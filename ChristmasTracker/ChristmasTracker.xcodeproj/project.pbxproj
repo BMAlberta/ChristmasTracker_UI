@@ -1,0 +1,745 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 50;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */; };
+		D38378AC25B20CAA005AD98D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378AB25B20CAA005AD98D /* ContentView.swift */; };
+		D38378AE25B20CAD005AD98D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378AD25B20CAD005AD98D /* Assets.xcassets */; };
+		D38378B125B20CAD005AD98D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378B025B20CAD005AD98D /* Preview Assets.xcassets */; };
+		D38378BC25B20CAD005AD98D /* ChristmasTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378BB25B20CAD005AD98D /* ChristmasTrackerTests.swift */; };
+		D38378C725B20CAD005AD98D /* ChristmasTrackerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378C625B20CAD005AD98D /* ChristmasTrackerUITests.swift */; };
+		D38378D925B20FBE005AD98D /* AppStore_old.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378D825B20FBE005AD98D /* AppStore_old.swift */; };
+		D38378E225B21D4E005AD98D /* MyListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378E125B21D4E005AD98D /* MyListStore.swift */; };
+		D38378E725B21D97005AD98D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378E625B21D97005AD98D /* Models.swift */; };
+		D38378EC25B22B2F005AD98D /* UserSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378EB25B22B2F005AD98D /* UserSession.swift */; };
+		D38378FC25B27BF8005AD98D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378FB25B27BF8005AD98D /* RootView.swift */; };
+		D383790125B27C63005AD98D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383790025B27C63005AD98D /* LoginView.swift */; };
+		D383790A25B53E93005AD98D /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383790925B53E93005AD98D /* AppStore.swift */; };
+		D383791125B54033005AD98D /* AppReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383791025B54033005AD98D /* AppReducer.swift */; };
+		D383791725B54090005AD98D /* AppAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383791625B54090005AD98D /* AppAction.swift */; };
+		D383791F25B540AF005AD98D /* AuthAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383791E25B540AF005AD98D /* AuthAction.swift */; };
+		D383792425B540E7005AD98D /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383792325B540E7005AD98D /* AuthMiddleware.swift */; };
+		D383793025B541FE005AD98D /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383792F25B541FE005AD98D /* AppState.swift */; };
+		D383793E25B5434A005AD98D /* LogMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383793D25B5434A005AD98D /* LogMiddleware.swift */; };
+		D383794425B54390005AD98D /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383794325B54390005AD98D /* AuthService.swift */; };
+		D383794C25B545C1005AD98D /* AuthReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383794B25B545C1005AD98D /* AuthReducer.swift */; };
+		D383795125B63272005AD98D /* OwnedListReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383795025B63272005AD98D /* OwnedListReducer.swift */; };
+		D383795C25B63330005AD98D /* Dashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383795B25B63330005AD98D /* Dashboard.swift */; };
+		D383796125B63454005AD98D /* MyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383796025B63454005AD98D /* MyListView.swift */; };
+		D383796625B63466005AD98D /* GivingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383796525B63466005AD98D /* GivingListView.swift */; };
+		D383796B25B63472005AD98D /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383796A25B63472005AD98D /* ProfileView.swift */; };
+		D383797025B6376F005AD98D /* NewItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383796F25B6376F005AD98D /* NewItemView.swift */; };
+		D383797525B63A78005AD98D /* ListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383797425B63A78005AD98D /* ListService.swift */; };
+		D383797A25B63AD3005AD98D /* ListMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383797925B63AD3005AD98D /* ListMiddleware.swift */; };
+		D383797F25B64113005AD98D /* ListAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383797E25B64113005AD98D /* ListAction.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D38378B825B20CAD005AD98D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D383789E25B20CAA005AD98D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D38378A525B20CAA005AD98D;
+			remoteInfo = ChristmasTracker;
+		};
+		D38378C325B20CAD005AD98D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D383789E25B20CAA005AD98D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D38378A525B20CAA005AD98D;
+			remoteInfo = ChristmasTracker;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		D38378A625B20CAA005AD98D /* ChristmasTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChristmasTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerApp.swift; sourceTree = "<group>"; };
+		D38378AB25B20CAA005AD98D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D38378AD25B20CAD005AD98D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D38378B025B20CAD005AD98D /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		D38378B225B20CAD005AD98D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D38378B725B20CAD005AD98D /* ChristmasTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChristmasTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D38378BB25B20CAD005AD98D /* ChristmasTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerTests.swift; sourceTree = "<group>"; };
+		D38378BD25B20CAD005AD98D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D38378C225B20CAD005AD98D /* ChristmasTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChristmasTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D38378C625B20CAD005AD98D /* ChristmasTrackerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerUITests.swift; sourceTree = "<group>"; };
+		D38378C825B20CAD005AD98D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D38378D825B20FBE005AD98D /* AppStore_old.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore_old.swift; sourceTree = "<group>"; };
+		D38378E125B21D4E005AD98D /* MyListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyListStore.swift; sourceTree = "<group>"; };
+		D38378E625B21D97005AD98D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		D38378EB25B22B2F005AD98D /* UserSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSession.swift; sourceTree = "<group>"; };
+		D38378FB25B27BF8005AD98D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		D383790025B27C63005AD98D /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		D383790925B53E93005AD98D /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		D383791025B54033005AD98D /* AppReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppReducer.swift; sourceTree = "<group>"; };
+		D383791625B54090005AD98D /* AppAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAction.swift; sourceTree = "<group>"; };
+		D383791E25B540AF005AD98D /* AuthAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthAction.swift; sourceTree = "<group>"; };
+		D383792325B540E7005AD98D /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
+		D383792F25B541FE005AD98D /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		D383793D25B5434A005AD98D /* LogMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogMiddleware.swift; sourceTree = "<group>"; };
+		D383794325B54390005AD98D /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		D383794B25B545C1005AD98D /* AuthReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthReducer.swift; sourceTree = "<group>"; };
+		D383795025B63272005AD98D /* OwnedListReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnedListReducer.swift; sourceTree = "<group>"; };
+		D383795B25B63330005AD98D /* Dashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dashboard.swift; sourceTree = "<group>"; };
+		D383796025B63454005AD98D /* MyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyListView.swift; sourceTree = "<group>"; };
+		D383796525B63466005AD98D /* GivingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GivingListView.swift; sourceTree = "<group>"; };
+		D383796A25B63472005AD98D /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		D383796F25B6376F005AD98D /* NewItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewItemView.swift; sourceTree = "<group>"; };
+		D383797425B63A78005AD98D /* ListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListService.swift; sourceTree = "<group>"; };
+		D383797925B63AD3005AD98D /* ListMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMiddleware.swift; sourceTree = "<group>"; };
+		D383797E25B64113005AD98D /* ListAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListAction.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D38378A325B20CAA005AD98D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D38378B425B20CAD005AD98D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D38378BF25B20CAD005AD98D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D383789D25B20CAA005AD98D = {
+			isa = PBXGroup;
+			children = (
+				D38378A825B20CAA005AD98D /* ChristmasTracker */,
+				D38378BA25B20CAD005AD98D /* ChristmasTrackerTests */,
+				D38378C525B20CAD005AD98D /* ChristmasTrackerUITests */,
+				D38378A725B20CAA005AD98D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D38378A725B20CAA005AD98D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D38378A625B20CAA005AD98D /* ChristmasTracker.app */,
+				D38378B725B20CAD005AD98D /* ChristmasTrackerTests.xctest */,
+				D38378C225B20CAD005AD98D /* ChristmasTrackerUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D38378A825B20CAA005AD98D /* ChristmasTracker */ = {
+			isa = PBXGroup;
+			children = (
+				D383794225B54383005AD98D /* Services */,
+				D383792E25B541AF005AD98D /* Models */,
+				D383792D25B541A2005AD98D /* Views */,
+				D383792C25B5419C005AD98D /* App */,
+				D383791525B54056005AD98D /* Actions */,
+				D383790F25B53EE3005AD98D /* Middleware */,
+				D383790E25B53ED9005AD98D /* Reducers */,
+				D38378D725B20FA2005AD98D /* Stores */,
+				D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */,
+				D38378AD25B20CAD005AD98D /* Assets.xcassets */,
+				D38378B225B20CAD005AD98D /* Info.plist */,
+				D38378AF25B20CAD005AD98D /* Preview Content */,
+				D38378D825B20FBE005AD98D /* AppStore_old.swift */,
+			);
+			path = ChristmasTracker;
+			sourceTree = "<group>";
+		};
+		D38378AF25B20CAD005AD98D /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				D38378B025B20CAD005AD98D /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		D38378BA25B20CAD005AD98D /* ChristmasTrackerTests */ = {
+			isa = PBXGroup;
+			children = (
+				D38378BB25B20CAD005AD98D /* ChristmasTrackerTests.swift */,
+				D38378BD25B20CAD005AD98D /* Info.plist */,
+			);
+			path = ChristmasTrackerTests;
+			sourceTree = "<group>";
+		};
+		D38378C525B20CAD005AD98D /* ChristmasTrackerUITests */ = {
+			isa = PBXGroup;
+			children = (
+				D38378C625B20CAD005AD98D /* ChristmasTrackerUITests.swift */,
+				D38378C825B20CAD005AD98D /* Info.plist */,
+			);
+			path = ChristmasTrackerUITests;
+			sourceTree = "<group>";
+		};
+		D38378D725B20FA2005AD98D /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				D38378E125B21D4E005AD98D /* MyListStore.swift */,
+				D38378EB25B22B2F005AD98D /* UserSession.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		D383790E25B53ED9005AD98D /* Reducers */ = {
+			isa = PBXGroup;
+			children = (
+				D383791025B54033005AD98D /* AppReducer.swift */,
+				D383794B25B545C1005AD98D /* AuthReducer.swift */,
+				D383795025B63272005AD98D /* OwnedListReducer.swift */,
+			);
+			path = Reducers;
+			sourceTree = "<group>";
+		};
+		D383790F25B53EE3005AD98D /* Middleware */ = {
+			isa = PBXGroup;
+			children = (
+				D383792325B540E7005AD98D /* AuthMiddleware.swift */,
+				D383793D25B5434A005AD98D /* LogMiddleware.swift */,
+				D383797925B63AD3005AD98D /* ListMiddleware.swift */,
+			);
+			path = Middleware;
+			sourceTree = "<group>";
+		};
+		D383791525B54056005AD98D /* Actions */ = {
+			isa = PBXGroup;
+			children = (
+				D383791625B54090005AD98D /* AppAction.swift */,
+				D383791E25B540AF005AD98D /* AuthAction.swift */,
+				D383797E25B64113005AD98D /* ListAction.swift */,
+			);
+			path = Actions;
+			sourceTree = "<group>";
+		};
+		D383792C25B5419C005AD98D /* App */ = {
+			isa = PBXGroup;
+			children = (
+				D383790925B53E93005AD98D /* AppStore.swift */,
+				D383792F25B541FE005AD98D /* AppState.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D383792D25B541A2005AD98D /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				D38378FB25B27BF8005AD98D /* RootView.swift */,
+				D38378AB25B20CAA005AD98D /* ContentView.swift */,
+				D383790025B27C63005AD98D /* LoginView.swift */,
+				D383795B25B63330005AD98D /* Dashboard.swift */,
+				D383796025B63454005AD98D /* MyListView.swift */,
+				D383796525B63466005AD98D /* GivingListView.swift */,
+				D383796A25B63472005AD98D /* ProfileView.swift */,
+				D383796F25B6376F005AD98D /* NewItemView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D383792E25B541AF005AD98D /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				D38378E625B21D97005AD98D /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D383794225B54383005AD98D /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				D383794325B54390005AD98D /* AuthService.swift */,
+				D383797425B63A78005AD98D /* ListService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D38378A525B20CAA005AD98D /* ChristmasTracker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D38378CB25B20CAD005AD98D /* Build configuration list for PBXNativeTarget "ChristmasTracker" */;
+			buildPhases = (
+				D38378A225B20CAA005AD98D /* Sources */,
+				D38378A325B20CAA005AD98D /* Frameworks */,
+				D38378A425B20CAA005AD98D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ChristmasTracker;
+			productName = ChristmasTracker;
+			productReference = D38378A625B20CAA005AD98D /* ChristmasTracker.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D38378B625B20CAD005AD98D /* ChristmasTrackerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D38378CE25B20CAD005AD98D /* Build configuration list for PBXNativeTarget "ChristmasTrackerTests" */;
+			buildPhases = (
+				D38378B325B20CAD005AD98D /* Sources */,
+				D38378B425B20CAD005AD98D /* Frameworks */,
+				D38378B525B20CAD005AD98D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D38378B925B20CAD005AD98D /* PBXTargetDependency */,
+			);
+			name = ChristmasTrackerTests;
+			productName = ChristmasTrackerTests;
+			productReference = D38378B725B20CAD005AD98D /* ChristmasTrackerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D38378C125B20CAD005AD98D /* ChristmasTrackerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D38378D125B20CAD005AD98D /* Build configuration list for PBXNativeTarget "ChristmasTrackerUITests" */;
+			buildPhases = (
+				D38378BE25B20CAD005AD98D /* Sources */,
+				D38378BF25B20CAD005AD98D /* Frameworks */,
+				D38378C025B20CAD005AD98D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D38378C425B20CAD005AD98D /* PBXTargetDependency */,
+			);
+			name = ChristmasTrackerUITests;
+			productName = ChristmasTrackerUITests;
+			productReference = D38378C225B20CAD005AD98D /* ChristmasTrackerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D383789E25B20CAA005AD98D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1230;
+				LastUpgradeCheck = 1230;
+				TargetAttributes = {
+					D38378A525B20CAA005AD98D = {
+						CreatedOnToolsVersion = 12.3;
+					};
+					D38378B625B20CAD005AD98D = {
+						CreatedOnToolsVersion = 12.3;
+						TestTargetID = D38378A525B20CAA005AD98D;
+					};
+					D38378C125B20CAD005AD98D = {
+						CreatedOnToolsVersion = 12.3;
+						TestTargetID = D38378A525B20CAA005AD98D;
+					};
+				};
+			};
+			buildConfigurationList = D38378A125B20CAA005AD98D /* Build configuration list for PBXProject "ChristmasTracker" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D383789D25B20CAA005AD98D;
+			productRefGroup = D38378A725B20CAA005AD98D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D38378A525B20CAA005AD98D /* ChristmasTracker */,
+				D38378B625B20CAD005AD98D /* ChristmasTrackerTests */,
+				D38378C125B20CAD005AD98D /* ChristmasTrackerUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D38378A425B20CAA005AD98D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D38378B125B20CAD005AD98D /* Preview Assets.xcassets in Resources */,
+				D38378AE25B20CAD005AD98D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D38378B525B20CAD005AD98D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D38378C025B20CAD005AD98D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D38378A225B20CAA005AD98D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D38378D925B20FBE005AD98D /* AppStore_old.swift in Sources */,
+				D38378AC25B20CAA005AD98D /* ContentView.swift in Sources */,
+				D383794C25B545C1005AD98D /* AuthReducer.swift in Sources */,
+				D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */,
+				D383796125B63454005AD98D /* MyListView.swift in Sources */,
+				D38378EC25B22B2F005AD98D /* UserSession.swift in Sources */,
+				D383791725B54090005AD98D /* AppAction.swift in Sources */,
+				D383792425B540E7005AD98D /* AuthMiddleware.swift in Sources */,
+				D383797A25B63AD3005AD98D /* ListMiddleware.swift in Sources */,
+				D383791125B54033005AD98D /* AppReducer.swift in Sources */,
+				D383797525B63A78005AD98D /* ListService.swift in Sources */,
+				D383795125B63272005AD98D /* OwnedListReducer.swift in Sources */,
+				D383795C25B63330005AD98D /* Dashboard.swift in Sources */,
+				D38378FC25B27BF8005AD98D /* RootView.swift in Sources */,
+				D38378E225B21D4E005AD98D /* MyListStore.swift in Sources */,
+				D383793025B541FE005AD98D /* AppState.swift in Sources */,
+				D383796625B63466005AD98D /* GivingListView.swift in Sources */,
+				D383790A25B53E93005AD98D /* AppStore.swift in Sources */,
+				D383790125B27C63005AD98D /* LoginView.swift in Sources */,
+				D38378E725B21D97005AD98D /* Models.swift in Sources */,
+				D383791F25B540AF005AD98D /* AuthAction.swift in Sources */,
+				D383797F25B64113005AD98D /* ListAction.swift in Sources */,
+				D383797025B6376F005AD98D /* NewItemView.swift in Sources */,
+				D383793E25B5434A005AD98D /* LogMiddleware.swift in Sources */,
+				D383796B25B63472005AD98D /* ProfileView.swift in Sources */,
+				D383794425B54390005AD98D /* AuthService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D38378B325B20CAD005AD98D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D38378BC25B20CAD005AD98D /* ChristmasTrackerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D38378BE25B20CAD005AD98D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D38378C725B20CAD005AD98D /* ChristmasTrackerUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D38378B925B20CAD005AD98D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D38378A525B20CAA005AD98D /* ChristmasTracker */;
+			targetProxy = D38378B825B20CAD005AD98D /* PBXContainerItemProxy */;
+		};
+		D38378C425B20CAD005AD98D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D38378A525B20CAA005AD98D /* ChristmasTracker */;
+			targetProxy = D38378C325B20CAD005AD98D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D38378C925B20CAD005AD98D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.3;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D38378CA25B20CAD005AD98D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.3;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D38378CC25B20CAD005AD98D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = ChristmasTracker/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D38378CD25B20CAD005AD98D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = ChristmasTracker/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		D38378CF25B20CAD005AD98D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				INFOPLIST_FILE = ChristmasTrackerTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChristmasTracker.app/ChristmasTracker";
+			};
+			name = Debug;
+		};
+		D38378D025B20CAD005AD98D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				INFOPLIST_FILE = ChristmasTrackerTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChristmasTracker.app/ChristmasTracker";
+			};
+			name = Release;
+		};
+		D38378D225B20CAD005AD98D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				INFOPLIST_FILE = ChristmasTrackerUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ChristmasTracker;
+			};
+			name = Debug;
+		};
+		D38378D325B20CAD005AD98D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				INFOPLIST_FILE = ChristmasTrackerUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ChristmasTracker;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D38378A125B20CAA005AD98D /* Build configuration list for PBXProject "ChristmasTracker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D38378C925B20CAD005AD98D /* Debug */,
+				D38378CA25B20CAD005AD98D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D38378CB25B20CAD005AD98D /* Build configuration list for PBXNativeTarget "ChristmasTracker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D38378CC25B20CAD005AD98D /* Debug */,
+				D38378CD25B20CAD005AD98D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D38378CE25B20CAD005AD98D /* Build configuration list for PBXNativeTarget "ChristmasTrackerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D38378CF25B20CAD005AD98D /* Debug */,
+				D38378D025B20CAD005AD98D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D38378D125B20CAD005AD98D /* Build configuration list for PBXNativeTarget "ChristmasTrackerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D38378D225B20CAD005AD98D /* Debug */,
+				D38378D325B20CAD005AD98D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D383789E25B20CAA005AD98D /* Project object */;
+}
