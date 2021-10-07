@@ -28,6 +28,12 @@ struct User: Codable {
     let __v: Int
 }
 
+struct SlimUser: Decodable {
+    let firstName: String
+    let lastName: String
+    let rawId: String
+}
+
 struct LoginResponse: Decodable {
     let token: String
 }
@@ -48,6 +54,23 @@ struct AllItemsResponse: Decodable {
 struct NewItemResponse: Decodable {
     let newItem: Item
 }
+struct UserListOverviewResponse: Decodable {
+    let listOverviews: [ListOverview]
+}
+
+struct ListOverview: Decodable, Identifiable {
+    let user: SlimUser
+    let totalItems: Int
+    let purchasedItems: Int
+    var id: String
+    
+    enum CodingKeys: String, CodingKey {
+        case user
+        case totalItems
+        case purchasedItems
+        case id = "_id"
+    }
+}
 
 struct NetworkResponse<T: Decodable>: Decodable {
     let error: ErrorResponse
@@ -61,7 +84,6 @@ struct ErrorResponse: Decodable {
 struct Item: Codable, Identifiable {
     
     var id: String
-    let category: String
     let createdBy: String
     let creationDate: String
     let description: String
@@ -70,11 +92,12 @@ struct Item: Codable, Identifiable {
     let name: String
     let price: Double
     let purchased: Bool
+    let purchaseDate: String?
     let quantity: Int
+    let retractablePurchase: Bool = false
     let __v: Int
     
     enum CodingKeys: String, CodingKey {
-        case category
         case createdBy
         case creationDate
         case description
@@ -83,7 +106,9 @@ struct Item: Codable, Identifiable {
         case name
         case price
         case purchased
+        case purchaseDate
         case quantity
+        case retractablePurchase
         case id = "_id"
         case __v
     }

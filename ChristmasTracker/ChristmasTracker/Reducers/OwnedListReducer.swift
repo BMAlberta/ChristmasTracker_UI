@@ -7,16 +7,25 @@
 
 import Foundation
 
-func ownedListReducer(state: inout OwnedListState, action: ListAction) -> Void {
+func ownedListReducer(state: inout ListState, action: ListAction) -> Void {
     
     switch action {
     
-    case .fetchData(_):
+    case .fetchOwnedList(_):
         state.isFetchError = false
         state.fetchInProgess = true
         
-    case .fetchComplete(res: let res):
+    case .fetchOwnedListComplete(res: let res):
         state.items = res.items
+        state.fetchInProgess = false
+        state.isFetchError = false
+        
+    case .fetchUserList(_,_):
+        state.isFetchError = false
+        state.fetchInProgess = true
+        
+    case .fetchUserListComplete(res: let res):
+        state.userItems = res.items
         state.fetchInProgess = false
         state.isFetchError = false
         
@@ -35,5 +44,14 @@ func ownedListReducer(state: inout OwnedListState, action: ListAction) -> Void {
     case .createError(_):
         state.createInProgrees = false
         state.isCreateError = true
+    
+    case .fetchListOverview(token:_):
+        state.isFetchError = false
+        state.fetchInProgess = true
+        
+    case .fetchListOverviewComplete(res: let res):
+        state.isFetchError = false
+        state.fetchInProgess = false
+        state.overviews = res.listOverviews
     }
 }

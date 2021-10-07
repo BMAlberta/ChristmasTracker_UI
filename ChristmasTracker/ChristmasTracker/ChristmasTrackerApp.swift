@@ -12,7 +12,7 @@ struct ChristmasTrackerApp: App {
     
     let store = AppStore(initialState: .init(
         auth: AuthState(),
-        ownedList: OwnedListState()
+        ownedList: ListState()
     ),
     reducer: appReducer,
     middlewares: [

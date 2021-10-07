@@ -6,15 +6,64 @@
 //
 
 import SwiftUI
+import Foundation
 
 struct GivingListView: View {
+    @EnvironmentObject var _store: AppStore
     var body: some View {
-        Text("You should see the list of all people to buy for here.")
+        NavigationView {
+            List(_store.state.ownedList.overviews) { i in
+                NavigationLink(destination: ListDetailView(user: i.user)) {
+                    UserListOverviewView(data: i)
+                }
+            }.navigationBarTitle("Available Lists")
+                .navigationBarTitleDisplayMode(.inline)
+        }.onAppear {
+            let token = _store.state.auth.token
+            _store.dispatch(.list(action: .fetchListOverview(token: token)))
+        }
     }
 }
 
 struct GivingListView_Previews: PreviewProvider {
     static var previews: some View {
-        GivingListView()
+        let store = AppStore(initialState: .init(
+            auth: AuthState(),
+            ownedList: ListState()
+        ),
+        reducer: appReducer,
+        middlewares: [
+            authMiddleware(service: AuthService()),
+            logMiddleware(),
+            listMiddleware(service: ListService())
+        ])
+        GivingListView().environmentObject(store)
+    }
+}
+
+struct UserListOverviewView: View {
+    let data: ListOverview
+    
+    var body: some View {
+        HStack {
+            Spacer()
+            VStack(alignment: .leading) {
+                Text("\(data.user.firstName)")
+                    .font(.title2)
+                ProgressView("Completion %", value: Double(data.purchasedItems), total: Double(data.totalItems))
+                    .font(.caption)
+                Text("\(data.purchasedItems) out of \(data.totalItems) items purchased.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            Spacer()
+        }
+    }
+    
+    private func convertToPercentage() -> Double {
+        let purchasedCount = data.purchasedItems
+        let total = data.totalItems
+        
+        return Double(purchasedCount/total)
     }
 }

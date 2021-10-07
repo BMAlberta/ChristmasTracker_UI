@@ -21,7 +21,7 @@ struct AuthService {
     func performLogin(_ credentials: Credentials) -> AnyPublisher<LoginResponse, AuthServiceError> {
         
 //        let urlString = "http://webdev01.ad.bmalberta.com:3000/xmasList/auth/login"
-        let urlString = "http://192.168.0.184:3000/tracker/auth/login"
+        let urlString = "http://127.0.0.1:3000/tracker/auth/login"
         let params: [String: String] = ["email": credentials.username,
                                         "password": credentials.password]
         

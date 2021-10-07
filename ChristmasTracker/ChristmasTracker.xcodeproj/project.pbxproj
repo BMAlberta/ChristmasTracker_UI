@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */; };
+		0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5C270E4081000D5E3B /* ListItemView.swift */; };
+		0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */; };
 		D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */; };
 		D38378AC25B20CAA005AD98D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378AB25B20CAA005AD98D /* ContentView.swift */; };
 		D38378AE25B20CAD005AD98D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378AD25B20CAD005AD98D /* Assets.xcassets */; };
@@ -57,6 +60,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDetailView.swift; sourceTree = "<group>"; };
+		0BC93E5C270E4081000D5E3B /* ListItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemView.swift; sourceTree = "<group>"; };
+		0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailView.swift; sourceTree = "<group>"; };
 		D38378A625B20CAA005AD98D /* ChristmasTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChristmasTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerApp.swift; sourceTree = "<group>"; };
 		D38378AB25B20CAA005AD98D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -242,9 +248,12 @@
 				D383790025B27C63005AD98D /* LoginView.swift */,
 				D383795B25B63330005AD98D /* Dashboard.swift */,
 				D383796025B63454005AD98D /* MyListView.swift */,
+				0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */,
 				D383796525B63466005AD98D /* GivingListView.swift */,
 				D383796A25B63472005AD98D /* ProfileView.swift */,
 				D383796F25B6376F005AD98D /* NewItemView.swift */,
+				0BC93E5C270E4081000D5E3B /* ListItemView.swift */,
+				0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -405,11 +414,14 @@
 				D383792425B540E7005AD98D /* AuthMiddleware.swift in Sources */,
 				D383797A25B63AD3005AD98D /* ListMiddleware.swift in Sources */,
 				D383791125B54033005AD98D /* AppReducer.swift in Sources */,
+				0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */,
 				D383797525B63A78005AD98D /* ListService.swift in Sources */,
 				D383795125B63272005AD98D /* OwnedListReducer.swift in Sources */,
 				D383795C25B63330005AD98D /* Dashboard.swift in Sources */,
 				D38378FC25B27BF8005AD98D /* RootView.swift in Sources */,
 				D38378E225B21D4E005AD98D /* MyListStore.swift in Sources */,
+				0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */,
+				0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */,
 				D383793025B541FE005AD98D /* AppState.swift in Sources */,
 				D383796625B63466005AD98D /* GivingListView.swift in Sources */,
 				D383790A25B53E93005AD98D /* AppStore.swift in Sources */,

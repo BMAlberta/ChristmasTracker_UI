@@ -48,7 +48,9 @@ struct MainLoginView: View {
             EnrollView()
             Spacer()
         }.background(
-            LinearGradient(gradient: Gradient(colors: [.green, .red]), startPoint: .top, endPoint: .bottom)
+            LinearGradient(gradient: Gradient(colors: [.init(red: 17/255, green: 87/255, blue: 74/255),
+                                                       .init(red: 17/255, green: 87/255, blue: 74/255)
+                                                      ]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all))
     }
 }
@@ -170,7 +172,6 @@ struct LogoView: View {
             .aspectRatio(contentMode: .fit)
             .frame(width: UIScreen.main.bounds.width * 0.75)
             .padding(.bottom, 20)
-//            .padding()
     }
 }
 
@@ -187,7 +188,7 @@ struct TitleView: View {
 struct LoginView_Previews: PreviewProvider {
     static let store = AppStore(initialState: .init(
         auth: AuthState(),
-        ownedList: OwnedListState()
+        ownedList: ListState()
     ),
     reducer: appReducer,
     middlewares: [

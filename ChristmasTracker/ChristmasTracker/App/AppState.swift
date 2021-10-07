@@ -10,7 +10,7 @@ import Foundation
 
 struct AppState {
     var auth: AuthState
-    var ownedList: OwnedListState
+    var ownedList: ListState
 }
 
 struct AuthState {
@@ -20,8 +20,10 @@ struct AuthState {
     var isLoggedIn = false
 }
 
-struct OwnedListState {
+struct ListState {
     var items: [Item] = []
+    var userItems: [Item] = []
+    var overviews: [ListOverview] = []
     var fetchInProgess = false
     var isFetchError = false
     var createInProgrees = false
