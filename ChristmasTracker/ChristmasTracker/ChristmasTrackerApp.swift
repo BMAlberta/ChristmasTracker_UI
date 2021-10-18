@@ -11,8 +11,8 @@ import SwiftUI
 struct ChristmasTrackerApp: App {
     
     let store = AppStore(initialState: .init(
-        auth: AuthState(),
-        ownedList: ListState()
+        authState: AuthState(),
+        listState: ListState()
     ),
     reducer: appReducer,
     middlewares: [

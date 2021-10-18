@@ -17,8 +17,10 @@ struct GivingListView: View {
                     UserListOverviewView(data: i)
                 }
             }.navigationBarTitle("Available Lists")
-                .navigationBarTitleDisplayMode(.inline)
-        }.onAppear {
+        }
+        .navigationViewStyle(.stack)
+        
+        .onAppear {
             let token = _store.state.auth.token
             _store.dispatch(.list(action: .fetchListOverview(token: token)))
         }
@@ -28,8 +30,8 @@ struct GivingListView: View {
 struct GivingListView_Previews: PreviewProvider {
     static var previews: some View {
         let store = AppStore(initialState: .init(
-            auth: AuthState(),
-            ownedList: ListState()
+            authState: AuthState(),
+            listState: ListState()
         ),
         reducer: appReducer,
         middlewares: [

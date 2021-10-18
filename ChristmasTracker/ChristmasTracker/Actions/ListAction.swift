@@ -26,4 +26,12 @@ enum ListAction {
     case createItem(item: NewItemModel)
     case createComplete(newItem: Item)
     case createError(error: ListMiddlewareError)
+    
+    // Purchase Item
+    case purchaseItem(item: Item)
+    case purchaseComplete
+    
+    // Retract Purchase
+    case retractPurchase(item: Item)
+    case retractComplete
 }

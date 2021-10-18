@@ -26,6 +26,7 @@ func ownedListReducer(state: inout ListState, action: ListAction) -> Void {
         
     case .fetchUserListComplete(res: let res):
         state.userItems = res.items
+        state.userIdContext = res.items.first?.createdBy ?? ""
         state.fetchInProgess = false
         state.isFetchError = false
         
@@ -53,5 +54,20 @@ func ownedListReducer(state: inout ListState, action: ListAction) -> Void {
         state.isFetchError = false
         state.fetchInProgess = false
         state.overviews = res.listOverviews
+        
+    case .purchaseItem(_):
+        state.isFetchError = false
+        state.fetchInProgess = true
+        state.purchaseComplete = false
+        
+    case .purchaseComplete, .retractComplete:
+//        state.fetchInProgess = false
+        state.purchaseComplete = true
+        state.isFetchError = false
+        
+    case .retractPurchase(_):
+        state.isFetchError = false
+//        state.fetchInProgess = false
+        state.purchaseComplete = false
     }
 }

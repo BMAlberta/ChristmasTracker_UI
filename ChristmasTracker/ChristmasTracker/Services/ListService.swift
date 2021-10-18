@@ -143,12 +143,73 @@ struct ListService {
         return URLSession.shared
             .dataTaskPublisher(for: request)
             .mapError { ListServiceError.url(error: $0) }
-            .map {
-                print($0)
-                return $0.data }
+            .map { $0.data }
             .decode(type: NetworkResponse<NewItemResponse>.self, decoder: JSONDecoder())
             .mapError { ListServiceError.decoder(error: $0) }
             .map { $0.payload.newItem }
+            .eraseToAnyPublisher()
+    }
+    
+    
+    func markItemPurchased(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
+        
+        let urlString = "http://127.0.0.1:3000/tracker/purchases"
+        
+        let params: [String: String] = ["itemId": item.id]
+        
+        guard let url = URL(string: urlString) else {
+            return Fail(error: ListServiceError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+        
+        
+        var request = Utilities.createBaseRequest(url: url,
+                                                  method: .post,
+                                                  token: token)
+        
+        let json: [AnyHashable: AnyHashable] = params
+        let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        
+        request.httpBody = jsonData
+        
+        return URLSession.shared
+            .dataTaskPublisher(for: request)
+            .mapError { ListServiceError.url(error: $0) }
+            .map { $0.data }
+            .decode(type: NetworkResponse<UpdatedItemResponse>.self, decoder: JSONDecoder())
+            .mapError { ListServiceError.decoder(error: $0) }
+            .map { $0.payload.updatedItem }
+            .eraseToAnyPublisher()
+    }
+    
+    func markItemRetracted(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
+        
+        let urlString = "http://127.0.0.1:3000/tracker/purchases/retract"
+        
+        let params: [String: String] = ["itemId": item.id]
+        
+        guard let url = URL(string: urlString) else {
+            return Fail(error: ListServiceError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+        
+        
+        var request = Utilities.createBaseRequest(url: url,
+                                                  method: .post,
+                                                  token: token)
+        
+        let json: [AnyHashable: AnyHashable] = params
+        let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        
+        request.httpBody = jsonData
+        
+        return URLSession.shared
+            .dataTaskPublisher(for: request)
+            .mapError { ListServiceError.url(error: $0) }
+            .map { $0.data }
+            .decode(type: NetworkResponse<UpdatedItemResponse>.self, decoder: JSONDecoder())
+            .mapError { ListServiceError.decoder(error: $0) }
+            .map { $0.payload.updatedItem }
             .eraseToAnyPublisher()
     }
 }

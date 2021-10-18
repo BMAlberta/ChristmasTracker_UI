@@ -68,7 +68,7 @@ struct ListItemView_Previews: PreviewProvider {
                         purchased: false,
                         purchaseDate: nil,
                         quantity: 1,
-                        __v: 1)
+                        v: 1)
         ListItemView(data: item, hidePurchase: false)
     }
 }
