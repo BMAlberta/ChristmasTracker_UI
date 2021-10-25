@@ -152,6 +152,53 @@ func listMiddleware(service: ListService) -> Middleware<AppState, AppAction> {
             return Just(AppAction.list(action: .fetchUserList(token: state.auth.token, userId: state.ownedList.userIdContext)))
                 .eraseToAnyPublisher()
             
+        case .list(action: .updateItem(let token, let item)):
+            return service.updateItem(token: token, item: item)
+                .subscribe(on: DispatchQueue.main)
+                .map { _ in AppAction.list(action: .updateComplete) }
+                .catch { (error: ListServiceError) -> Just<AppAction> in
+                    switch (error) {
+                    case .networkError:
+                        return Just(AppAction.list(action: .fetchError(error: .networkError)))
+                    case .unknown:
+                        return Just(AppAction.list(action: .fetchError(error: .unknown)))
+                    case .invalidURL:
+                        return Just(AppAction.list(action: .fetchError(error: .invalidURL)))
+                    case .decoder(_):
+                        return Just(AppAction.list(action: .fetchError(error: .decoder)))
+                    case .url(_):
+                        return Just(AppAction.list(action: .fetchError(error: .unknown)))
+                    }
+                }
+                .eraseToAnyPublisher()
+        case .list(action: .updateComplete):
+            return Just(AppAction.list(action: .fetchUserList(token: state.auth.token, userId: state.ownedList.userIdContext)))
+                .eraseToAnyPublisher()
+            
+        case .list(action: .deleteItem(let token, let item)):
+            return service.deleteItem(token: token, item: item)
+                .subscribe(on: DispatchQueue.main)
+                .map { _ in AppAction.list(action: .deleteComplete) }
+                .catch { (error: ListServiceError) -> Just<AppAction> in
+                    switch (error) {
+                    case .networkError:
+                        return Just(AppAction.list(action: .fetchError(error: .networkError)))
+                    case .unknown:
+                        return Just(AppAction.list(action: .fetchError(error: .unknown)))
+                    case .invalidURL:
+                        return Just(AppAction.list(action: .fetchError(error: .invalidURL)))
+                    case .decoder(_):
+                        return Just(AppAction.list(action: .fetchError(error: .decoder)))
+                    case .url(_):
+                        return Just(AppAction.list(action: .fetchError(error: .unknown)))
+                    }
+                }
+                .eraseToAnyPublisher()
+            
+        case .list(action: .deleteComplete):
+            return Just(AppAction.list(action: .fetchOwnedList(token: state.auth.token)))
+                .eraseToAnyPublisher()
+            
         default:
             break
         }

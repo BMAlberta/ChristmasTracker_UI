@@ -16,16 +16,19 @@ enum ListError: Error {
 }
 
 struct User: Codable {
-    let pwd: String
-    let role: Int
     let lastLogInLocation: String
-    let _id: String
     let email: String
     let firstName: String
     let lastName: String
     let creationDate: String //Date
     let lastLogInDate: String
-    let __v: Int
+    let lastPasswordChange: String
+}
+
+struct ChangePasswordModel: Codable {
+    var oldPassword: String = ""
+    var newPassword: String = ""
+    var newPasswordConfirmation: String = ""
 }
 
 struct SlimUser: Decodable {
@@ -38,6 +41,10 @@ struct LoginResponse: Decodable {
     let token: String
 }
 
+struct PasswordResetResponse: Decodable {
+    let userId: String
+}
+
 struct Credentials: Codable {
     let username: String
     let password: String
@@ -45,6 +52,10 @@ struct Credentials: Codable {
 
 struct AllUsersResponse: Decodable {
     let users: [User]
+}
+
+struct CurrentUserResponse: Decodable {
+    let user: User
 }
 
 struct AllItemsResponse: Decodable {
@@ -57,6 +68,10 @@ struct NewItemResponse: Decodable {
 
 struct UpdatedItemResponse: Decodable {
     let updatedItem: Item
+}
+
+struct DeletedItemResponse: Decodable {
+    let item: Item
 }
 
 struct UserListOverviewResponse: Decodable {

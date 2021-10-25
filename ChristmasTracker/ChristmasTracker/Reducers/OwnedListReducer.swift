@@ -61,13 +61,29 @@ func ownedListReducer(state: inout ListState, action: ListAction) -> Void {
         state.purchaseComplete = false
         
     case .purchaseComplete, .retractComplete:
-//        state.fetchInProgess = false
         state.purchaseComplete = true
         state.isFetchError = false
         
     case .retractPurchase(_):
         state.isFetchError = false
-//        state.fetchInProgess = false
         state.purchaseComplete = false
+        
+    case .updateItem(_,_):
+        state.updateInProgress = true
+        state.fetchInProgess = false
+        state.updateComplete = false
+        
+    case .updateComplete:
+        state.updateInProgress = false
+        state.fetchInProgess = false
+        state.updateComplete = true
+        
+    case .deleteItem(_,_):
+        state.deleteComplete = false
+        state.deleteInProgress = true
+
+    case .deleteComplete:
+        state.deleteComplete = true
+        state.deleteInProgress = false
     }
 }

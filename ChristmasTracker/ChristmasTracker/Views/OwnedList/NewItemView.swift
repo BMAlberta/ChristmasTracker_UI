@@ -25,11 +25,10 @@ struct NewItemView: View {
                     PriceView(model: $model)
                     QuantityView(model: $model)
                 }
-                CategoryView(model: $model)
                 SaveButton(model: $model, showingModal: $showingModal)
             }.padding()
             .background(Color(UIColor.systemBackground))
-            .navigationBarTitle("Create New Item", displayMode: .inline)
+            .navigationBarTitle("Create New Item")
             .navigationBarItems(trailing: CloseButton(showingModal: $showingModal))
         }
     }
@@ -217,7 +216,7 @@ struct KeyboardAdaptive: ViewModifier {
                     let focusedTextInputBottom = UIResponder.currentFirstResponder?.globalFrame?.maxY ?? 0
                     self.bottomPadding = max(0, focusedTextInputBottom - keyboardTop - geometry.safeAreaInsets.bottom)
             }
-            .animation(.easeOut(duration: 0.16))
+                .animation(.easeOut, value: 0.16)
         }
     }
 }

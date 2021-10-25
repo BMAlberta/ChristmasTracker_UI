@@ -24,5 +24,33 @@ func authReducer(state: inout AuthState, action: AuthAction) -> Void {
     case .loginError(_):
         state.authInProgress = false
         state.isAuthError = true
+        
+    case .logout:
+        state.authInProgress = false
+        state.isAuthError = false
+        state.isLoggedIn = false
+        state.token  = ""
+        
+    case .fetchCurrenUser(_):
+        state.isAuthError = false
+        state.authInProgress = false
+        
+    case .fetchCurrentUserComplete(let res):
+        state.currentUserDetails = res.user
+        
+    case .resetPassword(_,_):
+        state.passwordResetInProgress = true
+        state.isPasswordResetError = false
+        state.passwordResetSuccess = false
+        
+    case .resetPasswordComplete:
+        state.passwordResetInProgress = false
+        state.isPasswordResetError = false
+        state.passwordResetSuccess = true
+        
+    case .passwordResetError(_):
+        state.isPasswordResetError = true
+        state.passwordResetInProgress = false
+        state.passwordResetSuccess = false
     }
 }

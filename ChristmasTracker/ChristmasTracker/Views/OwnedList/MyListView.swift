@@ -15,7 +15,7 @@ struct MyListView: View {
         NavigationView {
             ZStack {
                 List(_store.state.ownedList.items) { i in
-                    NavigationLink(destination: LazyView(EmptyView())) {
+                    NavigationLink(destination: LazyView(ItemDetailView(model: i))) {
                         ListItemView(data: i)
                     }
                 }
@@ -26,7 +26,9 @@ struct MyListView: View {
                     ProgressView()
                 }
             }
-        }.onAppear {
+        }
+        .navigationViewStyle(.stack)
+        .onAppear {
             let token = _store.state.auth.token
             _store.dispatch(.list(action: .fetchOwnedList(token: token)))
         }

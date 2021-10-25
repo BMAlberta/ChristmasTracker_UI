@@ -11,7 +11,7 @@ import UIKit
 
 struct ItemDetailView: View {
     @EnvironmentObject var _store: AppStore
-    @ObservedObject var model: Item
+    @State var model: Item
     @Environment(\.presentationMode) var presentationMode
     
     private var purchaseActionSuccess: Bool {
@@ -24,8 +24,8 @@ struct ItemDetailView: View {
             set: { _ in _store.dispatch(.list(action: .fetchError(error: nil))) }
         )
         ZStack {
-            NavigationView{
-                VStack {
+            Form {
+                Section("Item Details") {
                     StaticElementView(title: "Name", data: model.name)
                     StaticElementView(title: "Description", data: model.description)
                     
@@ -34,16 +34,26 @@ struct ItemDetailView: View {
                         StaticElementView(title: "Price", data: String(format: "$%.2f", model.price))
                         StaticElementView(title: "Quantity", data: String(model.quantity))
                     }
-                    Spacer()
-                    PurchaseButton(model: model)
-                        .disabled(purchaseActionSuccess)
-                }.padding()
-                    .background(Color(UIColor.systemBackground))
-                    .navigationBarTitle("Item Detail", displayMode: .inline)
+                }
+                Section("Item History") {
+                    
+                    StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.lastEditDate))
+                    if (model.retractablePurchase) {
+                        StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.purchaseDate))
+                        
+                        PurchaseButton(model: model)
+                            .disabled(purchaseActionSuccess)
+                    } else {
+                        DeleteButton(model: model)
+                    }
+                }
             }
+            .padding()
+            .background(Color(UIColor.systemBackground))
+            .navigationBarTitle("Item Detail", displayMode: .inline)
             .onChange(of: _store.state.ownedList.purchaseComplete, perform: { _ in
                 print("On Change!")
-                if purchaseActionSuccess {
+                if purchaseActionSuccess && !model.retractablePurchase {
                     _store.dispatch(.list(action: .fetchListOverview(token: _store.state.auth.token)))
                     self.presentationMode.wrappedValue.dismiss()
                 }
@@ -55,6 +65,7 @@ struct ItemDetailView: View {
                 ProgressView()
             }
         }
+
     }
     
     struct StaticElementView: View {
@@ -120,7 +131,7 @@ struct ItemDetailView: View {
                     .frame(width: 300, height: 50)
                     .background(buttonColor)
                     .cornerRadius(15.0)
-            }.padding(.top, 50)
+            }/**.padding(.top, 50)*/
         }
         
         private func updatePurchase(item: Item) {
@@ -129,6 +140,26 @@ struct ItemDetailView: View {
             } else {
                 _store.dispatch(.list(action: .purchaseItem(item: item)))
             }
+        }
+    }
+    
+    struct DeleteButton: View {
+        @EnvironmentObject var _store: AppStore
+        @ObservedObject var model: Item
+
+        var body: some View {
+            Button(action: {
+                print("Delete tapped")
+                _store.dispatch(.list(action: .deleteItem(token: _store.state.auth.token, item: model)))
+            }) {
+                Text("Delete Item")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(width: 300, height: 50)
+                    .background(Color("brandBackgroundSecondary"))
+                    .cornerRadius(15.0)
+            }/**.padding(.top, 50)*/
         }
     }
 }
@@ -142,8 +173,19 @@ struct ItemDetailView_Previews: PreviewProvider {
 struct BindingItemViewPreview : View {
     @State
     private var value = false
-
+    
     var body: some View {
+        
+        let store = AppStore(initialState: .init(
+            authState: AuthState(),
+            listState: ListState()
+        ),
+                             reducer: appReducer,
+                             middlewares: [
+                                authMiddleware(service: AuthService()),
+                                logMiddleware(),
+                                listMiddleware(service: ListService())
+                             ])
         let item = Item(id: "1234",
                         createdBy: "Brian",
                         creationDate: "2021-10-04",
@@ -156,6 +198,6 @@ struct BindingItemViewPreview : View {
                         purchaseDate: nil,
                         quantity: 1,
                         v: 1)
-        ItemDetailView(model: item)
+        ItemDetailView(model: item).environmentObject(store)
     }
 }

@@ -23,6 +23,10 @@ class AuthState {
     var authInProgress = false
     var isAuthError = false
     var isLoggedIn = false
+    var currentUserDetails: User?
+    var passwordResetInProgress = false
+    var isPasswordResetError = false
+    var passwordResetSuccess = false
 }
 
 class ListState {
@@ -35,4 +39,8 @@ class ListState {
     var createInProgrees = false
     var isCreateError = false
     var purchaseComplete = false
+    var updateComplete = false
+    var updateInProgress = false
+    var deleteInProgress = false
+    var deleteComplete = false
 }

@@ -34,4 +34,12 @@ enum ListAction {
     // Retract Purchase
     case retractPurchase(item: Item)
     case retractComplete
+    
+    // Update Item
+    case updateItem(token: String, item: Item)
+    case updateComplete
+    
+    // Delete Item
+    case deleteItem(token: String, item: Item)
+    case deleteComplete
 }

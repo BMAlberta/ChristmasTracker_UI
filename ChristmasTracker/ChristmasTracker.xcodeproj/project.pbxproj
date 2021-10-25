@@ -10,16 +10,14 @@
 		0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */; };
 		0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5C270E4081000D5E3B /* ListItemView.swift */; };
 		0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */; };
+		0BC93E61271D13B5000D5E3B /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E60271D13B5000D5E3B /* Utilities.swift */; };
+		0BEFAAED2724ECD30012A7AE /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */; };
 		D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */; };
-		D38378AC25B20CAA005AD98D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378AB25B20CAA005AD98D /* ContentView.swift */; };
 		D38378AE25B20CAD005AD98D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378AD25B20CAD005AD98D /* Assets.xcassets */; };
 		D38378B125B20CAD005AD98D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378B025B20CAD005AD98D /* Preview Assets.xcassets */; };
 		D38378BC25B20CAD005AD98D /* ChristmasTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378BB25B20CAD005AD98D /* ChristmasTrackerTests.swift */; };
 		D38378C725B20CAD005AD98D /* ChristmasTrackerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378C625B20CAD005AD98D /* ChristmasTrackerUITests.swift */; };
-		D38378D925B20FBE005AD98D /* AppStore_old.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378D825B20FBE005AD98D /* AppStore_old.swift */; };
-		D38378E225B21D4E005AD98D /* MyListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378E125B21D4E005AD98D /* MyListStore.swift */; };
 		D38378E725B21D97005AD98D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378E625B21D97005AD98D /* Models.swift */; };
-		D38378EC25B22B2F005AD98D /* UserSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378EB25B22B2F005AD98D /* UserSession.swift */; };
 		D38378FC25B27BF8005AD98D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378FB25B27BF8005AD98D /* RootView.swift */; };
 		D383790125B27C63005AD98D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383790025B27C63005AD98D /* LoginView.swift */; };
 		D383790A25B53E93005AD98D /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D383790925B53E93005AD98D /* AppStore.swift */; };
@@ -63,9 +61,10 @@
 		0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDetailView.swift; sourceTree = "<group>"; };
 		0BC93E5C270E4081000D5E3B /* ListItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemView.swift; sourceTree = "<group>"; };
 		0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailView.swift; sourceTree = "<group>"; };
+		0BC93E60271D13B5000D5E3B /* Utilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
+		0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		D38378A625B20CAA005AD98D /* ChristmasTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChristmasTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerApp.swift; sourceTree = "<group>"; };
-		D38378AB25B20CAA005AD98D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D38378AD25B20CAD005AD98D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D38378B025B20CAD005AD98D /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		D38378B225B20CAD005AD98D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -75,10 +74,7 @@
 		D38378C225B20CAD005AD98D /* ChristmasTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChristmasTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D38378C625B20CAD005AD98D /* ChristmasTrackerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerUITests.swift; sourceTree = "<group>"; };
 		D38378C825B20CAD005AD98D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		D38378D825B20FBE005AD98D /* AppStore_old.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore_old.swift; sourceTree = "<group>"; };
-		D38378E125B21D4E005AD98D /* MyListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyListStore.swift; sourceTree = "<group>"; };
 		D38378E625B21D97005AD98D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		D38378EB25B22B2F005AD98D /* UserSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSession.swift; sourceTree = "<group>"; };
 		D38378FB25B27BF8005AD98D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		D383790025B27C63005AD98D /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		D383790925B53E93005AD98D /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
@@ -126,6 +122,52 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0BC93E62271E4B54000D5E3B /* OwnedList */ = {
+			isa = PBXGroup;
+			children = (
+				D383796F25B6376F005AD98D /* NewItemView.swift */,
+				D383796025B63454005AD98D /* MyListView.swift */,
+			);
+			path = OwnedList;
+			sourceTree = "<group>";
+		};
+		0BC93E63271E4B60000D5E3B /* GivingList */ = {
+			isa = PBXGroup;
+			children = (
+				0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */,
+				D383796525B63466005AD98D /* GivingListView.swift */,
+				0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */,
+				0BC93E5C270E4081000D5E3B /* ListItemView.swift */,
+			);
+			path = GivingList;
+			sourceTree = "<group>";
+		};
+		0BC93E64271E4B69000D5E3B /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				D383796A25B63472005AD98D /* ProfileView.swift */,
+				0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
+		0BC93E65271E4B72000D5E3B /* Login */ = {
+			isa = PBXGroup;
+			children = (
+				D383790025B27C63005AD98D /* LoginView.swift */,
+			);
+			path = Login;
+			sourceTree = "<group>";
+		};
+		0BC93E66271E4BAD000D5E3B /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				D38378FB25B27BF8005AD98D /* RootView.swift */,
+				D383795B25B63330005AD98D /* Dashboard.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
 		D383789D25B20CAA005AD98D = {
 			isa = PBXGroup;
 			children = (
@@ -156,12 +198,11 @@
 				D383791525B54056005AD98D /* Actions */,
 				D383790F25B53EE3005AD98D /* Middleware */,
 				D383790E25B53ED9005AD98D /* Reducers */,
-				D38378D725B20FA2005AD98D /* Stores */,
 				D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */,
 				D38378AD25B20CAD005AD98D /* Assets.xcassets */,
 				D38378B225B20CAD005AD98D /* Info.plist */,
 				D38378AF25B20CAD005AD98D /* Preview Content */,
-				D38378D825B20FBE005AD98D /* AppStore_old.swift */,
+				0BC93E60271D13B5000D5E3B /* Utilities.swift */,
 			);
 			path = ChristmasTracker;
 			sourceTree = "<group>";
@@ -190,15 +231,6 @@
 				D38378C825B20CAD005AD98D /* Info.plist */,
 			);
 			path = ChristmasTrackerUITests;
-			sourceTree = "<group>";
-		};
-		D38378D725B20FA2005AD98D /* Stores */ = {
-			isa = PBXGroup;
-			children = (
-				D38378E125B21D4E005AD98D /* MyListStore.swift */,
-				D38378EB25B22B2F005AD98D /* UserSession.swift */,
-			);
-			path = Stores;
 			sourceTree = "<group>";
 		};
 		D383790E25B53ED9005AD98D /* Reducers */ = {
@@ -243,17 +275,11 @@
 		D383792D25B541A2005AD98D /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				D38378FB25B27BF8005AD98D /* RootView.swift */,
-				D38378AB25B20CAA005AD98D /* ContentView.swift */,
-				D383790025B27C63005AD98D /* LoginView.swift */,
-				D383795B25B63330005AD98D /* Dashboard.swift */,
-				D383796025B63454005AD98D /* MyListView.swift */,
-				0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */,
-				D383796525B63466005AD98D /* GivingListView.swift */,
-				D383796A25B63472005AD98D /* ProfileView.swift */,
-				D383796F25B6376F005AD98D /* NewItemView.swift */,
-				0BC93E5C270E4081000D5E3B /* ListItemView.swift */,
-				0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */,
+				0BC93E66271E4BAD000D5E3B /* Core */,
+				0BC93E65271E4B72000D5E3B /* Login */,
+				0BC93E64271E4B69000D5E3B /* Profile */,
+				0BC93E63271E4B60000D5E3B /* GivingList */,
+				0BC93E62271E4B54000D5E3B /* OwnedList */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -404,14 +430,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D38378D925B20FBE005AD98D /* AppStore_old.swift in Sources */,
-				D38378AC25B20CAA005AD98D /* ContentView.swift in Sources */,
 				D383794C25B545C1005AD98D /* AuthReducer.swift in Sources */,
 				D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */,
 				D383796125B63454005AD98D /* MyListView.swift in Sources */,
-				D38378EC25B22B2F005AD98D /* UserSession.swift in Sources */,
 				D383791725B54090005AD98D /* AppAction.swift in Sources */,
 				D383792425B540E7005AD98D /* AuthMiddleware.swift in Sources */,
+				0BEFAAED2724ECD30012A7AE /* ChangePasswordView.swift in Sources */,
 				D383797A25B63AD3005AD98D /* ListMiddleware.swift in Sources */,
 				D383791125B54033005AD98D /* AppReducer.swift in Sources */,
 				0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */,
@@ -419,9 +443,9 @@
 				D383795125B63272005AD98D /* OwnedListReducer.swift in Sources */,
 				D383795C25B63330005AD98D /* Dashboard.swift in Sources */,
 				D38378FC25B27BF8005AD98D /* RootView.swift in Sources */,
-				D38378E225B21D4E005AD98D /* MyListStore.swift in Sources */,
 				0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */,
 				0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */,
+				0BC93E61271D13B5000D5E3B /* Utilities.swift in Sources */,
 				D383793025B541FE005AD98D /* AppState.swift in Sources */,
 				D383796625B63466005AD98D /* GivingListView.swift in Sources */,
 				D383790A25B53E93005AD98D /* AppStore.swift in Sources */,
@@ -519,7 +543,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.3;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -574,7 +598,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.3;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -594,7 +618,7 @@
 				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -616,7 +640,7 @@
 				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -636,7 +660,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				INFOPLIST_FILE = ChristmasTrackerTests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -658,7 +682,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				INFOPLIST_FILE = ChristmasTrackerTests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

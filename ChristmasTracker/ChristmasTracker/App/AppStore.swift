@@ -19,6 +19,12 @@ final class Store<State, Action>: ObservableObject {
     
     var tasks = [AnyCancellable]()
     
+    
+    
+    
+    
+    
+    
     let serialQueue = DispatchQueue(label: "com.alberta.christmastracker.serial.queue")
 
     private let reducer: Reducer<State, Action>

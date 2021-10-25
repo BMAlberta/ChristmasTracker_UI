@@ -38,6 +38,7 @@ struct LoginView: View {
 struct MainLoginView: View {
     @State var email = ""
     @State var password = ""
+    @State var showEnroll = false
     
     var body: some View {
         VStack() {
@@ -45,7 +46,10 @@ struct MainLoginView: View {
             LogoView()
             CredentialsView(email: $email, password: $password)
             Spacer()
-            EnrollView()
+            EnrollView(showEnroll: $showEnroll)
+                .alert(isPresented: $showEnroll) {
+                    Alert(title: Text("Not Supported"), message: Text("Enrollment via the Mobile application is not currently supported. Please contact the developer for assistance."), dismissButton: .default(Text("Ok")))
+                }
             Spacer()
         }.background(
             LinearGradient(gradient: Gradient(colors: [Color("brandBackgroundPrimary"),
@@ -91,13 +95,13 @@ struct CredentialsView: View {
                     self.prepareLogin()
                     print("Enter tapped")
                 })
-                .padding()
-                .disableAutocorrection(true)
-                .autocapitalization(.none)
-                .background(Color.white)
-                .textFieldStyle(PlaceholderStyle())
-                .cornerRadius(20.0)
-                .shadow(radius: 10.0, x: 20, y: 10)
+                    .padding()
+                    .disableAutocorrection(true)
+                    .autocapitalization(.none)
+                    .background(Color.white)
+                    .textFieldStyle(PlaceholderStyle())
+                    .cornerRadius(20.0)
+                    .shadow(radius: 10.0, x: 20, y: 10)
             }.padding([.leading, .trailing], 27.5)
             
             Button(action: {
@@ -151,12 +155,14 @@ struct PasswordField: View {
 }
 
 struct EnrollView: View {
+    @Binding var showEnroll: Bool
     var body: some View {
         HStack(spacing: 0) {
             Text("Don't have an account? ")
                 .foregroundColor(.white)
             Button(action: {
                 print("Sign up tapped")
+                showEnroll.toggle()
             }) {
                 Text("Sign Up")
                     .foregroundColor(.white)
@@ -190,12 +196,12 @@ struct LoginView_Previews: PreviewProvider {
         authState: AuthState(),
         listState: ListState()
     ),
-    reducer: appReducer,
-    middlewares: [
-        authMiddleware(service: AuthService()),
-        logMiddleware(),
-        listMiddleware(service: ListService())
-    ])
+                                reducer: appReducer,
+                                middlewares: [
+                                    authMiddleware(service: AuthService()),
+                                    logMiddleware(),
+                                    listMiddleware(service: ListService())
+                                ])
     
     static var previews: some View {
         Group {

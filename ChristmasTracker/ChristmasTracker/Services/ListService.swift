@@ -16,35 +16,25 @@ enum ListServiceError: Error {
     case url(error: URLError)
 }
 
-struct Utilities {
-    
-    enum RequestType: String {
-        case get = "GET"
-        case post = "POST"
-    }
-    
-    static func createBaseRequest(url: URL, method: RequestType, token: String) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(token, forHTTPHeaderField: "auth-token")
-        request.httpMethod = method.rawValue
-        
-        return request
-    }
-}
-
 struct ListService {
     
     func getOwnedItems(_ token: String) -> AnyPublisher<AllItemsResponse, ListServiceError> {
         
-        let urlString = "http://127.0.0.1:3000/tracker/items/owned"
+        guard token.count > 0 else {
+            return Fail(error: ListServiceError.unknown)
+                .eraseToAnyPublisher()
+        }
+        
+        
+//        let urlString = "http://127.0.0.1:3000/tracker/items/owned"
+        let urlString = Configuration.getUrl(forKey: .ownedItems)
         
         guard let url = URL(string : urlString) else {
             return Fail(error: ListServiceError.invalidURL)
                 .eraseToAnyPublisher()
         }
         
-        let request = Utilities.createBaseRequest(url: url,
+        let request = NetworkUtility.createBaseRequest(url: url,
                                                   method: .get,
                                                   token: token)
         
@@ -63,14 +53,15 @@ struct ListService {
     
     
     func getListOverviewByUser(_ token: String) -> AnyPublisher<UserListOverviewResponse, ListServiceError> {
-        let urlString = "http://127.0.0.1:3000/tracker/items/groupedByUser"
+//        let urlString = "http://127.0.0.1:3000/tracker/items/groupedByUser"
+        let urlString = Configuration.getUrl(forKey: .itemsGroupedByUser)
         
         guard let url = URL(string: urlString) else {
             return Fail(error: ListServiceError.invalidURL)
                 .eraseToAnyPublisher()
         }
         
-        let request = Utilities.createBaseRequest(url: url,
+        let request = NetworkUtility.createBaseRequest(url: url,
                                                   method: .get,
                                                   token: token)
         
@@ -89,7 +80,8 @@ struct ListService {
     }
     
     func getListForUser(_ token: String, userId: String) -> AnyPublisher<AllItemsResponse, ListServiceError> {
-        let baseUrlString = "http://127.0.0.1:3000/tracker/items/user/"
+//        let baseUrlString = "http://127.0.0.1:3000/tracker/items/user/"
+        let baseUrlString = Configuration.getUrl(forKey: .itemsForUser)
         let finalUrlString = baseUrlString + userId
         
         guard let url = URL(string: finalUrlString) else {
@@ -97,7 +89,7 @@ struct ListService {
                 .eraseToAnyPublisher()
         }
         
-        let request = Utilities.createBaseRequest(url: url,
+        let request = NetworkUtility.createBaseRequest(url: url,
                                                   method: .get,
                                                   token: token)
         
@@ -118,21 +110,21 @@ struct ListService {
  
     func addNewItem(token: String, newItem: NewItemModel) -> AnyPublisher<Item, ListServiceError> {
         
-        let urlString = "http://127.0.0.1:3000/tracker/items"
+//        let urlString = "http://127.0.0.1:3000/tracker/items"
+        let urlString = Configuration.getUrl(forKey: .addItem)
         
         let params: [String: String] = ["name": newItem.name,
                                         "description": newItem.description,
                                         "link": newItem.link,
-                                        "price": newItem.price,
-                                        "category": newItem.category]
+                                        "price": newItem.price]
         
         guard let url = URL(string : urlString) else {
             return Fail(error: ListServiceError.invalidURL)
                 .eraseToAnyPublisher()
         }
         
-        var request = Utilities.createBaseRequest(url: url,
-                                                  method: .get,
+        var request = NetworkUtility.createBaseRequest(url: url,
+                                                  method: .post,
                                                   token: token)
         
         let json: [AnyHashable: AnyHashable] = params
@@ -153,7 +145,8 @@ struct ListService {
     
     func markItemPurchased(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
         
-        let urlString = "http://127.0.0.1:3000/tracker/purchases"
+//        let urlString = "http://127.0.0.1:3000/tracker/purchases"
+        let urlString = Configuration.getUrl(forKey: .markPurchased)
         
         let params: [String: String] = ["itemId": item.id]
         
@@ -163,7 +156,7 @@ struct ListService {
         }
         
         
-        var request = Utilities.createBaseRequest(url: url,
+        var request = NetworkUtility.createBaseRequest(url: url,
                                                   method: .post,
                                                   token: token)
         
@@ -184,7 +177,8 @@ struct ListService {
     
     func markItemRetracted(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
         
-        let urlString = "http://127.0.0.1:3000/tracker/purchases/retract"
+//        let urlString = "http://127.0.0.1:3000/tracker/purchases/retract"
+        let urlString = Configuration.getUrl(forKey: .markRetracted)
         
         let params: [String: String] = ["itemId": item.id]
         
@@ -194,7 +188,7 @@ struct ListService {
         }
         
         
-        var request = Utilities.createBaseRequest(url: url,
+        var request = NetworkUtility.createBaseRequest(url: url,
                                                   method: .post,
                                                   token: token)
         
@@ -210,6 +204,65 @@ struct ListService {
             .decode(type: NetworkResponse<UpdatedItemResponse>.self, decoder: JSONDecoder())
             .mapError { ListServiceError.decoder(error: $0) }
             .map { $0.payload.updatedItem }
+            .eraseToAnyPublisher()
+    }
+    
+    func updateItem(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
+        let baseUrlString = Configuration.getUrl(forKey: .updateItem)
+        let finalUrlString = baseUrlString + item.id
+        
+        guard let url = URL(string: finalUrlString) else {
+            return Fail(error: ListServiceError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+        
+        let params: [String: AnyHashable] = [
+            "name" : item.name,
+            "description": item.description,
+            "link": item.link,
+            "price": item.price,
+            "quantity": item.quantity
+        ]
+        
+        var request = NetworkUtility.createBaseRequest(url: url,
+                                                       method: .patch,
+                                                       token: token)
+        
+        let json: [AnyHashable: AnyHashable] = params
+        let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        
+        request.httpBody = jsonData
+        
+        return URLSession.shared
+            .dataTaskPublisher(for: url)
+            .mapError { ListServiceError.url(error: $0) }
+            .map { $0.data }
+            .decode(type: NetworkResponse<UpdatedItemResponse>.self, decoder: JSONDecoder())
+            .mapError { ListServiceError.decoder(error: $0) }
+            .map { $0.payload.updatedItem }
+            .eraseToAnyPublisher()
+    }
+    
+    func deleteItem(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
+        let baseUrlString = Configuration.getUrl(forKey: .updateItem)
+        let finalUrlString = baseUrlString + item.id
+        
+        guard let url = URL(string: finalUrlString) else {
+            return Fail(error: ListServiceError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+        
+        let request = NetworkUtility.createBaseRequest(url: url,
+                                                       method: .delete,
+                                                       token: token)
+        
+        return URLSession.shared
+            .dataTaskPublisher(for: request)
+            .mapError { ListServiceError.url(error: $0) }
+            .map { $0.data }
+            .decode(type: NetworkResponse<DeletedItemResponse>.self, decoder: JSONDecoder())
+            .mapError { ListServiceError.decoder(error: $0) }
+            .map { $0.payload.item }
             .eraseToAnyPublisher()
     }
 }
