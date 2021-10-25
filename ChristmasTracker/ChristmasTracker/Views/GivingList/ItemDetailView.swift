@@ -79,6 +79,8 @@ struct ItemDetailView: View {
                     .padding(10)
                     .font(.body)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(nil)
                     .overlay(RoundedRectangle(cornerRadius: 10)
                                 .stroke(Color.green, lineWidth: 1))
                     .background(Color(UIColor.systemBackground))
@@ -197,7 +199,7 @@ struct BindingItemViewPreview : View {
         let item = Item(id: "1234",
                         createdBy: "Brian",
                         creationDate: "2021-10-04",
-                        description: "Cordless drill",
+                        description: "This an item that has a really long description that hopefully will be truncated properly.",
                         lastEditDate: "2021-10-04",
                         link: "www.lowes.com",
                         name: "Drill",

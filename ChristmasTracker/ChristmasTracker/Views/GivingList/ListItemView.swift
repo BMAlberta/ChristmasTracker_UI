@@ -18,7 +18,8 @@ struct ListItemView: View {
             HStack(alignment: .center) {
                 Text("\(data.description)")
                     .font(.subheadline)
-                    .lineLimit(nil)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer()
                 Text("Quantity(\(data.quantity))")
                     .font(.caption2)
@@ -34,7 +35,7 @@ struct ListItemView: View {
             }
             HStack {
                 Spacer()
-                Text("Last update: \(data.lastEditDate)")
+                Text("Last update: \(FormatUtility.convertDateStringToHumanReadable(rawDate: data.lastEditDate))")
                     .font(.caption)
                     .foregroundColor(Color.gray)
                 
@@ -60,7 +61,7 @@ struct ListItemView_Previews: PreviewProvider {
         let item = Item(id: "1234",
                         createdBy: "Brian",
                         creationDate: "2021-10-04",
-                        description: "Cordless drill",
+                        description: "This an item that has a really long description that hopefully will be truncated properly.",
                         lastEditDate: "2021-10-04",
                         link: "www.lowes.com",
                         name: "Drill",
