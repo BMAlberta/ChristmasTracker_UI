@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import os
 
 enum ListError: Error {
     case invalidURL
@@ -16,6 +17,7 @@ enum ListError: Error {
 }
 
 struct User: Codable {
+    let _id: String
     let lastLogInLocation: String
     let email: String
     let firstName: String
@@ -113,6 +115,7 @@ class Item: Decodable, Identifiable, ObservableObject {
     var price: Double
     @Published var purchased: Bool
     var purchaseDate: String?
+    var purchasedBy: String?
     var quantity: Int
     var retractablePurchase: Bool = false
     var __v: Int
@@ -129,6 +132,7 @@ class Item: Decodable, Identifiable, ObservableObject {
         case purchaseDate
         case quantity
         case retractablePurchase
+        case purchasedBy
         case id = "_id"
         case __v
     }
@@ -144,6 +148,7 @@ class Item: Decodable, Identifiable, ObservableObject {
         self.price = 0.0
         self.purchased = false
         self.purchaseDate = ""
+        self.purchasedBy = ""
         self.quantity = 0
         self.__v = 0
     }
@@ -202,7 +207,7 @@ class NewItemModel: ObservableObject {
     
     
     func saveItem() {
-        print("Saving the item")
-        print("Name: \(name)\nDescription: \(description)\nLink: \(link)\nPrice: \(price)\nQuantity: \(quantity)\nCategory: \(category)")
+        os_log("Saving the item")
+        os_log("Name: \(self.name)\nDescription: \(self.description)\nLink: \(self.link)\nPrice: \(self.price)\nQuantity: \(self.quantity)\nCategory: \(self.category)")
     }
 }

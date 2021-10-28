@@ -29,6 +29,9 @@ struct Dashboard: View {
                         Text("Profile")
                     }
             }
+            .onAppear(perform: {
+                _store.dispatch(.auth(action: .fetchCurrenUser(token: _store.state.auth.token)))
+            })
         } else {
             EmptyView()
         }

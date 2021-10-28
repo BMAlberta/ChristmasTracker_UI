@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import os
 
 enum ListServiceError: Error {
     case networkError
@@ -26,7 +27,6 @@ struct ListService {
         }
         
         
-//        let urlString = "http://127.0.0.1:3000/tracker/items/owned"
         let urlString = Configuration.getUrl(forKey: .ownedItems)
         
         guard let url = URL(string : urlString) else {
@@ -43,7 +43,7 @@ struct ListService {
             .mapError { ListServiceError.url(error: $0) }
             .map {
                 let stringData: String = String(data: $0.data, encoding: String.Encoding.utf8)!
-                print(stringData)
+                os_log("Service Returned Owned Items:\n%s", log: LogUtility.networking, stringData)
                 return $0.data }
             .decode(type: NetworkResponse<AllItemsResponse>.self, decoder: JSONDecoder())
             .mapError { ListServiceError.decoder(error: $0) }
@@ -53,7 +53,6 @@ struct ListService {
     
     
     func getListOverviewByUser(_ token: String) -> AnyPublisher<UserListOverviewResponse, ListServiceError> {
-//        let urlString = "http://127.0.0.1:3000/tracker/items/groupedByUser"
         let urlString = Configuration.getUrl(forKey: .itemsGroupedByUser)
         
         guard let url = URL(string: urlString) else {
@@ -70,7 +69,7 @@ struct ListService {
             .mapError { ListServiceError.url(error: $0) }
             .map {
                 let stringData: String = String(data: $0.data, encoding: String.Encoding.utf8)!
-                print(stringData)
+                os_log("Serivce Returned Overviews:\n%s", log: LogUtility.networking, stringData)
                 return $0.data
             }
             .decode(type: NetworkResponse<UserListOverviewResponse>.self, decoder: JSONDecoder())
@@ -80,7 +79,6 @@ struct ListService {
     }
     
     func getListForUser(_ token: String, userId: String) -> AnyPublisher<AllItemsResponse, ListServiceError> {
-//        let baseUrlString = "http://127.0.0.1:3000/tracker/items/user/"
         let baseUrlString = Configuration.getUrl(forKey: .itemsForUser)
         let finalUrlString = baseUrlString + userId
         
@@ -98,7 +96,7 @@ struct ListService {
             .mapError { ListServiceError.url(error: $0) }
             .map {
                 let stringData: String = String(data: $0.data, encoding: String.Encoding.utf8)!
-                print(stringData)
+                os_log("Service Returned List:\n%s", log: LogUtility.networking, stringData)
                 return $0.data
             }
             .decode(type: NetworkResponse<AllItemsResponse>.self, decoder: JSONDecoder())
@@ -110,13 +108,13 @@ struct ListService {
  
     func addNewItem(token: String, newItem: NewItemModel) -> AnyPublisher<Item, ListServiceError> {
         
-//        let urlString = "http://127.0.0.1:3000/tracker/items"
         let urlString = Configuration.getUrl(forKey: .addItem)
         
         let params: [String: String] = ["name": newItem.name,
                                         "description": newItem.description,
                                         "link": newItem.link,
-                                        "price": newItem.price]
+                                        "price": newItem.price,
+                                        "quantity": newItem.quantity]
         
         guard let url = URL(string : urlString) else {
             return Fail(error: ListServiceError.invalidURL)
@@ -145,7 +143,6 @@ struct ListService {
     
     func markItemPurchased(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
         
-//        let urlString = "http://127.0.0.1:3000/tracker/purchases"
         let urlString = Configuration.getUrl(forKey: .markPurchased)
         
         let params: [String: String] = ["itemId": item.id]
@@ -177,7 +174,6 @@ struct ListService {
     
     func markItemRetracted(token: String, item: Item) -> AnyPublisher<Item, ListServiceError> {
         
-//        let urlString = "http://127.0.0.1:3000/tracker/purchases/retract"
         let urlString = Configuration.getUrl(forKey: .markRetracted)
         
         let params: [String: String] = ["itemId": item.id]

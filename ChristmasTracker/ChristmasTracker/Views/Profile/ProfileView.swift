@@ -37,8 +37,10 @@ struct ProfileView: View {
         }
         .navigationViewStyle(.stack)
         .onAppear {
-            let token = _store.state.auth.token
-            _store.dispatch(.auth(action: .fetchCurrenUser(token: token)))
+            if _store.state.auth.currentUserDetails == nil {
+                let token = _store.state.auth.token
+                _store.dispatch(.auth(action: .fetchCurrenUser(token: token)))
+            }
         }
     }
     
@@ -119,7 +121,6 @@ struct ProfileView: View {
         
         var body: some View {
             Button("Sign Out") {
-                print("sign out")
                 store.dispatch(.auth(action: .logout))
                 
             }

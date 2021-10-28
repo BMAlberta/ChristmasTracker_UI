@@ -21,6 +21,7 @@ struct LoginView: View {
             if (store.state.auth.authInProgress) {
                 MainLoginView()
                 ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: Color.red))
             } else if (store.state.auth.isAuthError) {
                 MainLoginView()
                     .alert(isPresented: shouldDisplayError) {
@@ -93,7 +94,6 @@ struct CredentialsView: View {
                 
                 SecureField("Password", text: $password, onCommit: {
                     self.prepareLogin()
-                    print("Enter tapped")
                 })
                     .padding()
                     .disableAutocorrection(true)
@@ -106,7 +106,6 @@ struct CredentialsView: View {
             
             Button(action: {
                 self.prepareLogin()
-                print("Sign in tapped")
             }) {
                 Text("Sign In")
                     .font(.headline)
@@ -161,7 +160,6 @@ struct EnrollView: View {
             Text("Don't have an account? ")
                 .foregroundColor(.white)
             Button(action: {
-                print("Sign up tapped")
                 showEnroll.toggle()
             }) {
                 Text("Sign Up")

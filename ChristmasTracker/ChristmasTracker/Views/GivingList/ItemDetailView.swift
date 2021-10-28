@@ -38,13 +38,16 @@ struct ItemDetailView: View {
                 Section("Item History") {
                     
                     StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.lastEditDate))
-                    if (model.retractablePurchase) {
-                        StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.purchaseDate))
-                        
-                        PurchaseButton(model: model)
-                            .disabled(purchaseActionSuccess)
-                    } else {
+                    if (model.createdBy == _store.state.auth.currentUserDetails?._id) {
                         DeleteButton(model: model)
+                            
+                    } else {
+                        StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.purchaseDate))
+                        if (model.retractablePurchase || !model.purchased) {
+                            PurchaseButton(model: model)
+                                .disabled(purchaseActionSuccess)
+                                
+                        }
                     }
                 }
             }
@@ -52,8 +55,7 @@ struct ItemDetailView: View {
             .background(Color(UIColor.systemBackground))
             .navigationBarTitle("Item Detail", displayMode: .inline)
             .onChange(of: _store.state.ownedList.purchaseComplete, perform: { _ in
-                print("On Change!")
-                if purchaseActionSuccess && !model.retractablePurchase {
+                if purchaseActionSuccess && model.retractablePurchase {
                     _store.dispatch(.list(action: .fetchListOverview(token: _store.state.auth.token)))
                     self.presentationMode.wrappedValue.dismiss()
                 }
@@ -130,7 +132,6 @@ struct ItemDetailView: View {
         }
         var body: some View {
             Button(action: {
-                print("Save tapped")
                 updatePurchase(item: model)
                 
             }) {
@@ -138,7 +139,8 @@ struct ItemDetailView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding()
-                    .frame(width: 300, height: 50)
+//                    .frame(width: 300, height: 50)
+                    .frame(maxWidth: .infinity, maxHeight: 50)
                     .background(buttonColor)
                     .cornerRadius(15.0)
             }/**.padding(.top, 50)*/
@@ -159,14 +161,14 @@ struct ItemDetailView: View {
 
         var body: some View {
             Button(action: {
-                print("Delete tapped")
                 _store.dispatch(.list(action: .deleteItem(token: _store.state.auth.token, item: model)))
             }) {
                 Text("Delete Item")
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding()
-                    .frame(width: 300, height: 50)
+//                    .frame(width: 300, height: 50)
+                    .frame(maxWidth: .infinity, maxHeight: 50)
                     .background(Color("brandBackgroundSecondary"))
                     .cornerRadius(15.0)
             }/**.padding(.top, 50)*/

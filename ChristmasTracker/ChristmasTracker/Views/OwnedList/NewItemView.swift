@@ -16,7 +16,7 @@ struct NewItemView: View {
     
     var body: some View {
         NavigationView {
-            VStack {
+            List {
                 NameView(model: $model)
                 DescriptionView(model: $model)
                 
@@ -26,7 +26,7 @@ struct NewItemView: View {
                     QuantityView(model: $model)
                 }
                 SaveButton(model: $model, showingModal: $showingModal)
-            }.padding()
+            }
             .background(Color(UIColor.systemBackground))
             .navigationBarTitle("Create New Item")
             .navigationBarItems(trailing: CloseButton(showingModal: $showingModal))
@@ -54,20 +54,40 @@ struct SaveButton: View {
     @EnvironmentObject var _store: AppStore
     @Binding var model: NewItemModel
     @Binding var showingModal: Bool
+    @State var showError: Bool = false
     var body: some View {
         Button(action: {
-            print("Save tapped")
-            _store.dispatch(.list(action: .createItem(item: model)))
-            showingModal.toggle()
+            
+            if Self.allRequiredFieldsPresent(model: model) {
+                _store.dispatch(.list(action: .createItem(item: model)))
+                showingModal.toggle()
+            } else {
+                showError.toggle()
+            }
+            
         }) {
             Text("Save Item")
                 .font(.headline)
                 .foregroundColor(.white)
                 .padding()
-                .frame(width: 300, height: 50)
-                .background(Color.green)
+                .frame(maxWidth: .infinity, maxHeight: 50)
+                .background(Color("brandBackgroundPrimary"))
                 .cornerRadius(15.0)
-        }.padding(.top, 50)
+        }
+        .padding(.top, 50)
+        .alert(isPresented: $showError) {
+            Alert(title: Text("Unable to Add Item"), message: Text("Please ensure that all fields are filled out before saving the item."), dismissButton: .default(Text("Ok"), action: {
+                showError.toggle()
+            }))
+        }
+    }
+    
+    private static func allRequiredFieldsPresent(model: NewItemModel) -> Bool {
+        return !model.name.isEmpty
+        && !model.description.isEmpty
+        && !model.link.isEmpty
+        && !model.price.isEmpty
+        && !model.quantity.isEmpty
     }
 }
 
@@ -82,10 +102,10 @@ struct CategoryView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.green, lineWidth: 1))
+                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-//                .keyboardAdaptive()
+            //                .keyboardAdaptive()
         }
     }
 }
@@ -101,10 +121,10 @@ struct QuantityView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.green, lineWidth: 1))
+                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-//                .keyboardAdaptive()
+            //                .keyboardAdaptive()
         }
     }
 }
@@ -120,10 +140,10 @@ struct PriceView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.green, lineWidth: 1))
+                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-//                .keyboardAdaptive()
+            //                .keyboardAdaptive()
         }
     }
 }
@@ -139,10 +159,10 @@ struct LinkView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.green, lineWidth: 1))
+                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-//                .keyboardAdaptive()
+            //                .keyboardAdaptive()
         }
     }
 }
@@ -158,10 +178,10 @@ struct DescriptionView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.green, lineWidth: 1))
+                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-//                .keyboardAdaptive()
+            //                .keyboardAdaptive()
         }
     }
 }
@@ -177,10 +197,10 @@ struct NameView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.green, lineWidth: 1))
+                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-//                .keyboardAdaptive()
+            //                .keyboardAdaptive()
         }
     }
 }
@@ -189,7 +209,6 @@ struct CloseButton: View {
     @Binding var showingModal: Bool
     var body: some View {
         Button(action: {
-            print("Closed")
             showingModal.toggle()
         }) { Image(systemName: "xmark") }
     }
@@ -206,7 +225,7 @@ fileprivate struct BorderStyle: TextFieldStyle {
 
 struct KeyboardAdaptive: ViewModifier {
     @State private var bottomPadding: CGFloat = 0
-
+    
     func body(content: Content) -> some View {
         GeometryReader { geometry in
             content
@@ -215,7 +234,7 @@ struct KeyboardAdaptive: ViewModifier {
                     let keyboardTop = geometry.frame(in: .global).height - keyboardHeight
                     let focusedTextInputBottom = UIResponder.currentFirstResponder?.globalFrame?.maxY ?? 0
                     self.bottomPadding = max(0, focusedTextInputBottom - keyboardTop - geometry.safeAreaInsets.bottom)
-            }
+                }
                 .animation(.easeOut, value: 0.16)
         }
     }
@@ -248,9 +267,9 @@ extension UIResponder {
         UIApplication.shared.sendAction(#selector(UIResponder.findFirstResponder(_:)), to: nil, from: nil, for: nil)
         return _currentFirstResponder
     }
-
+    
     private static weak var _currentFirstResponder: UIResponder?
-
+    
     @objc private func findFirstResponder(_ sender: Any) {
         UIResponder._currentFirstResponder = self
     }

@@ -7,11 +7,12 @@
 
 import Foundation
 import Combine
+import os
 
 func logMiddleware() -> Middleware<AppState, AppAction> {
 
     return { state, action in
-        print("Triggered action: \(action)")
+        os_log("Triggered action: \(action)")
         return Empty().eraseToAnyPublisher()
     }
 }

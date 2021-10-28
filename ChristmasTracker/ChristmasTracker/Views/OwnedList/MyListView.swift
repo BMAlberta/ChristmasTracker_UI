@@ -53,6 +53,5 @@ struct MyListView: View {
     
     func onAdd() {
         // To be implemented in the next section
-        print("Add button pressed")
     }
 }

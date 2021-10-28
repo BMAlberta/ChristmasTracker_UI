@@ -6,14 +6,16 @@
 //
 
 import Foundation
+import os
 
 struct Configuration {
     
     static private let localHost = "http://127.0.0.1:3000"
     static private let devHost = "http://10.1.20.152:3000"
+    static private let prodHost = "https://api.bmalberta.com"
     
     static func getUrl(forKey key: Path) -> String {
-        return Self.devHost + key.rawValue
+        return Self.localHost + key.rawValue
     }
     
     
@@ -37,17 +39,6 @@ struct Configuration {
         }
         return versionString
     }
-    
-    /**
-     var buildDate:NSDate
-      {
-          if let infoPath = NSBundle.mainBundle().pathForResource("Info.plist", ofType: nil),
-             let infoAttr = try? NSFileManager.defaultManager().attributesOfItemAtPath(infoPath),
-             let infoDate = infoAttr["NSFileCreationDate"] as? NSDate
-          { return infoDate }
-          return NSDate()
-      }
-     */
     
     static var buildDate: String {
         guard let infoPath = Bundle.main.path(forResource: "Info", ofType: "plist"),
@@ -133,4 +124,9 @@ struct FormatUtility {
         
         return numberOfDays
     }
+}
+
+struct LogUtility {
+    static private let subsystem = "com.alberta.ChristmasTracker"
+    static let networking = OSLog(subsystem: Self.subsystem, category: "networking")
 }
