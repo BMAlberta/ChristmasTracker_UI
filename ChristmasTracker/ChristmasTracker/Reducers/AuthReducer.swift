@@ -37,6 +37,7 @@ func authReducer(state: inout AuthState, action: AuthAction) -> Void {
         
     case .fetchCurrentUserComplete(let res):
         state.currentUserDetails = res.user
+        UserDefaults.standard.set(res.user.email, forKey: "savedId")
         
     case .resetPassword(_,_):
         state.passwordResetInProgress = true

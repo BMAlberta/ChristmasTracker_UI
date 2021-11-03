@@ -19,7 +19,11 @@ struct ProfileView: View {
                 Section("Historical Details") {
                     HistoryView(data: _store.state.auth.currentUserDetails)
                 }
-                ChangePasswordButton(presented: $passwordChangePresented)
+                Section("Login Options") {
+                    ChangePasswordButton(presented: $passwordChangePresented)
+                    DisableSaveUserIdButton()
+                }
+                
                 
                 Section("Application Information") {
                     AppInfoView()
@@ -110,6 +114,21 @@ struct ProfileView: View {
                 Spacer()
                 Button("Change password") {
                     presented.toggle()
+                }
+                Spacer()
+            }
+        }
+    }
+    
+    private struct DisableSaveUserIdButton: View {
+        var body: some View {
+            HStack {
+                Spacer()
+                Button(action: {
+                    UserDefaults.standard.removeObject(forKey: "savedId")
+                }) {
+                    Text("Clear saved user ID")
+                        .foregroundColor(.red)
                 }
                 Spacer()
             }

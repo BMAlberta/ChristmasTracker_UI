@@ -37,7 +37,7 @@ struct LoginView: View {
 
 
 struct MainLoginView: View {
-    @State var email = ""
+    @State var email = UserDefaults.standard.string(forKey: "savedId") ?? ""
     @State var password = ""
     @State var showEnroll = false
     

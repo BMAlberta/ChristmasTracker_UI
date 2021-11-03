@@ -97,24 +97,41 @@ struct ItemDetailView: View {
         var body: some View {
             VStack {
                 Text(title)
-                Link(data, destination: Self.prepareLink(input: data))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .font(.body)
-                    .multilineTextAlignment(.leading)
-                    .overlay(RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.green, lineWidth: 1))
-                    .background(Color(UIColor.systemBackground))
-                    .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
+                if let url = (Self.prepareLink(input: data)) {
+                    Link(data, destination: url)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .font(.body)
+                        .multilineTextAlignment(.leading)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.green, lineWidth: 1))
+                        .background(Color(UIColor.systemBackground))
+                        .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
+                } else {
+                    Text(data)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .font(.body)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(nil)
+                        .overlay(RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.green, lineWidth: 1))
+                        .background(Color(UIColor.systemBackground))
+                        .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
+                }
             }
         }
         
-        static func prepareLink(input: String) -> URL {
+        static func prepareLink(input: String) -> URL? {
             if input.contains("http://") || input.contains("https://") {
-                return URL(string: input)!
-            } else {
-                return URL(string: "https://"+input)!
+                return URL(string: input)
             }
+            
+            if input.contains("www") || input.contains(".com") {
+                return URL(string: "https://"+input)
+            }
+            return nil
         }
     }
     

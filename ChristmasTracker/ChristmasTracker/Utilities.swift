@@ -15,7 +15,7 @@ struct Configuration {
     static private let prodHost = "https://api.bmalberta.com"
     
     static func getUrl(forKey key: Path) -> String {
-        return Self.localHost + key.rawValue
+        return Self.prodHost + key.rawValue
     }
     
     

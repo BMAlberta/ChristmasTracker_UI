@@ -173,8 +173,8 @@ struct DescriptionView: View {
         VStack {
             Text("Description")
             TextField("Enter more information about your item here.", text: $model.description)
-                .disableAutocorrection(true)
-                .autocapitalization(.none)
+//                .disableAutocorrection(true)
+                .autocapitalization(.sentences)
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
@@ -192,8 +192,8 @@ struct NameView: View {
         VStack {
             Text("Name")
             TextField("Item name", text: $model.name)
-                .disableAutocorrection(true)
-                .autocapitalization(.none)
+//                .disableAutocorrection(true)
+                .autocapitalization(.sentences)
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
