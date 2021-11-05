@@ -13,6 +13,9 @@ struct RootView: View {
         
         if (!_store.state.auth.isLoggedIn) {
             LoginView()
+                .onAppear {
+                    _store.dispatch(.auth(action: .fetchUpdateInfo))
+                }
         } else {
             Dashboard()
         }

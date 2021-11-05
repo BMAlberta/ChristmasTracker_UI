@@ -94,6 +94,15 @@ struct ListOverview: Decodable, Identifiable {
     }
 }
 
+struct UpdateInfoModelResponse: Decodable {
+    let version: UpdateInfoModel
+}
+
+struct UpdateInfoModel: Decodable {
+    let availableVersion: String
+    let downloadUri: String
+}
+
 struct NetworkResponse<T: Decodable>: Decodable {
     let error: ErrorResponse
     let payload: T

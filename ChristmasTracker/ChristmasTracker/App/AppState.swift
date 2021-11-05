@@ -27,6 +27,7 @@ class AuthState {
     var passwordResetInProgress = false
     var isPasswordResetError = false
     var passwordResetSuccess = false
+    var updateInfo: UpdateInfoModel? = nil
 }
 
 class ListState {

@@ -19,4 +19,7 @@ enum AuthAction {
     case resetPassword(token: String, model: ChangePasswordModel)
     case resetPasswordComplete(res: PasswordResetResponse)
     case passwordResetError(error: AuthMiddlewareError?)
+    
+    case fetchUpdateInfo
+    case fetchUpdateInfoComplete(res: UpdateInfoModel?)
 }

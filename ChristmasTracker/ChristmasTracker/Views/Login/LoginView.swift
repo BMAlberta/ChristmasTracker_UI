@@ -14,7 +14,12 @@ struct LoginView: View {
         
         let shouldDisplayError =  Binding<Bool>(
             get: { store.state.auth.isAuthError == true},
-            set: { _ in store.dispatch(.auth(action: .loginError(error: nil))) }
+            set: { _ in () }
+        )
+        
+        let shouldDisplayUpdateAlert =  Binding<Bool>(
+            get: { Configuration.isUpdateAvailable(updateInfo: store.state.auth.updateInfo)},
+            set: { _ in () }
         )
         
         ZStack {
@@ -29,6 +34,22 @@ struct LoginView: View {
                     }
             } else {
                 MainLoginView()
+                    .alert(isPresented: shouldDisplayUpdateAlert) {
+                        Alert(
+                            title: Text("Update Available"),
+                            message: Text("An updated version of this application is available for download. For the optimal experience, please download the latest version before logging in."),
+                            primaryButton: .default(Text("Install Now")) {
+                                guard let updateUri = Configuration.generateUpdateUri(updateInfo: store.state.auth.updateInfo) else {
+                                    shouldDisplayUpdateAlert.wrappedValue.toggle()
+                                    return
+                                }
+                                shouldDisplayUpdateAlert.wrappedValue.toggle()
+                                UIApplication.shared.open(updateUri)
+                                
+                            },
+                            secondaryButton: .cancel()
+                        )
+                    }
             }
         }
     }

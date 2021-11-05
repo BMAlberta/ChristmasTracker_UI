@@ -13,11 +13,15 @@ struct Configuration {
     static private let localHost = "http://127.0.0.1:3000"
     static private let devHost = "http://10.1.20.152:3000"
     static private let prodHost = "https://api.bmalberta.com"
+    static private let configHost = "https://appstore.bmalberta.com"
     
     static func getUrl(forKey key: Path) -> String {
         return Self.prodHost + key.rawValue
     }
     
+    static var configUrl: String {
+        return Self.configHost + "/config/tracker/config.json"
+    }
     
     
     enum Path: String {
@@ -48,6 +52,31 @@ struct Configuration {
               }
         return FormatUtility.convertDateToHumanReadable(rawDate: infoDate)
     }
+    
+    
+    static func isUpdateAvailable(updateInfo: UpdateInfoModel?) -> Bool {
+        guard let updateInfo = updateInfo else {
+            return false
+        }
+        guard updateInfo.availableVersion.compare(Self.appVersion, options: .numeric) == .orderedDescending else {
+            return false
+        }
+        
+        guard let _ = URL(string: "itms-services://?action=download-manifest&url="+updateInfo.downloadUri) else {
+            return false
+        }
+        return true
+    }
+    
+    static func generateUpdateUri(updateInfo: UpdateInfoModel?) -> URL? {
+        guard let updateInfo = updateInfo else {
+            return nil
+        }
+
+        return URL(string: "itms-services://?action=download-manifest&url="+updateInfo.downloadUri)
+    }
+    
+    
 }
 
 struct NetworkUtility {

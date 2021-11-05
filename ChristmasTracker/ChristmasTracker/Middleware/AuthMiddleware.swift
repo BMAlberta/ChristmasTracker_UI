@@ -82,7 +82,18 @@ func authMiddleware(service: AuthService) -> Middleware<AppState, AppAction> {
                     }
                 }
                 .eraseToAnyPublisher()
-                        
+            
+        case .auth(action: .fetchUpdateInfo):
+            return service.fetchUpdateInfo()
+                .subscribe(on: DispatchQueue.main)
+                .map { AppAction.auth(action: .fetchUpdateInfoComplete(res: $0)) }
+                .catch { (error: AuthServiceError) -> Just<AppAction> in
+                    switch (error) {
+                    default:
+                        return Just(AppAction.auth(action: .fetchUpdateInfoComplete(res: nil)))
+                    }
+                }
+                .eraseToAnyPublisher()
             default:
                 break
             }

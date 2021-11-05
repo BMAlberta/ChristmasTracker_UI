@@ -19,9 +19,6 @@ enum AuthServiceError: Error {
 struct AuthService {
     
     func performLogin(_ credentials: Credentials) -> AnyPublisher<LoginResponse, AuthServiceError> {
-        
-//        let urlString = "http://webdev01.ad.bmalberta.com:3000/xmasList/auth/login"
-//        let urlString = "http://127.0.0.1:3000/tracker/auth/login"
         let urlString = Configuration.getUrl(forKey: .auth)
         let params: [String: String] = ["email": credentials.username,
                                         "password": credentials.password]
@@ -96,6 +93,29 @@ struct AuthService {
             .decode(type: NetworkResponse<PasswordResetResponse>.self, decoder: JSONDecoder())
             .mapError { AuthServiceError.decoder(error: $0) }
             .map { $0.payload }
+            .eraseToAnyPublisher()
+    }
+    
+    func fetchUpdateInfo() -> AnyPublisher<UpdateInfoModel, AuthServiceError> {
+        let urlString = Configuration.configUrl
+        
+        guard let url = URL(string: urlString) else {
+            return Fail(error: AuthServiceError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpMethod = "GET"
+        
+        
+        return URLSession.shared
+            .dataTaskPublisher(for: request)
+            .mapError { AuthServiceError.url(error: $0) }
+            .map { $0.data }
+            .decode(type: UpdateInfoModelResponse.self, decoder: JSONDecoder())
+            .mapError { AuthServiceError.decoder(error: $0) }
+            .map { $0.version }
             .eraseToAnyPublisher()
     }
 }
