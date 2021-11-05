@@ -28,6 +28,8 @@ struct ListItemView: View {
                 Text("\(data.link)")
                     .font(.caption)
                     .fontWeight(.regular)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer()
                 Text("$\(data.price, specifier: "%.2f")")
                     .font(.title3)
