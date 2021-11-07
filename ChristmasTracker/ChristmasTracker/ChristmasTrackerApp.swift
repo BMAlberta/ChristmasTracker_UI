@@ -24,6 +24,12 @@ struct ChristmasTrackerApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .onAppear {
+                    let appearance = UITabBarAppearance()
+                    appearance.configureWithDefaultBackground()
+                    UITabBar.appearance().standardAppearance = appearance
+                    UITabBar.appearance().scrollEdgeAppearance = appearance
+                }
         }
     }
 }

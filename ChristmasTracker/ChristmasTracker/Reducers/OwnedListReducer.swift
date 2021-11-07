@@ -25,7 +25,7 @@ func ownedListReducer(state: inout ListState, action: ListAction) -> Void {
         state.fetchInProgess = true
         
     case .fetchUserListComplete(res: let res):
-        state.userItems = res.items
+        state.userItems = res.items.sorted { !$0.purchased && $1.purchased } 
         state.userIdContext = res.items.first?.createdBy ?? ""
         state.fetchInProgess = false
         state.isFetchError = false
