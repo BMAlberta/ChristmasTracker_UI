@@ -108,6 +108,7 @@ struct CategoryView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
+                .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
         }
@@ -134,6 +135,9 @@ struct QuantityView: View {
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
+                .cornerRadius(10)
+                .padding(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
+                
             if isError {
                 Text("Input can be numbers only")
                     .font(.footnote)
@@ -171,6 +175,8 @@ struct PriceView: View {
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
+                .cornerRadius(10)
+                .padding(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
             Spacer()
         }
     }
@@ -189,6 +195,7 @@ struct LinkView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
+                .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
         }
@@ -208,6 +215,7 @@ struct DescriptionView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
+                .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
         }
@@ -227,6 +235,7 @@ struct NameView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
+                .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
         }

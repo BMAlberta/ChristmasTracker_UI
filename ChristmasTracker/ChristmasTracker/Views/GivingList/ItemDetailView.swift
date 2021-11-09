@@ -86,6 +86,7 @@ struct ItemDetailView: View {
                     .overlay(RoundedRectangle(cornerRadius: 10)
                                 .stroke(Color.green, lineWidth: 1))
                     .background(Color(UIColor.systemBackground))
+                    .cornerRadius(10)
                     .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             }
         }
@@ -108,6 +109,7 @@ struct ItemDetailView: View {
                         .overlay(RoundedRectangle(cornerRadius: 10)
                                     .stroke(Color.green, lineWidth: 1))
                         .background(Color(UIColor.systemBackground))
+                        .cornerRadius(10)
                         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
                 } else {
                     Text(data)
@@ -121,6 +123,7 @@ struct ItemDetailView: View {
                         .overlay(RoundedRectangle(cornerRadius: 10)
                                     .stroke(Color.green, lineWidth: 1))
                         .background(Color(UIColor.systemBackground))
+                        .cornerRadius(10)
                         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
                 }
             }
@@ -199,6 +202,7 @@ struct ItemDetailView: View {
 struct ItemDetailView_Previews: PreviewProvider {
     static var previews: some View {
         BindingItemViewPreview()
+            .preferredColorScheme(.dark)
     }
 }
 
