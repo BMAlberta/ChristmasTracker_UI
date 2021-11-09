@@ -83,11 +83,15 @@ struct SaveButton: View {
     }
     
     private static func allRequiredFieldsPresent(model: NewItemModel) -> Bool {
+        
+        let nums: Set<Character> = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        
         return !model.name.isEmpty
         && !model.description.isEmpty
         && !model.link.isEmpty
         && !model.price.isEmpty
         && !model.quantity.isEmpty
+        && Set(model.quantity).isSubset(of: nums)
     }
 }
 
@@ -116,25 +120,48 @@ struct QuantityView: View {
         VStack {
             Text("Quantity")
             TextField("Item quantity", text: $model.quantity)
+            TextField("Item quantity", text: $model.quantity, onEditingChanged: { editing in
+                    let nums: Set<Character> = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+                    self.isError = !Set(model.quantity).isSubset(of: nums)
+            })
                 .disableAutocorrection(true)
                 .autocapitalization(.none)
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
+                            .stroke(isError ? Color("brandBackgroundSecondary") : Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
+            if isError {
+                Text("Input can be numbers only")
+                    .font(.footnote)
+                    .foregroundColor(Color("brandBackgroundSecondary"))
+            } else {
+                Spacer()
+            }
         }
     }
 }
 
 struct PriceView: View {
     @Binding var model: NewItemModel
+    @State private var temp: String = "$"
     var body: some View {
         VStack {
             Text("Price")
             TextField("Item price", text: $model.price)
+            TextField("Item price", text: $temp)
+                .onChange(of: temp) { newValue in
+                    if !newValue.hasPrefix("$") {
+                        temp = "$"
+                    }
+                    if temp.hasPrefix("$") {
+                        let trimmed = temp.dropFirst()
+                        model.price = String(trimmed)
+                    }
+                }
                 .disableAutocorrection(true)
                 .autocapitalization(.none)
                 .padding(10)
@@ -144,6 +171,7 @@ struct PriceView: View {
                 .background(Color(UIColor.systemBackground))
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             //                .keyboardAdaptive()
+            Spacer()
         }
     }
 }
