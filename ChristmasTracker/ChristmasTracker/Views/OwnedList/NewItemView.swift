@@ -110,17 +110,16 @@ struct CategoryView: View {
                 .background(Color(UIColor.systemBackground))
                 .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-            //                .keyboardAdaptive()
         }
     }
 }
 
 struct QuantityView: View {
     @Binding var model: NewItemModel
+    @State private var isError = false
     var body: some View {
         VStack {
             Text("Quantity")
-            TextField("Item quantity", text: $model.quantity)
             TextField("Item quantity", text: $model.quantity, onEditingChanged: { editing in
                     let nums: Set<Character> = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
                     self.isError = !Set(model.quantity).isSubset(of: nums)
@@ -130,11 +129,8 @@ struct QuantityView: View {
                 .padding(10)
                 .font(.body)
                 .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                             .stroke(isError ? Color("brandBackgroundSecondary") : Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
-                .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-            //                .keyboardAdaptive()
                 .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
                 
@@ -155,7 +151,6 @@ struct PriceView: View {
     var body: some View {
         VStack {
             Text("Price")
-            TextField("Item price", text: $model.price)
             TextField("Item price", text: $temp)
                 .onChange(of: temp) { newValue in
                     if !newValue.hasPrefix("$") {
@@ -173,8 +168,6 @@ struct PriceView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10)
                             .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
                 .background(Color(UIColor.systemBackground))
-                .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-            //                .keyboardAdaptive()
                 .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
             Spacer()
@@ -197,7 +190,6 @@ struct LinkView: View {
                 .background(Color(UIColor.systemBackground))
                 .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-            //                .keyboardAdaptive()
         }
     }
 }
@@ -208,7 +200,6 @@ struct DescriptionView: View {
         VStack {
             Text("Description")
             TextField("Enter more information about your item here.", text: $model.description)
-//                .disableAutocorrection(true)
                 .autocapitalization(.sentences)
                 .padding(10)
                 .font(.body)
@@ -217,7 +208,6 @@ struct DescriptionView: View {
                 .background(Color(UIColor.systemBackground))
                 .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-            //                .keyboardAdaptive()
         }
     }
 }
@@ -228,7 +218,6 @@ struct NameView: View {
         VStack {
             Text("Name")
             TextField("Item name", text: $model.name)
-//                .disableAutocorrection(true)
                 .autocapitalization(.sentences)
                 .padding(10)
                 .font(.body)
@@ -237,7 +226,6 @@ struct NameView: View {
                 .background(Color(UIColor.systemBackground))
                 .cornerRadius(10)
                 .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
-            //                .keyboardAdaptive()
         }
     }
 }
