@@ -14,10 +14,13 @@ struct MyListView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                List(_store.state.ownedList.items) { i in
-                    NavigationLink(destination: LazyView(ItemDetailView(model: i))) {
-                        ListItemView(data: i)
+                List {
+                    ForEach(_store.state.ownedList.items, id: \.id) { i in
+                        NavigationLink(destination: LazyView(ItemDetailView(model: i))) {
+                            ListItemView(data: i)
+                        }
                     }
+                    .onDelete(perform: delete)
                 }
                 .navigationBarItems(trailing: addItemButton)
                 .navigationBarTitle("My Items")
@@ -34,24 +37,20 @@ struct MyListView: View {
         }
     }
     
-    
-    private var addButton: some View {
-        return AnyView(Button(action: onAdd) { Image(systemName: "plus") })
+    private func delete(at offsets: IndexSet) {
+        let index = offsets[offsets.startIndex]
+        let item = _store.state.ownedList.items[index]
+        _store.dispatch(.list(action: .deleteItem(token: _store.state.auth.token, item: item)))
     }
     
     private var addItemButton: some View {
         Button(action: {
             self.showingDetail.toggle()
-            onAdd()
         }) {
             Image(systemName: "plus")
         }.sheet(isPresented: $showingDetail) {
             NewItemView(showingModal: $showingDetail)
             EmptyView()
         }
-    }
-    
-    func onAdd() {
-        // To be implemented in the next section
     }
 }
