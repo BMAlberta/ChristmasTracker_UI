@@ -200,7 +200,9 @@ class Item: Decodable, Identifiable, ObservableObject {
         purchased = try container.decode(Bool.self, forKey: .purchased)
         purchaseDate = try container.decode(String.self, forKey: .purchaseDate)
         quantity = try container.decode(Int.self, forKey: .quantity)
-        retractablePurchase = ((try? container.decode(Bool.self, forKey: .retractablePurchase)) != nil)
+        if let rawValue = try container.decodeIfPresent(Bool.self, forKey: .retractablePurchase) {
+            retractablePurchase = rawValue
+        }
         id = try container.decode(String.self, forKey: .id)
         __v = try container.decode(Int.self, forKey: .__v)
     }
