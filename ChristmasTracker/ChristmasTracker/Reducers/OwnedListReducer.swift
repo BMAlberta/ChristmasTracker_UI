@@ -53,7 +53,7 @@ func ownedListReducer(state: inout ListState, action: ListAction) -> Void {
     case .fetchListOverviewComplete(res: let res):
         state.isFetchError = false
         state.fetchInProgess = false
-        state.overviews = res.listOverviews
+        state.overviews = res.listOverviews.sorted{ $0.user.firstName < $1.user.firstName }
         
     case .purchaseItem(_):
         state.isFetchError = false
