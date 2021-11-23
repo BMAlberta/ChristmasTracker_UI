@@ -13,15 +13,20 @@ struct Dashboard: View {
     var body: some View {
         if (_store.state.auth.isLoggedIn) {
             TabView {
+                GivingListView().environmentObject(_store)
+                    .tabItem {
+                        Image(systemName: "books.vertical")
+                        Text("Giving")
+                    }
                 MyListView().environmentObject(_store)
                     .tabItem {
                         Image(systemName: "list.dash")
                         Text("My List")
                     }
-                GivingListView().environmentObject(_store)
+                StatsView(viewModel: StatsViewModel(_store)).environmentObject(_store)
                     .tabItem {
-                        Image(systemName: "books.vertical")
-                        Text("Giving")
+                        Image(systemName: "chart.xyaxis.line")
+                        Text("Stats")
                     }
                 ProfileView().environmentObject(_store)
                     .tabItem {

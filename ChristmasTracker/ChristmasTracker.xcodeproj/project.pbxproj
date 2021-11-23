@@ -3,14 +3,21 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 52;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0B4E6E232749ED2E00B529BC /* GenericPieChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B4E6E222749ED2E00B529BC /* GenericPieChartView.swift */; };
+		0B4E6E262749F07C00B529BC /* GenericBarChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B4E6E252749F07C00B529BC /* GenericBarChartView.swift */; };
+		0B4E6E282749F2A600B529BC /* GenericAxisValueFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B4E6E272749F2A500B529BC /* GenericAxisValueFormatter.swift */; };
+		0B569D0E27475CBC00D5ECF5 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B569D0D27475CBC00D5ECF5 /* StatsView.swift */; };
+		0BA7F31B274B2F1F009DBD7D /* StatsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA7F31A274B2F1F009DBD7D /* StatsViewModel.swift */; };
+		0BA7F31D274B306E009DBD7D /* StatsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA7F31C274B306E009DBD7D /* StatsService.swift */; };
 		0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */; };
 		0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5C270E4081000D5E3B /* ListItemView.swift */; };
 		0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */; };
 		0BC93E61271D13B5000D5E3B /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E60271D13B5000D5E3B /* Utilities.swift */; };
+		0BD4FB402748AABF001A3589 /* Charts in Frameworks */ = {isa = PBXBuildFile; productRef = 0BD4FB3F2748AABF001A3589 /* Charts */; };
 		0BEFAAED2724ECD30012A7AE /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */; };
 		D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */; };
 		D38378AE25B20CAD005AD98D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378AD25B20CAD005AD98D /* Assets.xcassets */; };
@@ -58,6 +65,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0B4E6E222749ED2E00B529BC /* GenericPieChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericPieChartView.swift; sourceTree = "<group>"; };
+		0B4E6E252749F07C00B529BC /* GenericBarChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericBarChartView.swift; sourceTree = "<group>"; };
+		0B4E6E272749F2A500B529BC /* GenericAxisValueFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenericAxisValueFormatter.swift; sourceTree = "<group>"; };
+		0B569D0D27475CBC00D5ECF5 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
+		0BA7F31A274B2F1F009DBD7D /* StatsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsViewModel.swift; sourceTree = "<group>"; };
+		0BA7F31C274B306E009DBD7D /* StatsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsService.swift; sourceTree = "<group>"; };
 		0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDetailView.swift; sourceTree = "<group>"; };
 		0BC93E5C270E4081000D5E3B /* ListItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemView.swift; sourceTree = "<group>"; };
 		0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailView.swift; sourceTree = "<group>"; };
@@ -102,6 +115,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0BD4FB402748AABF001A3589 /* Charts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,6 +136,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0B4E6E212749ED0F00B529BC /* Stats */ = {
+			isa = PBXGroup;
+			children = (
+				0B569D0D27475CBC00D5ECF5 /* StatsView.swift */,
+				0B4E6E222749ED2E00B529BC /* GenericPieChartView.swift */,
+				0B4E6E252749F07C00B529BC /* GenericBarChartView.swift */,
+				0B4E6E272749F2A500B529BC /* GenericAxisValueFormatter.swift */,
+				0BA7F31A274B2F1F009DBD7D /* StatsViewModel.swift */,
+			);
+			path = Stats;
+			sourceTree = "<group>";
+		};
 		0BC93E62271E4B54000D5E3B /* OwnedList */ = {
 			isa = PBXGroup;
 			children = (
@@ -280,6 +306,7 @@
 				0BC93E64271E4B69000D5E3B /* Profile */,
 				0BC93E63271E4B60000D5E3B /* GivingList */,
 				0BC93E62271E4B54000D5E3B /* OwnedList */,
+				0B4E6E212749ED0F00B529BC /* Stats */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -296,6 +323,7 @@
 			isa = PBXGroup;
 			children = (
 				D383794325B54390005AD98D /* AuthService.swift */,
+				0BA7F31C274B306E009DBD7D /* StatsService.swift */,
 				D383797425B63A78005AD98D /* ListService.swift */,
 			);
 			path = Services;
@@ -317,6 +345,9 @@
 			dependencies = (
 			);
 			name = ChristmasTracker;
+			packageProductDependencies = (
+				0BD4FB3F2748AABF001A3589 /* Charts */,
+			);
 			productName = ChristmasTracker;
 			productReference = D38378A625B20CAA005AD98D /* ChristmasTracker.app */;
 			productType = "com.apple.product-type.application";
@@ -388,6 +419,9 @@
 				Base,
 			);
 			mainGroup = D383789D25B20CAA005AD98D;
+			packageReferences = (
+				0BD4FB3E2748AABF001A3589 /* XCRemoteSwiftPackageReference "Charts" */,
+			);
 			productRefGroup = D38378A725B20CAA005AD98D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -431,7 +465,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				D383794C25B545C1005AD98D /* AuthReducer.swift in Sources */,
+				0BA7F31D274B306E009DBD7D /* StatsService.swift in Sources */,
 				D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */,
+				0B4E6E282749F2A600B529BC /* GenericAxisValueFormatter.swift in Sources */,
 				D383796125B63454005AD98D /* MyListView.swift in Sources */,
 				D383791725B54090005AD98D /* AppAction.swift in Sources */,
 				D383792425B540E7005AD98D /* AuthMiddleware.swift in Sources */,
@@ -439,20 +475,24 @@
 				D383797A25B63AD3005AD98D /* ListMiddleware.swift in Sources */,
 				D383791125B54033005AD98D /* AppReducer.swift in Sources */,
 				0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */,
+				0BA7F31B274B2F1F009DBD7D /* StatsViewModel.swift in Sources */,
 				D383797525B63A78005AD98D /* ListService.swift in Sources */,
 				D383795125B63272005AD98D /* OwnedListReducer.swift in Sources */,
 				D383795C25B63330005AD98D /* Dashboard.swift in Sources */,
 				D38378FC25B27BF8005AD98D /* RootView.swift in Sources */,
 				0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */,
 				0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */,
+				0B4E6E232749ED2E00B529BC /* GenericPieChartView.swift in Sources */,
 				0BC93E61271D13B5000D5E3B /* Utilities.swift in Sources */,
 				D383793025B541FE005AD98D /* AppState.swift in Sources */,
+				0B569D0E27475CBC00D5ECF5 /* StatsView.swift in Sources */,
 				D383796625B63466005AD98D /* GivingListView.swift in Sources */,
 				D383790A25B53E93005AD98D /* AppStore.swift in Sources */,
 				D383790125B27C63005AD98D /* LoginView.swift in Sources */,
 				D38378E725B21D97005AD98D /* Models.swift in Sources */,
 				D383791F25B540AF005AD98D /* AuthAction.swift in Sources */,
 				D383797F25B64113005AD98D /* ListAction.swift in Sources */,
+				0B4E6E262749F07C00B529BC /* GenericBarChartView.swift in Sources */,
 				D383797025B6376F005AD98D /* NewItemView.swift in Sources */,
 				D383793E25B5434A005AD98D /* LogMiddleware.swift in Sources */,
 				D383796B25B63472005AD98D /* ProfileView.swift in Sources */,
@@ -778,6 +818,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0BD4FB3E2748AABF001A3589 /* XCRemoteSwiftPackageReference "Charts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/danielgindi/Charts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0BD4FB3F2748AABF001A3589 /* Charts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0BD4FB3E2748AABF001A3589 /* XCRemoteSwiftPackageReference "Charts" */;
+			productName = Charts;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D383789E25B20CAA005AD98D /* Project object */;
 }

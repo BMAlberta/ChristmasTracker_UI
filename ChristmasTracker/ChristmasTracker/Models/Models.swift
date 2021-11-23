@@ -37,6 +37,12 @@ struct SlimUser: Decodable {
     let firstName: String
     let lastName: String
     let rawId: String
+    
+    init(firstName: String = "", lastName: String = "", rawId: String = "") {
+        self.firstName = firstName
+        self.lastName = lastName
+        self.rawId = rawId
+    }
 }
 
 struct LoginResponse: Decodable {
@@ -78,6 +84,22 @@ struct DeletedItemResponse: Decodable {
 
 struct UserListOverviewResponse: Decodable {
     let listOverviews: [ListOverview]
+}
+
+struct PurchaseStatsResponse: Decodable {
+    let spentOverviews: [PurchaseStat]
+}
+
+struct PurchaseStat: Decodable {
+    let totalSpent: Double
+    let purchasedItems: Int
+    let user: SlimUser
+    
+    init() {
+        self.totalSpent = 0.0
+        self.purchasedItems = 0
+        self.user = SlimUser()
+    }
 }
 
 struct ListOverview: Decodable, Identifiable {

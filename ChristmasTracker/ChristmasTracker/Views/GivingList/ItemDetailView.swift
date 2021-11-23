@@ -58,6 +58,8 @@ struct ItemDetailView: View {
                 if purchaseActionSuccess && model.retractablePurchase {
                     _store.dispatch(.list(action: .fetchListOverview(token: _store.state.auth.token)))
                     self.presentationMode.wrappedValue.dismiss()
+                } else if !purchaseActionSuccess && model.retractablePurchase {
+                    shouldDisplayError.wrappedValue = true
                 }
             })
             .alert(isPresented: shouldDisplayError) {

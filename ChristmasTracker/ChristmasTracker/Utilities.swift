@@ -35,6 +35,7 @@ struct Configuration {
         case markRetracted = "/tracker/purchases/retract"
         case resetPassword = "/tracker/auth/password/update"
         case updateItem = "/tracker/items/"
+        case stats = "/tracker/stats/purchases"
     }
     
     static var appVersion: String {
