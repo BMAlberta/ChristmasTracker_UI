@@ -77,7 +77,19 @@ struct Configuration {
         return URL(string: "itms-services://?action=download-manifest&url="+updateInfo.downloadUri)
     }
     
-    
+    static func daysUntilChristmas() -> Int {
+        let fmt = ISO8601DateFormatter()
+
+        let date1 = Date.now
+        let date2 = fmt.date(from: "2021-12-25T00:00:00+0000")!
+
+        let diff = Calendar.current.dateComponents([.day], from: date1, to: date2)
+        
+        guard let numberOfDays = diff.day else {
+            return 0
+        }
+        return numberOfDays + 1
+    }
 }
 
 struct NetworkUtility {

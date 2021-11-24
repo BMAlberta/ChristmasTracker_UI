@@ -11,8 +11,9 @@ import Combine
 class StatsViewModel: ObservableObject {
     @Published var spentModel = PieChartViewModel()
     @Published var purchasedModel = BarChartViewModel()
+    @Published var totalAmountSpent = 0.0
     @Published var isErrorState = false
-    @Published var hasStats = false
+    @Published var hasStats = true
     @Published var isLoading = false
     private var subscriptions = Set<AnyCancellable>()
     private var _store: AppStore
@@ -38,6 +39,7 @@ class StatsViewModel: ObservableObject {
                 self.spentModel = self.generateStatModel(model: response.spentOverviews)
                 self.purchasedModel = self.generateStatModel(model: response.spentOverviews)
                 self.hasStats = self.spentModel.detail.count > 0 && self.purchasedModel.detail.count > 0
+                self.totalAmountSpent = self.generateTotalSpent(model: response.spentOverviews)
                 self.isLoading = false
             })
             .store(in: &subscriptions)
@@ -58,6 +60,16 @@ class StatsViewModel: ObservableObject {
             viewModel.detail[item.user.firstName] = Double(item.purchasedItems)
         }
         return viewModel
+    }
+    
+    private func generateTotalSpent(model: [PurchaseStat]) -> Double {
+        var runningTotal = 0.0
+        
+        for item in model {
+            runningTotal += item.totalSpent
+        }
+        
+        return runningTotal
     }
 }
 

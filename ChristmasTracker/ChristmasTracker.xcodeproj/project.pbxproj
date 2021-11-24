@@ -13,6 +13,7 @@
 		0B569D0E27475CBC00D5ECF5 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B569D0D27475CBC00D5ECF5 /* StatsView.swift */; };
 		0BA7F31B274B2F1F009DBD7D /* StatsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA7F31A274B2F1F009DBD7D /* StatsViewModel.swift */; };
 		0BA7F31D274B306E009DBD7D /* StatsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA7F31C274B306E009DBD7D /* StatsService.swift */; };
+		0BB42E3E274DCF1F0066025E /* BannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB42E3D274DCF1F0066025E /* BannerView.swift */; };
 		0BC93E5B270CAF56000D5E3B /* ListDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */; };
 		0BC93E5D270E4081000D5E3B /* ListItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5C270E4081000D5E3B /* ListItemView.swift */; };
 		0BC93E5F270E7F04000D5E3B /* ItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */; };
@@ -71,6 +72,7 @@
 		0B569D0D27475CBC00D5ECF5 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		0BA7F31A274B2F1F009DBD7D /* StatsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsViewModel.swift; sourceTree = "<group>"; };
 		0BA7F31C274B306E009DBD7D /* StatsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsService.swift; sourceTree = "<group>"; };
+		0BB42E3D274DCF1F0066025E /* BannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerView.swift; sourceTree = "<group>"; };
 		0BC93E5A270CAF56000D5E3B /* ListDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDetailView.swift; sourceTree = "<group>"; };
 		0BC93E5C270E4081000D5E3B /* ListItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemView.swift; sourceTree = "<group>"; };
 		0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailView.swift; sourceTree = "<group>"; };
@@ -139,13 +141,29 @@
 		0B4E6E212749ED0F00B529BC /* Stats */ = {
 			isa = PBXGroup;
 			children = (
+				0BB36672274C9BE100FE777D /* ViewModels */,
+				0BB36671274C9BD700FE777D /* Views */,
+			);
+			path = Stats;
+			sourceTree = "<group>";
+		};
+		0BB36671274C9BD700FE777D /* Views */ = {
+			isa = PBXGroup;
+			children = (
 				0B569D0D27475CBC00D5ECF5 /* StatsView.swift */,
 				0B4E6E222749ED2E00B529BC /* GenericPieChartView.swift */,
 				0B4E6E252749F07C00B529BC /* GenericBarChartView.swift */,
 				0B4E6E272749F2A500B529BC /* GenericAxisValueFormatter.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		0BB36672274C9BE100FE777D /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
 				0BA7F31A274B2F1F009DBD7D /* StatsViewModel.swift */,
 			);
-			path = Stats;
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		0BC93E62271E4B54000D5E3B /* OwnedList */ = {
@@ -189,6 +207,7 @@
 			isa = PBXGroup;
 			children = (
 				D38378FB25B27BF8005AD98D /* RootView.swift */,
+				0BB42E3D274DCF1F0066025E /* BannerView.swift */,
 				D383795B25B63330005AD98D /* Dashboard.swift */,
 			);
 			path = Core;
@@ -496,6 +515,7 @@
 				D383797025B6376F005AD98D /* NewItemView.swift in Sources */,
 				D383793E25B5434A005AD98D /* LogMiddleware.swift in Sources */,
 				D383796B25B63472005AD98D /* ProfileView.swift in Sources */,
+				0BB42E3E274DCF1F0066025E /* BannerView.swift in Sources */,
 				D383794425B54390005AD98D /* AuthService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -663,7 +683,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -686,7 +706,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;

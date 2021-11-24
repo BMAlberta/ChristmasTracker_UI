@@ -20,14 +20,15 @@ struct GenericPieChartView_Previews: PreviewProvider {
     private static var sampleModel: PieChartViewModel {
         let model = PieChartViewModel()
         model.detail["Brian"] = 124.98
-        model.detail["Melanie"] = 450.87
-        model.detail["Graham"] = 234.67
+        model.detail["Melanie"] = 50.87
+        model.detail["Graham"] = 34.67
         model.detail["Nikki"] = 23.89
         return model
     }
     
     static var previews: some View {
         GenericPieChartView(viewModel: Self.sampleModel)
+            
     }
 }
 
@@ -36,7 +37,8 @@ struct WrappedPieChartView: UIViewRepresentable {
     
     func makeUIView(context: UIViewRepresentableContext<WrappedPieChartView>) -> PieChartView {
         let view = PieChartView()
-
+        view.holeColor = NSUIColor.clear
+        
         setDataCount(chartView: view)
         return view
     }
@@ -68,23 +70,21 @@ struct WrappedPieChartView: UIViewRepresentable {
         
         let set = PieChartDataSet(entries: entries, label: "")
         set.sliceSpace = 3
-//        set.selectionShift = 48
         set.colors = ChartColorTemplates.joyful()
         
         let data = PieChartData(dataSet: set)
         
         let pFormatter = NumberFormatter()
-        pFormatter.numberStyle = .decimal
-        pFormatter.maximumFractionDigits = 1
+        pFormatter.numberStyle = .currency
+        pFormatter.maximumFractionDigits = 2
         pFormatter.multiplier = 1
-        pFormatter.percentSymbol = " %"
-        data.setValueFormatter(DefaultValueFormatter(formatter: pFormatter))
     
-        data.setValueFont(UIFont(name: "HelveticaNeue-Light", size: 11)!)
+        data.setValueFont(UIFont(name: "HelveticaNeue", size: 10)!)
         data.setValueTextColor(.black)
         
         chartView.data = data
         chartView.drawEntryLabelsEnabled = false
+        data.setValueFormatter(DefaultValueFormatter(formatter: pFormatter))
         
         chartView.setNeedsDisplay()
     }

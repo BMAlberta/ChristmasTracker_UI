@@ -100,17 +100,15 @@ struct WrappedBarChartView: UIViewRepresentable {
         
         let formatter = NumberFormatter()
         formatter.maximumFractionDigits = 1
-        formatter.negativeSuffix = " $"
-        formatter.positiveSuffix = " $"
-        data.setValueFormatter(DefaultValueFormatter(formatter: formatter))
         
     
-        data.setValueFont(UIFont(name: "HelveticaNeue-Light", size: 11)!)
+        data.setValueFont(UIFont(name: "HelveticaNeue", size: 11)!)
         data.setValueTextColor(.white)
         
         chartView.fitBars = true
         
         chartView.data = data
+        data.setValueFormatter(DefaultValueFormatter(formatter: formatter))
         
         chartView.setNeedsDisplay()
     }

@@ -17,6 +17,10 @@ struct StatsView: View {
         NavigationView {
             if viewModel.hasStats {
                 Form{
+                    Section ("Overview") {
+                        Text("Total Spent $\(viewModel.totalAmountSpent, specifier: "%.2f")")
+                            .font(.subheadline)
+                    }
                     Section("Amount Spent per Person") {
                         GenericPieChartView(viewModel: viewModel.spentModel)
                             .frame(minWidth: 250, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
