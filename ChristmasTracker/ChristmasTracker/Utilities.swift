@@ -171,4 +171,22 @@ struct FormatUtility {
 struct LogUtility {
     static private let subsystem = "com.alberta.ChristmasTracker"
     static let networking = OSLog(subsystem: Self.subsystem, category: "networking")
+    static let serviceError = OSLog(subsystem: Self.subsystem, category: "serviceError")
+    
+    static func logNetworkDetails(message: String, rawData: Data) {
+        let stringData: String = String(data: rawData, encoding: String.Encoding.utf8)!
+        let logData = String(format: "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n%@:\n%@", message, stringData)
+        Self.logMessage(osLog: Self.networking, message: logData)
+    }
+    
+    static func logServiceError(message: String, error: Error) {
+        let logData = String(format: "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n%@:\n%@", message, String(describing: error))
+        Self.logMessage(osLog: Self.serviceError, message: logData)
+    }
+    
+    private static func logMessage(osLog: OSLog, message: String) {
+        #if DEBUG
+        os_log("%s", log: osLog, message)
+        #endif
+    }
 }

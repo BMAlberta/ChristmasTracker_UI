@@ -10,8 +10,7 @@ import Charts
 import Combine
 
 struct StatsView: View {
-    @EnvironmentObject var _store: AppStore
-    @ObservedObject var viewModel: StatsViewModel
+    @StateObject var viewModel: StatsViewModel
     
     var body: some View {
         NavigationView {
@@ -31,6 +30,7 @@ struct StatsView: View {
                     }
                 }
                 .navigationTitle("Stats Dashboard")
+//                .navigationBarItems(trailing: refreshButton)
                 .alert(isPresented: $viewModel.isErrorState) {
                     Alert(title: Text("Data Error"), message: Text("We're temporariliy unable to retrieve that data. Please try again."), dismissButton: .default(Text("Ok")))
                 }
@@ -44,25 +44,28 @@ struct StatsView: View {
                     .padding([.leading, .trailing], 48)
                     .navigationTitle("Stats Dashboard")
             }
-        }.onAppear {
-            self.viewModel.getStats()
+        }
+        .navigationViewStyle(.stack)
+        .onAppear {
+            Task {
+             await self.viewModel.getStats()
+            }
+        }
+    }
+    
+    private var refreshButton: some View {
+        Button(action: {
+            Task {
+                await self.viewModel.getStats()
+            }
+        }) {
+            Image(systemName: "arrow.clockwise")
         }
     }
 }
 
 struct StatsView_Previews: PreviewProvider {
     static var previews: some View {
-        let store = AppStore(initialState: .init(
-            authState: AuthState(),
-            listState: ListState()
-        ),
-                             reducer: appReducer,
-                             middlewares: [
-                                authMiddleware(service: AuthService()),
-                                logMiddleware(),
-                                listMiddleware(service: ListService())
-                             ])
-        StatsView(viewModel: StatsViewModel(store))
-            
+        StatsView(viewModel: StatsViewModel(UserSession()))
     }
 }

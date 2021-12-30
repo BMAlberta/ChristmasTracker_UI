@@ -8,16 +8,17 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @EnvironmentObject var _store: AppStore
+    @EnvironmentObject var _session: UserSession
+    @StateObject var viewModel: ProfileViewModel
     @State var passwordChangePresented = false
     var body: some View {
         NavigationView {
             Form {
                 Section("Profile Information") {
-                    PersonView(data: _store.state.auth.currentUserDetails)
+                    PersonView(data: viewModel.userModel)
                 }
                 Section("Historical Details") {
-                    HistoryView(data: _store.state.auth.currentUserDetails)
+                    HistoryView(data: viewModel.userModel)
                 }
                 Section("Login Options") {
                     ChangePasswordButton(presented: $passwordChangePresented)
@@ -26,24 +27,23 @@ struct ProfileView: View {
                 
                 
                 Section("Application Information") {
-                    AppInfoView()
+                    AppInfoView(data: self.viewModel.appInfo)
                 }
             }
             .sheet(isPresented: $passwordChangePresented, onDismiss: nil, content: {
-                ChangePasswordView()
+                ChangePasswordView(viewModel: ChangePasswordViewModel(_session))
             })
             .navigationBarTitle("Profile & Settings")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    LogoutButton()
+                    LogoutButton(viewModel: self.viewModel)
                 }
             }
         }
         .navigationViewStyle(.stack)
         .onAppear {
-            if _store.state.auth.currentUserDetails == nil {
-                let token = _store.state.auth.token
-                _store.dispatch(.auth(action: .fetchCurrenUser(token: token)))
+            Task {
+                await self.viewModel.fetchUserDetails()
             }
         }
     }
@@ -91,16 +91,17 @@ struct ProfileView: View {
     }
     
     private struct AppInfoView: View {
+        var data: ProfileViewModel.ApplicationInfoModel
         var body: some View {
             HStack {
                 Text("Application Version:")
-                Text(Configuration.appVersion)
+                Text(data.appVersion)
                     .font(.subheadline)
                     .foregroundColor(Color.gray)
             }
             HStack {
                 Text("Build Date:")
-                Text(Configuration.buildDate)
+                Text(data.buildDate)
                     .font(.subheadline)
                     .foregroundColor(Color.gray)
             }
@@ -136,11 +137,11 @@ struct ProfileView: View {
     }
     
     private struct LogoutButton: View {
-        @EnvironmentObject var store: AppStore
+        var viewModel: ProfileViewModel
         
         var body: some View {
             Button("Sign Out") {
-                store.dispatch(.auth(action: .logout))
+                viewModel.logout()
                 
             }
         }
@@ -149,18 +150,8 @@ struct ProfileView: View {
 
 struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
-        
-        let store = AppStore(initialState: .init(
-            authState: AuthState(),
-            listState: ListState()
-        ),
-                             reducer: appReducer,
-                             middlewares: [
-                                authMiddleware(service: AuthService()),
-                                logMiddleware(),
-                                listMiddleware(service: ListService())
-                             ])
-        ProfileView().environmentObject(store)
+        let viewModel = ProfileViewModel(UserSession())
+        ProfileView(viewModel: viewModel)
     }
 }
 

@@ -8,16 +8,14 @@
 import SwiftUI
 
 struct RootView: View {
-    @EnvironmentObject var _store: AppStore
+    @EnvironmentObject var _session: UserSession
     var body: some View {
-        
-        if (!_store.state.auth.isLoggedIn) {
-            LoginView()
-                .onAppear {
-                    _store.dispatch(.auth(action: .fetchUpdateInfo))
-                }
+        if (!_session.sessionActive) {
+            let viewModel = LoginViewModel(_session)
+            LoginView(viewModel: viewModel)
         } else {
             Dashboard()
+                .environmentObject(_session)
         }
     }
 }

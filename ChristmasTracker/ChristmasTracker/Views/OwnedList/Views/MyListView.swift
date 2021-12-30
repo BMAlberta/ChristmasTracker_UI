@@ -8,15 +8,16 @@
 import SwiftUI
 
 struct MyListView: View {
-    @EnvironmentObject var _store: AppStore
+    @EnvironmentObject var _session: UserSession
+    @StateObject var viewModel: MyListViewModel
     @State var showingDetail = false
     
     var body: some View {
         NavigationView {
             ZStack {
                 List {
-                    ForEach(_store.state.ownedList.items, id: \.id) { i in
-                        NavigationLink(destination: LazyView(ItemDetailView(model: i))) {
+                    ForEach(viewModel.items, id: \.id) { i in
+                        NavigationLink(destination: LazyView(ItemDetailView(viewModel: ItemDetailViewModel(_session, itemModel: i)))) {
                             ListItemView(data: i)
                         }
                     }
@@ -25,23 +26,26 @@ struct MyListView: View {
                 .navigationBarItems(trailing: addItemButton)
                 .navigationBarTitle("My Items")
                 
-                if (_store.state.ownedList.fetchInProgess) {
+                if (viewModel.isLoading) {
                     ProgressView()
                 }
             }
         }
         .navigationViewStyle(.stack)
         .onAppear {
-            let token = _store.state.auth.token
-            _store.dispatch(.list(action: .fetchOwnedList(token: token)))
+            Task {
+                await self.viewModel.fetchOwnedList()
+            }
+        }
+        .refreshable {
+            await self.viewModel.fetchOwnedList()
         }
     }
     
     private func delete(at offsets: IndexSet) {
-        let index = offsets[offsets.startIndex]
-        let item = _store.state.ownedList.items[index]
-        _store.dispatch(.list(action: .deleteItem(token: _store.state.auth.token, item: item)))
-    }
+        Task() {
+            await self.viewModel.deleteItem(at: offsets)
+        }    }
     
     private var addItemButton: some View {
         Button(action: {
@@ -49,7 +53,8 @@ struct MyListView: View {
         }) {
             Image(systemName: "plus")
         }.sheet(isPresented: $showingDetail) {
-            NewItemView(showingModal: $showingDetail)
+            let newItemViewModel = NewItemViewModel(_session)
+            NewItemView(viewModel: newItemViewModel, showingModal: $showingDetail)
             EmptyView()
         }
     }

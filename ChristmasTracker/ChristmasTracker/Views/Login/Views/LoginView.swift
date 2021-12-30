@@ -8,42 +8,34 @@
 import SwiftUI
 
 struct LoginView: View {
-    @EnvironmentObject var store: AppStore
+    @EnvironmentObject var _session: UserSession
+    @StateObject var viewModel: LoginViewModel
     
     var body: some View {
         
-        let shouldDisplayError =  Binding<Bool>(
-            get: { store.state.auth.isAuthError == true},
-            set: { _ in () }
-        )
-        
-        let shouldDisplayUpdateAlert =  Binding<Bool>(
-            get: { Configuration.isUpdateAvailable(updateInfo: store.state.auth.updateInfo)},
-            set: { _ in () }
-        )
-        
         ZStack {
-            if (store.state.auth.authInProgress) {
-                MainLoginView()
+            if (viewModel.isLoading) {
+                MainLoginView(viewModel: viewModel)
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: Color.red))
-            } else if (store.state.auth.isAuthError) {
-                MainLoginView()
-                    .alert(isPresented: shouldDisplayError) {
-                        Alert(title: Text("Login Failed"), message: Text("The email and password combination you provided does not match our records. Please try again."), dismissButton: .default(Text("Ok")))
-                    }
+            } else if (viewModel.isErrorState) {
+                MainLoginView(viewModel: viewModel)                    .alert(isPresented: $viewModel.isErrorState) {
+                    Alert(title: Text(viewModel.alertCongfiguration.title),
+                          message: Text(viewModel.alertCongfiguration.message),
+                          dismissButton: .default(Text(viewModel.alertCongfiguration.positiveActionTitle)))
+                }
             } else {
-                MainLoginView()
-                    .alert(isPresented: shouldDisplayUpdateAlert) {
+                MainLoginView(viewModel: viewModel)
+                    .alert(isPresented: $viewModel.shouldPromptForUpdate) {
                         Alert(
-                            title: Text("Update Available"),
-                            message: Text("An updated version of this application is available for download. For the optimal experience, please download the latest version before logging in."),
-                            primaryButton: .default(Text("Install Now")) {
-                                guard let updateUri = Configuration.generateUpdateUri(updateInfo: store.state.auth.updateInfo) else {
-                                    shouldDisplayUpdateAlert.wrappedValue.toggle()
+                            title: Text(viewModel.updateConfiguration.title),
+                            message: Text(viewModel.updateConfiguration.message),
+                            primaryButton: .default(Text(viewModel.updateConfiguration.positiveActionTitle)) {
+                                guard let updateUri = viewModel.updateConfiguration.updateUrl else {
+                                    $viewModel.shouldPromptForUpdate.wrappedValue.toggle()
                                     return
                                 }
-                                shouldDisplayUpdateAlert.wrappedValue.toggle()
+                                $viewModel.shouldPromptForUpdate.wrappedValue.toggle()
                                 UIApplication.shared.open(updateUri)
                                 
                             },
@@ -52,21 +44,25 @@ struct LoginView: View {
                     }
             }
         }
+        .onAppear {
+            Task {
+                await self.viewModel.checkForUpdate()
+            }
+        }
     }
 }
 
 
 
 struct MainLoginView: View {
-    @State var email = UserDefaults.standard.string(forKey: "savedId") ?? ""
-    @State var password = ""
+    @ObservedObject var viewModel: LoginViewModel
     @State var showEnroll = false
     
     var body: some View {
         VStack() {
             TitleView()
             LogoView()
-            CredentialsView(email: $email, password: $password)
+            CredentialsView(viewModel: viewModel)
             Spacer()
             EnrollView(showEnroll: $showEnroll)
                 .alert(isPresented: $showEnroll) {
@@ -97,14 +93,13 @@ extension Color {
 
 
 struct CredentialsView: View {
-    @EnvironmentObject private var _store: AppStore
-    @Binding var email: String
-    @Binding var password: String
+    @EnvironmentObject private var _session:UserSession
+    @ObservedObject var viewModel: LoginViewModel
     
     var body: some View {
         VStack {
             VStack(alignment: .leading, spacing: 15) {
-                TextField("Email", text: $email)
+                TextField("Email", text: $viewModel.username)
                     .padding()
                     .disableAutocorrection(true)
                     .autocapitalization(.none)
@@ -113,9 +108,10 @@ struct CredentialsView: View {
                     .cornerRadius(20.0)
                     .shadow(radius: 10.0, x: 20, y: 10)
                 
-                SecureField("Password", text: $password, onCommit: {
-                    self.prepareLogin()
-                })
+                SecureField("Password", text: $viewModel.password, onCommit: {
+                    Task {
+                        await self.viewModel.doLogin()
+                    }                })
                     .padding()
                     .disableAutocorrection(true)
                     .autocapitalization(.none)
@@ -126,7 +122,9 @@ struct CredentialsView: View {
             }.padding([.leading, .trailing], 27.5)
             
             Button(action: {
-                self.prepareLogin()
+                Task {
+                    await self.viewModel.doLogin()
+                }
             }) {
                 Text("Sign In")
                     .font(.headline)
@@ -138,11 +136,6 @@ struct CredentialsView: View {
                     .shadow(radius: 10.0, x: 20, y: 10)
             }.padding(.top, UIScreen.main.bounds.height * 0.05)
         }
-    }
-    
-    func prepareLogin() {
-        let credentials = Credentials(username: email, password: password)
-        _store.dispatch(.auth(action: .doLogin(credentials: credentials)))
     }
 }
 
@@ -211,20 +204,10 @@ struct TitleView: View {
 
 
 struct LoginView_Previews: PreviewProvider {
-    static let store = AppStore(initialState: .init(
-        authState: AuthState(),
-        listState: ListState()
-    ),
-                                reducer: appReducer,
-                                middlewares: [
-                                    authMiddleware(service: AuthService()),
-                                    logMiddleware(),
-                                    listMiddleware(service: ListService())
-                                ])
-    
     static var previews: some View {
         Group {
-            LoginView().environmentObject(store)
+            let sampleViewModel = LoginViewModel(UserSession())
+            LoginView(viewModel: sampleViewModel)
         }
     }
 }

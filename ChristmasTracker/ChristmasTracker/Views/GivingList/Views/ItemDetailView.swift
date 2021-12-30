@@ -10,42 +10,34 @@ import Combine
 import UIKit
 
 struct ItemDetailView: View {
-    @EnvironmentObject var _store: AppStore
-    @State var model: Item
+    @EnvironmentObject var _session: UserSession
+    @StateObject var viewModel: ItemDetailViewModel
     @Environment(\.presentationMode) var presentationMode
     
-    private var purchaseActionSuccess: Bool {
-        return _store.state.ownedList.isFetchError == false && _store.state.ownedList.purchaseComplete == true
-    }
-    
     var body: some View {
-        let shouldDisplayError =  Binding<Bool>(
-            get: { _store.state.ownedList.isFetchError == true},
-            set: { _ in _store.dispatch(.list(action: .fetchError(error: nil))) }
-        )
         ZStack {
             Form {
                 Section("Item Details") {
-                    StaticElementView(title: "Name", data: model.name)
-                    StaticElementView(title: "Description", data: model.description)
+                    StaticElementView(title: "Name", data: viewModel.itemModel.name)
+                    StaticElementView(title: "Description", data: viewModel.itemModel.description)
                     
-                    StaticLinkView(title: "Link", data: model.link)
+                    StaticLinkView(title: "Link", data: viewModel.itemModel.link)
                     HStack {
-                        StaticElementView(title: "Price", data: String(format: "$%.2f", model.price))
-                        StaticElementView(title: "Quantity", data: String(model.quantity))
+                        StaticElementView(title: "Price", data: String(format: "$%.2f", viewModel.itemModel.price))
+                        StaticElementView(title: "Quantity", data: String(viewModel.itemModel.quantity))
                     }
                 }
                 Section("Item History") {
                     
-                    StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.lastEditDate))
-                    if (model.createdBy == _store.state.auth.currentUserDetails?._id) {
-                        DeleteButton(model: model)
+                    StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.lastEditDate))
+                    if (viewModel.itemModel.createdBy == _session.loggedInUser?._id) {
+                        DeleteButton(viewModel: viewModel)
                             
                     } else {
-                        StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: model.purchaseDate))
-                        if (model.retractablePurchase || !model.purchased) {
-                            PurchaseButton(model: model)
-                                .disabled(purchaseActionSuccess)
+                        StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.purchaseDate))
+                        if (viewModel.itemModel.retractablePurchase || !viewModel.itemModel.purchased) {
+                            PurchaseButton(viewModel: viewModel)
+                                .disabled(viewModel.isPurchaseSuccessful)
                                 
                         }
                     }
@@ -54,18 +46,18 @@ struct ItemDetailView: View {
             .padding()
             .background(Color(UIColor.systemBackground))
             .navigationBarTitle("Item Detail", displayMode: .inline)
-            .onChange(of: _store.state.ownedList.purchaseComplete, perform: { _ in
-                if purchaseActionSuccess && model.retractablePurchase {
-                    _store.dispatch(.list(action: .fetchListOverview(token: _store.state.auth.token)))
+            .onChange(of: viewModel.isPurchaseSuccessful, perform: { _ in
+                if viewModel.isPurchaseSuccessful /*&& viewModel.itemModel.retractablePurchase*/ {
+                    NotificationCenter.default.post(name: Notification.Name("purchaseStatusChanged"), object: nil)
                     self.presentationMode.wrappedValue.dismiss()
-                } else if !purchaseActionSuccess && model.retractablePurchase {
-                    shouldDisplayError.wrappedValue = true
+                } else if !viewModel.isPurchaseSuccessful && viewModel.itemModel.retractablePurchase {
+                    viewModel.isErrorState = true
                 }
             })
-            .alert(isPresented: shouldDisplayError) {
+            .alert(isPresented: $viewModel.isErrorState) {
                 Alert(title: Text("Error"), message: Text("We're temporarily unable to complete this action. Please try again later."), dismissButton: .default(Text("Ok")))
             }
-            if (_store.state.ownedList.fetchInProgess) {
+            if (viewModel.isLoading) {
                 ProgressView()
             }
         }
@@ -144,23 +136,23 @@ struct ItemDetailView: View {
     }
     
     struct PurchaseButton: View {
-        @EnvironmentObject var _store: AppStore
-        @ObservedObject var model: Item
+        @StateObject var viewModel: ItemDetailViewModel
         
         var buttonColor: Color {
-            if (_store.state.ownedList.isFetchError == false && _store.state.ownedList.purchaseComplete == true) {
+            if (!viewModel.isErrorState && viewModel.isPurchaseSuccessful) {
                 return Color.gray
             }
             else {
-                return model.purchased ? Color("brandBackgroundSecondary") : Color("brandBackgroundPrimary")
+                return viewModel.itemModel.purchased ? Color("brandBackgroundSecondary") : Color("brandBackgroundPrimary")
             }
         }
         var body: some View {
             Button(action: {
-                updatePurchase(item: model)
-                
+                Task {
+                    await updatePurchase()
+                }
             }) {
-                Text(model.purchased ? "Retract Purchase" : "Purchase")
+                Text(viewModel.itemModel.purchased ? "Retract Purchase" : "Purchase")
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding()
@@ -171,22 +163,23 @@ struct ItemDetailView: View {
             }/**.padding(.top, 50)*/
         }
         
-        private func updatePurchase(item: Item) {
-            if item.purchased {
-                _store.dispatch(.list(action: .retractPurchase(item: item)))
+        private func updatePurchase() async {
+            if viewModel.itemModel.purchased {
+                await viewModel.performAction(.retract)
             } else {
-                _store.dispatch(.list(action: .purchaseItem(item: item)))
+                await  viewModel.performAction(.purchase)
             }
         }
     }
     
     struct DeleteButton: View {
-        @EnvironmentObject var _store: AppStore
-        @ObservedObject var model: Item
-
+        @StateObject var viewModel: ItemDetailViewModel
+        
         var body: some View {
             Button(action: {
-                _store.dispatch(.list(action: .deleteItem(token: _store.state.auth.token, item: model)))
+                Task {
+                    await viewModel.performAction(.delete)
+                }
             }) {
                 Text("Delete Item")
                     .font(.headline)
@@ -213,17 +206,6 @@ struct BindingItemViewPreview : View {
     private var value = false
     
     var body: some View {
-        
-        let store = AppStore(initialState: .init(
-            authState: AuthState(),
-            listState: ListState()
-        ),
-                             reducer: appReducer,
-                             middlewares: [
-                                authMiddleware(service: AuthService()),
-                                logMiddleware(),
-                                listMiddleware(service: ListService())
-                             ])
         let item = Item(id: "1234",
                         createdBy: "Brian",
                         creationDate: "2021-10-04",
@@ -236,6 +218,7 @@ struct BindingItemViewPreview : View {
                         purchaseDate: nil,
                         quantity: 1,
                         v: 1)
-        ItemDetailView(model: item).environmentObject(store)
+        let viewModel = ItemDetailViewModel(UserSession(), itemModel: item)
+        ItemDetailView(viewModel: viewModel)
     }
 }

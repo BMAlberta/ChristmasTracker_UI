@@ -25,6 +25,17 @@ struct User: Codable {
     let creationDate: String //Date
     let lastLogInDate: String
     let lastPasswordChange: String
+    
+    init() {
+        _id = ""
+        lastLogInLocation = ""
+        email = ""
+        firstName = ""
+        lastName = ""
+        creationDate = ""
+        lastLogInDate = ""
+        lastPasswordChange = ""
+    }
 }
 
 struct ChangePasswordModel: Codable {

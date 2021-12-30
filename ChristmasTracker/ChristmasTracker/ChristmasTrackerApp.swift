@@ -9,21 +9,11 @@ import SwiftUI
 
 @main
 struct ChristmasTrackerApp: App {
-    
-    let store = AppStore(initialState: .init(
-        authState: AuthState(),
-        listState: ListState()
-    ),
-    reducer: appReducer,
-    middlewares: [
-        authMiddleware(service: AuthService()),
-        logMiddleware(),
-        listMiddleware(service: ListService())
-    ])
+    let sessionManager = UserSession()
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environmentObject(store)
+                .environmentObject(sessionManager)
                 .onAppear {
                     let appearance = UITabBarAppearance()
                     appearance.configureWithDefaultBackground()

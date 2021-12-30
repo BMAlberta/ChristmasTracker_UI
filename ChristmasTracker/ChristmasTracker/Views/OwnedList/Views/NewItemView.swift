@@ -10,22 +10,21 @@ import Combine
 import UIKit
 
 struct NewItemView: View {
-    @EnvironmentObject var _store: AppStore
-    @State var model: NewItemModel = NewItemModel()
+    @StateObject var viewModel: NewItemViewModel
     @Binding var showingModal:Bool
     
     var body: some View {
         NavigationView {
             List {
-                NameView(model: $model)
-                DescriptionView(model: $model)
+                NameView(model: $viewModel.newItem)
+                DescriptionView(model: $viewModel.newItem)
                 
-                LinkView(model: $model)
+                LinkView(model: $viewModel.newItem)
                 HStack {
-                    PriceView(model: $model)
-                    QuantityView(model: $model)
+                    PriceView(model: $viewModel.newItem)
+                    QuantityView(model: $viewModel.newItem)
                 }
-                SaveButton(model: $model, showingModal: $showingModal)
+                SaveButton(viewModel: viewModel, showingModal: $showingModal)
             }
             .background(Color(UIColor.systemBackground))
             .navigationBarTitle("Create New Item")
@@ -45,22 +44,24 @@ struct BindingNewItemViewPreview : View {
     private var value = false
     
     var body: some View {
-        NewItemView(showingModal: $value)
+        NewItemView(viewModel: NewItemViewModel(UserSession()),
+                    showingModal: $value)
     }
 }
 
 
 struct SaveButton: View {
-    @EnvironmentObject var _store: AppStore
-    @Binding var model: NewItemModel
+    @State var viewModel: NewItemViewModel
     @Binding var showingModal: Bool
     @State var showError: Bool = false
     var body: some View {
         Button(action: {
             
-            if Self.allRequiredFieldsPresent(model: model) {
-                _store.dispatch(.list(action: .createItem(item: model)))
-                showingModal.toggle()
+            if viewModel.allRequiredFieldsPresent() {
+                Task {
+                    await viewModel.saveItem()
+                    showingModal.toggle()
+                }
             } else {
                 showError.toggle()
             }
@@ -80,18 +81,6 @@ struct SaveButton: View {
                 showError.toggle()
             }))
         }
-    }
-    
-    private static func allRequiredFieldsPresent(model: NewItemModel) -> Bool {
-        
-        let nums: Set<Character> = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-        
-        return !model.name.isEmpty
-        && !model.description.isEmpty
-        && !model.link.isEmpty
-        && !model.price.isEmpty
-        && !model.quantity.isEmpty
-        && Set(model.quantity).isSubset(of: nums)
     }
 }
 

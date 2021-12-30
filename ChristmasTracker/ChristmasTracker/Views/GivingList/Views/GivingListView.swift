@@ -9,37 +9,38 @@ import SwiftUI
 import Foundation
 
 struct GivingListView: View {
-    @EnvironmentObject var _store: AppStore
+    @StateObject var viewModel: GivingListViewModel
+    @EnvironmentObject var _session: UserSession
     var body: some View {
         NavigationView {
-            List(_store.state.ownedList.overviews) { i in
-                NavigationLink(destination: ListDetailView(user: i.user)) {
-                    UserListOverviewView(data: i)
-                }
-            }.navigationBarTitle("Available Lists")
+            if viewModel.overviews.count > 0 {
+                List(self.viewModel.overviews) { i in
+                    NavigationLink(destination: ListDetailView(viewModel: ListDetailViewModel(_session, userInContext: i.user))) {
+                        UserListOverviewView(data: i)
+                    }
+                }.navigationBarTitle("Available Lists")
+            } else {
+                ProgressView()
+                    .navigationBarTitle("Available Lists")
+            }
         }
         .navigationViewStyle(.stack)
         
         .onAppear {
-            let token = _store.state.auth.token
-            _store.dispatch(.list(action: .fetchListOverview(token: token)))
+            Task {
+                await self.viewModel.getOverview()
+            }
+        }
+        .refreshable {
+            await self.viewModel.getOverview()
         }
     }
 }
 
 struct GivingListView_Previews: PreviewProvider {
     static var previews: some View {
-        let store = AppStore(initialState: .init(
-            authState: AuthState(),
-            listState: ListState()
-        ),
-        reducer: appReducer,
-        middlewares: [
-            authMiddleware(service: AuthService()),
-            logMiddleware(),
-            listMiddleware(service: ListService())
-        ])
-        GivingListView().environmentObject(store)
+        let session = UserSession()
+        GivingListView(viewModel: GivingListViewModel(session))
     }
 }
 

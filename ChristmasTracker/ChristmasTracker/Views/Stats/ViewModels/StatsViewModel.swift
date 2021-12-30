@@ -15,35 +15,35 @@ class StatsViewModel: ObservableObject {
     @Published var isErrorState = false
     @Published var hasStats = true
     @Published var isLoading = false
-    private var subscriptions = Set<AnyCancellable>()
-    private var _store: AppStore
     
-    init(_ store: AppStore) {
-        _store = store
+    private var _session: SessionManaging
+    
+    init(_ session: SessionManaging) {
+        _session = session
     }
     
-    func getStats() {
+    @MainActor
+    func getStats() async {
         self.isLoading = true
-        StatsService.getPurchaseStats(_store.state.auth.token)
-            .receive(on: DispatchQueue.main)
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .failure(let error):
-                    print(error.localizedDescription)
-                    self.isErrorState = true
-                    self.isLoading = false
-                default: break
-                }
-            }, receiveValue: { response in
-                print(response)
-                self.spentModel = self.generateStatModel(model: response.spentOverviews)
-                self.purchasedModel = self.generateStatModel(model: response.spentOverviews)
-                self.hasStats = self.spentModel.detail.count > 0 && self.purchasedModel.detail.count > 0
-                self.totalAmountSpent = self.generateTotalSpent(model: response.spentOverviews)
-                self.isLoading = false
-            })
-            .store(in: &subscriptions)
+        do {
+            let purchaseStatsResponse: PurchaseStatsResponse = try await StatsServiceStore.getPurchasedStats(_session.token)
+        
+            let spentModel: PieChartViewModel = self.generateStatModel(model: purchaseStatsResponse.spentOverviews)
+            let purchasedModel: BarChartViewModel = self.generateStatModel(model: purchaseStatsResponse.spentOverviews)
+            let totalSpent = self.generateTotalSpent(model: purchaseStatsResponse.spentOverviews)
+            self.spentModel = spentModel
+            self.purchasedModel = purchasedModel
+            self.totalAmountSpent = totalSpent
+            
+            self.hasStats = spentModel.detail.count > 0 && self.purchasedModel.detail.count > 0
+            self.isLoading = false
+            
+        } catch {
+            self.isLoading = false
+            self.isErrorState = true
+        }
     }
+    
     
     private func generateStatModel(model: [PurchaseStat]) -> PieChartViewModel {
         

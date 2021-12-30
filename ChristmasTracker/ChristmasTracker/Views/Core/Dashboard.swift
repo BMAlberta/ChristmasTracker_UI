@@ -8,28 +8,29 @@
 import SwiftUI
 
 struct Dashboard: View {
-    @EnvironmentObject var _store: AppStore
+    @EnvironmentObject var _session: UserSession
     @State private var showOverlay = false
     
     var body: some View {
-        if (_store.state.auth.isLoggedIn) {
+        if (_session.sessionActive) {
             TabView {
-                GivingListView().environmentObject(_store)
+                GivingListView(viewModel: GivingListViewModel(_session))
                     .tabItem {
                         Image(systemName: "books.vertical")
                         Text("Giving")
                     }
-                MyListView().environmentObject(_store)
+                MyListView(viewModel: MyListViewModel(_session))
                     .tabItem {
                         Image(systemName: "list.dash")
                         Text("My List")
                     }
-                StatsView(viewModel: StatsViewModel(_store)).environmentObject(_store)
+                StatsView(viewModel: StatsViewModel(_session))
                     .tabItem {
                         Image(systemName: "chart.xyaxis.line")
                         Text("Stats")
                     }
-                ProfileView().environmentObject(_store)
+                ProfileView(viewModel: ProfileViewModel(_session))
+                    .environmentObject(_session)
                     .tabItem {
                         Image(systemName: "person.crop.circle")
                         Text("Profile")
@@ -38,7 +39,6 @@ struct Dashboard: View {
             .overlay(overlayView: announcementBanner,
                      show: $showOverlay)
             .onAppear(perform: {
-                _store.dispatch(.auth(action: .fetchCurrenUser(token: _store.state.auth.token)))
                 promptForOveralyIfNeeded()
             })
         } else {
@@ -93,24 +93,9 @@ struct Dashboard: View {
 }
 
 struct Dashboard_Previews: PreviewProvider {
-    
-    static private func generateStore() -> AppStore {
-        let store = AppStore(initialState: .init(
-            authState: AuthState(),
-            listState: ListState()
-        ),
-                             reducer: appReducer,
-                             middlewares: [
-                                authMiddleware(service: AuthService()),
-                                logMiddleware(),
-                                listMiddleware(service: ListService())
-                             ])
-        store.state.auth.isLoggedIn = true
-        return store
-    }
-    
     static var previews: some View {
         
-        Dashboard().environmentObject(Self.generateStore())
+        Dashboard()
+            .environmentObject(UserSession())
     }
 }
