@@ -9,44 +9,63 @@ import Foundation
 import Combine
 
 protocol SessionManaging {
-    var token: String { get }
-    var sessionId: String? { get }
-    var loggedInUser: User? { get }
+    var loggedInUser: UserModel? { get }
     var sessionActive: Bool { get }
+    var enrollmentInProgress: Bool { get set }
+    var passwordResetInProgress: Bool { get set }
     
-    func startSession()
-    func startSession(token: String, activeUser: User?)
+    func startSession(activeUser: UserModel?)
     func terminateSession()
 }
 
 class UserSession: ObservableObject, SessionManaging {
-    var token: String = ""
-    var sessionId: String? = nil
-    var loggedInUser: User? = nil
+    var loggedInUser: UserModel? = nil
     @Published var sessionActive = false
+    @Published var enrollmentInProgress = false
+    @Published var passwordResetInProgress = false
     private var sessionTimer: Timer? = nil
+    private var lastTouchTime: Date = Date()
+    private var timeoutTime: TimeInterval = 600
     
-    func startSession() {
-        
-        self.sessionActive = true
-    }
-    
-    func startSession(token: String, activeUser: User?) {
-        self.token = token
+    func startSession(activeUser: UserModel?) {
         self.loggedInUser = activeUser
+        UserDefaults.standard.set(activeUser?.email, forKey: "savedId")
         self.sessionActive = true
+        self.enrollmentInProgress = false
+        self.passwordResetInProgress = false
+        self.startSessionTimer()
     }
     
     func terminateSession() {
         self.sessionTimer?.invalidate()
         self.loggedInUser = nil
         self.sessionActive = false
-        self.sessionId = nil
-        self.token = ""
+        self.enrollmentInProgress = false
+        self.passwordResetInProgress = false
+        HTTPCookieStorage.shared.cookies?.forEach(HTTPCookieStorage.shared.deleteCookie)
+        NotificationCenter.default.removeObserver(self, name: Notification.Name("UserTappedOnScreenEvent"), object: nil)
     }
     
     private func startSessionTimer() {
-        self.sessionTimer = Timer()
+        NotificationCenter.default.addObserver(self, selector: #selector(updateLastTouchTime), name: Notification.Name("UserTappedOnScreenEvent"), object: nil)
+        
+        let timer = Timer(timeInterval: 60.0, target: self, selector: #selector(checkSessionTimer), userInfo: nil, repeats: true)
+        timer.tolerance = 5
+        RunLoop.current.add(timer, forMode: .common)
+        self.sessionTimer = timer
+    }
+    
+    @objc private func checkSessionTimer() {
+        let timeSinceLastTouch = Date().timeIntervalSince(lastTouchTime)
+        if timeSinceLastTouch > self.timeoutTime {
+//            print("Session Expired - Time since touch: \(timeSinceLastTouch)")
+            self.terminateSession()
+        }
+    }
+    
+    @objc private func updateLastTouchTime() {
+        self.lastTouchTime = Date()
+//        print("Notification received for touch event.")
     }
 }
 

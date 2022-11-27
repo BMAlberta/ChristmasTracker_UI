@@ -7,32 +7,304 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "0DDB4AEA-66E0-4C4E-B891-10F3FD29CC90"
+            uuid = "5A7A6813-1DC5-4A99-9A39-4EEEC518FD19"
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "ChristmasTracker/Middleware/AuthMiddleware.swift"
+            filePath = "ChristmasTracker/Views/Login/ViewModels/LoginViewModel.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "37"
-            endingLineNumber = "37"
-            landmarkName = "authMiddleware(service:)"
-            landmarkType = "9">
+            startingLineNumber = "74"
+            endingLineNumber = "74"
+            landmarkName = "doLogin()"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "8E9E7052-A9F2-4C1E-8649-C8A2F0D2D12B"
+            uuid = "166F7963-22C6-468E-83EE-58E2FB9FC6FA"
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "ChristmasTracker/Services/AuthService.swift"
+            filePath = "ChristmasTracker/Views/Stats/ViewModels/StatsViewModel.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "38"
-            endingLineNumber = "38"
-            landmarkName = "performLogin(_:)"
+            startingLineNumber = "51"
+            endingLineNumber = "51"
+            landmarkName = "generateStatModel(model:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "9D9169EC-2FBF-4CDF-B300-C6FEE2B8068D"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/Stats/ViewModels/StatsViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "61"
+            endingLineNumber = "61"
+            landmarkName = "generateStatModel(model:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "080BE1D2-B44D-401A-93E8-8C41449B2ECB"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/Stats/ViewModels/StatsViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "72"
+            endingLineNumber = "72"
+            landmarkName = "generateTotalSpent(model:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "BE7BD8FF-7BC9-49AD-A4B4-A07D0A4A3E69"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/GivingList/ViewModels/ListDetailViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "75"
+            endingLineNumber = "75"
+            landmarkName = "init(_:listId:displayName:purchasesAllowed:ownedList:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "C096074E-CD61-4F73-87E4-61B91AB3BA95"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Services/ListServiceStore.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "308"
+            endingLineNumber = "308"
+            landmarkName = "deleteItem(fromList:item:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "A032739D-DB5A-4662-987E-C51355F060A6"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/GivingList/ViewModels/ListDetailViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "82"
+            endingLineNumber = "82"
+            landmarkName = "refreshList()"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "A032739D-DB5A-4662-987E-C51355F060A6 - 8c4bf9540fd855e"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #1 @Sendable () async -&gt; () in ChristmasTracker.ListDetailViewModel.refreshList() -&gt; ()"
+                  moduleName = "ChristmasTracker"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/balberta/Development/christmasTracker/UI/ChristmasTracker/ChristmasTracker/Views/GivingList/ViewModels/ListDetailViewModel.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "80"
+                  endingLineNumber = "80"
+                  offsetFromSymbolStart = "60">
+               </Location>
+               <Location
+                  uuid = "A032739D-DB5A-4662-987E-C51355F060A6 - c155bc3f87f50653"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) await resume partial function for closure #1 @Sendable () async -&gt; () in ChristmasTracker.ListDetailViewModel.refreshList() -&gt; ()"
+                  moduleName = "ChristmasTracker"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/balberta/Development/christmasTracker/UI/ChristmasTracker/ChristmasTracker/Views/GivingList/ViewModels/ListDetailViewModel.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "80"
+                  endingLineNumber = "80"
+                  offsetFromSymbolStart = "45">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "B58DCE35-5A87-4ED0-B12F-85EE2BC86898"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/GivingList/ViewModels/ListDetailViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "100"
+            endingLineNumber = "100"
+            landmarkName = "getDetails()"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "B2EB0BF0-EEF7-4D3D-8580-296A4D929574"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/GivingList/Views/ListDetailView.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "122"
+            endingLineNumber = "122"
+            landmarkName = "addItemButton"
+            landmarkType = "24">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "166CE023-AD4C-49B7-AE70-B5EBB64FCB21"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Views/GivingList/Views/ListDetailView.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "43"
+            endingLineNumber = "43"
+            landmarkName = "body"
+            landmarkType = "24">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "7397E47A-1A41-4F4B-A399-A378E7F1A804"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Services/ServiceCache.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "50"
+            endingLineNumber = "50"
+            landmarkName = "fetchNetworkResponse(request:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "7397E47A-1A41-4F4B-A399-A378E7F1A804 - 7158757bef6d1bac"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) suspend resume partial function for ChristmasTracker.ServiceCache.fetchNetworkResponse(request: Foundation.URLRequest) async throws -&gt; (data: Foundation.Data, response: __C.NSURLResponse)"
+                  moduleName = "ChristmasTracker"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/balberta/Development/christmasTracker/UI/ChristmasTracker/ChristmasTracker/Services/ServiceCache.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "50"
+                  endingLineNumber = "50"
+                  offsetFromSymbolStart = "268">
+               </Location>
+               <Location
+                  uuid = "7397E47A-1A41-4F4B-A399-A378E7F1A804 - 7158757bef6d1bac"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) suspend resume partial function for ChristmasTracker.ServiceCache.fetchNetworkResponse(request: Foundation.URLRequest) async throws -&gt; (data: Foundation.Data, response: __C.NSURLResponse)"
+                  moduleName = "ChristmasTracker"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/balberta/Development/christmasTracker/UI/ChristmasTracker/ChristmasTracker/Services/ServiceCache.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "50"
+                  endingLineNumber = "50"
+                  offsetFromSymbolStart = "312">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "9C0B51F7-09FB-4E5A-AA32-3B093C33A5BF"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Services/ServiceCache.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "40"
+            endingLineNumber = "40"
+            landmarkName = "fetchNetworkResponse(request:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "9C0B51F7-09FB-4E5A-AA32-3B093C33A5BF - 3152fc31165704f3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for ChristmasTracker.ServiceCache.fetchNetworkResponse(request: Foundation.URLRequest) async throws -&gt; (data: Foundation.Data, response: __C.NSURLResponse)"
+                  moduleName = "ChristmasTracker"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/balberta/Development/christmasTracker/UI/ChristmasTracker/ChristmasTracker/Services/ServiceCache.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "40"
+                  endingLineNumber = "40"
+                  offsetFromSymbolStart = "116">
+               </Location>
+               <Location
+                  uuid = "9C0B51F7-09FB-4E5A-AA32-3B093C33A5BF - 3152fc31165704f3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for ChristmasTracker.ServiceCache.fetchNetworkResponse(request: Foundation.URLRequest) async throws -&gt; (data: Foundation.Data, response: __C.NSURLResponse)"
+                  moduleName = "ChristmasTracker"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/balberta/Development/christmasTracker/UI/ChristmasTracker/ChristmasTracker/Services/ServiceCache.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "40"
+                  endingLineNumber = "40"
+                  offsetFromSymbolStart = "148">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "B6CF81C6-DA10-412A-A189-59CBCB669700"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "ChristmasTracker/Services/ServiceCache.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "68"
+            endingLineNumber = "68"
+            landmarkName = "clearCache()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

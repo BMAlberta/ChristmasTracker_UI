@@ -33,10 +33,8 @@ struct ChangePasswordView: View {
                 .foregroundColor(.white)
                 .padding(10)
                 .background(self.viewModel.doesPasswordMeetRequirements() ? Color.green : Color.gray)
-//                .background(((viewModel.newPassword == viewModel.newPasswordConfirmation) && (viewModel.newPasswordConfirmation.count > 0 && viewModel.newPassword.count > 0)) ? Color.green : Color.gray)
                 .cornerRadius(8)
                 .disabled(!self.viewModel.doesPasswordMeetRequirements())
-//                .disabled((viewModel.newPassword != viewModel.newPasswordConfirmation) && (viewModel.newPasswordConfirmation.count > 0 && viewModel.newPassword.count > 0))
             }
             .alert(isPresented: $viewModel.isErrorState) {
                 Alert(title: Text("Password Change Failed"), message: Text("Unable to process your change password request. Please try again."), dismissButton: .default(Text("Ok")))

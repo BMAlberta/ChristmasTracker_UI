@@ -70,8 +70,7 @@ struct ListItemView_Previews: PreviewProvider {
                         price: 230.00,
                         purchased: false,
                         purchaseDate: nil,
-                        quantity: 1,
-                        v: 1)
+                        quantity: 1)
         ListItemView(data: item, hidePurchase: false)
     }
 }

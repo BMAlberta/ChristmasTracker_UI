@@ -15,7 +15,7 @@ class ProfileViewModel: ObservableObject {
         var buildDate: String = ""
     }
     
-    @Published var userModel: User?
+    @Published var userModel: UserModel?
     @Published var appInfo: ApplicationInfoModel = ApplicationInfoModel()
     @Published var isLoading = false
     @Published var isErrorState = false
@@ -45,7 +45,7 @@ class ProfileViewModel: ObservableObject {
         
         self.isLoading = true
         do {
-            let userResponse: CurrentUserResponse = try await UserServiceStore.getCurrentUserDetails(token: _session.token)
+            let userResponse: CurrentUserResponse = try await UserServiceStore.getUserDetails(forId: "")
             self.userModel = userResponse.user
             self.isLoading = false
             self.isErrorState = false
@@ -56,7 +56,13 @@ class ProfileViewModel: ObservableObject {
         }
     }
     
-    func logout() {
+    @MainActor
+    func logout() async {
+        
+        self.isLoading = true
+        let _ = await AuthServiceStore.performLogout()
+        self.isLoading = false
+        self.isErrorState = false
         _session.terminateSession()
     }
     

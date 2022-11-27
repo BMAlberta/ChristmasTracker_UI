@@ -36,8 +36,7 @@ class ChangePasswordViewModel: ObservableObject {
                 throw AuthServiceError.unknown
             }
             
-            let passwordChangeResponse = try await AuthServiceStore.resetPassword(_session.token,
-                                                                             model: newPasswordModel)
+            let passwordChangeResponse = try await AuthServiceStore.resetPassword(model: newPasswordModel)
             print(passwordChangeResponse)
             self.isLoading = false
             self.isSuccessState = true

@@ -10,7 +10,7 @@ import Combine
 import UIKit
 
 class GivingListViewModel: ObservableObject {
-    @Published var overviews: [ListOverview] = []
+    @Published var overviews: [ListOverviewDetails] = []
     @Published var isLoading = false
     @Published var isErrorState = false
     
@@ -31,8 +31,11 @@ class GivingListViewModel: ObservableObject {
     func getOverview() async {
         self.isLoading = true
         do {
-            let userOverviewResponse: UserListOverviewResponse = try await ListServiceStore.getListOverviewByUser(_session.token)
-            let sortedOverviews = userOverviewResponse.listOverviews.sorted { $0.user.firstName < $1.user.firstName }
+            let userOverviewResponse: ListOverviewResponse = try await ListServiceStore.getListOverviewByUser()
+            let sortedOverviews = userOverviewResponse.listOverviews.sorted {
+//                ($0.ownerInfo.firstName < $1.ownerInfo.firstName) &&
+                (FormatUtility.convertStringToDate(rawDate: $0.lastUpdateDate) > FormatUtility.convertStringToDate(rawDate: $1.lastUpdateDate))
+            }
             self.overviews = sortedOverviews
             self.isLoading = false
             self.isErrorState = false

@@ -1,8 +1,8 @@
 //
-//  NewItemView.swift
+//  NewListView.swift
 //  ChristmasTracker
 //
-//  Created by Brian Alberta on 1/18/21.
+//  Created by Brian Alberta on 10/18/22.
 //
 
 import SwiftUI
@@ -44,7 +44,7 @@ struct BindingNewItemViewPreview : View {
     private var value = false
     
     var body: some View {
-        NewItemView(viewModel: NewItemViewModel(UserSession()),
+        NewItemView(viewModel: NewItemViewModel(UserSession(), listInContext: "abcd123456789"),
                     showingModal: $value)
     }
 }

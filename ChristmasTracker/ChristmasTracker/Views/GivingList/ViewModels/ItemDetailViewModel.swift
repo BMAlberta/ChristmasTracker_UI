@@ -20,12 +20,14 @@ class ItemDetailViewModel: ObservableObject {
     @Published var isErrorState = false
     @Published var isPurchaseSuccessful = false
     @Published var itemModel: Item = Item()
+    @Published var listId: String
     
     private var _session: UserSession
     
-    init(_ session: UserSession, itemModel: Item) {
+    init(_ session: UserSession, listInContext: String, itemModel: Item) {
         _session = session
         self.itemModel = itemModel
+        self.listId = listInContext
     }
     
     
@@ -44,7 +46,7 @@ class ItemDetailViewModel: ObservableObject {
     private func deleteItem() async {
         self.isLoading = true
         do {
-            let _ = try await ListServiceStore.deleteItem(_session.token, item: self.itemModel)
+            let _ = try await ListServiceStore.deleteItem(fromList: "", item: itemModel)
             self.isLoading = false
             self.isErrorState = false
         } catch {
@@ -57,8 +59,10 @@ class ItemDetailViewModel: ObservableObject {
     private func purchaseItem() async {
         self.isLoading = true
         do {
-            let purchaseResponse = try await ListServiceStore.markItemPurchased(token: _session.token, item: self.itemModel)
-            self.itemModel = purchaseResponse.updatedItem
+            
+            let purchaseResponse = try await ListServiceStore.markItemPurchased(listId: self.listId, itemInContext: self.itemModel)
+            let extractedItem = Self.extractItemModel(listModel: purchaseResponse, itemId: self.itemModel.id)
+            self.itemModel = extractedItem
             self.isLoading = false
             self.isErrorState = false
             self.isPurchaseSuccessful = true
@@ -69,12 +73,20 @@ class ItemDetailViewModel: ObservableObject {
         }
     }
     
+    private static func extractItemModel(listModel: ListDetailResponse, itemId: String) -> Item {
+        
+        let itemArray: [Item] = listModel.detail.items
+        let item = itemArray.first(where: { $0.id == itemId })
+        return item ?? Item()
+    }
+    
     @MainActor
     private func retractPurchase() async {
         self.isLoading = true
         do {
-            let retractedResponse = try await ListServiceStore.markItemRetracted(_session.token, item: self.itemModel)
-            self.itemModel = retractedResponse.updatedItem
+            let retractedResponse = try await ListServiceStore.markItemRetracted(listId: self.listId, itemInContext: self.itemModel)
+            let extractedItem = Self.extractItemModel(listModel: retractedResponse, itemId: self.itemModel.id)
+            self.itemModel = extractedItem
             self.isLoading = false
             self.isErrorState = false
             self.isPurchaseSuccessful = true

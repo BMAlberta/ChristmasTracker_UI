@@ -19,7 +19,8 @@ struct LoginView: View {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: Color.red))
             } else if (viewModel.isErrorState) {
-                MainLoginView(viewModel: viewModel)                    .alert(isPresented: $viewModel.isErrorState) {
+                MainLoginView(viewModel: viewModel)
+                    .alert(isPresented: $viewModel.isErrorState) {
                     Alert(title: Text(viewModel.alertCongfiguration.title),
                           message: Text(viewModel.alertCongfiguration.message),
                           dismissButton: .default(Text(viewModel.alertCongfiguration.positiveActionTitle)))
@@ -56,6 +57,7 @@ struct LoginView: View {
 
 struct MainLoginView: View {
     @ObservedObject var viewModel: LoginViewModel
+    @EnvironmentObject var _session: UserSession
     @State var showEnroll = false
     
     var body: some View {
@@ -64,9 +66,12 @@ struct MainLoginView: View {
             LogoView()
             CredentialsView(viewModel: viewModel)
             Spacer()
-            EnrollView(showEnroll: $showEnroll)
-                .alert(isPresented: $showEnroll) {
-                    Alert(title: Text("Not Supported"), message: Text("Enrollment via the Mobile application is not currently supported. Please contact the developer for assistance."), dismissButton: .default(Text("Ok")))
+            EnrollView(showEnroll: $_session.enrollmentInProgress)
+                .sheet(isPresented: $_session.enrollmentInProgress) {
+                    UserAccessKeyView(viewModel: UserAccessKeyViewModel(_session))
+                }
+                .sheet(isPresented: $_session.passwordResetInProgress) {
+                    PasswordResetView()
                 }
             Spacer()
         }.background(
@@ -178,6 +183,7 @@ struct EnrollView: View {
             }) {
                 Text("Sign Up")
                     .foregroundColor(.white)
+                    .underline()
             }
         }
     }
@@ -204,10 +210,18 @@ struct TitleView: View {
 
 
 struct LoginView_Previews: PreviewProvider {
+    
+    static var session: UserSession {
+        let session = UserSession()
+        session.enrollmentInProgress = true
+        return session
+    }
+    
     static var previews: some View {
         Group {
-            let sampleViewModel = LoginViewModel(UserSession())
+            let sampleViewModel = LoginViewModel(Self.session)
             LoginView(viewModel: sampleViewModel)
+                .environmentObject(Self.session)
         }
     }
 }

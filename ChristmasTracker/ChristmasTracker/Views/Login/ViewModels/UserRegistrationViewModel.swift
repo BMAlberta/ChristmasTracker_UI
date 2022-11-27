@@ -20,13 +20,11 @@ class UserRegistrationViewModel: ObservableObject {
     
     
     @MainActor
-    func generateOTP() async {
-        
-    }
-    
-    @MainActor
-    func validateOTP() async {
-        
+    func register() async {
+        // Send email/password
+        // Server to determine if email is registered
+        // Server to validate password meets requirements
+        // Server returns registration response
     }
 }
 

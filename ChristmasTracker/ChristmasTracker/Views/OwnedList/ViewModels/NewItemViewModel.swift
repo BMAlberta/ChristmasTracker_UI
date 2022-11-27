@@ -15,16 +15,19 @@ class NewItemViewModel: ObservableObject {
     @Published var isErrorState = false
     
     private var _session: SessionManaging
+    private var _listInContext: String
     
-    init(_ session: SessionManaging) {
+    init(_ session: SessionManaging, listInContext: String) {
         self._session = session
+        self._listInContext = listInContext
     }
     
     @MainActor
     func saveItem() async {
         self.isLoading = true
         do {
-            let _ : NewItemResponse = try await ListServiceStore.addNewItem(token: _session.token, newItem: self.newItem)
+            let newListResponse: ListDetailResponse = try await ListServiceStore.addNewItem(toList: _listInContext, newItem: self.newItem)
+            NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: ["updatedList": newListResponse.detail])
             self.isLoading = false
             self.isErrorState = false
         } catch {

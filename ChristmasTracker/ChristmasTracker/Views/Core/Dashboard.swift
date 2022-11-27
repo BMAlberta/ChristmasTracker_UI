@@ -19,7 +19,7 @@ struct Dashboard: View {
                         Image(systemName: "books.vertical")
                         Text("Giving")
                     }
-                MyListView(viewModel: MyListViewModel(_session))
+                MyListsView(viewModel: MyListsViewModel(_session))
                     .tabItem {
                         Image(systemName: "list.dash")
                         Text("My List")

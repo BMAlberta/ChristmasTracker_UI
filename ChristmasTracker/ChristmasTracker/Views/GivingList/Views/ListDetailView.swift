@@ -11,52 +11,63 @@ struct ListDetailView: View {
      @EnvironmentObject var _session: UserSession
     @StateObject var viewModel: ListDetailViewModel
     @State private var isDetailPresented = false
+    @State private var isNewItemFlowPresented = false
+    @State private var isActionSheetPresented = false
     @State var selectedItem: Item?
     @State private var selectedFilterAmount: ListDetailViewModel.FilterValue = .all
     var body: some View {
-        VStack(alignment: .leading, spacing: 0, content: {
-            Text("Filter By Price")
-                .font(.caption)
-                .foregroundColor(Color(uiColor: .systemGray))
-                .padding(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-        
-            Picker("", selection: $selectedFilterAmount, content: {
-                ForEach(ListDetailViewModel.FilterValue.allCases) { filterValue in
-                    Text(filterValue.displayText).tag(filterValue)
-                }
-            })
-                .pickerStyle(.segmented)
-                .padding(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
-            List {
-                    ForEach(filterItems(), id: \.id) { i in
-                        ListItemView(data: i, hidePurchase: false)
-                            .onTapGesture {
-                                selectedItem = i
-                                isDetailPresented = true
-                            }
+        ZStack {
+            Color(uiColor: .systemGroupedBackground)
+                .ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0, content: {
+                Text("Filter By Price")
+                    .font(.caption)
+                    .foregroundColor(Color(uiColor: .systemGray))
+                    .padding(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+            
+                Picker("", selection: $selectedFilterAmount, content: {
+                    ForEach(ListDetailViewModel.FilterValue.allCases) { filterValue in
+                        Text(filterValue.displayText).tag(filterValue)
                     }
-            }
-            .listStyle(.plain)
-            .padding()
-            .sheet(item: $selectedItem, onDismiss: {
-                isDetailPresented = false
-            }, content: { item in
-                let viewModel = ItemDetailViewModel(_session, itemModel: item)
-                LazyView(ItemDetailView(viewModel: viewModel))
+                })
+                    .pickerStyle(.segmented)
+                    .padding(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
+                List {
+                        ForEach(filterItems(), id: \.id) { i in
+                            Section {
+                                let viewModel = ItemCardViewModel(_session, listContext: viewModel.activeListId, itemInContext: i)
+                                ItemCardView(viewModel: viewModel, isActionSheetPresented: isActionSheetPresented, ownedList: self.viewModel.ownedList)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        selectedItem = i
+                                        isDetailPresented = true
+                                    }
+                            }
+                        }
+                        .onDelete(perform: delete)
+                }
+                .listStyle(.insetGrouped)
+                .sheet(item: $selectedItem, onDismiss: {
+                    isDetailPresented = false
+                }, content: { item in
+                    let viewModel = ItemDetailViewModel(_session, listInContext: viewModel.activeListId, itemModel: item)
+                    LazyView(ItemDetailView(viewModel: viewModel))
+                })
+                .onAppear {
+                    Task {
+                        await self.viewModel.getDetails()
+                    }
+                }
+                .refreshable {
+                    Task {
+                        await self.viewModel.getDetails()
+                    }
+                }
             })
-            .onAppear {
-                Task {
-                    await self.viewModel.getDetails()
-                }
-            }
-            .refreshable {
-                Task {
-                    await self.viewModel.getDetails()
-                }
-            }
-        })
-            .navigationViewStyle(.stack)
-            .navigationTitle("\(self.viewModel.userDisplayName)'s List")
+                .navigationViewStyle(.stack)
+                .navigationTitle("\(self.viewModel.userDisplayName)'s List")
+            .navigationBarItems(trailing: viewModel.hidePurchases ? addItemButton : nil)
+        }
     }
     
     
@@ -95,11 +106,31 @@ struct ListDetailView: View {
                 .font(.caption)
         }
     }
+    
+    private func delete(at offsets: IndexSet) {
+        Task() {
+            await self.viewModel.deleteItem(at: offsets)
+        }
+    }
+    
+    private var addItemButton: some View {
+        Button(action: {
+            self.isNewItemFlowPresented.toggle()
+        }) {
+            Image(systemName: "plus")
+        }.sheet(isPresented: $isNewItemFlowPresented) {
+            let newItemViewModel = NewItemViewModel(_session, listInContext: viewModel.activeListId)
+            NewItemView(viewModel: newItemViewModel, showingModal: $isNewItemFlowPresented)
+            EmptyView()
+        }
+    }
 }
 
 struct ListDetailView_Previews: PreviewProvider {
     
-    static let user = SlimUser(firstName: "Brian", lastName: "Alberta", rawId: "615d0aca9dce0250b0eac9c2")
+    static let user = SlimUserModel(firstName: "Brian", lastName: "Alberta", rawId: "615d0aca9dce0250b0eac9c2")
+    
+    static let list = ListOverviewDetails(listName: "Fake Name", totalItems: 10, purchasedItems: 8, id: "615d0aca9dce0250b0eac9c2", lastUpdateDate: "2022-12-12 12:12:12", ownerInfo: user, memberDetails: [MemberDetail(firstName: "Brian", lastName: "Alberta", id: "1234")])
     
     
     
@@ -114,8 +145,7 @@ struct ListDetailView_Previews: PreviewProvider {
                                                 price: 230.00,
                                                 purchased: false,
                                                 purchaseDate: nil,
-                                                quantity: 1,
-                                                v: 1),
+                                                quantity: 1),
                                            Item(id: "1234",
                                                 createdBy: "Brian",
                                                 creationDate: "2021-10-04",
@@ -126,13 +156,12 @@ struct ListDetailView_Previews: PreviewProvider {
                                                 price: 230.00,
                                                 purchased: false,
                                                 purchaseDate: nil,
-                                                quantity: 1,
-                                                v: 1)]
+                                                quantity: 1)]
     
     
     static var previews: some View {
         let session = UserSession()
-        let viewModel = ListDetailViewModel(session, userInContext: Self.user)
+        let viewModel = ListDetailViewModel(session, listInContext: Self.list, items: userItems)
         ListDetailView(viewModel: viewModel)
             .environmentObject(session)
     }

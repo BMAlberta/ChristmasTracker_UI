@@ -14,9 +14,11 @@ class ListDetailViewModel: ObservableObject {
     @Published var isErrorState = false
     @Published var items: [Item] = []
     @Published var userDisplayName: String = ""
+    @Published var hidePurchases = false
     
     private var _session: UserSession
-    private var _user: SlimUser
+    var activeListId: String
+    var ownedList: Bool = false
     private var allItems: [Item] = []
     
     enum FilterValue: String, CaseIterable, Identifiable {
@@ -45,12 +47,35 @@ class ListDetailViewModel: ObservableObject {
     }
     
     
-    init(_ session: UserSession, userInContext: SlimUser) {
+    init(_ session: UserSession, listInContext: ListOverviewDetails) {
         _session = session
-        _user = userInContext
-        self.userDisplayName = _user.firstName
+        activeListId = listInContext.id
+        self.userDisplayName =  listInContext.ownerInfo.firstName
         NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateList(_:)), name: Notification.Name("newItemAdded"), object: nil)
     }
+    
+    init(_ session: UserSession, listInContext: ListOverviewDetails, items: [Item]) {
+        _session = session
+        activeListId = listInContext.id
+        self.userDisplayName =  listInContext.ownerInfo.firstName
+        self.allItems = items
+    }
+    
+    
+    init(_ session: UserSession, listId: String, displayName: String, purchasesAllowed: Bool = false, ownedList: Bool = false) {
+        _session = session
+        activeListId = listId
+        self.userDisplayName =  displayName
+        self.hidePurchases = !purchasesAllowed
+        self.ownedList = ownedList
+        if purchasesAllowed {
+            NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
+        } else {
+            NotificationCenter.default.addObserver(self, selector: #selector(updateList(_:)), name: Notification.Name("newItemAdded"), object: nil)
+        }
+    }
+    
     
     @objc private func refreshList() {
         Task {
@@ -58,14 +83,21 @@ class ListDetailViewModel: ObservableObject {
         }
     }
     
+    @objc private func updateList(_ notification: NSNotification) {
+        guard let updatedListModel = notification.userInfo?["updatedList"] as? ListDetailModel else {
+            return
+        }
+        let sortedItems = updatedListModel.items.sorted { !$0.purchased && $1.purchased }
+        self.items = sortedItems
+    }
+    
     @MainActor
     func getDetails() async {
         self.isLoading = true
         do {
-            let userListResponse: AllItemsResponse = try await ListServiceStore.getListForUser(_session.token, userId: _user.rawId)
+            let userListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
             let sortedItems = userListResponse.items.sorted { !$0.purchased && $1.purchased }
             self.items = sortedItems
-            self.userDisplayName = _user.firstName
             self.isLoading = false
             self.isErrorState = false
         } catch {
@@ -73,6 +105,35 @@ class ListDetailViewModel: ObservableObject {
             self.isErrorState = true
         }
         
+    }
+    
+    static func sortItems(inputItems: [Item], ownedList: Bool) -> [Item] {
+        
+        if ownedList {
+            return inputItems.sorted { $0.creationDate < $1.creationDate }
+        }
+        
+        return inputItems.sorted { !$0.purchased && $1.purchased }
+        
+    }
+    
+    @MainActor
+    func deleteItem(at offsets: IndexSet) async {
+        let index = offsets[offsets.startIndex]
+        let itemInContext = self.items[index]
+        
+        do {
+            self.isLoading = true
+            let _ = try await ListServiceStore.deleteItem(fromList: activeListId, item: itemInContext)
+            let updatedListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
+            let sortedItems = updatedListResponse.items.sorted { !$0.purchased && $1.purchased }
+            self.items = sortedItems
+            self.isLoading = false
+            self.isErrorState = false
+        } catch {
+            self.isLoading = false
+            self.isErrorState = true
+        }
     }
     func applyFilter(_ selectedFilterAmount: FilterValue) {
         switch selectedFilterAmount {
@@ -88,5 +149,4 @@ class ListDetailViewModel: ObservableObject {
             items = allItems.filter { $0.price > 100.00 }
         }
     }
-    
 }

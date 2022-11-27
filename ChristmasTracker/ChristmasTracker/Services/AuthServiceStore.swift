@@ -55,7 +55,30 @@ actor AuthServiceStore {
         }
     }
     
-    static func resetPassword(_ token: String, model: ChangePasswordModel) async throws -> PasswordResetResponse {
+    static func performLogout() async -> () {
+        let urlString = Configuration.getUrl(forKey: .logout)
+        
+        guard let url = URL(string: urlString) else {
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        request.httpMethod = "POST"
+        
+        do {
+            let _ = try await URLSession.shared.data(for: request)
+            ServiceCache.shared.clearCache()
+            return
+            
+        } catch {
+            ServiceCache.shared.clearCache()
+            return
+        }
+    }
+    
+    static func resetPassword(model: ChangePasswordModel) async throws -> PasswordResetResponse {
         let urlString = Configuration.getUrl(forKey: .resetPassword)
         
         guard let url = URL(string: urlString) else {
@@ -63,8 +86,7 @@ actor AuthServiceStore {
         }
         
         var request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .post,
-                                                       token: token)
+                                                       method: .post)
         
         let params: [String: String] = ["oldPassword": model.oldPassword,
                                         "newPassword": model.newPassword]

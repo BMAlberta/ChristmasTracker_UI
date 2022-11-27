@@ -16,46 +16,60 @@ struct ItemDetailView: View {
     
     var body: some View {
         ZStack {
-            Form {
-                Section("Item Details") {
-                    StaticElementView(title: "Name", data: viewModel.itemModel.name)
-                    StaticElementView(title: "Description", data: viewModel.itemModel.description)
-                    
-                    StaticLinkView(title: "Link", data: viewModel.itemModel.link)
-                    HStack {
-                        StaticElementView(title: "Price", data: String(format: "$%.2f", viewModel.itemModel.price))
-                        StaticElementView(title: "Quantity", data: String(viewModel.itemModel.quantity))
+            
+            VStack {
+                HStack{
+                    Spacer()
+                    Spacer()
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Image(systemName: "xmark")
+                            .padding(EdgeInsets(top: 16, leading: 8, bottom: 0, trailing: 16))
                     }
                 }
-                Section("Item History") {
-                    
-                    StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.lastEditDate))
-                    if (viewModel.itemModel.createdBy == _session.loggedInUser?._id) {
-                        DeleteButton(viewModel: viewModel)
-                            
-                    } else {
-                        StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.purchaseDate))
-                        if (viewModel.itemModel.retractablePurchase || !viewModel.itemModel.purchased) {
-                            PurchaseButton(viewModel: viewModel)
-                                .disabled(viewModel.isPurchaseSuccessful)
+                
+                Form {
+                    Section("Item Details") {
+                        StaticElementView(title: "Name", data: viewModel.itemModel.name)
+                        StaticElementView(title: "Description", data: viewModel.itemModel.description)
+                        
+                        StaticLinkView(title: "Link", data: viewModel.itemModel.link)
+                        HStack {
+                            StaticElementView(title: "Price", data: String(format: "$%.2f", viewModel.itemModel.price))
+                            StaticElementView(title: "Quantity", data: String(viewModel.itemModel.quantity))
+                        }
+                    }
+                    Section("Item History") {
+                        
+                        StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.lastEditDate))
+                        if (viewModel.itemModel.createdBy == _session.loggedInUser?._id) {
+                            DeleteButton(viewModel: viewModel)
                                 
+                        } else {
+                            StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.purchaseDate))
+                            if (viewModel.itemModel.retractablePurchase || !viewModel.itemModel.purchased) {
+                                PurchaseButton(viewModel: viewModel)
+                                    .disabled(viewModel.isPurchaseSuccessful)
+                                    
+                            }
                         }
                     }
                 }
+                .padding()
+                .background(Color(UIColor.systemBackground))
+                .navigationBarTitle("Item Detail", displayMode: .inline)
+                .onChange(of: viewModel.isPurchaseSuccessful, perform: { _ in
+                    if viewModel.isPurchaseSuccessful /*&& viewModel.itemModel.retractablePurchase*/ {
+                        NotificationCenter.default.post(name: Notification.Name("purchaseStatusChanged"), object: nil)
+                        self.presentationMode.wrappedValue.dismiss()
+                    } else if !viewModel.isPurchaseSuccessful && viewModel.itemModel.retractablePurchase {
+                        viewModel.isErrorState = true
+                    }
+                })
+                .alert(isPresented: $viewModel.isErrorState) {
+                    Alert(title: Text("Error"), message: Text("We're temporarily unable to complete this action. Please try again later."), dismissButton: .default(Text("Ok")))
             }
-            .padding()
-            .background(Color(UIColor.systemBackground))
-            .navigationBarTitle("Item Detail", displayMode: .inline)
-            .onChange(of: viewModel.isPurchaseSuccessful, perform: { _ in
-                if viewModel.isPurchaseSuccessful /*&& viewModel.itemModel.retractablePurchase*/ {
-                    NotificationCenter.default.post(name: Notification.Name("purchaseStatusChanged"), object: nil)
-                    self.presentationMode.wrappedValue.dismiss()
-                } else if !viewModel.isPurchaseSuccessful && viewModel.itemModel.retractablePurchase {
-                    viewModel.isErrorState = true
-                }
-            })
-            .alert(isPresented: $viewModel.isErrorState) {
-                Alert(title: Text("Error"), message: Text("We're temporarily unable to complete this action. Please try again later."), dismissButton: .default(Text("Ok")))
             }
             if (viewModel.isLoading) {
                 ProgressView()
@@ -216,9 +230,8 @@ struct BindingItemViewPreview : View {
                         price: 230.00,
                         purchased: false,
                         purchaseDate: nil,
-                        quantity: 1,
-                        v: 1)
-        let viewModel = ItemDetailViewModel(UserSession(), itemModel: item)
+                        quantity: 1)
+        let viewModel = ItemDetailViewModel(UserSession(), listInContext: "abc", itemModel: item)
         ItemDetailView(viewModel: viewModel)
     }
 }

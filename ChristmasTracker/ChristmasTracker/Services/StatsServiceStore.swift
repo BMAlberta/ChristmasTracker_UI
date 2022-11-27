@@ -18,11 +18,7 @@ enum StatsServiceError: Error {
 }
 
 actor StatsServiceStore {
-    static func getPurchasedStats(_ token: String) async throws -> PurchaseStatsResponse {
-        
-        guard token.count > 0 else {
-            throw StatsServiceError.unknown
-        }
+    static func getPurchasedStats() async throws -> PurchaseStatsResponse {
         
         let urlString = Configuration.getUrl(forKey: .stats)
         
@@ -31,11 +27,10 @@ actor StatsServiceStore {
         }
                 
         let request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .get,
-                                                       token: token)
+                                                       method: .get)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await ServiceCache.shared.fetchNetworkResponse(request: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw StatsServiceError.networkError
             }

@@ -18,26 +18,25 @@ enum ListServiceError: Error {
 }
 
 actor ListServiceStore {
-    static func getOwnedItems(_ token: String) async throws -> AllItemsResponse {
-        let urlString = Configuration.getUrl(forKey: .ownedItems)
+    static func getOwnedItems() async throws -> OwnedListResponse {
+        let urlString = Configuration.getUrl(forKey: .ownedLists)
         
         guard let url = URL(string: urlString) else {
             throw ListServiceError.invalidURL
         }
         
         let request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .get,
-                                                       token: token)
+                                                       method: .get)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await ServiceCache.shared.fetchNetworkResponse(request: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw ListServiceError.networkError
             }
             LogUtility.logNetworkDetails(message: "ListService.getOwnedItems",
                                          rawData: data)
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<AllItemsResponse>.self, from: data)
+            let rawData = try decoder.decode(NetworkResponse<OwnedListResponse>.self, from: data)
             return rawData.payload
         } catch {
             LogUtility.logServiceError(message: "ListService.getOwnedItems",
@@ -46,7 +45,7 @@ actor ListServiceStore {
         }
     }
     
-    static func getListOverviewByUser(_ token: String) async throws -> UserListOverviewResponse {
+    static func getListOverviewByUser() async throws -> ListOverviewResponse {
         let urlString = Configuration.getUrl(forKey: .itemsGroupedByUser)
         
         guard let url = URL(string: urlString) else {
@@ -54,11 +53,10 @@ actor ListServiceStore {
         }
         
         let request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .get,
-                                                       token: token)
+                                                       method: .get)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await ServiceCache.shared.fetchNetworkResponse(request: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw ListServiceError.networkError
             }
@@ -67,7 +65,7 @@ actor ListServiceStore {
                                          rawData: data)
             
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<UserListOverviewResponse>.self, from: data)
+            let rawData = try decoder.decode(NetworkResponse<ListOverviewResponse>.self, from: data)
             return rawData.payload
             
         } catch {
@@ -77,53 +75,52 @@ actor ListServiceStore {
         }
     }
  
-    static func getListForUser(_ token: String, userId: String) async throws -> AllItemsResponse {
-        let baseUrlString = Configuration.getUrl(forKey: .itemsForUser)
-        let finalUrlString = baseUrlString + userId
+    static func getList(listId: String) async throws -> ListDetailModel {
+        let baseUrlString = Configuration.getUrl(forKey: .listForId)
+        let finalUrlString = baseUrlString + listId
         
         guard let url = URL(string: finalUrlString) else {
             throw ListServiceError.invalidURL
         }
         
         let request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .get,
-                                                       token: token)
+                                                       method: .get)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await ServiceCache.shared.fetchNetworkResponse(request: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw ListServiceError.networkError
             }
-            LogUtility.logNetworkDetails(message: "ListService.getListForUser",
+            LogUtility.logNetworkDetails(message: "ListService.getListbyId",
                                          rawData: data)
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<AllItemsResponse>.self, from: data)
-            return rawData.payload
+            let rawData = try decoder.decode(NetworkResponse<ListDetailResponse>.self, from: data)
+            return rawData.payload.detail
             
         } catch {
-            LogUtility.logServiceError(message: "ListService.getListForUser",
+            LogUtility.logServiceError(message: "ListService.getListbyId",
                                        error: ListServiceError.decoder(error: error))
             throw ListServiceError.decoder(error: error)
         }
         
     }
     
-    static func addNewItem(token: String, newItem: NewItemModel) async throws -> NewItemResponse {
+    static func addNewItem(toList listInContext: String, newItem: NewItemModel) async throws -> ListDetailResponse {
         let urlString = Configuration.getUrl(forKey: .addItem)
         
         let params: [String: String] = ["name": newItem.name,
                                         "description": newItem.description,
                                         "link": newItem.link,
                                         "price": newItem.price,
-                                        "quantity": newItem.quantity]
+                                        "quantity": newItem.quantity,
+                                        "listId": listInContext]
         
         guard let url = URL(string: urlString) else {
             throw ListServiceError.invalidURL
         }
         
         var request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .post,
-                                                       token: token)
+                                                       method: .post)
         
         let json: [AnyHashable: AnyHashable] = params
         let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
@@ -131,7 +128,7 @@ actor ListServiceStore {
         
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 201 else {
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw ListServiceError.networkError
             }
             
@@ -139,7 +136,7 @@ actor ListServiceStore {
                                          rawData: data)
             
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<NewItemResponse>.self, from: data)
+            let rawData = try decoder.decode(NetworkResponse<ListDetailResponse>.self, from: data)
             return rawData.payload
         } catch {
             LogUtility.logServiceError(message: "ListService.addNewItem",
@@ -148,18 +145,53 @@ actor ListServiceStore {
         }
     }
     
-    static func markItemPurchased(token: String, item: Item) async throws -> UpdatedItemResponse {
-        let urlString = Configuration.getUrl(forKey: .markPurchased)
+    static func addNewList(newList: String) async throws -> ListDetailResponse {
+        let urlString = Configuration.getUrl(forKey: .addList)
         
-        let params: [String: String] = ["itemId": item.id]
+        let params: [String: String] = ["listName": newList]
         
         guard let url = URL(string: urlString) else {
             throw ListServiceError.invalidURL
         }
         
         var request = NetworkUtility.createBaseRequest(url: url,
-                                                  method: .post,
-                                                  token: token)
+                                                       method: .post)
+        
+        let json: [AnyHashable: AnyHashable] = params
+        let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        request.httpBody = jsonData
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                throw ListServiceError.networkError
+            }
+            
+            LogUtility.logNetworkDetails(message: "ListService.addNewList",
+                                         rawData: data)
+            
+            let decoder = JSONDecoder()
+            let rawData = try decoder.decode(NetworkResponse<ListDetailResponse>.self, from: data)
+            return rawData.payload
+        } catch {
+            LogUtility.logServiceError(message: "ListService.addNewList",
+                                       error: ListServiceError.decoder(error: error))
+            throw ListServiceError.decoder(error: error)
+        }
+    }
+    
+    static func markItemPurchased(listId: String, itemInContext: Item) async throws -> ListDetailResponse {
+        let urlString = Configuration.getUrl(forKey: .markPurchased)
+        
+        let params: [String: String] = ["listId" : listId,
+                                        "itemId": itemInContext.id]
+        
+        guard let url = URL(string: urlString) else {
+            throw ListServiceError.invalidURL
+        }
+        
+        var request = NetworkUtility.createBaseRequest(url: url,
+                                                  method: .post)
         
         let json: [AnyHashable: AnyHashable] = params
         let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
@@ -174,8 +206,8 @@ actor ListServiceStore {
                                          rawData: data)
             
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<UpdatedItemResponse>.self, from: data)
-            return rawData.payload
+            let model = try decoder.decode(NetworkResponse<ListDetailResponse>.self, from: data)
+            return model.payload
             
         } catch {
             LogUtility.logServiceError(message: "ListService.markItemPurchased",
@@ -184,18 +216,18 @@ actor ListServiceStore {
         }
     }
     
-    static func markItemRetracted(_ token: String, item: Item) async throws -> UpdatedItemResponse {
+    static func markItemRetracted(listId: String, itemInContext: Item) async throws -> ListDetailResponse  {
         let urlString = Configuration.getUrl(forKey: .markRetracted)
         
-        let params: [String: String] = ["itemId": item.id]
+        let params: [String: String] = ["listId" : listId,
+                                        "itemId": itemInContext.id]
         
         guard let url = URL(string: urlString) else {
             throw ListServiceError.invalidURL
         }
         
         var request = NetworkUtility.createBaseRequest(url: url,
-                                                  method: .post,
-                                                  token: token)
+                                                  method: .post)
         
         let json: [AnyHashable: AnyHashable] = params
         let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
@@ -211,7 +243,7 @@ actor ListServiceStore {
                                          rawData: data)
             
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<UpdatedItemResponse>.self, from: data)
+            let rawData = try decoder.decode(NetworkResponse<ListDetailResponse>.self, from: data)
             return rawData.payload
             
         } catch {
@@ -221,7 +253,7 @@ actor ListServiceStore {
         }
     }
     
-    static func updateItem(token: String, item: Item) async throws -> UpdatedItemResponse {
+    static func updateItem(item: Item) async throws -> UpdatedItemResponse {
         let baseUrlString = Configuration.getUrl(forKey: .updateItem)
         let finalUrlString = baseUrlString + item.id
         
@@ -238,8 +270,7 @@ actor ListServiceStore {
         ]
         
         var request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .patch,
-                                                       token: token)
+                                                       method: .patch)
         
         let json: [AnyHashable: AnyHashable] = params
         let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
@@ -266,18 +297,17 @@ actor ListServiceStore {
         }
     }
     
-    static func deleteItem(_ token: String, item: Item) async throws -> DeletedItemResponse {
-        let baseUrlString = Configuration.getUrl(forKey: .updateItem)
-        let finalUrlString = baseUrlString + item.id
+    static func deleteItem(fromList listId: String, item: Item) async throws -> Void {
+        let baseUrlString = Configuration.getUrl(forKey: .deleteItem)
+        let finalUrlString = baseUrlString + listId
         
-        guard let url = URL(string: finalUrlString) else {
+        guard let url = URL(string: finalUrlString)?.appending(queryItems: [URLQueryItem(name: "itemId", value: item.id)]) else {
             throw ListServiceError.invalidURL
         }
         
         let request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .delete,
-                                                       token: token)
-        
+                                                       method: .delete)
+                
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
@@ -286,13 +316,38 @@ actor ListServiceStore {
             
             LogUtility.logNetworkDetails(message: "ListService.deleteItem",
                                          rawData: data)
-            
-            let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<DeletedItemResponse>.self, from: data)
-            return rawData.payload
+            return
             
         } catch {
             LogUtility.logServiceError(message: "ListService.deleteItem",
+                                       error: ListServiceError.decoder(error: error))
+            throw ListServiceError.decoder(error: error)
+        }
+    }
+    
+    static func deleteList(listId: String) async throws -> Void {
+        let baseUrlString = Configuration.getUrl(forKey: .listForId)
+        let finalUrlString = baseUrlString + listId
+        
+        guard let url = URL(string: finalUrlString) else {
+            throw ListServiceError.invalidURL
+        }
+        
+        let request = NetworkUtility.createBaseRequest(url: url,
+                                                       method: .delete)
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                throw ListServiceError.networkError
+            }
+            
+            LogUtility.logNetworkDetails(message: "ListService.deleteList",
+                                         rawData: data)
+            return
+            
+        } catch {
+            LogUtility.logServiceError(message: "ListService.deleteList",
                                        error: ListServiceError.decoder(error: error))
             throw ListServiceError.decoder(error: error)
         }

@@ -8,23 +8,31 @@
 import Foundation
 import Combine
 
-class LoginViewModel: ObservableObject {
 
-    struct AlertConfiguration: CustomDebugStringConvertible {
-        var title: String = ""
-        var message: String = ""
-        var positiveActionTitle: String = ""
-        
-        var debugDescription: String {
-            """
-            
-                title: \(title)
-                message: \(message)
-                positiveActionTitle: \(positiveActionTitle)
-            """
-        }
+struct AlertConfiguration: CustomDebugStringConvertible, Identifiable {
+    
+    enum AlertType {
+        case error
+        case success
+        case informational
     }
     
+    var id: AlertType = .error
+    var title: String = ""
+    var message: String = ""
+    var positiveActionTitle: String = ""
+    
+    var debugDescription: String {
+        """
+        
+            title: \(title)
+            message: \(message)
+            positiveActionTitle: \(positiveActionTitle)
+        """
+    }
+}
+
+class LoginViewModel: ObservableObject {
     struct UpdateAlertConfiguration: CustomDebugStringConvertible {
         var title: String = ""
         var message: String = ""
@@ -63,8 +71,8 @@ class LoginViewModel: ObservableObject {
                                               password: self.password)
         do {
             let loginResponse: LoginResponse = try await AuthServiceStore.performLogin(suppliedCredentials)
-            let currentUserResponse: CurrentUserResponse = try await UserServiceStore.getCurrentUserDetails(token: loginResponse.token)
-            self._session.startSession(token: loginResponse.token, activeUser: currentUserResponse.user)
+            let currentUserResponse: CurrentUserResponse = try await UserServiceStore.getUserDetails(forId: loginResponse.userInfo)
+            self._session.startSession(activeUser: currentUserResponse.user)
             self.isLoading = false
             self.isErrorState = false
             
@@ -74,6 +82,7 @@ class LoginViewModel: ObservableObject {
             self.isErrorState = true
         }
         catch is UserServiceError {
+            // TODO: Need to call logout from here
             let alertConfiguration = AlertConfiguration(title: "Temporarily Unavailable",
                                                         message: "We're temporarily unable to connect. Thank you for your patience. Please try again later.",
                                                         positiveActionTitle: "OK")
@@ -93,6 +102,7 @@ class LoginViewModel: ObservableObject {
     
     @MainActor
     func checkForUpdate() async {
+        self.shouldPromptForUpdate = false
         do {
             let updateResponse: UpdateInfoModelResponse = try await UpdateServiceStore.fetchUpdateInfo()
             let configuration = UpdateAlertConfiguration(title: "Update Available",
@@ -135,14 +145,3 @@ extension LoginViewModel: CustomDebugStringConvertible {
         """
     }
 }
-
-
-/**
- alertConfiguration = AlertConfiguration()
- @Published var updateConfiguration = UpdateAlertConfiguration()
- @Published var shouldPromptForUpdate = false
- @Published var isLoading = false
- @Published var isErrorState = false
- @Published var username = UserDefaults.standard.string(forKey: "savedId") ?? ""
- @Published var password = ""
- */

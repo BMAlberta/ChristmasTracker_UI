@@ -18,19 +18,19 @@ enum UserServiceError: Error {
 
 actor UserServiceStore {
     
-    static func getCurrentUserDetails(token: String) async throws -> CurrentUserResponse {
-        let urlString = Configuration.getUrl(forKey: .userDetails)
-        
-        guard let url = URL(string: urlString) else {
+    static func getUserDetails(forId userId: String) async throws -> CurrentUserResponse {
+        let baseUrlString = Configuration.getUrl(forKey: .userDetails)
+        let finalUrlString = baseUrlString + userId
+       
+        guard let url = URL(string: finalUrlString) else {
             throw UserServiceError.networkError
         }
         
         let request = NetworkUtility.createBaseRequest(url: url,
-                                                       method: .get,
-                                                       token: token)
+                                                       method: .get)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await ServiceCache.shared.fetchNetworkResponse(request: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw UserServiceError.networkError
             }

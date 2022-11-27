@@ -13,7 +13,7 @@ class StatsViewModel: ObservableObject {
     @Published var purchasedModel = BarChartViewModel()
     @Published var totalAmountSpent = 0.0
     @Published var isErrorState = false
-    @Published var hasStats = true
+    @Published var hasStats = false
     @Published var isLoading = false
     
     private var _session: SessionManaging
@@ -26,11 +26,11 @@ class StatsViewModel: ObservableObject {
     func getStats() async {
         self.isLoading = true
         do {
-            let purchaseStatsResponse: PurchaseStatsResponse = try await StatsServiceStore.getPurchasedStats(_session.token)
+            let purchaseStatsResponse: PurchaseStatsResponse = try await StatsServiceStore.getPurchasedStats()
         
-            let spentModel: PieChartViewModel = self.generateStatModel(model: purchaseStatsResponse.spentOverviews)
-            let purchasedModel: BarChartViewModel = self.generateStatModel(model: purchaseStatsResponse.spentOverviews)
-            let totalSpent = self.generateTotalSpent(model: purchaseStatsResponse.spentOverviews)
+            let spentModel: PieChartViewModel = self.generateStatModel(model: purchaseStatsResponse.purchaseStats)
+            let purchasedModel: BarChartViewModel = self.generateStatModel(model: purchaseStatsResponse.purchaseStats)
+            let totalSpent = self.generateTotalSpent(model: purchaseStatsResponse.purchaseStats)
             self.spentModel = spentModel
             self.purchasedModel = purchasedModel
             self.totalAmountSpent = totalSpent
@@ -49,7 +49,9 @@ class StatsViewModel: ObservableObject {
         
         let viewModel = PieChartViewModel()
         for item in model {
-            viewModel.detail[item.user.firstName] = item.totalSpent
+            var tempModel = viewModel.detail[item.ownerInfo.firstName] ?? 0.0
+            tempModel += item.totalSpent
+            viewModel.detail[item.ownerInfo.firstName] = tempModel
         }
         return viewModel
     }
@@ -57,7 +59,9 @@ class StatsViewModel: ObservableObject {
     private func generateStatModel(model: [PurchaseStat]) -> BarChartViewModel {
         let viewModel = BarChartViewModel()
         for item in model {
-            viewModel.detail[item.user.firstName] = Double(item.purchasedItems)
+            var tempModel = viewModel.detail[item.ownerInfo.firstName] ?? 0
+            tempModel += Double(item.purchasedItems)
+            viewModel.detail[item.ownerInfo.firstName] = tempModel
         }
         return viewModel
     }

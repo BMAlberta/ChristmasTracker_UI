@@ -11,31 +11,36 @@ import os
 struct Configuration {
     
     static private let localHost = "http://127.0.0.1:3000"
-    static private let devHost = "http://10.1.20.152:3000"
+    static private let devHost = "http://10.1.20.231:3000"
     static private let prodHost = "https://api.bmalberta.com"
-    static private let configHost = "https://appstore.bmalberta.com"
+    static private let configHost = "https://content.bmalberta.com"
     
     static func getUrl(forKey key: Path) -> String {
         return Self.prodHost + key.rawValue
     }
     
     static var configUrl: String {
-        return Self.configHost + "/config/tracker/config.json"
+        return Self.configHost + "/config.json"
     }
     
     
     enum Path: String {
         case auth = "/tracker/auth/login"
+        case lwEnroll = "/tracker/enroll/lw/createUser"
+        case logout = "/tracker/auth/logout"
         case userDetails = "/tracker/users/"
         case ownedItems = "/tracker/items/owned"
-        case itemsGroupedByUser = "/tracker/items/groupedByUser"
-        case itemsForUser = "/tracker/items/user/"
-        case addItem = "/tracker/items"
-        case markPurchased = "/tracker/purchases"
-        case markRetracted = "/tracker/purchases/retract"
+        case ownedLists = "/tracker/lists/owned"
+        case itemsGroupedByUser = "/tracker/lists/details/overviews"
+        case listForId = "/tracker/lists/"
+        case addItem = "/tracker/lists/details/addItem"
+        case markPurchased = "/tracker/lists/purchase"
+        case markRetracted = "/tracker/lists/purchase/retract"
         case resetPassword = "/tracker/auth/password/update"
-        case updateItem = "/tracker/items/"
+        case updateItem = "/tracker/items/asd"
         case stats = "/tracker/stats/purchases"
+        case addList = "/tracker/lists/create"
+        case deleteItem = "/tracker/lists/details/"
     }
     
     static var appVersion: String {
@@ -81,7 +86,7 @@ struct Configuration {
         let fmt = ISO8601DateFormatter()
 
         let date1 = Date.now
-        let date2 = fmt.date(from: "2021-12-25T00:00:00+0000")!
+        let date2 = fmt.date(from: "2022-12-25T00:00:00+0000")!
 
         let diff = Calendar.current.dateComponents([.day], from: date1, to: date2)
         
@@ -101,10 +106,9 @@ struct NetworkUtility {
         case delete = "DELETE"
     }
     
-    static func createBaseRequest(url: URL, method: RequestType, token: String) -> URLRequest {
+    static func createBaseRequest(url: URL, method: RequestType) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(token, forHTTPHeaderField: "auth-token")
         request.httpMethod = method.rawValue
         
         return request
@@ -131,6 +135,22 @@ struct FormatUtility {
         let targetFormat = toFormatter.string(from: convertedRaw)
         
         return targetFormat
+    }
+    
+    static func convertStringToDate(rawDate: String?) -> Date {
+        guard let rawDate = rawDate else {
+            return Date()
+        }
+
+        
+        let fromFormatter = ISO8601DateFormatter()
+        fromFormatter.formatOptions.insert(.withFractionalSeconds)
+
+        guard let convertedRaw = fromFormatter.date(from: rawDate) else {
+            return Date()
+        }
+
+        return convertedRaw
     }
     
     static func convertDateToHumanReadable(rawDate: Date?) -> String {
@@ -166,6 +186,17 @@ struct FormatUtility {
         
         return numberOfDays
     }
+    
+    static func formatInitials(members: [MemberDetail]) -> [String] {
+        var initials: [String] = []
+        
+        for member in members {
+            let temp = "\(member.firstName.first ?? "-")\(member.lastName.first ?? "-")"
+            initials.append(temp)
+        }
+        
+        return initials
+    }
 }
 
 struct LogUtility {
@@ -174,14 +205,18 @@ struct LogUtility {
     static let serviceError = OSLog(subsystem: Self.subsystem, category: "serviceError")
     
     static func logNetworkDetails(message: String, rawData: Data) {
+        #if DEBUG
         let stringData: String = String(data: rawData, encoding: String.Encoding.utf8)!
         let logData = String(format: "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n%@:\n%@", message, stringData)
         Self.logMessage(osLog: Self.networking, message: logData)
+        #endif
     }
     
     static func logServiceError(message: String, error: Error) {
+        #if DEBUG
         let logData = String(format: "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n%@:\n%@", message, String(describing: error))
         Self.logMessage(osLog: Self.serviceError, message: logData)
+        #endif
     }
     
     private static func logMessage(osLog: OSLog, message: String) {
