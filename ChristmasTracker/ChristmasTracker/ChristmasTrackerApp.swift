@@ -9,21 +9,11 @@ import SwiftUI
 
 @main
 struct ChristmasTrackerApp: App {
-    
-    let store = AppStore(initialState: .init(
-        authState: AuthState(),
-        listState: ListState()
-    ),
-    reducer: appReducer,
-    middlewares: [
-        authMiddleware(service: AuthService()),
-        logMiddleware(),
-        listMiddleware(service: ListService())
-    ])
+    let sessionManager = UserSession()
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environmentObject(store)
+                .environmentObject(sessionManager)
                 .onAppear {
                     let appearance = UITabBarAppearance()
                     appearance.configureWithDefaultBackground()
@@ -31,5 +21,28 @@ struct ChristmasTrackerApp: App {
                     UITabBar.appearance().scrollEdgeAppearance = appearance
                 }
         }
+    }
+}
+
+extension UIApplication {
+    func addTapGestureRecognizer() {
+        let keyWindow = connectedScenes.compactMap { $0 as? UIWindowScene  }.flatMap { $0.windows }.first { $0.isKeyWindow }
+        guard let window = keyWindow else { return }
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(tapAction))
+        tapGesture.requiresExclusiveTouchType = false
+        tapGesture.cancelsTouchesInView = false
+        tapGesture.delegate = self
+        window.addGestureRecognizer(tapGesture)
+    }
+
+    @objc func tapAction(_ sender: UITapGestureRecognizer) {
+//        print("User action taken")
+        NotificationCenter.default.post(Notification.init(name: Notification.Name(rawValue: "UserTappedOnScreenEvent")))
+    }
+}
+
+extension UIApplication: UIGestureRecognizerDelegate {
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true // set to `false` if you don't want to detect tap during other gestures
     }
 }
