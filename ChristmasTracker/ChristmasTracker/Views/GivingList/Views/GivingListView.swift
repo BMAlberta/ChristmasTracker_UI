@@ -41,7 +41,7 @@ struct GivingListView: View {
             }
         }
         .refreshable {
-            await self.viewModel.getOverview()
+            await self.viewModel.refreshOverview()
         }
     }
 }

@@ -19,6 +19,13 @@ class MyListsViewModel: ObservableObject {
     
     init(_ session: SessionManaging) {
         _session = session
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("newItemAdded"), object: nil)
+    }
+    
+    @objc private func refreshList() {
+        Task {
+            await fetchOwnedList()
+        }
     }
     
     @MainActor
@@ -47,6 +54,7 @@ class MyListsViewModel: ObservableObject {
             self.activeLists = ownedListResponse.ownedLists
             self.isLoading = false
             self.isErrorState = false
+            NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: nil)
         } catch {
             self.isLoading = false
             self.isErrorState = true

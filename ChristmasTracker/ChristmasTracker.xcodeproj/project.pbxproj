@@ -59,6 +59,9 @@
 		0BC93E61271D13B5000D5E3B /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC93E60271D13B5000D5E3B /* Utilities.swift */; };
 		0BD4FB402748AABF001A3589 /* Charts in Frameworks */ = {isa = PBXBuildFile; productRef = 0BD4FB3F2748AABF001A3589 /* Charts */; };
 		0BEFAAED2724ECD30012A7AE /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */; };
+		0BFE9E6D29391ED800346B92 /* BiometricUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFE9E6C29391ED800346B92 /* BiometricUtilities.swift */; };
+		0BFE9E6F2939B51500346B92 /* SignInOptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFE9E6E2939B51500346B92 /* SignInOptionsView.swift */; };
+		0BFE9E71293A75DB00346B92 /* SignInOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFE9E70293A75DB00346B92 /* SignInOptionsViewModel.swift */; };
 		D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */; };
 		D38378AE25B20CAD005AD98D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378AD25B20CAD005AD98D /* Assets.xcassets */; };
 		D38378B125B20CAD005AD98D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D38378B025B20CAD005AD98D /* Preview Assets.xcassets */; };
@@ -144,6 +147,9 @@
 		0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailView.swift; sourceTree = "<group>"; };
 		0BC93E60271D13B5000D5E3B /* Utilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
 		0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
+		0BFE9E6C29391ED800346B92 /* BiometricUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricUtilities.swift; sourceTree = "<group>"; };
+		0BFE9E6E2939B51500346B92 /* SignInOptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInOptionsView.swift; sourceTree = "<group>"; };
+		0BFE9E70293A75DB00346B92 /* SignInOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInOptionsViewModel.swift; sourceTree = "<group>"; };
 		D38378A625B20CAA005AD98D /* ChristmasTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChristmasTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D38378A925B20CAA005AD98D /* ChristmasTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasTrackerApp.swift; sourceTree = "<group>"; };
 		D38378AD25B20CAD005AD98D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -227,6 +233,7 @@
 			children = (
 				D383796A25B63472005AD98D /* ProfileView.swift */,
 				0BEFAAEC2724ECD30012A7AE /* ChangePasswordView.swift */,
+				0BFE9E6E2939B51500346B92 /* SignInOptionsView.swift */,
 				0B3153482787DAEA0003AB3D /* DeleteProfileView.swift */,
 			);
 			path = Views;
@@ -315,6 +322,7 @@
 				0B358924275DB8A000CE9252 /* ProfileViewModel.swift */,
 				0B358926275DB8AF00CE9252 /* ChangePasswordViewModel.swift */,
 				0B31534A2787DAF90003AB3D /* DeleteProfileViewModel.swift */,
+				0BFE9E70293A75DB00346B92 /* SignInOptionsViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -442,6 +450,7 @@
 				D38378B225B20CAD005AD98D /* Info.plist */,
 				D38378AF25B20CAD005AD98D /* Preview Content */,
 				0BC93E60271D13B5000D5E3B /* Utilities.swift */,
+				0BFE9E6C29391ED800346B92 /* BiometricUtilities.swift */,
 			);
 			path = ChristmasTracker;
 			sourceTree = "<group>";
@@ -693,18 +702,21 @@
 				0B3153492787DAEA0003AB3D /* DeleteProfileView.swift in Sources */,
 				D383790125B27C63005AD98D /* LoginView.swift in Sources */,
 				0B31534727864BC60003AB3D /* PasswordResetView.swift in Sources */,
+				0BFE9E6D29391ED800346B92 /* BiometricUtilities.swift in Sources */,
 				0B06AEBE27698AC20057DA71 /* LoginViewModel.swift in Sources */,
 				D38378E725B21D97005AD98D /* Models.swift in Sources */,
 				0B31535C278A87650003AB3D /* NewItemModel.swift in Sources */,
 				0B73EC432922DABA000FD600 /* ServiceCache.swift in Sources */,
 				0B31532F277AB3200003AB3D /* NewItemViewModel.swift in Sources */,
 				0B31533F277D52A60003AB3D /* UserVerificationViewModel.swift in Sources */,
+				0BFE9E6F2939B51500346B92 /* SignInOptionsView.swift in Sources */,
 				0B4E6E262749F07C00B529BC /* GenericBarChartView.swift in Sources */,
 				0B4B4580292C85A90021E422 /* EnrollServiceStore.swift in Sources */,
 				0BBADF76275B1373005654AA /* GivingListViewModel.swift in Sources */,
 				0B31532B27758D3A0003AB3D /* UpdateServiceStore.swift in Sources */,
 				D383796B25B63472005AD98D /* ProfileView.swift in Sources */,
 				0BB42E3E274DCF1F0066025E /* BannerView.swift in Sources */,
+				0BFE9E71293A75DB00346B92 /* SignInOptionsViewModel.swift in Sources */,
 				D383794425B54390005AD98D /* AuthServiceStore.swift in Sources */,
 				0B31534327863AFF0003AB3D /* CreatePasswordView.swift in Sources */,
 				0B315354278A865D0003AB3D /* NetworkResponses.swift in Sources */,
@@ -879,7 +891,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -902,7 +914,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;

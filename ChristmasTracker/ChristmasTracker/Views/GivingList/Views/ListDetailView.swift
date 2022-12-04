@@ -45,6 +45,7 @@ struct ListDetailView: View {
                             }
                         }
                         .onDelete(perform: delete)
+                        .deleteDisabled(!self.viewModel.hidePurchases)
                 }
                 .listStyle(.insetGrouped)
                 .sheet(item: $selectedItem, onDismiss: {

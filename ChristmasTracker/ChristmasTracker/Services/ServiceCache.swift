@@ -24,6 +24,7 @@ class ServiceCache {
     static let shared = ServiceCache()
     var cache: CacheEntry = [:]
     
+    
     private init() {
         NotificationCenter.default.addObserver(self, selector: #selector(clearCache), name: Notification.Name("purchaseStatusChanged"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(clearCache), name: Notification.Name("newItemAdded"), object: nil)

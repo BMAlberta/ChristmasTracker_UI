@@ -125,6 +125,7 @@ class ListDetailViewModel: ObservableObject {
         do {
             self.isLoading = true
             let _ = try await ListServiceStore.deleteItem(fromList: activeListId, item: itemInContext)
+            NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: nil)
             let updatedListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
             let sortedItems = updatedListResponse.items.sorted { !$0.purchased && $1.purchased }
             self.items = sortedItems

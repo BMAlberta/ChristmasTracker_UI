@@ -46,6 +46,7 @@ actor AuthServiceStore {
             
             let decoder = JSONDecoder()
             let rawData = try decoder.decode(NetworkResponse<LoginResponse>.self, from: data)
+            ServiceCache.shared.clearCache()
             return rawData.payload
             
         } catch {

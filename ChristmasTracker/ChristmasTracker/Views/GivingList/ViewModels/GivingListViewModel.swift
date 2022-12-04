@@ -44,4 +44,10 @@ class GivingListViewModel: ObservableObject {
             self.isErrorState = true
         }
     }
+    
+    @MainActor
+    func refreshOverview() async {
+        NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: nil)
+        let _ = await self.getOverview()
+    }
 }

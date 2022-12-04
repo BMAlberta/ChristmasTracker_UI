@@ -12,6 +12,7 @@ struct ProfileView: View {
     @StateObject var viewModel: ProfileViewModel
     @State var passwordChangePresented = false
     @State var deleteProfilePresented = false
+    @State var biometricSettingsPresented = false
     var body: some View {
         NavigationView {
             VStack {
@@ -24,7 +25,9 @@ struct ProfileView: View {
                     }
                     Section("Login Options") {
                         ChangePasswordButton(presented: $passwordChangePresented)
+                        BiometricLoginButton(presented: $biometricSettingsPresented)
                         DisableSaveUserIdButton()
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                     
                     Section("Application Information") {
@@ -37,6 +40,9 @@ struct ProfileView: View {
                 }
                 .sheet(isPresented: $passwordChangePresented, onDismiss: nil, content: {
                     ChangePasswordView(viewModel: ChangePasswordViewModel(_session))
+                })
+                .sheet(isPresented: $biometricSettingsPresented, onDismiss: nil, content: {
+                    SignInOptionsView(viewModel: SignInOptionsViewModel(_session))
                 })
                 .navigationBarTitle("Profile & Settings")
                 .toolbar {
@@ -125,12 +131,18 @@ struct ProfileView: View {
     private struct ChangePasswordButton: View {
         @Binding var presented: Bool
         var body: some View {
-            HStack {
-                Spacer()
-                Button("Change password") {
-                    presented.toggle()
-                }
-                Spacer()
+            Button("Change password") {
+                presented.toggle()
+            }
+        }
+    }
+    
+    private struct BiometricLoginButton: View {
+        @Binding var presented: Bool
+        var body: some View {
+            
+            Button("Sign-In Options") {
+                presented.toggle()
             }
         }
     }
@@ -138,25 +150,22 @@ struct ProfileView: View {
     private struct DisableSaveUserIdButton: View {
         @State private var alertPresented = false
         var body: some View {
-            HStack {
-                Spacer()
-                Button(action: {
-                    alertPresented = true
-                }) {
-                    Text("Clear saved user ID")
-                        .foregroundColor(.red)
-                }
-                Spacer()
-                    .alert(isPresented: $alertPresented) {
-                        Alert(
-                            title: Text("Are you sure?"),
-                            message: Text("This action will clear your saved user id from the system. You will have to re-enter your login credentials the next time you sign in.\n\nDo you wish to proceed?"),
-                            primaryButton: .default(Text("Yes")) {
-                                UserDefaults.standard.removeObject(forKey: "savedId")
-                            },
-                            secondaryButton: .cancel()
-                        )
-                    }
+            
+            Button(action: {
+                alertPresented = true
+            }) {
+                Text("Clear saved user ID")
+                    .foregroundColor(.red)
+            }
+            .alert(isPresented: $alertPresented) {
+                Alert(
+                    title: Text("Are you sure?"),
+                    message: Text("This action will clear your saved user id from the system. You will have to re-enter your login credentials the next time you sign in.\n\nDo you wish to proceed?"),
+                    primaryButton: .default(Text("Yes")) {
+                        UserDefaults.standard.removeObject(forKey: "savedId")
+                    },
+                    secondaryButton: .cancel()
+                )
             }
         }
     }

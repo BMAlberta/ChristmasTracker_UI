@@ -12,6 +12,8 @@ struct MyListsView: View {
     @StateObject var viewModel: MyListsViewModel
     @State var showingNewListFlow = false
     @State var newListName: String = ""
+    @State private var deleteAlertPresented = false
+    @State private var selectedItemOffest = IndexSet()
     
     var body: some View {
         NavigationView {
@@ -31,6 +33,20 @@ struct MyListsView: View {
                     ProgressView()
                 }
             }
+            .alert(isPresented: $deleteAlertPresented) {
+                Alert(
+                    title: Text("Are you sure?"),
+                    message: Text("Are you sure you want to delete this list? Deleted lists cannot be recovered."),
+                    primaryButton: .destructive(Text("Yes, Delete")) {
+                        $deleteAlertPresented.wrappedValue.toggle()
+                        Task() {
+                            await self.viewModel.deleteItem(at: self.selectedItemOffest)
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+            
         }
         .navigationViewStyle(.stack)
         .onAppear {
@@ -49,9 +65,8 @@ struct MyListsView: View {
     }
     
     private func delete(at offsets: IndexSet) {
-        Task() {
-            await self.viewModel.deleteItem(at: offsets)
-        }
+        self.$selectedItemOffest.wrappedValue = offsets
+        self.$deleteAlertPresented.wrappedValue = true
     }
     
     private var addItemButton: some View {

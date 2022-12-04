@@ -37,12 +37,12 @@ class ChangePasswordViewModel: ObservableObject {
             }
             
             let passwordChangeResponse = try await AuthServiceStore.resetPassword(model: newPasswordModel)
-            print(passwordChangeResponse)
+//            print(passwordChangeResponse)
             self.isLoading = false
             self.isSuccessState = true
             self.isErrorState = false
         } catch {
-            print(error.localizedDescription)
+//            print(error.localizedDescription)
             self.isLoading = false
             self.isErrorState = true
             self.isSuccessState = false

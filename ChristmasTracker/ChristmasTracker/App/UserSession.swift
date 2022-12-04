@@ -58,7 +58,9 @@ class UserSession: ObservableObject, SessionManaging {
     @objc private func checkSessionTimer() {
         let timeSinceLastTouch = Date().timeIntervalSince(lastTouchTime)
         if timeSinceLastTouch > self.timeoutTime {
-//            print("Session Expired - Time since touch: \(timeSinceLastTouch)")
+        Task {
+                await AuthServiceStore.performLogout()
+            }
             self.terminateSession()
         }
     }

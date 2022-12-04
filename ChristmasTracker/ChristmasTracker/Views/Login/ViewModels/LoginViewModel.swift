@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import LocalAuthentication
 
 
 struct AlertConfiguration: CustomDebugStringConvertible, Identifiable {
@@ -49,7 +50,6 @@ class LoginViewModel: ObservableObject {
             """
         }
     }
-    
     @Published var alertCongfiguration = AlertConfiguration()
     @Published var updateConfiguration = UpdateAlertConfiguration()
     @Published var shouldPromptForUpdate = false
@@ -57,22 +57,78 @@ class LoginViewModel: ObservableObject {
     @Published var isErrorState = false
     @Published var username = UserDefaults.standard.string(forKey: "savedId") ?? ""
     @Published var password = ""
+    @Published var shouldShowBiometricOptions = BiometricUtility.isBiometricSupported
     
     private var _session: UserSession
+    private var biometricEnrollmentInProgress = false
     
     init(_ session: UserSession) {
         _session = session
+        self.updateBiometricStatus()
+    }
+    
+    
+    //check for Biometric
+    private func updateBiometricStatus() {
+        switch BiometricUtility.biometricStatus {
+        case .enrolled, .unenrolled:
+            self.shouldShowBiometricOptions = true
+        case .unavailable:
+            self.shouldShowBiometricOptions = false
+        }
     }
     
     @MainActor
-    func doLogin() async {
+    func handleBiometricInteraction() async {
+        
+        switch BiometricUtility.biometricStatus {
+        case .enrolled:
+            print("enrolled")
+            do {
+                let storedCredentials = try BiometricUtility.getStoredCredentials()
+                await doLogin(withCredentials: storedCredentials)
+            } catch {
+                let alertTitle = "Unable to log in"
+                let alertMessage = "Oops! It looks like there was an issue trying to log you in with \(BiometricUtility.biometricName). Please login with your username and password and check your Profile settings."
+                let alertConfig = AlertConfiguration(title: alertTitle,
+                                                     message: alertMessage,
+                                                     positiveActionTitle: "Ok")
+                self.alertCongfiguration = alertConfig
+                self.isErrorState = true
+            }
+        case .unenrolled:
+            let alertTitle = "Enable \(BiometricUtility.biometricName)?"
+            let alertMessage = "Please sign in with your username and password to enable \(BiometricUtility.biometricName)"
+            let alertConfig = AlertConfiguration(title: alertTitle,
+                                                 message: alertMessage,
+                                                 positiveActionTitle: "Ok")
+            self.alertCongfiguration = alertConfig
+            self.isErrorState = true
+            self.biometricEnrollmentInProgress = true
+            print("unenrolled")
+        case .unavailable:
+            let alertTitle = "Biometrics Unavailable"
+            let alertMessage = "Biometric authentication is not available for your device. Please ensure you have a device passcode set and biometric settings are enabled."
+            let alertConfig = AlertConfiguration(title: alertTitle,
+                                                 message: alertMessage,
+                                                 positiveActionTitle: "Ok")
+            self.alertCongfiguration = alertConfig
+            self.isErrorState = true
+            return
+        }
+    }
+    
+    @MainActor
+    func doLogin(withCredentials credentials: Credentials) async {
         self.isLoading = true
-        let suppliedCredentials = Credentials(username: self.username,
-                                              password: self.password)
+        let suppliedCredentials = credentials
         do {
             let loginResponse: LoginResponse = try await AuthServiceStore.performLogin(suppliedCredentials)
             let currentUserResponse: CurrentUserResponse = try await UserServiceStore.getUserDetails(forId: loginResponse.userInfo)
             self._session.startSession(activeUser: currentUserResponse.user)
+            if self.biometricEnrollmentInProgress {
+               try BiometricUtility.handleBiometricEnrollment(suppliedCredentials)
+            }
             self.isLoading = false
             self.isErrorState = false
             
@@ -97,7 +153,13 @@ class LoginViewModel: ObservableObject {
             self.isLoading = false
             self.isErrorState = true
         }
-        
+    }
+    
+    @MainActor
+    func doLogin() async {
+        let localCredentials = Credentials(username: self.username,
+                                           password: self.password)
+        await self.doLogin(withCredentials: localCredentials)
     }
     
     @MainActor

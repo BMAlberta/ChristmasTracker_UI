@@ -113,17 +113,33 @@ struct CredentialsView: View {
                     .cornerRadius(20.0)
                     .shadow(radius: 10.0, x: 20, y: 10)
                 
-                SecureField("Password", text: $viewModel.password, onCommit: {
-                    Task {
-                        await self.viewModel.doLogin()
-                    }                })
-                    .padding()
-                    .disableAutocorrection(true)
-                    .autocapitalization(.none)
-                    .background(Color.white)
-                    .textFieldStyle(PlaceholderStyle())
-                    .cornerRadius(20.0)
-                    .shadow(radius: 10.0, x: 20, y: 10)
+                HStack {
+                    SecureField("Password", text: $viewModel.password, onCommit: {
+                        Task {
+                            await self.viewModel.doLogin()
+                        }                })
+                        .padding()
+                        .disableAutocorrection(true)
+                        .autocapitalization(.none)
+                        .textFieldStyle(PlaceholderStyle())
+
+                    if (self.viewModel.shouldShowBiometricOptions) {
+                        Button(action: {
+                            Task {
+                                await self.viewModel.handleBiometricInteraction()
+                            }
+                        }) {
+                            Image(systemName: "faceid")
+                                .resizable()
+                                .frame(width: 24, height: 24)
+                                .padding(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16))
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+                .background(.white)
+                .cornerRadius(20.0)
+                .shadow(radius: 10.0, x:20, y: 10)
             }.padding([.leading, .trailing], 27.5)
             
             Button(action: {
@@ -213,7 +229,7 @@ struct LoginView_Previews: PreviewProvider {
     
     static var session: UserSession {
         let session = UserSession()
-        session.enrollmentInProgress = true
+        session.enrollmentInProgress = false
         return session
     }
     
@@ -222,6 +238,22 @@ struct LoginView_Previews: PreviewProvider {
             let sampleViewModel = LoginViewModel(Self.session)
             LoginView(viewModel: sampleViewModel)
                 .environmentObject(Self.session)
+        }
+    }
+}
+
+struct CredentialsView_Previews: PreviewProvider {
+    
+    static var session: UserSession {
+        let session = UserSession()
+        session.enrollmentInProgress = false
+        return session
+    }
+    
+    static var previews: some View {
+        Group {
+            let sampleViewModel = LoginViewModel(Self.session)
+            CredentialsView(viewModel: sampleViewModel)
         }
     }
 }

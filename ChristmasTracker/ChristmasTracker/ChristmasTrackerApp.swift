@@ -19,6 +19,7 @@ struct ChristmasTrackerApp: App {
                     appearance.configureWithDefaultBackground()
                     UITabBar.appearance().standardAppearance = appearance
                     UITabBar.appearance().scrollEdgeAppearance = appearance
+                    UIApplication.shared.addTapGestureRecognizer()
                 }
         }
     }
