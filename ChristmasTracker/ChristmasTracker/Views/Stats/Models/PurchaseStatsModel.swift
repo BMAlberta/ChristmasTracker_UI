@@ -12,6 +12,7 @@ struct PurchaseStat: Decodable {
     let purchasedItems: Int
     let listId: String
     let listName: String
+    let purchaseYear: String
     let ownerInfo: SlimUserModel
     
     init() {
@@ -19,6 +20,7 @@ struct PurchaseStat: Decodable {
         self.purchasedItems = 0
         self.listId = ""
         self.listName = ""
+        self.purchaseYear = ""
         self.ownerInfo = SlimUserModel()
     }
 }

@@ -11,17 +11,22 @@ import Foundation
 struct GivingListView: View {
     @StateObject var viewModel: GivingListViewModel
     @EnvironmentObject var _session: UserSession
+    var items: [GridItem] {
+        Array(repeating: .init(.adaptive(minimum: 300)), count: 1)
+    }
     var body: some View {
         NavigationView {
             if viewModel.overviews.count > 0 {
-                List(self.viewModel.overviews) { i in
-                    Section {
-                        NavigationLink(destination: ListDetailView(viewModel: ListDetailViewModel(_session, listInContext: i))) {
-                            UserListOverviewView(data: i)
-                        }
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVGrid(columns: items, spacing: 20) {
+                        ForEach(viewModel.overviews, id: \.id) { i in
+                            NavigationLink(destination: ListDetailView(viewModel: ListDetailViewModel(_session, listInContext: i))) {
+                                UserListOverviewView(data: i)
+                            }.buttonStyle(PlainButtonStyle())
+                        }.padding(.horizontal)
                     }
-                }.listStyle(InsetGroupedListStyle())
-                .navigationBarTitle("Available Lists")
+                }
+                .navigationTitle("Available Lists")
             } else if (self.viewModel.isLoading) {
                 ProgressView()
                     .navigationBarTitle("Available Lists")
@@ -45,6 +50,7 @@ struct GivingListView: View {
         }
     }
 }
+
 
 struct GivingListView_Previews: PreviewProvider {
     static var previews: some View {
@@ -76,10 +82,6 @@ struct UserListOverviewView: View {
                     Text("\(data.ownerInfo.firstName)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-//                    Divider()
-//                        .frame(height:1)
-//                        .overlay(.gray)
-//                        .padding(EdgeInsets(top: -8, leading: 0, bottom: 0, trailing: 8))
                     ProgressView("Progress", value: Double(data.purchasedItems), total: Double(data.totalItems))
                         .font(.caption)
                     Text("\(data.purchasedItems) out of \(data.totalItems) items purchased.")
@@ -92,15 +94,19 @@ struct UserListOverviewView: View {
                 AvatarListView(initials: members, maxAvatars: 4)
                     .alignmentGuide(.leading) { d in d[.leading] }
                 Spacer()
-                StateCapsule(state: .active)
+                StateCapsule(state: data.listStatus)
                     .padding(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             }
-        }
+        }.padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color("brandDividerColor"), lineWidth: 1)
+        )
     }
     
     func memberView(for initials: String) -> some View {
-            return AvatarView(initials: initials)
-        }
+        return AvatarView(initials: initials)
+    }
     
     private func convertToPercentage() -> Double {
         let purchasedCount = data.purchasedItems
@@ -117,8 +123,9 @@ struct UserListOverviewView_Previews: PreviewProvider {
                                              purchasedItems: 2,
                                              id: "abcd",
                                              lastUpdateDate: "2022-11-12 12:30:12",
+                                             listStatus: .active,
                                              ownerInfo: SlimUserModel(firstName: "Melanie",
-                                                                     lastName: "Alberta",
+                                                                      lastName: "Alberta",
                                                                       rawId: "1234"), memberDetails: [MemberDetail(firstName: "Brian", lastName: "Alberta", id: "1234")])
         UserListOverviewView(data: sampleData)
     }
@@ -131,10 +138,10 @@ struct AvatarView: View {
             .fontWeight(.bold)
             .font(.system(size: 10))
             .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
-          .foregroundColor(.white)
-          .font(.callout)
-          .background(.gray)
-          .clipShape(Circle())
+            .foregroundColor(.white)
+            .font(.callout)
+            .background(.gray)
+            .clipShape(Circle())
     }
 }
 
@@ -171,44 +178,8 @@ struct AvatarListView_Previews: PreviewProvider {
 }
 
 struct StateCapsule: View {
-    var state: State
-    enum State {
-        case active, inactive, expired
-        
-        var mappedColor: Color {
-            switch self {
-            case .active:
-                return .green
-            case .inactive:
-                return .gray
-            case .expired:
-                return.red
-            }
-        }
-        
-        var mappedText: String {
-            switch self {
-            case .active:
-                return "Active"
-            case .inactive:
-                return "Inactive"
-            case .expired:
-                return "Expired"
-            }
-        }
-        
-        var mappedTextColor: Color {
-            switch self {
-            case .active:
-                return .white
-            case .inactive:
-                return .white
-            case .expired:
-                return .white
-            }
-        }
-    }
-
+    var state: ListStatus
+    
     var body: some View {
         Text(state.mappedText)
             .font(.system(size: 10))
@@ -218,6 +189,41 @@ struct StateCapsule: View {
             .foregroundColor(state.mappedTextColor)
             .background(state.mappedColor)
             .clipShape(Capsule())
+    }
+}
+
+extension ListStatus {
+    var mappedColor: Color {
+        switch self {
+        case .active:
+            return .green
+        case .archive:
+            return .gray
+        case .expired:
+            return.red
+        }
+    }
+    
+    var mappedText: String {
+        switch self {
+        case .active:
+            return "Active"
+        case .archive:
+            return "Archived"
+        case .expired:
+            return "Expired"
+        }
+    }
+    
+    var mappedTextColor: Color {
+        switch self {
+        case .active:
+            return .white
+        case .archive:
+            return .white
+        case .expired:
+            return .white
+        }
     }
 }
 

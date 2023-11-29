@@ -15,6 +15,26 @@ class StatsViewModel: ObservableObject {
     @Published var isErrorState = false
     @Published var hasStats = false
     @Published var isLoading = false
+    private var rawStatsResponse: PurchaseStatsResponse? = nil
+    
+    enum FilterValue: String, CaseIterable, Identifiable {
+        var id: Self { self }
+        
+        case all = "all"
+        case twentyTwo = "2022"
+        case twentyThree = "2023"
+        
+        var displayText: String {
+            switch self {
+            case .all:
+                return "All"
+            case .twentyTwo:
+                return "2022"
+            case .twentyThree:
+                return "2023"
+            }
+        }
+    }
     
     private var _session: SessionManaging
     
@@ -23,19 +43,12 @@ class StatsViewModel: ObservableObject {
     }
     
     @MainActor
-    func getStats() async {
+    func getStats(selectedFilterValue: FilterValue) async {
         self.isLoading = true
         do {
             let purchaseStatsResponse: PurchaseStatsResponse = try await StatsServiceStore.getPurchasedStats()
-        
-            let spentModel: PieChartViewModel = self.generateStatModel(model: purchaseStatsResponse.purchaseStats)
-            let purchasedModel: BarChartViewModel = self.generateStatModel(model: purchaseStatsResponse.purchaseStats)
-            let totalSpent = self.generateTotalSpent(model: purchaseStatsResponse.purchaseStats)
-            self.spentModel = spentModel
-            self.purchasedModel = purchasedModel
-            self.totalAmountSpent = totalSpent
-            
-            self.hasStats = spentModel.detail.count > 0 && self.purchasedModel.detail.count > 0
+            self.rawStatsResponse = purchaseStatsResponse
+            processStats(filterValue: selectedFilterValue)
             self.isLoading = false
             
         } catch {
@@ -44,6 +57,29 @@ class StatsViewModel: ObservableObject {
         }
     }
     
+    func processStats(filterValue: FilterValue) {
+        guard let model = self.rawStatsResponse else {
+            return
+        }
+        let filteredModel = Self.applyYearFilter(model: model.purchaseStats, filter: filterValue)
+        let spentModel: PieChartViewModel = self.generateStatModel(model: filteredModel)
+        let purchasedModel: BarChartViewModel = self.generateStatModel(model: filteredModel)
+        let totalSpent = self.generateTotalSpent(model: filteredModel)
+        self.spentModel = spentModel
+        self.purchasedModel = purchasedModel
+        self.totalAmountSpent = totalSpent
+        
+        self.hasStats = spentModel.detail.count > 0 && self.purchasedModel.detail.count > 0
+    }
+    
+    private static func applyYearFilter(model: [PurchaseStat], filter: FilterValue) -> [PurchaseStat] {
+        switch filter {
+        case .all:
+            return model
+        default:
+            return model.filter { $0.purchaseYear == filter.rawValue }
+        }
+    }
     
     private func generateStatModel(model: [PurchaseStat]) -> PieChartViewModel {
         

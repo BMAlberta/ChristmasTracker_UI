@@ -26,12 +26,20 @@ struct UserListOverviewResponse: Decodable {
     let listOverviews: [ListOverview]
 }
 
+
+enum ListStatus: String, Decodable {
+    case active = "active"
+    case archive = "archive"
+    case expired = "expired"
+}
+
 struct ListOverviewDetails: Decodable, Identifiable {
     let listName: String
     let totalItems: Int
     let purchasedItems: Int
     var id: String
     var lastUpdateDate: String
+    var listStatus: ListStatus
     let ownerInfo: SlimUserModel
     let memberDetails: [MemberDetail]
     
@@ -40,6 +48,7 @@ struct ListOverviewDetails: Decodable, Identifiable {
         case totalItems
         case purchasedItems
         case ownerInfo
+        case listStatus
         case lastUpdateDate
         case id = "_id"
         case memberDetails
@@ -96,6 +105,7 @@ struct OwnedListModel: Decodable {
     let members: [String]
     let id: String
     let creationDate: String
+    var status: ListStatus = .archive
     let lastUpdateDate: String
     
     enum CodingKeys: String, CodingKey {
@@ -104,5 +114,8 @@ struct OwnedListModel: Decodable {
         case id = "_id"
         case creationDate
         case lastUpdateDate
+        case status
     }
 }
+
+typealias ListInfo = (listId: String, listStatus: ListStatus)

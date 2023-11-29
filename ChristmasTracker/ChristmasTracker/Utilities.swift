@@ -11,7 +11,7 @@ import os
 struct Configuration {
     
     static private let localHost = "http://127.0.0.1:3000"
-    static private let devHost = "http://10.1.20.231:3000"
+    static private let devHost = "http://10.1.80.2:3000"
     static private let prodHost = "https://api.bmalberta.com"
     static private let configHost = "https://content.bmalberta.com"
     

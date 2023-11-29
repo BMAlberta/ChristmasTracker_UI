@@ -33,7 +33,6 @@ class GivingListViewModel: ObservableObject {
         do {
             let userOverviewResponse: ListOverviewResponse = try await ListServiceStore.getListOverviewByUser()
             let sortedOverviews = userOverviewResponse.listOverviews.sorted {
-//                ($0.ownerInfo.firstName < $1.ownerInfo.firstName) &&
                 (FormatUtility.convertStringToDate(rawDate: $0.lastUpdateDate) > FormatUtility.convertStringToDate(rawDate: $1.lastUpdateDate))
             }
             self.overviews = sortedOverviews

@@ -15,19 +15,19 @@ class ItemDetailViewModel: ObservableObject {
         case retract
         case delete
     }
-    
     @Published var isLoading = false
     @Published var isErrorState = false
     @Published var isPurchaseSuccessful = false
     @Published var itemModel: Item = Item()
-    @Published var listId: String
+    @Published var listInfo: ListInfo
+    
     
     private var _session: UserSession
     
-    init(_ session: UserSession, listInContext: String, itemModel: Item) {
+    init(_ session: UserSession, listInfo: ListInfo, itemModel: Item) {
         _session = session
         self.itemModel = itemModel
-        self.listId = listInContext
+        self.listInfo = listInfo
     }
     
     
@@ -51,7 +51,7 @@ class ItemDetailViewModel: ObservableObject {
             self.isErrorState = false
         } catch {
             self.isLoading = false
-            self.isErrorState = false
+            self.isErrorState = true
         }
     }
     
@@ -60,7 +60,7 @@ class ItemDetailViewModel: ObservableObject {
         self.isLoading = true
         do {
             
-            let purchaseResponse = try await ListServiceStore.markItemPurchased(listId: self.listId, itemInContext: self.itemModel)
+            let purchaseResponse = try await ListServiceStore.markItemPurchased(listId: self.listInfo.listId, itemInContext: self.itemModel)
             let extractedItem = Self.extractItemModel(listModel: purchaseResponse, itemId: self.itemModel.id)
             self.itemModel = extractedItem
             self.isLoading = false
@@ -84,7 +84,7 @@ class ItemDetailViewModel: ObservableObject {
     private func retractPurchase() async {
         self.isLoading = true
         do {
-            let retractedResponse = try await ListServiceStore.markItemRetracted(listId: self.listId, itemInContext: self.itemModel)
+            let retractedResponse = try await ListServiceStore.markItemRetracted(listId: self.listInfo.listId, itemInContext: self.itemModel)
             let extractedItem = Self.extractItemModel(listModel: retractedResponse, itemId: self.itemModel.id)
             self.itemModel = extractedItem
             self.isLoading = false

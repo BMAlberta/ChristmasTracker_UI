@@ -74,7 +74,8 @@ struct MainLoginView: View {
                     PasswordResetView()
                 }
             Spacer()
-        }.background(
+        }
+        .background(
             LinearGradient(gradient: Gradient(colors: [Color("brandBackgroundPrimary"),
                                                        Color("brandBackgroundPrimary")
                                                       ]), startPoint: .top, endPoint: .bottom)

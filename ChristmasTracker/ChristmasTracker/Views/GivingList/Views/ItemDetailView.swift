@@ -43,12 +43,12 @@ struct ItemDetailView: View {
                     Section("Item History") {
                         
                         StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.lastEditDate))
-                        if (viewModel.itemModel.createdBy == _session.loggedInUser?._id) {
+                        if (viewModel.itemModel.createdBy == _session.loggedInUser?._id && viewModel.listInfo.listStatus == .active) {
                             DeleteButton(viewModel: viewModel)
                                 
                         } else {
                             StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.purchaseDate))
-                            if (viewModel.itemModel.retractablePurchase || !viewModel.itemModel.purchased) {
+                            if ((viewModel.itemModel.retractablePurchase || !viewModel.itemModel.purchased) && viewModel.listInfo.listStatus == .active) {
                                 PurchaseButton(viewModel: viewModel)
                                     .disabled(viewModel.isPurchaseSuccessful)
                                     
@@ -231,7 +231,7 @@ struct BindingItemViewPreview : View {
                         purchased: false,
                         purchaseDate: nil,
                         quantity: 1)
-        let viewModel = ItemDetailViewModel(UserSession(), listInContext: "abc", itemModel: item)
+        let viewModel = ItemDetailViewModel(UserSession(), listInfo: ListInfo(listId: "abc", listStatus: .active), itemModel: item)
         ItemDetailView(viewModel: viewModel)
     }
 }

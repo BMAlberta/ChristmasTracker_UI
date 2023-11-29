@@ -15,6 +15,7 @@ class ListDetailViewModel: ObservableObject {
     @Published var items: [Item] = []
     @Published var userDisplayName: String = ""
     @Published var hidePurchases = false
+    @Published var listStatus = ListStatus.archive
     
     private var _session: UserSession
     var activeListId: String
@@ -51,6 +52,7 @@ class ListDetailViewModel: ObservableObject {
         _session = session
         activeListId = listInContext.id
         self.userDisplayName =  listInContext.ownerInfo.firstName
+        self.listStatus = listInContext.listStatus
         NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(updateList(_:)), name: Notification.Name("newItemAdded"), object: nil)
     }
@@ -63,12 +65,13 @@ class ListDetailViewModel: ObservableObject {
     }
     
     
-    init(_ session: UserSession, listId: String, displayName: String, purchasesAllowed: Bool = false, ownedList: Bool = false) {
+    init(_ session: UserSession, listId: String, displayName: String, purchasesAllowed: Bool = false, listStatus: ListStatus = .archive, ownedList: Bool = false) {
         _session = session
         activeListId = listId
         self.userDisplayName =  displayName
         self.hidePurchases = !purchasesAllowed
         self.ownedList = ownedList
+        self.listStatus = listStatus
         if purchasesAllowed {
             NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
         } else {

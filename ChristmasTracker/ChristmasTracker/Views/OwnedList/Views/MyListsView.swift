@@ -20,7 +20,7 @@ struct MyListsView: View {
             ZStack {
                 List {
                     ForEach(viewModel.activeLists, id: \.id) { i in
-                        NavigationLink(destination: LazyView(ListDetailView(viewModel: ListDetailViewModel(_session, listId: i.id, displayName: i.name, ownedList: true)))) {
+                        NavigationLink(destination: LazyView(ListDetailView(viewModel: ListDetailViewModel(_session, listId: i.id, displayName: i.name, listStatus: i.status, ownedList: true)))) {
                             OwnedListOverviewView(data: i)
                         }
                     }
@@ -106,7 +106,15 @@ struct OwnedListOverviewView: View {
                 Text("Created on: \(FormatUtility.convertDateStringToHumanReadable(rawDate: data.creationDate))")
                     .font(.caption)
                     .foregroundColor(.gray)
+                StateCapsule(state: data.status)
             }
             Spacer()
+    }
+}
+
+struct OwnedListOverviewView_Previews: PreviewProvider {
+    static var previews: some View {
+        let model = OwnedListModel(name: "Test List", members: ["BA", "MA"], id: "12345", creationDate: "2023-12-01", status: .archive, lastUpdateDate: "2023-12-01")
+        OwnedListOverviewView(data: model)
     }
 }

@@ -45,13 +45,13 @@ struct ListDetailView: View {
                             }
                         }
                         .onDelete(perform: delete)
-                        .deleteDisabled(!self.viewModel.hidePurchases)
+                        .deleteDisabled(!self.viewModel.hidePurchases || self.viewModel.listStatus != .active)
                 }
                 .listStyle(.insetGrouped)
                 .sheet(item: $selectedItem, onDismiss: {
                     isDetailPresented = false
                 }, content: { item in
-                    let viewModel = ItemDetailViewModel(_session, listInContext: viewModel.activeListId, itemModel: item)
+                    let viewModel = ItemDetailViewModel(_session, listInfo: ListInfo(listId:viewModel.activeListId, listStatus: viewModel.listStatus), itemModel: item)
                     LazyView(ItemDetailView(viewModel: viewModel))
                 })
                 .onAppear {
@@ -67,7 +67,7 @@ struct ListDetailView: View {
             })
                 .navigationViewStyle(.stack)
                 .navigationTitle("\(self.viewModel.userDisplayName)'s List")
-            .navigationBarItems(trailing: viewModel.hidePurchases ? addItemButton : nil)
+                .navigationBarItems(trailing: (viewModel.hidePurchases && viewModel.listStatus == .active) ? addItemButton : nil)
         }
     }
     
@@ -131,7 +131,7 @@ struct ListDetailView_Previews: PreviewProvider {
     
     static let user = SlimUserModel(firstName: "Brian", lastName: "Alberta", rawId: "615d0aca9dce0250b0eac9c2")
     
-    static let list = ListOverviewDetails(listName: "Fake Name", totalItems: 10, purchasedItems: 8, id: "615d0aca9dce0250b0eac9c2", lastUpdateDate: "2022-12-12 12:12:12", ownerInfo: user, memberDetails: [MemberDetail(firstName: "Brian", lastName: "Alberta", id: "1234")])
+    static let list = ListOverviewDetails(listName: "Fake Name", totalItems: 10, purchasedItems: 8, id: "615d0aca9dce0250b0eac9c2", lastUpdateDate: "2022-12-12 12:12:12", listStatus: .active, ownerInfo: user, memberDetails: [MemberDetail(firstName: "Brian", lastName: "Alberta", id: "1234")])
     
     
     
