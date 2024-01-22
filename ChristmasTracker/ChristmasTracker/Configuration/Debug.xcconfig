@@ -1,0 +1,14 @@
+//
+//  Debug.xcconfig
+//  ChristmasTracker
+//
+//  Created by Brian Alberta on 11/29/23.
+//
+
+// Configuration settings file format documentation can be found at:
+// https://help.apple.com/xcode/#/dev745c5c974
+#include "Base.xcconfig"
+
+APP_NAME = Dev - $(inherited)
+BASE_API_HOST = 127.0.0.1:3000
+API_SCHEME = http:

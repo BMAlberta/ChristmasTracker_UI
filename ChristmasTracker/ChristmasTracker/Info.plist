@@ -2,8 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key></key>
+	<string></string>
+	<key>API_SCHEME</key>
+	<string>$(API_SCHEME)</string>
+	<key>BASE_API_HOST</key>
+	<string>$(BASE_API_HOST)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(APP_NAME)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -18,6 +26,14 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CHRISTMAS_DATE</key>
+	<string>$(CHRISTMAS_DATE)</string>
+	<key>CONFIG_API_HOST</key>
+	<string>$(CONFIG_API_HOST)</string>
+	<key>CONFIG_SCHEME</key>
+	<string>$(CONFIG_SCHEME)</string>
+	<key>LOG_SUBSYSTEM</key>
+	<string>$(LOG_SUBSYSTEM)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

@@ -16,11 +16,17 @@ struct Configuration {
     static private let configHost = "https://content.bmalberta.com"
     
     static func getUrl(forKey key: Path) -> String {
-        return Self.prodHost + key.rawValue
+        return Self.stringValue(forKey: "API_SCHEME") +
+        "//" +
+        Self.stringValue(forKey: "BASE_API_HOST") +
+        key.rawValue
     }
     
     static var configUrl: String {
-        return Self.configHost + "/config.json"
+        return Self.stringValue(forKey: "CONFIG_SCHEME") +
+        "//" +
+        Self.stringValue(forKey: "CONFIG_API_HOST") +
+        "/config.json"
     }
     
     
@@ -54,8 +60,8 @@ struct Configuration {
         guard let infoPath = Bundle.main.path(forResource: "Info", ofType: "plist"),
               let infoAttributes = try? FileManager.default.attributesOfItem(atPath: infoPath),
               let infoDate = infoAttributes[.modificationDate] as? Date else {
-                  return "--"
-              }
+            return "--"
+        }
         return FormatUtility.convertDateToHumanReadable(rawDate: infoDate)
     }
     
@@ -78,16 +84,16 @@ struct Configuration {
         guard let updateInfo = updateInfo else {
             return nil
         }
-
+        
         return URL(string: "itms-services://?action=download-manifest&url="+updateInfo.downloadUri)
     }
     
     static func daysUntilChristmas() -> Int {
         let fmt = ISO8601DateFormatter()
-
+        
         let date1 = Date.now
-        let date2 = fmt.date(from: "2022-12-25T00:00:00+0000")!
-
+        let date2 = fmt.date(from: Self.stringValue(forKey: "CHRISTMAS_DATE"))!
+        
         let diff = Calendar.current.dateComponents([.day], from: date1, to: date2)
         
         guard let numberOfDays = diff.day else {
@@ -95,6 +101,14 @@ struct Configuration {
         }
         return numberOfDays + 1
     }
+    static func stringValue(forKey key: String) -> String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String
+        else {
+            fatalError("Invalid value or undefined key")
+        }
+        return value
+    }
+    
 }
 
 struct NetworkUtility {
@@ -120,15 +134,15 @@ struct FormatUtility {
         guard let rawDate = rawDate else {
             return "--"
         }
-
+        
         
         let fromFormatter = ISO8601DateFormatter()
         fromFormatter.formatOptions.insert(.withFractionalSeconds)
-
+        
         guard let convertedRaw = fromFormatter.date(from: rawDate) else {
             return "--"
         }
-
+        
         let toFormatter = DateFormatter()
         toFormatter.dateStyle = .long
         toFormatter.timeStyle = .short
@@ -141,15 +155,15 @@ struct FormatUtility {
         guard let rawDate = rawDate else {
             return Date()
         }
-
+        
         
         let fromFormatter = ISO8601DateFormatter()
         fromFormatter.formatOptions.insert(.withFractionalSeconds)
-
+        
         guard let convertedRaw = fromFormatter.date(from: rawDate) else {
             return Date()
         }
-
+        
         return convertedRaw
     }
     
@@ -157,7 +171,7 @@ struct FormatUtility {
         guard let rawDate = rawDate else {
             return "--"
         }
-
+        
         let toFormatter = DateFormatter()
         toFormatter.dateStyle = .long
         toFormatter.timeStyle = .short
@@ -174,7 +188,7 @@ struct FormatUtility {
         
         let fromFormatter = ISO8601DateFormatter()
         fromFormatter.formatOptions.insert(.withFractionalSeconds)
-
+        
         guard let convertedFromRaw = fromFormatter.date(from: rawDate) else {
             return 0
         }
@@ -200,28 +214,28 @@ struct FormatUtility {
 }
 
 struct LogUtility {
-    static private let subsystem = "com.alberta.ChristmasTracker"
+    static private let subsystem = Configuration.stringValue(forKey: "LOG_SUBSYSTEM")
     static let networking = OSLog(subsystem: Self.subsystem, category: "networking")
     static let serviceError = OSLog(subsystem: Self.subsystem, category: "serviceError")
     
     static func logNetworkDetails(message: String, rawData: Data) {
-        #if DEBUG
+#if DEBUG
         let stringData: String = String(data: rawData, encoding: String.Encoding.utf8)!
         let logData = String(format: "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n%@:\n%@", message, stringData)
         Self.logMessage(osLog: Self.networking, message: logData)
-        #endif
+#endif
     }
     
     static func logServiceError(message: String, error: Error) {
-        #if DEBUG
+#if DEBUG
         let logData = String(format: "\n=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n%@:\n%@", message, String(describing: error))
         Self.logMessage(osLog: Self.serviceError, message: logData)
-        #endif
+#endif
     }
     
     private static func logMessage(osLog: OSLog, message: String) {
-        #if DEBUG
+#if DEBUG
         os_log("%s", log: osLog, message)
-        #endif
+#endif
     }
 }

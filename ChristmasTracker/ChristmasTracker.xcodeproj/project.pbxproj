@@ -10,6 +10,7 @@
 		0B06AEBE27698AC20057DA71 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B06AEBD27698AC20057DA71 /* LoginViewModel.swift */; };
 		0B06AEC02769923C0057DA71 /* UserSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B06AEBF2769923C0057DA71 /* UserSession.swift */; };
 		0B1187E2290B69550075227D /* ItemCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1187E1290B69550075227D /* ItemCardView.swift */; };
+		0B16EB0B2B3E686C0025F5A4 /* ReadOnlyItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B16EB0A2B3E686C0025F5A4 /* ReadOnlyItemDetailView.swift */; };
 		0B1E75232921762D008D372A /* ItemCardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1E75222921762D008D372A /* ItemCardViewModel.swift */; };
 		0B315327277421990003AB3D /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B315326277421990003AB3D /* AppContainer.swift */; };
 		0B3153292775881F0003AB3D /* UserServiceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3153282775881F0003AB3D /* UserServiceStore.swift */; };
@@ -99,7 +100,12 @@
 		0B06AEBD27698AC20057DA71 /* LoginViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewModel.swift; sourceTree = "<group>"; };
 		0B06AEBF2769923C0057DA71 /* UserSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSession.swift; sourceTree = "<group>"; };
 		0B1187E1290B69550075227D /* ItemCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCardView.swift; sourceTree = "<group>"; };
+		0B16EB0A2B3E686C0025F5A4 /* ReadOnlyItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadOnlyItemDetailView.swift; sourceTree = "<group>"; };
 		0B1A8D3E2B1671D90018483E /* ChristmasTracker.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ChristmasTracker.entitlements; sourceTree = "<group>"; };
+		0B1A8D442B17A8A80018483E /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		0B1A8D452B17A8B70018483E /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Staging.xcconfig; sourceTree = "<group>"; };
+		0B1A8D462B17A8C30018483E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		0B1A8D482B17AABE0018483E /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		0B1E75222921762D008D372A /* ItemCardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCardViewModel.swift; sourceTree = "<group>"; };
 		0B315326277421990003AB3D /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
 		0B3153282775881F0003AB3D /* UserServiceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserServiceStore.swift; sourceTree = "<group>"; };
@@ -199,6 +205,17 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0B1A8D432B17A81D0018483E /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				0B1A8D482B17AABE0018483E /* Base.xcconfig */,
+				0B1A8D442B17A8A80018483E /* Debug.xcconfig */,
+				0B1A8D452B17A8B70018483E /* Staging.xcconfig */,
+				0B1A8D462B17A8C30018483E /* Release.xcconfig */,
+			);
+			path = Configuration;
+			sourceTree = "<group>";
+		};
 		0B31532C277AB2EE0003AB3D /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -225,6 +242,7 @@
 				0BC93E5E270E7F04000D5E3B /* ItemDetailView.swift */,
 				0BC93E5C270E4081000D5E3B /* ListItemView.swift */,
 				0B1187E1290B69550075227D /* ItemCardView.swift */,
+				0B16EB0A2B3E686C0025F5A4 /* ReadOnlyItemDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -442,6 +460,7 @@
 		D38378A825B20CAA005AD98D /* ChristmasTracker */ = {
 			isa = PBXGroup;
 			children = (
+				0B1A8D432B17A81D0018483E /* Configuration */,
 				0B1A8D3E2B1671D90018483E /* ChristmasTracker.entitlements */,
 				D383794225B54383005AD98D /* Services */,
 				D383792E25B541AF005AD98D /* Models */,
@@ -705,6 +724,7 @@
 				D383790125B27C63005AD98D /* LoginView.swift in Sources */,
 				0B31534727864BC60003AB3D /* PasswordResetView.swift in Sources */,
 				0BFE9E6D29391ED800346B92 /* BiometricUtilities.swift in Sources */,
+				0B16EB0B2B3E686C0025F5A4 /* ReadOnlyItemDetailView.swift in Sources */,
 				0B06AEBE27698AC20057DA71 /* LoginViewModel.swift in Sources */,
 				D38378E725B21D97005AD98D /* Models.swift in Sources */,
 				0B31535C278A87650003AB3D /* NewItemModel.swift in Sources */,
@@ -762,8 +782,147 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0B1A8D3F2B17A7B20018483E /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0B1A8D482B17AABE0018483E /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Staging;
+		};
+		0B1A8D402B17A7B20018483E /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0B1A8D452B17A8B70018483E /* Staging.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 2W5W9XTGL6;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = ChristmasTracker/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.7;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Personal Development Profile";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "Personal Development Profile";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Staging;
+		};
+		0B1A8D412B17A7B20018483E /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				INFOPLIST_FILE = ChristmasTrackerTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChristmasTracker.app/ChristmasTracker";
+			};
+			name = Staging;
+		};
+		0B1A8D422B17A7B20018483E /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				INFOPLIST_FILE = ChristmasTrackerUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ChristmasTracker;
+			};
+			name = Staging;
+		};
 		D38378C925B20CAD005AD98D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0B1A8D482B17AABE0018483E /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -825,6 +984,7 @@
 		};
 		D38378CA25B20CAD005AD98D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0B1A8D482B17AABE0018483E /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -880,13 +1040,17 @@
 		};
 		D38378CC25B20CAD005AD98D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0B1A8D442B17A8A80018483E /* Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
-				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
@@ -895,9 +1059,12 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
+				MARKETING_VERSION = 2.7;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Personal Development Profile";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "Personal Development Profile";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SWIFT_VERSION = 5.0;
@@ -907,13 +1074,17 @@
 		};
 		D38378CD25B20CAD005AD98D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0B1A8D462B17A8C30018483E /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
-				DEVELOPMENT_TEAM = 2W5W9XTGL6;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
@@ -922,9 +1093,12 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker;
+				MARKETING_VERSION = 2.7;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Personal Development Profile";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "Personal Development Profile";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SWIFT_VERSION = 5.0;
@@ -1023,6 +1197,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D38378C925B20CAD005AD98D /* Debug */,
+				0B1A8D3F2B17A7B20018483E /* Staging */,
 				D38378CA25B20CAD005AD98D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -1032,6 +1207,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D38378CC25B20CAD005AD98D /* Debug */,
+				0B1A8D402B17A7B20018483E /* Staging */,
 				D38378CD25B20CAD005AD98D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -1041,6 +1217,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D38378CF25B20CAD005AD98D /* Debug */,
+				0B1A8D412B17A7B20018483E /* Staging */,
 				D38378D025B20CAD005AD98D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -1050,6 +1227,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D38378D225B20CAD005AD98D /* Debug */,
+				0B1A8D422B17A7B20018483E /* Staging */,
 				D38378D325B20CAD005AD98D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
