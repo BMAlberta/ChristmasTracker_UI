@@ -8,13 +8,29 @@
 import Foundation
 
 struct UserModel: Codable {
+    
+    /// User identifier.
     let _id: String
+    
+    /// IP Address of the last login.
     let lastLogInLocation: String
+    
+    /// Registered email address.
     let email: String
+    
+    /// Users's first name.
     let firstName: String
+    
+    /// User's last name.
     let lastName: String
+    
+    /// Date the profile was created.
     let creationDate: String //Date
+    
+    /// Date of last login.
     let lastLogInDate: String
+    
+    /// Date of the last password change.
     let lastPasswordChange: String
     
     init() {

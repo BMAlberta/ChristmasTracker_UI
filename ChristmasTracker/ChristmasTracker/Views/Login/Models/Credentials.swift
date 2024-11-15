@@ -8,6 +8,10 @@
 import Foundation
 
 struct Credentials: Codable {
+    
+    /// User's username.
     let username: String
+    
+    /// User's password.
     let password: String
 }
