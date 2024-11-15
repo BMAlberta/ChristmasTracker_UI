@@ -58,10 +58,17 @@ class ItemCardViewModel: ObservableObject {
     }
     
     @MainActor
-    private func purchaseItem() async {
+    private func purchaseItem(quantity: String? = nil) async {
         self.isLoading = true
+        
+        var quantityToPurchase = 0
+        if let requestedQuantity = quantity {
+            quantityToPurchase = Int(requestedQuantity) ?? 0
+        } else {
+            quantityToPurchase = self.itemModel.quantity
+        }
         do {
-            let _ = try await ListServiceStore.markItemPurchased(listId: listId, itemInContext: itemModel)
+            let _ = try await ListServiceStore.markItemPurchased(listId: listId, itemInContext: itemModel, quantity: quantityToPurchase)
 //            self.itemModel = purchaseResponse.updatedItem
             self.isLoading = false
             self.isErrorState = false

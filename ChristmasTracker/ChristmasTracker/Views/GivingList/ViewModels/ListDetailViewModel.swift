@@ -15,6 +15,7 @@ class ListDetailViewModel: ObservableObject {
     @Published var items: [Item] = []
     @Published var userDisplayName: String = ""
     @Published var hidePurchases = false
+    @Published var allowAdHocItems = false
     @Published var listStatus = ListStatus.archive
     
     private var _session: UserSession
@@ -54,7 +55,8 @@ class ListDetailViewModel: ObservableObject {
         self.userDisplayName =  listInContext.ownerInfo.firstName
         self.listStatus = listInContext.listStatus
         NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(updateList(_:)), name: Notification.Name("newItemAdded"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("newItemAdded"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("itemDeleted"), object: nil)
     }
     
     init(_ session: UserSession, listInContext: ListOverviewDetails, items: [Item]) {
@@ -70,13 +72,15 @@ class ListDetailViewModel: ObservableObject {
         activeListId = listId
         self.userDisplayName =  displayName
         self.hidePurchases = !purchasesAllowed
+        self.allowAdHocItems = purchasesAllowed
         self.ownedList = ownedList
         self.listStatus = listStatus
         if purchasesAllowed {
             NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
         } else {
-            NotificationCenter.default.addObserver(self, selector: #selector(updateList(_:)), name: Notification.Name("newItemAdded"), object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("newItemAdded"), object: nil)
         }
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("itemDeleted"), object: nil)
     }
     
     
@@ -90,7 +94,7 @@ class ListDetailViewModel: ObservableObject {
         guard let updatedListModel = notification.userInfo?["updatedList"] as? ListDetailModel else {
             return
         }
-        let sortedItems = updatedListModel.items.sorted { !$0.purchased && $1.purchased }
+        let sortedItems = updatedListModel.items.sorted { $0.purchaseState < $1.purchaseState }
         self.items = sortedItems
     }
     
@@ -99,7 +103,7 @@ class ListDetailViewModel: ObservableObject {
         self.isLoading = true
         do {
             let userListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
-            let sortedItems = userListResponse.items.sorted { !$0.purchased && $1.purchased }
+            let sortedItems = userListResponse.items.sorted { $0.purchaseState < $1.purchaseState }
             self.items = sortedItems
             self.isLoading = false
             self.isErrorState = false
@@ -116,7 +120,7 @@ class ListDetailViewModel: ObservableObject {
             return inputItems.sorted { $0.creationDate < $1.creationDate }
         }
         
-        return inputItems.sorted { !$0.purchased && $1.purchased }
+        return inputItems.sorted { $0.purchaseState < $1.purchaseState }
         
     }
     
@@ -130,7 +134,7 @@ class ListDetailViewModel: ObservableObject {
             let _ = try await ListServiceStore.deleteItem(fromList: activeListId, item: itemInContext)
             NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: nil)
             let updatedListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
-            let sortedItems = updatedListResponse.items.sorted { !$0.purchased && $1.purchased }
+            let sortedItems = updatedListResponse.items.sorted { $0.purchaseState < $1.purchaseState }
             self.items = sortedItems
             self.isLoading = false
             self.isErrorState = false

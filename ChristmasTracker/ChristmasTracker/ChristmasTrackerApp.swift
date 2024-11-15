@@ -37,12 +37,11 @@ extension UIApplication {
     }
 
     @objc func tapAction(_ sender: UITapGestureRecognizer) {
-//        print("User action taken")
         NotificationCenter.default.post(Notification.init(name: Notification.Name(rawValue: "UserTappedOnScreenEvent")))
     }
 }
 
-extension UIApplication: UIGestureRecognizerDelegate {
+extension UIApplication: @retroactive UIGestureRecognizerDelegate {
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return true // set to `false` if you don't want to detect tap during other gestures
     }

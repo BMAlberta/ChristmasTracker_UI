@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ListDetailView: View {
-     @EnvironmentObject var _session: UserSession
+    @EnvironmentObject var _session: UserSession
     @StateObject var viewModel: ListDetailViewModel
     @State private var isDetailPresented = false
     @State private var isNewItemFlowPresented = false
@@ -24,36 +24,27 @@ struct ListDetailView: View {
                     .font(.caption)
                     .foregroundColor(Color(uiColor: .systemGray))
                     .padding(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-            
+                
                 Picker("", selection: $selectedFilterAmount, content: {
                     ForEach(ListDetailViewModel.FilterValue.allCases) { filterValue in
                         Text(filterValue.displayText).tag(filterValue)
                     }
                 })
-                    .pickerStyle(.segmented)
-                    .padding(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
+                .pickerStyle(.segmented)
+                .padding(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
                 List {
-                        ForEach(filterItems(), id: \.id) { i in
-                            Section {
-                                let viewModel = ItemCardViewModel(_session, listContext: viewModel.activeListId, itemInContext: i)
-                                ItemCardView(viewModel: viewModel, isActionSheetPresented: isActionSheetPresented, ownedList: self.viewModel.ownedList)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        selectedItem = i
-                                        isDetailPresented = true
-                                    }
+                    ForEach(filterItems(), id: \.id) { i in
+                        Section {
+                            let newViewModel = ItemDetailViewModel(_session, listInfo: ListInfo(listId:viewModel.activeListId, listStatus: viewModel.listStatus), itemModel: i)
+                            NavigationLink(destination: LazyView(ItemView(viewModel: newViewModel))) {
+                                ItemCardView(viewModel: ItemCardViewModel(_session, listContext: viewModel.activeListId, itemInContext: i), isActionSheetPresented: isActionSheetPresented, ownedList: self.viewModel.ownedList)
                             }
                         }
-                        .onDelete(perform: delete)
-                        .deleteDisabled(!self.viewModel.hidePurchases || self.viewModel.listStatus != .active)
+                    }
+                    .onDelete(perform: delete)
+                    .deleteDisabled(!self.viewModel.hidePurchases || self.viewModel.listStatus != .active)
                 }
                 .listStyle(.insetGrouped)
-                .sheet(item: $selectedItem, onDismiss: {
-                    isDetailPresented = false
-                }, content: { item in
-                    let viewModel = ItemDetailViewModel(_session, listInfo: ListInfo(listId:viewModel.activeListId, listStatus: viewModel.listStatus), itemModel: item)
-                    LazyView(ItemDetailView(viewModel: viewModel))
-                })
                 .onAppear {
                     Task {
                         await self.viewModel.getDetails()
@@ -65,12 +56,11 @@ struct ListDetailView: View {
                     }
                 }
             })
-                .navigationViewStyle(.stack)
-                .navigationTitle("\(self.viewModel.userDisplayName)'s List")
-                .navigationBarItems(trailing: (viewModel.hidePurchases && viewModel.listStatus == .active) ? addItemButton : nil)
+            .navigationViewStyle(.stack)
+            .navigationTitle("\(self.viewModel.userDisplayName)'s List")
+            .navigationBarItems(trailing: (viewModel.listStatus == .active) ? addItemButton : nil)
         }
     }
-    
     
     private func filterItems() -> [Item] {
         switch selectedFilterAmount {
@@ -144,9 +134,15 @@ struct ListDetailView_Previews: PreviewProvider {
                                                 link: "www.lowes.com",
                                                 name: "Drill",
                                                 price: 230.00,
-                                                purchased: false,
                                                 purchaseDate: nil,
-                                                quantity: 1),
+                                                quantity: 1,
+                                   retractablePurchase: false,
+                                   offListItem: false,
+                                   purchaseState: .available,
+                                   purchasesAllowed: true,
+                                   quantityPurchased: 0,
+                                   deleteAllowed:true,
+                                   editAllowed: false),
                                            Item(id: "1234",
                                                 createdBy: "Brian",
                                                 creationDate: "2021-10-04",
@@ -155,9 +151,15 @@ struct ListDetailView_Previews: PreviewProvider {
                                                 link: "www.lowes.com",
                                                 name: "Drill",
                                                 price: 230.00,
-                                                purchased: false,
                                                 purchaseDate: nil,
-                                                quantity: 1)]
+                                                quantity: 1,
+                                                retractablePurchase: false,
+                                                offListItem: false,
+                                                purchaseState: .available,
+                                                purchasesAllowed: true,
+                                                quantityPurchased: 0,
+                                                deleteAllowed:true,
+                                                editAllowed: false)]
     
     
     static var previews: some View {

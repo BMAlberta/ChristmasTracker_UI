@@ -180,11 +180,12 @@ actor ListServiceStore {
         }
     }
     
-    static func markItemPurchased(listId: String, itemInContext: Item) async throws -> ListDetailResponse {
+    static func markItemPurchased(listId: String, itemInContext: Item, quantity: Int) async throws -> ListDetailResponse {
         let urlString = Configuration.getUrl(forKey: .markPurchased)
         
-        let params: [String: String] = ["listId" : listId,
-                                        "itemId": itemInContext.id]
+        let params: [String: AnyHashable] = ["listId" : listId,
+                                        "itemId": itemInContext.id,
+                                        "quantityPurchased": quantity]
         
         guard let url = URL(string: urlString) else {
             throw ListServiceError.invalidURL
@@ -253,20 +254,21 @@ actor ListServiceStore {
         }
     }
     
-    static func updateItem(item: Item) async throws -> UpdatedItemResponse {
+    static func updateItem(listContext: String, updatedItem: NewItemModel) async throws -> ListDetailResponse {
         let baseUrlString = Configuration.getUrl(forKey: .updateItem)
-        let finalUrlString = baseUrlString + item.id
         
-        guard let url = URL(string: finalUrlString) else {
+        guard let url = URL(string: baseUrlString) else {
             throw ListServiceError.invalidURL
         }
         
         let params: [String: AnyHashable] = [
-            "name" : item.name,
-            "description": item.description,
-            "link": item.link,
-            "price": item.price,
-            "quantity": item.quantity
+            "name" : updatedItem.name,
+            "description": updatedItem.description,
+            "link": updatedItem.link,
+            "price": updatedItem.price,
+            "quantity": updatedItem.quantity,
+            "listId": listContext,
+            "itemId": updatedItem.itemId
         ]
         
         var request = NetworkUtility.createBaseRequest(url: url,
@@ -287,7 +289,7 @@ actor ListServiceStore {
                                          rawData: data)
             
             let decoder = JSONDecoder()
-            let rawData = try decoder.decode(NetworkResponse<UpdatedItemResponse>.self, from: data)
+            let rawData = try decoder.decode(NetworkResponse<ListDetailResponse>.self, from: data)
             return rawData.payload
             
         } catch {

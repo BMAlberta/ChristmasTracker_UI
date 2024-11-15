@@ -9,9 +9,17 @@ import Foundation
 
 
 struct ListOverview: Decodable, Identifiable {
+    
+    /// Trimmed down user summary
     let user: SlimUserModel
+    
+    /// Total number of items in the list.
     let totalItems: Int
+    
+    /// Total number of items purchased from the list.
     let purchasedItems: Int
+    
+    /// List identifier
     var id: String
     
     enum CodingKeys: String, CodingKey {
@@ -34,13 +42,29 @@ enum ListStatus: String, Decodable {
 }
 
 struct ListOverviewDetails: Decodable, Identifiable {
+    
+    /// Name of the list.
     let listName: String
+    
+    /// Total number of items in the list.
     let totalItems: Int
+    
+    /// Total purchased items in the list.
     let purchasedItems: Int
+    
+    /// List identifier
     var id: String
+    
+    /// Date on which the list was last updated.
     var lastUpdateDate: String
+    
+    /// Enumeration denoting the status of the list.
     var listStatus: ListStatus
+    
+    /// Trimmed down user model for the list owner.
     let ownerInfo: SlimUserModel
+    
+    /// List of users who are members of the list.
     let memberDetails: [MemberDetail]
     
     enum CodingKeys: String, CodingKey {
@@ -56,8 +80,14 @@ struct ListOverviewDetails: Decodable, Identifiable {
 }
 
 struct MemberDetail: Decodable {
+    
+    /// User's first name.
     let firstName: String
+    
+    /// User's last name.
     let lastName: String
+    
+    /// User identifier.
     let id: String
     
     enum CodingKeys: String, CodingKey {
@@ -67,12 +97,29 @@ struct MemberDetail: Decodable {
     }
 }
 struct ListDetailModel: Decodable {
+    
+    /// List name.
     let name: String
+    
+    /// List owner.
     let owner: String
+    
+    /// List of member ids.
     let members: [String]
+    
+    /// List identifier.
     let id: String
+    
+    /// Date on which the list was created.
     let creationDate: String
+    
+    /// Date on which the list was last updated.
     let lastUpdateDate: String
+    
+    /// Stats of the list.
+    var status: ListStatus
+    
+    /// List of items.
     let items: [Item]
     var __v: Int
     
@@ -84,6 +131,7 @@ struct ListDetailModel: Decodable {
         case creationDate
         case lastUpdateDate
         case items
+        case status
         case __v
     }
 }
@@ -101,11 +149,23 @@ struct OwnedListResponse: Decodable {
 }
 
 struct OwnedListModel: Decodable {
+    
+    /// Name of the list
     let name: String
+    
+    /// List of members.
     let members: [String]
+    
+    /// List identifier.
     let id: String
+    
+    /// Date on which the list was created.
     let creationDate: String
+    
+    /// List status.
     var status: ListStatus = .archive
+    
+    /// Date on which the list was last updated.
     let lastUpdateDate: String
     
     enum CodingKeys: String, CodingKey {

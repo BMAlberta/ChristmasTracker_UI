@@ -8,8 +8,14 @@
 import Foundation
 
 struct ChangePasswordModel: Codable {
+    
+    /// Uesrs's old password.
     var oldPassword: String = ""
+    
+    /// Users's new password.
     var newPassword: String = ""
+    
+    /// User's new password.
     var newPasswordConfirmation: String = ""
 }
 

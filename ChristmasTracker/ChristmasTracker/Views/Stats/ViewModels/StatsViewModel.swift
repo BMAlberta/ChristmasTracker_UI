@@ -21,8 +21,9 @@ class StatsViewModel: ObservableObject {
         var id: Self { self }
         
         case all = "all"
-        case twentyTwo = "2022"
+        case twentyFour = "2024"
         case twentyThree = "2023"
+        case twentyTwo = "2022"
         
         var displayText: String {
             switch self {
@@ -32,6 +33,8 @@ class StatsViewModel: ObservableObject {
                 return "2022"
             case .twentyThree:
                 return "2023"
+            case .twentyFour:
+                return "2024"
             }
         }
     }

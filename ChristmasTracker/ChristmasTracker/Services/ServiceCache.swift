@@ -28,11 +28,13 @@ class ServiceCache {
     private init() {
         NotificationCenter.default.addObserver(self, selector: #selector(clearCache), name: Notification.Name("purchaseStatusChanged"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(clearCache), name: Notification.Name("newItemAdded"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(clearCache), name: Notification.Name("itemDeleted"), object: nil)
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self, name: Notification.Name("purchaseStatusChanged"), object: nil)
         NotificationCenter.default.removeObserver(self, name: Notification.Name("newItemAdded"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: Notification.Name("itemDeleted"), object: nil)
     }
     
     

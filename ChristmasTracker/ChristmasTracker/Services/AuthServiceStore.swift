@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 
+/// Authentication Errors
 enum AuthServiceError: Error {
     case networkError
     case unknown
@@ -28,6 +29,8 @@ actor AuthServiceStore {
         
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let appVersion = Configuration.appVersion
+        request.setValue(appVersion, forHTTPHeaderField: "av")
         
         request.httpMethod = "POST"
         let json: [AnyHashable: AnyHashable] = params
