@@ -17,9 +17,9 @@ struct ItemCardView: View {
         VStack(alignment: .leading) {
             if !ownedList {
                 HStack {
-                    PurchaseCapsuleView(state: self.purchaseState)
-                    Spacer()
-                    takeActionButton
+                    PurchaseCapsuleView(state: self.viewModel.itemModel.purchaseState)
+//                    Spacer()
+//                    takeActionButton
                 }
             }
             Text("\(viewModel.itemModel.name)")
@@ -45,13 +45,6 @@ struct ItemCardView: View {
         }
     }
     
-    private var purchaseState: PurchaseCapsuleView.State {
-        if viewModel.itemModel.purchased && viewModel.itemModel.retractablePurchase {
-            return .purchased
-        }
-        return viewModel.itemModel.purchased ? .unavailable : .available
-    }
-    
     private var takeActionButton: some View {
         Button(action: {
             isActionSheetPresented = true
@@ -72,6 +65,20 @@ struct ItemCardView: View {
                 let buttonTitle = self.viewModel.itemModel.retractablePurchase ? "Retract Purchase" : "Purchase Item"
                 Text(buttonTitle)
             }
+            
+            if self.viewModel.itemModel.deleteAllowed {
+                Button {
+                    Task {
+                        let action: ItemCardViewModel.ActionButtonType = .delete
+                        await self.viewModel.performAction(action)
+                    }
+                    isActionSheetPresented = false
+                } label: {
+                    let buttonTitle = "Delete Item"
+                    Text(buttonTitle)
+                }
+            }
+            
             Button("Cancel", role: .cancel) {
                 isActionSheetPresented = false
             }
@@ -85,45 +92,50 @@ struct ItemCardView: View {
     }
 }
 
-struct PurchaseCapsuleView: View {
-    var state: State
-    enum State {
-        case available, purchased, unavailable
-        
-        var mappedColor: Color {
-            switch self {
-            case .available:
-                return .green
-            case .unavailable:
-                return .gray
-            case .purchased:
-                return.red
-            }
-        }
-        
-        var mappedText: String {
-            switch self {
-            case .available:
-                return "Available"
-            case .purchased:
-                return "Purchased"
-            case .unavailable:
-                return "Unavailable"
-            }
-        }
-        
-        var mappedTextColor: Color {
-            switch self {
-            case .available:
-                return .white
-            case .purchased:
-                return .white
-            case .unavailable:
-                return .white
-            }
+extension PurchaseState {
+    var mappedColor: Color {
+        switch self {
+        case .available:
+            return .green
+        case .unavailable:
+            return .gray
+        case .purchased:
+            return.red
+        case .partial:
+            return .yellow
         }
     }
+    
+    var mappedText: String {
+        switch self {
+        case .available:
+            return "Available"
+        case .purchased:
+            return "Purchased"
+        case .unavailable:
+            return "Unavailable"
+        case .partial:
+            return "Partial"
+        }
+    }
+    
+    var mappedTextColor: Color {
+        switch self {
+        case .available:
+            return .white
+        case .purchased:
+            return .white
+        case .unavailable:
+            return .white
+        case .partial:
+            return .white
+        }
+    }
+}
 
+struct PurchaseCapsuleView: View {
+    var state: PurchaseState
+  
     var body: some View {
         Text(state.mappedText)
             .font(.system(size: 10))
@@ -136,6 +148,20 @@ struct PurchaseCapsuleView: View {
     }
 }
 
+struct ItemStateCapsuleView: View {
+    var offlistItem = false
+  
+    var body: some View {
+        Text(offlistItem ? "Off-List Item" : "List Item")
+            .font(.system(size: 10))
+            .fontWeight(.bold)
+            .font(.callout)
+            .padding(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            .foregroundColor(.white)
+            .background(offlistItem ? .yellow: .green)
+            .clipShape(Capsule())
+    }
+}
 
 struct ItemCardView_Previews: PreviewProvider {
     static var previews: some View {
@@ -147,9 +173,15 @@ struct ItemCardView_Previews: PreviewProvider {
                         link: "www.lowes.com",
                         name: "Drill",
                         price: 230.00,
-                        purchased: false,
                         purchaseDate: nil,
-                        quantity: 1)
+                        quantity: 1,
+                        retractablePurchase: false,
+                        offListItem: false,
+                        purchaseState: .partial,
+                        purchasesAllowed: true,
+                        quantityPurchased: 0,
+                        deleteAllowed:true,
+                        editAllowed: false)
         let viewModel = ItemCardViewModel(UserSession(), listContext: "asdasd", itemInContext: item)
         ItemCardView(viewModel: viewModel)
     }

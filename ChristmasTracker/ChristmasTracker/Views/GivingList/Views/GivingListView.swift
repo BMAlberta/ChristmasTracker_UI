@@ -56,6 +56,7 @@ struct GivingListView_Previews: PreviewProvider {
     static var previews: some View {
         let session = UserSession()
         GivingListView(viewModel: GivingListViewModel(session))
+            .environmentObject(session)
     }
 }
 

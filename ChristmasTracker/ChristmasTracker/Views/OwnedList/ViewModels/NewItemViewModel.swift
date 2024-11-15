@@ -22,6 +22,19 @@ class NewItemViewModel: ObservableObject {
         self._listInContext = listInContext
     }
     
+    init(_ session: SessionManaging, listInContext: String, baseModel: Item) {
+        self._session = session
+        self._listInContext = listInContext
+        let model = NewItemModel()
+        model.itemId = baseModel.id
+        model.name = baseModel.name
+        model.description = baseModel.description
+        model.link = baseModel.link
+        model.price = String(format: "%.2f", baseModel.price)
+        model.quantity = String(baseModel.quantity)
+        self.newItem = model
+    }
+    
     @MainActor
     func saveItem() async {
         self.isLoading = true
@@ -34,6 +47,28 @@ class NewItemViewModel: ObservableObject {
             self.isLoading = false
             self.isErrorState = true
         }
+    }
+    
+    @MainActor
+    func updateItem() async {
+        self.isLoading = true
+        do {
+            let updatedList: ListDetailResponse = try await ListServiceStore.updateItem(listContext: _listInContext, updatedItem: self.newItem)
+            let extractedItem = Self.extractItemModel(listModel: updatedList, itemId: self.newItem.itemId)
+            NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: ["updatedItem": extractedItem])
+            self.isLoading = false
+            self.isErrorState = false
+        } catch {
+            self.isLoading = false
+            self.isErrorState = true
+        }
+    }
+    
+    private static func extractItemModel(listModel: ListDetailResponse, itemId: String) -> Item {
+        
+        let itemArray: [Item] = listModel.detail.items
+        let item = itemArray.first(where: { $0.id == itemId })
+        return item ?? Item()
     }
     
     func allRequiredFieldsPresent() -> Bool {

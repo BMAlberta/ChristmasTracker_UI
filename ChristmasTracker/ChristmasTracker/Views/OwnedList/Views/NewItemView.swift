@@ -12,6 +12,7 @@ import UIKit
 struct NewItemView: View {
     @StateObject var viewModel: NewItemViewModel
     @Binding var showingModal:Bool
+    var editModeActive = false
     
     var body: some View {
         NavigationView {
@@ -24,10 +25,10 @@ struct NewItemView: View {
                     PriceView(model: $viewModel.newItem)
                     QuantityView(model: $viewModel.newItem)
                 }
-                SaveButton(viewModel: viewModel, showingModal: $showingModal)
+                SaveButton(viewModel: viewModel, showingModal: $showingModal, editMode: editModeActive)
             }
             .background(Color(UIColor.systemBackground))
-            .navigationBarTitle("Create New Item")
+            .navigationBarTitle(editModeActive ? "Edit Item" : "Create New Item")
             .navigationBarItems(trailing: CloseButton(showingModal: $showingModal))
         }
     }
@@ -54,10 +55,15 @@ struct SaveButton: View {
     @State var viewModel: NewItemViewModel
     @Binding var showingModal: Bool
     @State var showError: Bool = false
+    var editMode = false
     var body: some View {
         Button(action: {
-            
-            if viewModel.allRequiredFieldsPresent() {
+            if editMode {
+                Task {
+                    await viewModel.updateItem()
+                    showingModal.toggle()
+                }
+            } else if viewModel.allRequiredFieldsPresent() {
                 Task {
                     await viewModel.saveItem()
                     showingModal.toggle()
@@ -80,25 +86,6 @@ struct SaveButton: View {
             Alert(title: Text("Unable to Add Item"), message: Text("Please ensure that all fields are filled out before saving the item."), dismissButton: .default(Text("Ok"), action: {
                 showError.toggle()
             }))
-        }
-    }
-}
-
-struct CategoryView: View {
-    @Binding var model: NewItemModel
-    var body: some View {
-        VStack {
-            Text("Category")
-            TextField("Item category", text: $model.category)
-                .disableAutocorrection(true)
-                .autocapitalization(.none)
-                .padding(10)
-                .font(.body)
-                .overlay(RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color("brandBackgroundPrimary"), lineWidth: 1))
-                .background(Color(UIColor.systemBackground))
-                .cornerRadius(10)
-                .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
         }
     }
 }
@@ -136,16 +123,16 @@ struct QuantityView: View {
 
 struct PriceView: View {
     @Binding var model: NewItemModel
-    @State private var temp: String = "$"
+    @State private var temp: String = "&"
     var body: some View {
         VStack {
             Text("Price")
-            TextField("Item price", text: $temp)
-                .onChange(of: temp) { newValue in
-                    if !newValue.hasPrefix("$") {
-                        temp = "$"
+            TextField("Item price", text: model.price != "" ? $model.price : $temp)
+                .onChange(of: temp) { oldState, newState in
+                    if !newState.hasPrefix("$") {
+                        temp = "$\(model.price)"
                     }
-                    if temp.hasPrefix("$") {
+                    if newState.hasPrefix("$") {
                         let trimmed = temp.dropFirst()
                         model.price = String(trimmed)
                     }

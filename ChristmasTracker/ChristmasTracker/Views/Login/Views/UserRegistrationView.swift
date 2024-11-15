@@ -59,7 +59,10 @@ struct UserRegistrationView: View {
                             }
                         )
                     }
-                NavigationLink(destination: UserVerificationView(), isActive: $shouldShowVerificationScreen) { EmptyView() }
+                    .navigationDestination(isPresented: $shouldShowVerificationScreen, destination: {
+                        UserVerificationView()
+                        EmptyView()
+                    })
             }
         }
     }

@@ -56,7 +56,10 @@ struct UserVerificationView: View {
             }
             .navigationTitle("Email Verification")
             .navigationBarTitleDisplayMode(.inline)
-            NavigationLink(destination: CreatePasswordView(), isActive: $shouldShowCreatePasswordView) { EmptyView() }
+            .navigationDestination(isPresented: $shouldShowCreatePasswordView, destination: {
+                CreatePasswordView()
+                EmptyView()
+            })
         }
     }
 }

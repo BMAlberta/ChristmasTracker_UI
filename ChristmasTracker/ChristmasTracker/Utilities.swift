@@ -43,7 +43,7 @@ struct Configuration {
         case markPurchased = "/tracker/lists/purchase"
         case markRetracted = "/tracker/lists/purchase/retract"
         case resetPassword = "/tracker/auth/password/update"
-        case updateItem = "/tracker/items/asd"
+        case updateItem = "/tracker/lists/details/update"
         case stats = "/tracker/stats/purchases"
         case addList = "/tracker/lists/create"
         case deleteItem = "/tracker/lists/details/"
@@ -146,6 +146,27 @@ struct FormatUtility {
         let toFormatter = DateFormatter()
         toFormatter.dateStyle = .long
         toFormatter.timeStyle = .short
+        let targetFormat = toFormatter.string(from: convertedRaw)
+        
+        return targetFormat
+    }
+    
+    static func convertDateOnlyStringToHumanReadable(rawDate: String?) -> String {
+        guard let rawDate = rawDate else {
+            return "--"
+        }
+        
+        
+        let fromFormatter = ISO8601DateFormatter()
+        fromFormatter.formatOptions.insert(.withFractionalSeconds)
+        
+        guard let convertedRaw = fromFormatter.date(from: rawDate) else {
+            return "--"
+        }
+        
+        let toFormatter = DateFormatter()
+        toFormatter.dateStyle = .medium
+        toFormatter.timeStyle = .none
         let targetFormat = toFormatter.string(from: convertedRaw)
         
         return targetFormat
