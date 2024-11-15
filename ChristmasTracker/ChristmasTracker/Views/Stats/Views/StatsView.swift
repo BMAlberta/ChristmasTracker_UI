@@ -30,9 +30,9 @@ struct StatsView: View {
                     ForEach(StatsViewModel.FilterValue.allCases) { filterValue in
                         Text(filterValue.displayText).tag(filterValue)
                     }
-                }).onChange(of: selectedFilterValue, perform: { (value) in
-                    self.viewModel.processStats(filterValue: value)
-                })
+                }).onChange(of: selectedFilterValue) {
+                    self.viewModel.processStats(filterValue: selectedFilterValue)
+                }
                 .pickerStyle(.segmented)
                 .padding(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
                 

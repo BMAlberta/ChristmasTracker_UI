@@ -21,7 +21,7 @@ struct BiometricUtility {
         switch LAContext().biometricType {
         case .faceID, .touchID:
             return true
-        case .none:
+        case .none, .opticID:
             return false
         }
     }
@@ -32,7 +32,7 @@ struct BiometricUtility {
             return "Touch ID®"
         case .faceID:
             return "Face ID®"
-        case .none:
+        case .none, .opticID:
             return ""
         }
     }
@@ -153,6 +153,7 @@ extension LAContext {
         case none
         case touchID
         case faceID
+        case opticID
     }
     
     var biometricType: BiometricType {
@@ -169,9 +170,10 @@ extension LAContext {
             return .touchID
         case .faceID:
             return .faceID
+        case .opticID:
+            return .opticID
         @unknown default:
-#warning("Handle new Biometric type")
+            return .none
         }
-        return  self.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) ? .touchID : .none
     }
 }
