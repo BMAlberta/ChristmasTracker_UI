@@ -123,10 +123,10 @@ struct QuantityView: View {
 
 struct PriceView: View {
     @Binding var model: NewItemModel
-    @State private var temp: String = "&"
+    @State private var temp: String = "$"
     var body: some View {
         VStack {
-            Text("Price")
+            Text("Price $")
             TextField("Item price", text: model.price != "" ? $model.price : $temp)
                 .onChange(of: temp) { oldState, newState in
                     if !newState.hasPrefix("$") {

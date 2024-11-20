@@ -39,6 +39,7 @@ class NewItemViewModel: ObservableObject {
     func saveItem() async {
         self.isLoading = true
         do {
+            self.trimPrice()
             let newListResponse: ListDetailResponse = try await ListServiceStore.addNewItem(toList: _listInContext, newItem: self.newItem)
             NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: ["updatedList": newListResponse.detail])
             self.isLoading = false
@@ -53,6 +54,7 @@ class NewItemViewModel: ObservableObject {
     func updateItem() async {
         self.isLoading = true
         do {
+            self.trimPrice()
             let updatedList: ListDetailResponse = try await ListServiceStore.updateItem(listContext: _listInContext, updatedItem: self.newItem)
             let extractedItem = Self.extractItemModel(listModel: updatedList, itemId: self.newItem.itemId)
             NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: ["updatedItem": extractedItem])
@@ -69,6 +71,13 @@ class NewItemViewModel: ObservableObject {
         let itemArray: [Item] = listModel.detail.items
         let item = itemArray.first(where: { $0.id == itemId })
         return item ?? Item()
+    }
+    
+    private func trimPrice() {
+        if self.newItem.price.hasPrefix("$") {
+            let trimmed = self.newItem.price.dropFirst()
+            self.newItem.price = String(trimmed)
+        }
     }
     
     func allRequiredFieldsPresent() -> Bool {
