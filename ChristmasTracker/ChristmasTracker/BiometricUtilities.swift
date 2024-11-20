@@ -15,6 +15,9 @@ struct BiometricUtility {
         case unexpectedPasswordData
         case unhandledError(status: OSStatus)
         case noUsernameStored
+        case unexpectedUsernameData
+        case usernameMismatch
+        case unknownError
     }
     
     static var isBiometricSupported: Bool {
@@ -43,7 +46,7 @@ struct BiometricUtility {
             return .unavailable
         }
         
-        guard let _ = UserDefaults.standard.string(forKey: "biometricUser") else {
+        guard let _ = Self.getStoredUsername() else {
             return .unenrolled
         }
         return .enrolled
@@ -79,16 +82,72 @@ struct BiometricUtility {
             print(status.description)
             throw BiometricKeychainError.unhandledError(status: status)
         }
-        UserDefaults.standard.set(creds.username, forKey: "biometricUser")
+        
+        do {
+            try Self.storeUsername(username: creds.username)
+        } catch {
+            try Self.deleteStoredCredentials()
+            throw BiometricKeychainError.unknownError
+        }
     }
     
     
     
+    static func getStoredUsername() -> String? {
+        
+        let fetchQuery: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                       kSecAttrLabel as String: "ChristmasTracker_username",
+                                         kSecReturnAttributes as String: true,
+                                         kSecReturnData as String: true]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(fetchQuery as CFDictionary, &item)
+        guard status != errSecItemNotFound else {
+            return nil
+        }
+        guard status == errSecSuccess else {
+            return nil
+        }
+        
+        guard let fetchedItem = item as? [String: Any],
+              let usernameData = fetchedItem[kSecValueData as String] as? Data,
+              let username = String(data: usernameData, encoding: String.Encoding.utf8) else {
+            return nil
+        }
+        return username
+    }
+    
+    
+    static func clearStoredUsername() {
+        
+        let deleteQuery: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                       kSecAttrLabel as String: "ChristmasTracker_username"]
+        
+        SecItemDelete(deleteQuery as CFDictionary)
+    }
+    
+    static func storeUsername(username: String) throws {
+        
+        guard let encodedUsername = username.data(using: String.Encoding.utf8) else {
+            throw BiometricKeychainError.unexpectedUsernameData
+        }
+        
+        let addquery: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                       kSecAttrLabel as String: "ChristmasTracker_username",
+                                       kSecValueData as String: encodedUsername]
+        
+        let status = SecItemAdd(addquery as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            print(status.description)
+            throw BiometricKeychainError.unhandledError(status: status)
+        }
+    }
+    
     static func getStoredCredentials() throws -> Credentials {
         
-        guard let storedUsername = UserDefaults.standard.string(forKey: "biometricUser") else {
+        guard let storedUsername = Self.getStoredUsername() else {
             throw BiometricKeychainError.noUsernameStored
         }
+        
         let context = LAContext()
         guard let access = SecAccessControlCreateWithFlags(nil,
                                                      kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
@@ -100,7 +159,6 @@ struct BiometricUtility {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecMatchLimit as String: kSecMatchLimitOne,
                                     kSecReturnAttributes as String: true,
-                                    kSecAttrAccount as String: storedUsername,
                                     kSecAttrService as String: "ChristmasTrackerAPI_Biometric",
                                     kSecAttrAccessControl as String: access,
                                     kSecUseAuthenticationContext as String: context,
@@ -124,25 +182,25 @@ struct BiometricUtility {
         else {
             throw BiometricKeychainError.unexpectedPasswordData
         }
+        
+        guard account == storedUsername else {
+            throw BiometricKeychainError.usernameMismatch
+        }
         let credentials = Credentials(username: account, password: password)
         return credentials
     }
     
     static func deleteStoredCredentials() throws {
-        guard let storedUsername = UserDefaults.standard.string(forKey: "biometricUser")
-        else {
-            throw BiometricKeychainError.noUsernameStored
-        }
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrService as String: "ChristmasTrackerAPI_Biometric",
-                                    kSecAttrAccount as String: storedUsername
-                                    ]
+                                    kSecAttrService as String: "ChristmasTrackerAPI_Biometric"
+        ]
         
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw BiometricKeychainError.unhandledError(status: status)
         }
         
+        Self.clearStoredUsername()
         UserDefaults.standard.removeObject(forKey: "biometricUser")
     }
     
