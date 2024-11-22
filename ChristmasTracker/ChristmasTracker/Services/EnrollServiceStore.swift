@@ -73,10 +73,7 @@ actor EnrollServiceStore {
             throw EnrollServiceError.invalidURL
         }
         
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        request.httpMethod = "POST"
+        var request = NetworkUtility.createBaseRequest(url: url, method: .post)
         let json = try JSONEncoder().encode(model)
         request.httpBody = json
         

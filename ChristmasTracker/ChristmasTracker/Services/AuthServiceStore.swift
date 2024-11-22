@@ -27,12 +27,8 @@ actor AuthServiceStore {
             throw AuthServiceError.invalidURL
         }
         
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let appVersion = Configuration.appVersion
-        request.setValue(appVersion, forHTTPHeaderField: "av")
-        
-        request.httpMethod = "POST"
+        var request = NetworkUtility.createBaseRequest(url: url, method: .post)
+
         let json: [AnyHashable: AnyHashable] = params
         let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
         request.httpBody = jsonData
@@ -66,11 +62,7 @@ actor AuthServiceStore {
             return
         }
         
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        request.httpMethod = "POST"
-        
+        var request = NetworkUtility.createBaseRequest(url: url, method: .post)
         do {
             let _ = try await URLSession.shared.data(for: request)
             ServiceCache.shared.clearCache()

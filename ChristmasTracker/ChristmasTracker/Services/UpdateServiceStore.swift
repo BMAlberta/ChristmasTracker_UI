@@ -24,9 +24,7 @@ actor UpdateServiceStore {
             throw UpdateServiceError.invalidURL
         }
         
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpMethod = "GET"
+        var request = NetworkUtility.createBaseRequest(url: url, method: .get)
         
         do {
             let (data, response) = try await URLSession.shared.data(for: request)

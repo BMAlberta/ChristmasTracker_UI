@@ -7,6 +7,7 @@
 
 import Foundation
 import os
+import UIKit
 
 struct Configuration {
     
@@ -124,7 +125,10 @@ struct NetworkUtility {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpMethod = method.rawValue
-        
+        request.setValue(Configuration.appVersion, forHTTPHeaderField: "av")
+        request.setValue("MOB", forHTTPHeaderField: "channel")
+        let os = UIDevice.current.systemVersion
+        request.setValue(os, forHTTPHeaderField: "os")
         return request
     }
 }
