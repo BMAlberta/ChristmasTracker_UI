@@ -128,11 +128,11 @@ struct PriceView: View {
         VStack {
             Text("Price $")
             TextField("Item price", text: model.price != "" ? $model.price : $temp)
-                .onChange(of: temp) { oldState, newState in
-                    if !newState.hasPrefix("$") {
-                        temp = "$\(model.price)"
+                .onChange(of: temp) { newValue in
+                    if !newValue.hasPrefix("$") {
+                        temp = "$"
                     }
-                    if newState.hasPrefix("$") {
+                    if temp.hasPrefix("$") {
                         let trimmed = temp.dropFirst()
                         model.price = String(trimmed)
                     }
