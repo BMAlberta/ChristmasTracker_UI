@@ -11,11 +11,10 @@ import Combine
 struct ItemCardView: View {
     @ObservedObject var viewModel: ItemCardViewModel
     @State var isActionSheetPresented = false
-    var ownedList = false
     
     var body: some View {
         VStack(alignment: .leading) {
-            if !ownedList {
+            if viewModel.itemModel.canViewMetadata {
                 HStack {
                     PurchaseCapsuleView(state: self.viewModel.itemModel.purchaseState)
 //                    Spacer()
@@ -24,7 +23,7 @@ struct ItemCardView: View {
             }
             Text("\(viewModel.itemModel.name)")
                 .font(.title2)
-                .padding(EdgeInsets(top: ownedList ? 0 : -8, leading: 0, bottom: 0, trailing: 0))
+                .padding(EdgeInsets(top: viewModel.itemModel.canViewMetadata ? 0 : -8, leading: 0, bottom: 0, trailing: 0))
             Text("Last update: \(FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.lastEditDate))")
                 .font(.caption)
                 .foregroundColor(Color.gray)
@@ -181,7 +180,8 @@ struct ItemCardView_Previews: PreviewProvider {
                         purchasesAllowed: true,
                         quantityPurchased: 0,
                         deleteAllowed:true,
-                        editAllowed: false)
+                        editAllowed: false,
+                        canViewMedata: true)
         let viewModel = ItemCardViewModel(UserSession(), listContext: "asdasd", itemInContext: item)
         ItemCardView(viewModel: viewModel)
     }

@@ -20,7 +20,6 @@ class ListDetailViewModel: ObservableObject {
     
     private var _session: UserSession
     var activeListId: String
-    var ownedList: Bool = false
     private var allItems: [Item] = []
     
     enum FilterValue: String, CaseIterable, Identifiable {
@@ -67,13 +66,12 @@ class ListDetailViewModel: ObservableObject {
     }
     
     
-    init(_ session: UserSession, listId: String, displayName: String, purchasesAllowed: Bool = false, listStatus: ListStatus = .archive, ownedList: Bool = false) {
+    init(_ session: UserSession, listId: String, displayName: String, purchasesAllowed: Bool = false, listStatus: ListStatus = .archive) {
         _session = session
         activeListId = listId
         self.userDisplayName =  displayName
         self.hidePurchases = !purchasesAllowed
         self.allowAdHocItems = purchasesAllowed
-        self.ownedList = ownedList
         self.listStatus = listStatus
         if purchasesAllowed {
             NotificationCenter.default.addObserver(self, selector: #selector(refreshList), name: Notification.Name("purchaseStatusChanged"), object: nil)
@@ -103,7 +101,7 @@ class ListDetailViewModel: ObservableObject {
         self.isLoading = true
         do {
             let userListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
-            let sortedItems = userListResponse.items.sorted { $0.purchaseState < $1.purchaseState }
+            let sortedItems = Self.sortItems(inputItems: userListResponse.items, ownedList: !userListResponse.canViewMetadata)
             self.items = sortedItems
             self.isLoading = false
             self.isErrorState = false
@@ -134,7 +132,7 @@ class ListDetailViewModel: ObservableObject {
             let _ = try await ListServiceStore.deleteItem(fromList: activeListId, item: itemInContext)
             NotificationCenter.default.post(name: Notification.Name("newItemAdded"), object: nil, userInfo: nil)
             let updatedListResponse: ListDetailModel = try await ListServiceStore.getList(listId: activeListId)
-            let sortedItems = updatedListResponse.items.sorted { $0.purchaseState < $1.purchaseState }
+            let sortedItems = Self.sortItems(inputItems: updatedListResponse.items, ownedList: !updatedListResponse.canViewMetadata)
             self.items = sortedItems
             self.isLoading = false
             self.isErrorState = false

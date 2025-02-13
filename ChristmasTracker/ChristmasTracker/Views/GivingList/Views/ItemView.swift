@@ -37,13 +37,15 @@ struct ItemView: View {
                 if (viewModel.itemModel.deleteAllowed) {
                     DeleteButton(viewModel: viewModel, dismiss: dismiss)
                         .padding()
-                } else if (viewModel.itemModel.purchasesAllowed) {
+                } else if (viewModel.itemModel.purchasesAllowed || viewModel.itemModel.retractablePurchase) {
                     HStack {
                         StaticElementView(title: "Purchase Date", data: FormatUtility.convertDateOnlyStringToHumanReadable(rawDate: viewModel.itemModel.purchaseDate))
                         StaticElementView(title: "Quantity Purchased", data: String(viewModel.itemModel.quantityPurchased))
                     }
                     HStack {
-                        PurchaseButton(viewModel: viewModel)
+                        if (viewModel.itemModel.purchasesAllowed) {
+                            PurchaseButton(viewModel: viewModel)
+                        }
                         if (viewModel.itemModel.retractablePurchase) {
                             RetractButton(viewModel: viewModel)
                         }
@@ -314,7 +316,8 @@ struct BindItemViewPreview : View {
                         purchasesAllowed: true,
                         quantityPurchased: 0,
                         deleteAllowed:false,
-                        editAllowed: false)
+                        editAllowed: false,
+                        canViewMedata: false)
         let viewModel = ItemDetailViewModel(session, listInfo: ListInfo(listId: "abc", listStatus: .active), itemModel: item)
         ItemView(viewModel: viewModel)
             .environmentObject(session)

@@ -133,6 +133,23 @@ struct NetworkUtility {
     }
 }
 
+struct UpdateAlertConfiguration: CustomDebugStringConvertible {
+    var title: String = ""
+    var message: String = ""
+    var positiveActionTitle: String = ""
+    var updateUrl: URL? = nil
+    
+    var debugDescription: String {
+        """
+
+            title: \(title)
+            message: \(message)
+            positiveActionTitle: \(positiveActionTitle)
+            updateUrl: \(String(describing: updateUrl))
+        """
+    }
+}
+
 struct FormatUtility {
     static func convertDateStringToHumanReadable(rawDate: String?) -> String {
         guard let rawDate = rawDate else {

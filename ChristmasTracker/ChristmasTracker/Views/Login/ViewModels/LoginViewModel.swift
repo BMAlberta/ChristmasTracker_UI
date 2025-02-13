@@ -34,22 +34,7 @@ struct AlertConfiguration: CustomDebugStringConvertible, Identifiable {
 }
 
 class LoginViewModel: ObservableObject {
-    struct UpdateAlertConfiguration: CustomDebugStringConvertible {
-        var title: String = ""
-        var message: String = ""
-        var positiveActionTitle: String = ""
-        var updateUrl: URL? = nil
-        
-        var debugDescription: String {
-            """
-
-                title: \(title)
-                message: \(message)
-                positiveActionTitle: \(positiveActionTitle)
-                updateUrl: \(String(describing: updateUrl))
-            """
-        }
-    }
+    
     @Published var alertCongfiguration = AlertConfiguration()
     @Published var updateConfiguration = UpdateAlertConfiguration()
     @Published var shouldPromptForUpdate = false

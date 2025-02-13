@@ -21,7 +21,7 @@ struct EducationView: View {
                 .lineLimit(10)
         }
         .onAppear {
-//            EducationUtility.recordEducationView(educationModel: self.model)
+            EducationUtility.recordEducationView(educationModel: self.model)
         }
     }
 }

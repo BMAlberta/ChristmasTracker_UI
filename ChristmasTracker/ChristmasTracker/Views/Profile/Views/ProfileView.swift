@@ -32,6 +32,14 @@ struct ProfileView: View {
                     
                     Section("Application Information") {
                         AppInfoView(data: self.viewModel.appInfo)
+                        Button(action: {
+                            Task {
+                                await self.viewModel.checkForUpdate()
+                            }
+                        }) {
+                            Text("Check for Update ")
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
                     }
                     //TODO: Rebuild this functionality
 //                    Section {
@@ -44,6 +52,7 @@ struct ProfileView: View {
                 .sheet(isPresented: $biometricSettingsPresented, onDismiss: nil, content: {
                     SignInOptionsView(viewModel: SignInOptionsViewModel(_session))
                 })
+                
                 .navigationBarTitle("Profile & Settings")
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -51,6 +60,43 @@ struct ProfileView: View {
                     }
                 }
                 
+                .alert(isPresented: $viewModel.shouldShowUpdateAlert) {
+                    
+                    
+                    switch viewModel.alertInContext {
+                    case .noUpdateFound:
+                        return Alert(title: Text("No Update Found"),
+                              message: Text("You are currently running the most recent available version of the application."),
+                              dismissButton: .default(Text("Ok"),
+                                                      action: {
+                            viewModel.shouldShowUpdateAlert.toggle()
+                        }))
+                    case .updateFound:
+                        return Alert(
+                            title: Text(viewModel.updateConfiguration.title),
+                            message: Text(viewModel.updateConfiguration.message),
+                            primaryButton: .default(Text(viewModel.updateConfiguration.positiveActionTitle)) {
+                                guard let updateUri = viewModel.updateConfiguration.updateUrl else {
+                                    viewModel.shouldShowUpdateAlert.toggle()
+                                    return
+                                }
+                                viewModel.shouldShowUpdateAlert.toggle()
+                                UIApplication.shared.open(updateUri)
+                                
+                            },
+                            secondaryButton: .cancel() {
+                                viewModel.shouldShowUpdateAlert.toggle()
+                            }
+                        )
+                    case .unknown:
+                       return  Alert(title: Text("Error"),
+                              message: Text("It looks like there was an error when checking for an update. Please try again later."),
+                              dismissButton: .default(Text("Ok"),
+                                                      action: {
+                            viewModel.shouldShowUpdateAlert.toggle()
+                        }))
+                    }
+                }
                 NavigationLink(destination: DeleteProfileView(), isActive: $deleteProfilePresented) { EmptyView() }
             }
         }
@@ -169,7 +215,6 @@ struct ProfileView: View {
             }
         }
     }
-    
     private struct DeleteUserProfileButton: View {
         @Binding var presentDeleteFlow: Bool
         var body: some View {

@@ -10,5 +10,6 @@
 #include "Base.xcconfig"
 
 APP_NAME = Dev - $(inherited)
-BASE_API_HOST = 127.0.0.1:3000
+//BASE_API_HOST = 127.0.0.1:3000
+BASE_API_HOST = api.bmalberta.com
 API_SCHEME = http:

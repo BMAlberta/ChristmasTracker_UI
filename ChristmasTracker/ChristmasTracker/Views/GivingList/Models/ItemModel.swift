@@ -61,6 +61,8 @@ class Item: Decodable, Identifiable, ObservableObject {
     /// Indicates if the current user can edit the item.
     var editAllowed: Bool
     
+    var canViewMetadata: Bool
+    
     enum CodingKeys: String, CodingKey {
         case createdBy
         case creationDate
@@ -81,6 +83,7 @@ class Item: Decodable, Identifiable, ObservableObject {
         case quantityPurchased
         case deleteAllowed
         case editAllowed
+        case canViewMetadata
     }
     
     init() {
@@ -101,6 +104,7 @@ class Item: Decodable, Identifiable, ObservableObject {
         self.quantityPurchased = 0
         self.deleteAllowed = false
         self.editAllowed = false
+        self.canViewMetadata = false
     }
     
     init(id: String,
@@ -119,7 +123,8 @@ class Item: Decodable, Identifiable, ObservableObject {
          purchasesAllowed: Bool,
          quantityPurchased: Int,
          deleteAllowed: Bool,
-         editAllowed: Bool) {
+         editAllowed: Bool,
+         canViewMedata: Bool) {
         self.id = id
         self.createdBy = createdBy
         self.creationDate = creationDate
@@ -137,6 +142,7 @@ class Item: Decodable, Identifiable, ObservableObject {
         self.quantityPurchased = quantityPurchased
         self.deleteAllowed = deleteAllowed
         self.editAllowed = editAllowed
+        self.canViewMetadata = canViewMedata
     }
     
     required init(from decoder: Decoder) throws {
@@ -156,6 +162,7 @@ class Item: Decodable, Identifiable, ObservableObject {
         quantityPurchased = try container.decode(Int.self, forKey: .quantityPurchased)
         deleteAllowed = try container.decode(Bool.self, forKey: .deleteAllowed)
         editAllowed = try container.decode(Bool.self, forKey: .editAllowed)
+        canViewMetadata = try container.decode(Bool.self, forKey: .canViewMetadata)
         
         if let rawValue = try container.decodeIfPresent(Bool.self, forKey: .retractablePurchase) {
             retractablePurchase = rawValue

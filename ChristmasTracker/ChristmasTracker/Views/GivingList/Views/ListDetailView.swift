@@ -37,7 +37,7 @@ struct ListDetailView: View {
                         Section {
                             let newViewModel = ItemDetailViewModel(_session, listInfo: ListInfo(listId:viewModel.activeListId, listStatus: viewModel.listStatus), itemModel: i)
                             NavigationLink(destination: LazyView(ItemView(viewModel: newViewModel))) {
-                                ItemCardView(viewModel: ItemCardViewModel(_session, listContext: viewModel.activeListId, itemInContext: i), isActionSheetPresented: isActionSheetPresented, ownedList: self.viewModel.ownedList)
+                                ItemCardView(viewModel: ItemCardViewModel(_session, listContext: viewModel.activeListId, itemInContext: i), isActionSheetPresented: isActionSheetPresented)
                             }
                         }
                     }
@@ -142,7 +142,8 @@ struct ListDetailView_Previews: PreviewProvider {
                                    purchasesAllowed: true,
                                    quantityPurchased: 0,
                                    deleteAllowed:true,
-                                   editAllowed: false),
+                                   editAllowed: false,
+                                   canViewMedata: false),
                                            Item(id: "1234",
                                                 createdBy: "Brian",
                                                 creationDate: "2021-10-04",
@@ -159,7 +160,8 @@ struct ListDetailView_Previews: PreviewProvider {
                                                 purchasesAllowed: true,
                                                 quantityPurchased: 0,
                                                 deleteAllowed:true,
-                                                editAllowed: false)]
+                                                editAllowed: false,
+                                                canViewMedata: false)]
     
     
     static var previews: some View {

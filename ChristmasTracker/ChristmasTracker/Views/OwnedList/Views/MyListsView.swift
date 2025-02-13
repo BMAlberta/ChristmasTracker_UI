@@ -20,7 +20,7 @@ struct MyListsView: View {
             ZStack {
                 List {
                     ForEach(viewModel.activeLists, id: \.id) { i in
-                        NavigationLink(destination: LazyView(ListDetailView(viewModel: ListDetailViewModel(_session, listId: i.id, displayName: i.name, listStatus: i.status, ownedList: true)))) {
+                        NavigationLink(destination: LazyView(ListDetailView(viewModel: ListDetailViewModel(_session, listId: i.id, displayName: i.name, listStatus: i.status)))) {
                             OwnedListOverviewView(data: i)
                         }
                     }

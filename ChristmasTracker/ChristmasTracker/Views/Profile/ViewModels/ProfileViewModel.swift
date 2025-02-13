@@ -15,10 +15,19 @@ class ProfileViewModel: ObservableObject {
         var buildDate: String = ""
     }
     
+    enum AlertVariation {
+        case noUpdateFound
+        case updateFound
+        case unknown
+    }
+    
     @Published var userModel: UserModel?
+    @Published var updateConfiguration = UpdateAlertConfiguration()
     @Published var appInfo: ApplicationInfoModel = ApplicationInfoModel()
     @Published var isLoading = false
     @Published var isErrorState = false
+    @Published var shouldShowUpdateAlert = false
+    @Published var alertInContext: AlertVariation = .noUpdateFound
     
     private var _session: SessionManaging
     
@@ -68,6 +77,25 @@ class ProfileViewModel: ObservableObject {
     
     func clearSavedUserId() {
         UserDefaults.standard.removeObject(forKey: "savedId")
+    }
+    
+    @MainActor
+    func checkForUpdate() async {
+        self.shouldShowUpdateAlert = false
+        do {
+            let updateResponse: UpdateInfoModelResponse = try await UpdateServiceStore.fetchUpdateInfo()
+            let configuration = UpdateAlertConfiguration(title: "Update Available",
+                                                         message: "An updated version of this application is available for download. For the optimal experience, please download the latest version before logging in.", positiveActionTitle: "Install Now",
+                                                         updateUrl: Configuration.generateUpdateUri(updateInfo: updateResponse.version))
+            self.updateConfiguration = configuration
+            let isUpdateAvailable = Configuration.isUpdateAvailable(updateInfo: updateResponse.version)
+            
+            self.alertInContext = isUpdateAvailable ? .updateFound : .noUpdateFound
+            self.shouldShowUpdateAlert = true
+        } catch {
+            self.alertInContext = .unknown
+            self.shouldShowUpdateAlert = true
+        }
     }
 }
 

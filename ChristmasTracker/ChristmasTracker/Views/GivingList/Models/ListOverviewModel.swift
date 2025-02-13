@@ -123,6 +123,8 @@ struct ListDetailModel: Decodable {
     let items: [Item]
     var __v: Int
     
+    let canViewMetadata: Bool
+    
     enum CodingKeys: String, CodingKey {
         case name
         case owner
@@ -133,6 +135,7 @@ struct ListDetailModel: Decodable {
         case items
         case status
         case __v
+        case canViewMetadata
     }
 }
 
