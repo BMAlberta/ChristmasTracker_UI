@@ -8,6 +8,7 @@
 import Foundation
 import os
 import UIKit
+import SwiftUI
 
 struct Configuration {
     
@@ -263,4 +264,34 @@ struct LogUtility {
         os_log("%s", log: osLog, message)
 #endif
     }
+}
+
+//
+//extension Color {
+//    static var primaryGreen = Color("primaryGreen")
+//    static var primaryRed = Color("primaryRed")
+//}
+
+
+extension Font {
+    
+    enum Style: String {
+        case thin = "Thin"
+        case extralight = "ExtraLight"
+        case light = "Light"
+        case regular = "Regular"
+        case medium = "Medium"
+        case semibold = "SemiBold"
+        case bold = "Bold"
+        case extrabold = "ExtraBold"
+        case black = "Black"
+    }
+    
+    static func brandFont(size: CGFloat) -> Font {
+        return .custom("InterVariable", size: size)
+    }
+    
+//    static func brandFont(size: CGFloat) -> Font {
+//        return .custom("InterVariable", size: size)
+//    }
 }

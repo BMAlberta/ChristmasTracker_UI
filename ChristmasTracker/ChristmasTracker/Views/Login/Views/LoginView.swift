@@ -76,8 +76,8 @@ struct MainLoginView: View {
             Spacer()
         }
         .background(
-            LinearGradient(gradient: Gradient(colors: [Color("brandBackgroundPrimary"),
-                                                       Color("brandBackgroundPrimary")
+            LinearGradient(gradient: Gradient(colors: [.brandBackgroundSecondary,
+                                                       .brandBackgroundSecondary
                                                       ]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all))
     }
@@ -153,7 +153,8 @@ struct CredentialsView: View {
                     .foregroundColor(.white)
                     .padding()
                     .frame(width: 300, height: 50)
-                    .background(Color.green)
+//                    .background(Color.green)
+                    .background(.primaryGreen)
                     .cornerRadius(15.0)
                     .shadow(radius: 10.0, x: 20, y: 10)
             }.padding(.top, UIScreen.main.bounds.height * 0.05)
