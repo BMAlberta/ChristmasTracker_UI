@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct SlimUserModel: Decodable {
+struct SlimUserModel: Codable {
     /// User's first name.
     let firstName: String
     

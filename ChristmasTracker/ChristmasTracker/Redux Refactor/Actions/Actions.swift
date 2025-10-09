@@ -13,5 +13,5 @@ protocol Action {
 protocol AppAction: Action {}
 protocol UserAction: Action {}
 protocol ListAction: Action {}
-protocol ItemAction: Action {}
+protocol StatsAction: Action {}
 

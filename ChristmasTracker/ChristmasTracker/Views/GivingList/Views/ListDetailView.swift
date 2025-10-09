@@ -121,7 +121,7 @@ struct ListDetailView_Previews: PreviewProvider {
     
     static let user = SlimUserModel(firstName: "Brian", lastName: "Alberta", rawId: "615d0aca9dce0250b0eac9c2")
     
-    static let list = ListOverviewDetails(listName: "Fake Name", totalItems: 10, purchasedItems: 8, id: "615d0aca9dce0250b0eac9c2", lastUpdateDate: "2022-12-12 12:12:12", listStatus: .active, ownerInfo: user, memberDetails: [MemberDetail(firstName: "Brian", lastName: "Alberta", id: "1234")])
+    static let list = ListOverviewDetails(listName: "Fake Name", totalItems: "10", purchasedItems: "8", id: "615d0aca9dce0250b0eac9c2", lastUpdate: "2022-12-12 12:12:12", listStatus: .active, ownerInfo: user, members: [MemberDetail(firstName: "Brian", lastName: "Alberta", userId: "1234")])
     
     
     

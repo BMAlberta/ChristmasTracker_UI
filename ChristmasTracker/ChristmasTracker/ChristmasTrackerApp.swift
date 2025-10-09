@@ -10,17 +10,26 @@ import SwiftUI
 @main
 struct ChristmasTrackerApp: App {
     let sessionManager = UserSession()
+    let store: Store<AppState>
+    
+    init() {
+        // Use mock store for development/demo
+        self.store = StoreFactory.createMockStore()
+    }
+    
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(sessionManager)
-                .onAppear {
-                    let appearance = UITabBarAppearance()
-                    appearance.configureWithDefaultBackground()
-                    UITabBar.appearance().standardAppearance = appearance
-                    UITabBar.appearance().scrollEdgeAppearance = appearance
-                    UIApplication.shared.addTapGestureRecognizer()
-                }
+//            RootView()
+//                .environmentObject(sessionManager)
+//                .environmentObject(store)
+//                .onAppear {
+//                    let appearance = UITabBarAppearance()
+//                    appearance.configureWithDefaultBackground()
+//                    UITabBar.appearance().standardAppearance = appearance
+//                    UITabBar.appearance().scrollEdgeAppearance = appearance
+//                    UIApplication.shared.addTapGestureRecognizer()
+//                }
+            ContentView(store: store)
         }
     }
 }

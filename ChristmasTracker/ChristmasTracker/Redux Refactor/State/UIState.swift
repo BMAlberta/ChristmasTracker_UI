@@ -9,13 +9,11 @@ import Foundation
 struct UIState: Equatable {
     var isNetworkConnected: Bool
     var currentTab: AppTab
-    var showingLoginSheet: Bool
     var toast: ToastMessage?
     
     static let initialState = UIState(
         isNetworkConnected: true,
         currentTab: .home,
-        showingLoginSheet: false,
         toast: nil
     )
 }
@@ -28,10 +26,10 @@ enum AppTab: String, CaseIterable {
     
     var iconName: String {
         switch self {
-        case .home: return "list.bullet"
-        case .lists: return "cart"
-        case .stats: return "cart"
-        case .profile: return "person"
+        case .home: return "house.fill"
+        case .lists: return "list.bullet"
+        case .stats: return "chart.xyaxis.line"
+        case .profile: return "person.crop.circle"
         }
     }
 }

@@ -63,14 +63,14 @@ struct GivingListView_Previews: PreviewProvider {
 struct UserListOverviewView: View {
     let data: ListOverviewDetails
     var body: some View {
-        let members = FormatUtility.formatInitials(members: data.memberDetails)
+        let members = FormatUtility.formatInitials(members: data.members)
         VStack(alignment: .leading) {
             HStack {
                 VStack {
                     Text("Updated")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    StackedDateView(date: FormatUtility.convertStringToDate(rawDate: data.lastUpdateDate))
+                    StackedDateView(date: FormatUtility.convertStringToDate(rawDate: data.lastUpdate))
                 }
                 Divider()
                     .frame(width:1)
@@ -83,7 +83,7 @@ struct UserListOverviewView: View {
                     Text("\(data.ownerInfo.firstName)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-                    ProgressView("Progress", value: Double(data.purchasedItems), total: Double(data.totalItems))
+                    ProgressView("Progress", value: Double(data.purchasedItems), total: Double(data.totalItems) ?? 0)
                         .font(.caption)
                     Text("\(data.purchasedItems) out of \(data.totalItems) items purchased.")
                         .font(.caption)
@@ -110,8 +110,8 @@ struct UserListOverviewView: View {
     }
     
     private func convertToPercentage() -> Double {
-        let purchasedCount = data.purchasedItems
-        let total = data.totalItems
+        let purchasedCount = Int(data.purchasedItems) ?? 0
+        let total = Int(data.totalItems) ?? 0
         
         return Double(purchasedCount/total)
     }
@@ -120,14 +120,14 @@ struct UserListOverviewView: View {
 struct UserListOverviewView_Previews: PreviewProvider {
     static var previews: some View {
         let sampleData = ListOverviewDetails(listName: "Test name",
-                                             totalItems: 10,
-                                             purchasedItems: 2,
+                                             totalItems: "10",
+                                             purchasedItems: "2",
                                              id: "abcd",
-                                             lastUpdateDate: "2022-11-12 12:30:12",
+                                             lastUpdate: "2022-11-12 12:30:12",
                                              listStatus: .active,
                                              ownerInfo: SlimUserModel(firstName: "Melanie",
                                                                       lastName: "Alberta",
-                                                                      rawId: "1234"), memberDetails: [MemberDetail(firstName: "Brian", lastName: "Alberta", id: "1234")])
+                                                                      rawId: "1234"), members: [MemberDetail(firstName: "Brian", lastName: "Alberta", userId: "1234")])
         UserListOverviewView(data: sampleData)
     }
 }
@@ -202,6 +202,8 @@ extension ListStatus {
             return .gray
         case .expired:
             return.red
+        case .draft:
+            return .gray
         }
     }
     
@@ -213,6 +215,8 @@ extension ListStatus {
             return "Archived"
         case .expired:
             return "Expired"
+        case .draft:
+            return "Draft"
         }
     }
     
@@ -223,6 +227,8 @@ extension ListStatus {
         case .archive:
             return .white
         case .expired:
+            return .white
+        case .draft:
             return .white
         }
     }

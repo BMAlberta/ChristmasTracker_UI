@@ -7,8 +7,43 @@
 
 import Foundation
 
+enum APIError: Error {
+    case invalidResponse
+    case unauthorized
+    case decoder(error: Error)
+    case url(error: Error)
+    case generic(Int)
+    case invalidRequest
+    case badRequest
+    case serverError
+    case notFound
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse:
+            return "Invalid response received"
+        case . unauthorized:
+            return "Authentication required"
+        case .decoder(error: let error):
+            return "Error while decoding: \(error)"
+        case .url(error: let error):
+            return "Error while building URL: \(error)"
+        case .generic(let code):
+            return "General error with code: \(code)"
+        case .invalidRequest:
+            return "Invalid request"
+        case .badRequest:
+            return "Bad URL request"
+        case .serverError:
+            return "Internal server error"
+        case .notFound:
+            return "Endpoint not found"
+        }
+    }
+}
 
-protocol UserDataManaging {
+
+protocol UserDataProviding {
     func authenticateUser(_ credentials: Credentials) async throws -> LoginResponse
     func performLogout() async
     
@@ -20,9 +55,38 @@ protocol UserDataManaging {
 }
 
 
-actor UserAPIService: UserDataManaging {
+actor UserAPIService: UserDataProviding {
+    
+    
+    private let seesion = URLSession.shared
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+    
+    
     func authenticateUser(_ credentials: Credentials) async throws -> LoginResponse {
-        return LoginResponse(userInfo: "foo")
+        
+        let urlString = Configuration.getUrl(forKey: .auth)
+        let params: [String: String] = ["email": credentials.username,
+                                        "password": credentials.password]
+        
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidRequest
+        }
+        
+        var request = NetworkUtility.createBaseRequest(url: url, method: .post)
+
+        let json: [AnyHashable: AnyHashable] = params
+        let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        request.httpBody = jsonData
+        
+        let (data, response) = try await seesion.data(for: request)
+        
+        try APIService.validateResponse(response)
+        
+        let authResponse = try decoder.decode(NetworkResponse<LoginResponse>.self, from: data)
+        
+        return authResponse.payload
+        
     }
     
     func performLogout() async {

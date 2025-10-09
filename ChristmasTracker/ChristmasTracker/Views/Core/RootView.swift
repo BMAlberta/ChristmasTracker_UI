@@ -9,6 +9,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject var _session: UserSession
+    @EnvironmentObject var _store: Store<AppState>
     var body: some View {
         if (!_session.sessionActive) {
             let viewModel = LoginViewModel(_session)

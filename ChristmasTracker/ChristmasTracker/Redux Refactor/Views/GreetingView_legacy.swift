@@ -7,52 +7,56 @@
 
 import SwiftUI
 
-struct GreetingView: View {
+struct GreetingView_legacy: View {
     var body: some View {
-//        VStack {
-//            GreetingBody
-//                .frame(height: 100)
-//                .cornerRadius(6)
-//                .padding()
-//            ButtonGroupView
-//                .padding()
-//            FilterCarousel
-//                .padding()
-//            ListTileView
-//                .padding()
-//                .border(.border)
-//                .background(.white)
-//                .padding()
+        VStack {
+            GreetingBody
+                .frame(height: 100)
+                .cornerRadius(6)
+                .padding()
+            ButtonGroupView
+                .padding()
+            FilterCarousel
+                .padding()
+            
+//            ForEach(0..<5) { _ in
+//                ListTileView
+//                    .padding()
+//                    .border(.border)
+//                    .background(.white)
+//                    .padding(EdgeInsets(top: 0, leading: 20, bottom: 20, trailing: 20))
+//            }
+            
 //            ItemTileView
 //                .padding()
 //                .border(.border)
 //                .background(.white)
 //                .padding()
-//                
-//        }
-//        .background(Color.background)
-        
-        List {
-            GreetingBody
-                .frame(height: 100)
-                .cornerRadius(6)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
-            ButtonGroupView
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            
-            Section(header: Text("My Lists")) {
-                FilterCarousel
-                    .listRowSeparator(.hidden)
-                    
-            }
-
+                
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .background(Color.background)
+        
+//        List {
+//            GreetingBody
+//                .frame(height: 100)
+//                .cornerRadius(6)
+//                .listRowBackground(Color.clear)
+//                .listRowSeparator(.hidden)
+//
+//            ButtonGroupView
+//                .listRowBackground(Color.clear)
+//                .listRowSeparator(.hidden)
+//            
+//            Section(header: Text("My Lists")) {
+//                FilterCarousel
+//                    .listRowSeparator(.hidden)
+//                    
+//            }
+//
+//        }
+//        .listStyle(.plain)
+//        .scrollContentBackground(.hidden)
+//        .background(Color.background)
         
     }
     
@@ -208,5 +212,5 @@ struct GreetingView: View {
 }
 
 #Preview {
-    GreetingView()
+    GreetingView_legacy()
 }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct PurchaseStat: Decodable {
+struct PurchaseStat: Codable {
     /// Total amount, in dollars, spent on purchases.
     let totalSpent: Double
     

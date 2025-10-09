@@ -8,24 +8,15 @@
 struct AppState: Equatable {
     var user: UserState
     var ui: UIState
+    var list: ListState
+    var activity: ActivityState
+    var stats: StatsState
     
     static let initialState = AppState(
         user: .initialState,
-        ui: .initialState
+        ui: .initialState,
+        list: .initialState,
+        activity: .initialState,
+        stats: .initialState
     )
 }
-
-
-//struct AppState: Equatable {
-//    var user: UserState
-//    var cart: CartState
-//    var products: ProductState
-//    var ui: UIState
-//    
-//    static let initial = AppState(
-//        user: UserState.initial,
-//        cart: CartState.initial,
-//        products: ProductState.initial,
-//        ui: UIState.initial
-//    )
-//}

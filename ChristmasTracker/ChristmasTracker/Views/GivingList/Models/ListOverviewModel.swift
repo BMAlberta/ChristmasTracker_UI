@@ -35,10 +35,11 @@ struct UserListOverviewResponse: Decodable {
 }
 
 
-enum ListStatus: String, Decodable {
+enum ListStatus: String, Codable {
     case active = "active"
     case archive = "archive"
     case expired = "expired"
+    case draft = "draft"
 }
 
 struct ListOverviewDetails: Decodable, Identifiable {
@@ -47,16 +48,16 @@ struct ListOverviewDetails: Decodable, Identifiable {
     let listName: String
     
     /// Total number of items in the list.
-    let totalItems: Int
+    let totalItems: String
     
     /// Total purchased items in the list.
-    let purchasedItems: Int
+    let purchasedItems: String
     
     /// List identifier
     var id: String
     
     /// Date on which the list was last updated.
-    var lastUpdateDate: String
+    var lastUpdate: String
     
     /// Enumeration denoting the status of the list.
     var listStatus: ListStatus
@@ -65,7 +66,7 @@ struct ListOverviewDetails: Decodable, Identifiable {
     let ownerInfo: SlimUserModel
     
     /// List of users who are members of the list.
-    let memberDetails: [MemberDetail]
+    let members: [MemberDetail]
     
     enum CodingKeys: String, CodingKey {
         case listName
@@ -73,9 +74,9 @@ struct ListOverviewDetails: Decodable, Identifiable {
         case purchasedItems
         case ownerInfo
         case listStatus
-        case lastUpdateDate
-        case id = "_id"
-        case memberDetails
+        case lastUpdate
+        case id = "listId"
+        case members
     }
 }
 
@@ -88,12 +89,12 @@ struct MemberDetail: Decodable {
     let lastName: String
     
     /// User identifier.
-    let id: String
+    let userId: String
     
     enum CodingKeys: String, CodingKey {
         case firstName
         case lastName
-        case id
+        case userId
     }
 }
 struct ListDetailModel: Decodable {

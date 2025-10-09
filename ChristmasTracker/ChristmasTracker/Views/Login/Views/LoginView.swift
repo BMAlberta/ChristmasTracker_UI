@@ -9,6 +9,7 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var _session: UserSession
+    @EnvironmentObject var _store: Store<AppState>
     @StateObject var viewModel: LoginViewModel
     
     var body: some View {
@@ -58,6 +59,7 @@ struct LoginView: View {
 struct MainLoginView: View {
     @ObservedObject var viewModel: LoginViewModel
     @EnvironmentObject var _session: UserSession
+    @EnvironmentObject var _store: Store<AppState>
     @State var showEnroll = false
     
     var body: some View {
@@ -77,7 +79,7 @@ struct MainLoginView: View {
         }
         .background(
             LinearGradient(gradient: Gradient(colors: [.brandBackgroundSecondary,
-                                                       .brandBackgroundSecondary
+                                                       .brandBackgroundPrimary
                                                       ]), startPoint: .top, endPoint: .bottom)
                 .edgesIgnoringSafeArea(.all))
     }
@@ -100,6 +102,7 @@ extension Color {
 
 struct CredentialsView: View {
     @EnvironmentObject private var _session:UserSession
+    @EnvironmentObject private var _store:Store<AppState>
     @ObservedObject var viewModel: LoginViewModel
     
     var body: some View {
@@ -118,6 +121,7 @@ struct CredentialsView: View {
                     SecureField("Password", text: $viewModel.password, onCommit: {
                         Task {
                             await self.viewModel.doLogin()
+//                            _store.dispatch(UserActions.login(email: viewModel.username, password: viewModel.password))
                         }                })
                         .padding()
                         .disableAutocorrection(true)
@@ -146,6 +150,7 @@ struct CredentialsView: View {
             Button(action: {
                 Task {
                     await self.viewModel.doLogin()
+//                    _store.dispatch(UserActions.login(email: viewModel.username, password: viewModel.password))
                 }
             }) {
                 Text("Sign In")

@@ -10,7 +10,7 @@ import Foundation
 struct UserState: Codable, Equatable {
     var currentUser: String? // TODO: Change type
     var isloading: Bool = false
-    var error: String? // TODO: Change type
+    var error: UserError? // TODO: Change type
     var isLoggedIn: Bool = false
     var authToken: String?
     var lastLoginDate: Date?

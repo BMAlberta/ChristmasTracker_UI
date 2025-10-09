@@ -19,7 +19,7 @@ struct ItemView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack {
-                if (viewModel.itemModel.createdBy != _session.loggedInUser?._id) {
+                if (viewModel.itemModel.createdBy != _session.loggedInUser?.userId) {
                     TagsView(purchaseState: viewModel.itemModel.purchaseState, offListItem: viewModel.itemModel.offListItem)
                 }
                 StaticElementView(title: "Name", data: viewModel.itemModel.name)
@@ -30,7 +30,7 @@ struct ItemView: View {
                     StaticElementView(title: "Price", data: String(format: "$%.2f", viewModel.itemModel.price))
                     StaticElementView(title: "Quantity Requested", data: String(viewModel.itemModel.quantity))
                 }
-                if (viewModel.itemModel.createdBy == _session.loggedInUser?._id) {
+                if (viewModel.itemModel.createdBy == _session.loggedInUser?.userId) {
                     StaticElementView(title: "Last Edit Date", data: FormatUtility.convertDateStringToHumanReadable(rawDate: viewModel.itemModel.lastEditDate))
                 }
                 

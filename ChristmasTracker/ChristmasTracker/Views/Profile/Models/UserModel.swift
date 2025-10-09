@@ -10,7 +10,7 @@ import Foundation
 struct UserModel: Codable {
     
     /// User identifier.
-    let _id: String
+    let userId: String
     
     /// IP Address of the last login.
     let lastLogInLocation: String
@@ -34,7 +34,7 @@ struct UserModel: Codable {
     let lastPasswordChange: String
     
     init() {
-        _id = ""
+        userId = ""
         lastLogInLocation = ""
         email = ""
         firstName = ""
