@@ -47,3 +47,8 @@ struct HomeFeedButtonGroup: View {
 #Preview {
     HomeFeedButtonGroup(onNewList: {}, onJoinList: {})
 }
+
+#Preview {
+    HomeFeedButtonGroup(onNewList: {}, onJoinList: {})
+        .preferredColorScheme(.dark)
+}

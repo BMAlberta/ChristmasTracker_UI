@@ -224,7 +224,7 @@ struct LogoView: View {
 
 struct TitleView: View {
     var body: some View {
-        Text("Christmas Tracker")
+        Text("App.Title")
             .font(.largeTitle).foregroundColor(Color.white)
             .padding([.top, .bottom], 20)
             .shadow(radius: 10.0, x: 20, y: 10)

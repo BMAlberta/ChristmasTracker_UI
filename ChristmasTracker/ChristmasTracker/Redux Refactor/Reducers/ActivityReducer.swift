@@ -20,6 +20,8 @@ func activityReducer(state: ActivityState, action: any Action) -> ActivityState 
             fatalError("activityReducer: \(activityAction) not implemented")
         case .activityError(_):
             fatalError("activityReducer: \(activityAction) not implemented")
+        case .homeFeedLoaded(let data):
+            newState.currentActivity = data.activity
         }
     default:
         break

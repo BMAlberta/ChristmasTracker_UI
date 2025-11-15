@@ -8,20 +8,32 @@
 import Foundation
 
 struct UserState: Codable, Equatable {
-    var currentUser: String? // TODO: Change type
-    var isloading: Bool = false
+    var currentUser: LWUserModel?
+    var savdUserId: String
+    var isLoading: Bool = false
     var error: UserError? // TODO: Change type
     var isLoggedIn: Bool = false
     var authToken: String?
-    var lastLoginDate: Date?
+    var biometricsState: BiometricUtility.BiometricState
+    var teaser: Teaser
+    var metadata: UserMetadata
+    var updateNameSuccess: Bool
+    var changePasswordSuccess: Bool
+    
+    
     
     static let initialState = UserState(
         currentUser: nil,
-        isloading: false,
+        savdUserId: "",
+        isLoading: false,
         error: nil,
         isLoggedIn: false,
         authToken: nil,
-        lastLoginDate: nil
+        biometricsState: .unavailable,
+        teaser: Teaser(type: .greeting, name: "<name>", message: "Sample teaser message here"),
+        metadata: UserMetadata.defaultMetadata(),
+        updateNameSuccess: false,
+        changePasswordSuccess: false
     )
     
     var userName: String {

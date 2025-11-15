@@ -8,59 +8,58 @@
 import Foundation
 
 protocol ListDataProviding {
-    func getOwnedItems() async throws -> OwnedListResponse
-    func getListOverviewByUser() async throws -> ListOverviewResponse
-    func getList(listId: String) async throws -> ListDetailResponse
-    func createList(newList: String) async throws -> ListDetailResponse
+    func createList(newList: NewListDetails) async throws -> AddListResponse
     func deleteList(listId: String) async throws
-    func getHomeFeed() async throws -> HomeFeedResponse
+    func getHomeFeed() async throws -> AppDataResponse
 }
 
 
 actor ListAPIService: ListDataProviding {
-    func getHomeFeed() async throws -> HomeFeedResponse {
-        return MockData.homeOverview
-    }
-    
-    func getOwnedItems() async throws -> OwnedListResponse {
-        let foo = OwnedListModel(name: "Foo",
-                                 members: ["Bar"],
-                                 id: "1234",
-                                 creationDate: "123",
-                                 lastUpdateDate: "123")
+    func getHomeFeed() async throws -> AppDataResponse {
+        let urlString = Configuration.getUrl(forKey: .homeFeed)
         
-        return OwnedListResponse(ownedLists:[foo])
+        guard let url = URL(string: urlString) else {
+            throw ListServiceError.invalidURL
+        }
+        
+        let request = NetworkUtility.createBaseRequest(url: url, method: .get)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        try APIService.validateResponse(response)
+//        LogUtility.logNetworkDetails(message: "ListAPIService.getHomeFeed",
+//                                     rawData: data)
+        let feedResponse = try JSONDecoder().decode(NetworkResponse<AppDataResponse>.self, from: data)
+        
+        return feedResponse.payload
     }
     
-    func getListOverviewByUser() async throws -> ListOverviewResponse {
-        return ListOverviewResponse(listOverviews: [ListOverviewDetails(listName: "Foo", totalItems: "1", purchasedItems: "1", id: "123", lastUpdate: "123", listStatus: .active, ownerInfo: SlimUserModel(), members: [MemberDetail(firstName: "Foo", lastName: "Foo", userId: "Foo")])])
-    }
-    
-    func getList(listId: String) async throws -> ListDetailResponse {
-        return ListDetailResponse(detail: ListDetailModel(name: "Foo",
-                                                          owner: "Foo",
-                                                          members: ["Foo"],
-                                                          id: "Foo",
-                                                          creationDate: "123",
-                                                          lastUpdateDate: "123",
-                                                          status: .active,
-                                                          items: [], __v: 1))
-    }
-    
-    func createList(newList: String) async throws -> ListDetailResponse {
-        return ListDetailResponse(detail: ListDetailModel(name: "Foo",
-                                                          owner: "Foo",
-                                                          members: ["Foo"],
-                                                          id: "Foo",
-                                                          creationDate: "123",
-                                                          lastUpdateDate: "123",
-                                                          status: .active,
-                                                          items: [],
-                                                          __v: 1))
+    func createList(newList: NewListDetails) async throws -> AddListResponse {
+        let urlString = Configuration.getUrl(forKey: .addList)
+        
+        guard let url = URL(string: urlString) else {
+            throw ListServiceError.invalidURL
+        }
+        
+        let params: [String: AnyHashable] = ["listName": newList.listName,
+                                             "listTheme": newList.listTheme]
+        
+        
+        var request = NetworkUtility.createBaseRequest(url: url, method: .post)
+        
+        let json: [AnyHashable: AnyHashable] = params
+        let jsonData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        request.httpBody = jsonData
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        try APIService.validateResponse(response)
+        let addListResponse = try JSONDecoder().decode(NetworkResponse<AddListResponse>.self, from: data)
+        
+        return addListResponse.payload
     }
     
     func deleteList(listId: String) async throws {
-        
+        fatalError("ListAPIService: not implemented")
     }
     
     

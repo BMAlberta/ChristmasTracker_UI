@@ -11,7 +11,7 @@ enum UIActions: Action {
     case hideToast
     case checkForUpdate
     case updateCheckComplete(UpdateInfoModel)
-    case showUpdateDialog
+    case showUpdateDialog(UpdateAlertConfiguration)
     case hideUpdateDialog
     case showBiometricSheet
     case hideBiometricSheet

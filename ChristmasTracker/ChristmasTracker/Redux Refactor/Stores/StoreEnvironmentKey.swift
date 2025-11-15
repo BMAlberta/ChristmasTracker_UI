@@ -9,7 +9,8 @@ import SwiftUI
 
 @MainActor
 struct StoreEnvironmentKey: @preconcurrency EnvironmentKey {
-    static let defaultValue: Store<AppState> = StoreFactory.createProductionStore()
+    static let defaultValue: Store<AppState> = StoreFactory.createMockStore()
+//    static let mockValue: Store<AppState> = StoreFactory.createMockStore()
 }
 
 extension EnvironmentValues {

@@ -42,3 +42,8 @@ struct TeaserView: View {
 #Preview {
     TeaserView(teaser: Teaser(type: .greeting, name: "John", message: "Sample teaser text here"))
 }
+
+#Preview {
+    TeaserView(teaser: Teaser(type: .greeting, name: "John", message: "Sample teaser text here"))
+        .preferredColorScheme(.dark)
+}

@@ -15,10 +15,6 @@ final class StoreFactory {
         
 //        return createStore(apiService: apiService, persistenceService: persistenceService)
         
-//        for family in UIFont.familyNames.sorted() {
-//            let names = UIFont.fontNames(forFamilyName: family)
-//            print("XXXX: Family: \(family) Font names: \(names)")
-//        }
         
         return createStore(apiService: apiService)
     }

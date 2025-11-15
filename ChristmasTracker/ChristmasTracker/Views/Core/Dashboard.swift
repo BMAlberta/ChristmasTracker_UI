@@ -24,11 +24,11 @@ struct Dashboard: View {
                         Image(systemName: "list.dash")
                         Text("My List")
                     }
-                StatsView(viewModel: StatsViewModel(_session))
-                    .tabItem {
-                        Image(systemName: "chart.xyaxis.line")
-                        Text("Stats")
-                    }
+//                StatsView(viewModel: StatsViewModel(_session))
+//                    .tabItem {
+//                        Image(systemName: "chart.xyaxis.line")
+//                        Text("Stats")
+//                    }
                 ProfileView(viewModel: ProfileViewModel(_session))
                     .environmentObject(_session)
                     .tabItem {

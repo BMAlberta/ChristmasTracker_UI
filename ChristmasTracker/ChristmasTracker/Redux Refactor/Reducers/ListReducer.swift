@@ -17,68 +17,153 @@ func listReducer(state: ListState, action: any Action) -> ListState {
             newState.isLoading = true
             newState.error = nil
             break
+            
         case .homeFeedLoaded(let data):
             newState.isLoading = false
             newState.error = nil
-            newState.listSummaries = data.listSummaries
-        case .loadListOverviews:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .overviewsLoaded:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .overviewError(_):
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.listSummaries = data.listOverviews
+
         case .addList:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = true
+            newState.error = nil
+            newState.addListInProgress = true
+            newState.addListSuccess = false
+            
         case .addListSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .addListError(_):
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.error = nil
+            newState.addListSuccess = true
+            newState.addListInProgress = false
+            
+        case .addListError(let error):
+            newState.isLoading = false
+            newState.error = error
+            newState.addListSuccess = false
+            newState.addListSuccess = false
+            
+        case .addListFlowComplete:
+            newState.isLoading = false
+            newState.addListSuccess = false
+            newState.addListInProgress = false
+            newState.error = nil
+            
         case .deleteList:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = true
+            newState.error = nil
+            newState.deleteListSuccess = false
+            
         case .deleteListSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .updateList:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .updateListSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .updateListError(_):
-            fatalError("listReducer: \(listAction) not implemented")
-        case .addItem:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.error = nil
+            newState.deleteListSuccess = true
+            
+        case .viewListDetails(let list):
+            newState.listIdInContext = list
+            
+        case .resetListDetails:
+            newState.listIdInContext = ""
+            
+        case .addItem(_,_):
+            newState.isLoading = true
+            newState.error = nil
+            newState.addItemInProgress = true
+            
         case .addItemSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .addItemError(_):
-            fatalError("listReducer: \(listAction) not implemented")
-        case .purchaseItem:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.error = nil
+            newState.addItemSuccess = true
+            newState.addItemInProgress = false
+            
+        case .addItemError(let error):
+            newState.isLoading = false
+            newState.error = error
+            newState.addItemSuccess = false
+            newState.addItemInProgress = false
+            
+        case .addItemFlowComplete:
+            newState.isLoading = false
+            newState.addItemSuccess = false
+            newState.addItemInProgress = false
+            newState.error = nil
+            
+        case .purchaseItem(_, _, _, _):
+            newState.isLoading = true
+            newState.purchaseSuccess = false
+            newState.error = nil
+            
         case .purchaseItemSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .purchaseItemError(_):
-            fatalError("listReducer: \(listAction) not implemented")
-        case .retractItem:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.purchaseSuccess = true
+            newState.error = nil
+            
+        case .purchaseItemError(let error):
+            newState.isLoading = false
+            newState.purchaseSuccess = false
+            newState.error = error
+            
+        case .purchaseFlowComplete:
+            newState.isLoading = false
+            newState.purchaseSuccess = false
+            newState.retractedPurchaseSuccess = false
+            newState.error = nil
+            
+        case .retractItem(_,_):
+            newState.isLoading = true
+            newState.retractedPurchaseSuccess = false
+            newState.error = nil
+            
         case .retractItemSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .retractItemError(_):
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.retractedPurchaseSuccess = true
+            newState.error = nil
+            
+        case .retractItemError(let error):
+            newState.isLoading = false
+            newState.retractedPurchaseSuccess = false
+            newState.error = error
+            
         case .deleteItem:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = true
+            newState.error = nil
+            
         case .deleteItemSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .deleteItemError(_):
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.error = nil
+            
+        case .deleteItemError(let error):
+            newState.isLoading = false
+            newState.error = error
+            
         case .updateItem:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = true
+            newState.error = nil
+            
         case .updateItemSuccess:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .updateItemError:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.error = nil
+            newState.updateItemSuccess = true
+            
+        case .updateItemError(let error):
+            newState.isLoading = false
+            newState.error = error
+            newState.updateItemSuccess = false
+            
+        case .updateItemFlowComplete:
+            newState.isLoading = false
+            newState.updateItemSuccess = false
+            newState.error = nil
+            
         case .loadActivity:
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = true
+            newState.error = nil
+            
         case .activityLoaded:
-            fatalError("listReducer: \(listAction) not implemented")
-        case .activityError(_):
-            fatalError("listReducer: \(listAction) not implemented")
+            newState.isLoading = false
+            newState.error = nil
+            
+        case .activityError(let error):
+            newState.isLoading = false
+            newState.error = error
         }
     default:
         break

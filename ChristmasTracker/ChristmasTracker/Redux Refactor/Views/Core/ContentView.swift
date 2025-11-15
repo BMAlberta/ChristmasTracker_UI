@@ -31,6 +31,7 @@ struct ContentView: View {
                 .onAppear {
                     // Update viewStore to use environment store
                     updateViewStore()
+                    viewStore.dispatch(UserActions.checkForBiometrics)
                 }
         } else {
             DashboardView(store: store)
@@ -50,4 +51,9 @@ struct ContentViewState: Equatable {
 
 #Preview {
     ContentView(store: StoreEnvironmentKey.defaultValue)
+}
+
+#Preview {
+    ContentView(store: StoreEnvironmentKey.defaultValue)
+        .preferredColorScheme(.dark)
 }

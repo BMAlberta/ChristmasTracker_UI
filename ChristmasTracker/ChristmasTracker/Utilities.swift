@@ -9,13 +9,16 @@ import Foundation
 import os
 import UIKit
 import SwiftUI
+import LinkPresentation
+import UniformTypeIdentifiers.UTType
+
 
 struct Configuration {
     
-//    static private let localHost = "http://127.0.0.1:3000"
-//    static private let devHost = "http://10.1.80.2:3000"
-//    static private let prodHost = "https://api.bmalberta.com"
-//    static private let configHost = "https://content.bmalberta.com"
+    //    static private let localHost = "http://127.0.0.1:3000"
+    //    static private let devHost = "http://10.1.80.2:3000"
+    //    static private let prodHost = "https://api.bmalberta.com"
+    //    static private let configHost = "https://content.bmalberta.com"
     
     static func getUrl(forKey key: Path) -> String {
         return Self.stringValue(forKey: "API_SCHEME") +
@@ -49,6 +52,7 @@ struct Configuration {
         case stats = "/tracker/stats/purchases"
         case addList = "/tracker/lists/create"
         case deleteItem = "/tracker/lists/details/"
+        case homeFeed = "/tracker/overview/list"
     }
     
     static var appVersion: String {
@@ -286,7 +290,70 @@ extension Font {
         return .custom("InterVariable", size: size)
     }
     
-//    static func brandFont(size: CGFloat) -> Font {
-//        return .custom("InterVariable", size: size)
-//    }
+    //    static func brandFont(size: CGFloat) -> Font {
+    //        return .custom("InterVariable", size: size)
+    //    }
+}
+
+
+// MARK: - Image Utilities -
+struct ImageUtiliy {
+    
+    static func fetchImagePathForItem(urlString: String) async -> String? {
+        
+        guard let metadata = await Self.loadMetadata(urlString: urlString) else {
+            return nil
+        }
+        
+        guard let imagePath = metadata.value(forKeyPath: "imageMetadata.URL") as? URL else {
+            return nil
+        }
+        
+        return imagePath.absoluteString
+    }
+    
+    private static func loadMetadata(urlString: String) async -> LPLinkMetadata? {
+        let metadataProvider = LPMetadataProvider()
+        guard let url = URL(string: urlString) else {
+            return nil
+        }
+        do {
+            let result = try await metadataProvider.startFetchingMetadata(for: url)
+            return result
+        } catch(let error) {
+            print(error)
+            return nil
+        }
+    }
+    
+    private static func getImage(_ itemProvider: NSItemProvider?) async -> UIImage? {
+        
+        guard let itemProvider else { return nil }
+        let allowedType = UTType.image.identifier
+        guard itemProvider.hasItemConformingToTypeIdentifier(allowedType)  else {
+            return nil
+        }
+        do {
+            let item =  try await itemProvider.loadItem(forTypeIdentifier: allowedType)
+            
+            if let url = item as? URL, let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                return image
+            }
+            
+            if let image = item as? UIImage {
+                return image
+            }
+            
+            if let data = item as? Data, let image = UIImage(data: data) {
+                return image
+            }
+            
+            return nil
+            
+        } catch (let error) {
+            print(error)
+            return nil
+        }
+        
+    }
 }

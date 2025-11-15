@@ -164,25 +164,7 @@ class Item: Decodable, Identifiable, ObservableObject {
     }
 }
 
-enum PurchaseState:String, Decodable, Comparable {
-    static func minimum(lhs: Self, rhs: Self) -> Self {
-      switch (lhs, rhs) {
-      case (.available,  _), (_, .available) : return .available
-      case (.partial, _), (_, .partial): return .partial
-      case (.purchased,   _), (_, .purchased)  : return .purchased
-      case (.unavailable,   _), (_, .unavailable)  : return .unavailable
-      }
-    }
 
-    static func < (lhs: Self, rhs: Self) -> Bool {
-        return (lhs != rhs) && (lhs == minimum(lhs: lhs, rhs: rhs))
-    }
-    
-    case available
-    case partial
-    case purchased
-    case unavailable
-}
 
 
 struct AllItemsResponse: Decodable {

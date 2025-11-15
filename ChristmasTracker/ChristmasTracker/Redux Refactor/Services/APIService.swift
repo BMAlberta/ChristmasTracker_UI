@@ -12,6 +12,7 @@ protocol APIServiceProviding {
     var listAPI: ListDataProviding { get }
     var itemAPI: ItemDataProviding { get }
     var statsAPI: StatsDataProviding { get }
+    var updateAPI: UpdateDataProviding { get }
 }
 
 final class APIService: APIServiceProviding {
@@ -19,12 +20,14 @@ final class APIService: APIServiceProviding {
     var listAPI: any ListDataProviding
     var itemAPI: any ItemDataProviding
     var statsAPI: any StatsDataProviding
+    var updateAPI: any UpdateDataProviding
     
     init() {
         self.userAPI = UserAPIService()
         self.itemAPI = ItemAPIService()
         self.listAPI = ListAPIService()
         self.statsAPI = StatsAPIService()
+        self.updateAPI = UpdateAPIService()
     }
     
     static func validateResponse(_ response: URLResponse) throws {

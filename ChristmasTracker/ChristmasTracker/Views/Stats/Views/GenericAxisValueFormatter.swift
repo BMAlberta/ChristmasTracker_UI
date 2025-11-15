@@ -6,20 +6,20 @@
 //
 
 import Foundation
-import Charts
-
-class GenericAxisValueFormatter: NSObject, AxisValueFormatter {
-    private var dataSet: [MappedEntryData] = []
-    
-    init(dataSet: [MappedEntryData]) {
-        self.dataSet = dataSet
-    }
-    
-    
-    func stringForValue(_ value: Double, axis: AxisBase?) -> String {
-        guard let valueString = self.dataSet.filter({ $0.personId == value }).first else {
-            return ""
-        }
-        return valueString.name
-    }
-}
+//import Charts
+//
+//class GenericAxisValueFormatter: NSObject, AxisValueFormatter {
+//    private var dataSet: [MappedEntryData] = []
+//    
+//    init(dataSet: [MappedEntryData]) {
+//        self.dataSet = dataSet
+//    }
+//    
+//    
+//    func stringForValue(_ value: Double, axis: AxisBase?) -> String {
+//        guard let valueString = self.dataSet.filter({ $0.personId == value }).first else {
+//            return ""
+//        }
+//        return valueString.name
+//    }
+//}

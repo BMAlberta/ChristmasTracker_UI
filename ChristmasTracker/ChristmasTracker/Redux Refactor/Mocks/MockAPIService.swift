@@ -13,29 +13,37 @@ final class MockAPIService: APIServiceProviding {
     var listAPI: any ListDataProviding
     var itemAPI: any ItemDataProviding
     var statsAPI: any StatsDataProviding
+    var updateAPI: any UpdateDataProviding
     
     init() {
         self.userAPI = MockUserAPIService()
         self.listAPI = MockListAPIService()
         self.itemAPI = MockItemAPIService()
         self.statsAPI = MockStatsAPIService()
+        self.updateAPI = MockUpdateAPIService()
     }
     
 }
 
 final class MockUserAPIService: UserDataProviding {
-    func authenticateUser(_ credentials: Credentials) async throws -> LoginResponse {
+    func fetchUserMetadata() async throws -> UserMetadataResponse {
+        try await simulateNetworkDelay()
+        return MockData.userMetadata
+    }
+    
+    func updateProfileName(userId: String, firstName: String, lastName: String) async throws -> UpdateProfileResponse {
+        try await simulateNetworkDelay()
+        return MockData.updateProfile
+    }
+    
+    func authenticateUser(_ credentials: Credentials) async throws -> AuthResponse {
         try await simulateNetworkDelay()
         return MockData.loggedInUser
     }
     
-    func performLogout() async {
-        return
-    }
-    
-    func resetPassword(model: ChangePasswordModel) async throws -> PasswordResetResponse {
+    func performLogout() async throws {
         try await simulateNetworkDelay()
-        return PasswordResetResponse(userId: MockData.loggedInUser.userInfo)
+        return
     }
     
     func enrollWithAccessKey(_ model: AccessKeyEnrollmentModel) async throws -> EnrollmentStateResponse {
@@ -43,18 +51,30 @@ final class MockUserAPIService: UserDataProviding {
         return EnrollmentStateResponse(success: true)
     }
     
-    func getUserDetails(forId userId: String) async throws -> CurrentUserResponse {
+    func updatePassword(oldPassword: String, newPassword: String) async throws -> ChangePasswordResponse {
         try await simulateNetworkDelay()
-        return CurrentUserResponse(user: MockData.userModel)
+        return MockData.updatePassword
     }
     
     
 }
 
 final class MockListAPIService: ListDataProviding {
-    func getHomeFeed() async throws -> HomeFeedResponse {
+//    func getHomeFeed() async throws -> HomeFeedResponse {
+//        try await simulateNetworkDelay()
+//        return HomeFeedResponse(feed:MockData.homeOverview)
+//    }
+    
+    func getHomeFeed() async throws -> AppDataResponse {
         try await simulateNetworkDelay()
-        return MockData.homeOverview
+        var mockData = MockData.appDataResponse
+        
+        mockData.appData.listOverviews[1].totalItems = Int.random(in: 1...100)
+        mockData.appData.listOverviews[1].purchasedItems = Int.random(in: 100...110)
+        mockData.appData.listOverviews[1].items[0].quantity = Int.random(in: 1...10)
+        mockData.appData.listOverviews[1].items[0].purchaseState = PurchaseState.allCases[Int.random(in: 0..<PurchaseState.allCases.count)]
+        
+        return mockData
     }
     
     func getOwnedItems() async throws -> OwnedListResponse {
@@ -72,46 +92,49 @@ final class MockListAPIService: ListDataProviding {
         return MockData.listDetail
     }
     
-    func createList(newList: String) async throws -> ListDetailResponse {
+    func createList(newList: NewListDetails) async throws -> AddListResponse {
         try await simulateNetworkDelay()
-        return MockData.listDetail
+        return MockData.addList
     }
     
     func deleteList(listId: String) async throws {
         try await simulateNetworkDelay()
         return
     }
-    
-    
 }
 
 final class MockItemAPIService: ItemDataProviding {
-    func addNewItem(toList listInContext: String, newItem: NewItemModel) async throws -> ListDetailResponse {
-        try await simulateNetworkDelay()
-        return MockData.listDetail
-    }
-    
-    func markItemPurchased(listId: String, itemInContext: Item, quantity: Int) async throws -> ListDetailResponse {
-        try await simulateNetworkDelay()
-        return MockData.listDetail
-    }
-    
-    func markItemRetracted(listId: String, itemInContext: Item) async throws -> ListDetailResponse {
-        try await simulateNetworkDelay()
-        return MockData.listDetail
-    }
-    
-    func updateItem(listInContext: String, updatedItem: NewItemModel) async throws -> ListDetailResponse {
-        try await simulateNetworkDelay()
-        return MockData.listDetail
-    }
-    
-    func deleteItem(fromList listId: String, item: Item) async throws {
+    func markItemRetracted(listId: String, itemId: String) async throws {
         try await simulateNetworkDelay()
         return
     }
     
+    func markItemPurchased(listId: String, itemInContext: String, quantityPurchased: Int, purchasePrice: Double) async throws -> ItemPurchaseResponse {
+        try await simulateNetworkDelay()
+        return MockData.itemPurchase
+    }
     
+    func addNewItem(toList listInContext: String, newItem: NewItemDetails) async throws -> AddItemResponse {
+        try await simulateNetworkDelay()
+        return MockData.addItem
+    }
+    
+    func updateItem(listInContext: String, updatedItem: NewItemDetails) async throws -> AddItemResponse {
+        try await simulateNetworkDelay()
+        return MockData.addItem
+    }
+    
+    func deleteItem(listId: String, itemId: String) async throws {
+        try await simulateNetworkDelay()
+        return
+    }
+}
+
+final class MockUpdateAPIService: UpdateDataProviding {
+    func fetchUpdateInfo() async throws -> UpdateInfoModelResponse {
+        try await simulateNetworkDelay()
+        return MockData.updateResponse
+    }
 }
 
 final class MockStatsAPIService: StatsDataProviding {
@@ -119,9 +142,11 @@ final class MockStatsAPIService: StatsDataProviding {
         try await simulateNetworkDelay()
         return MockData.stats
     }
-    
 }
 
 fileprivate func simulateNetworkDelay() async throws {
-    try await Task.sleep(nanoseconds: UInt64(1.0 * 1_000_000_000))
+    let randomPause = Double(Int.random(in: 1..<100))
+    let doublePause = randomPause/100.0
+    print("XXXX: Simulating network delay of \(doublePause) seconds")
+    try await Task.sleep(nanoseconds: UInt64(doublePause * 1_000_000_000))
 }

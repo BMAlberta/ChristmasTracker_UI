@@ -9,12 +9,17 @@ import SwiftUI
 
 @main
 struct ChristmasTrackerApp: App {
-    let sessionManager = UserSession()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let store: Store<AppState>
     
     init() {
         // Use mock store for development/demo
+#if MOCK
         self.store = StoreFactory.createMockStore()
+#else
+        self.store = StoreFactory.createProductionStore()
+#endif
+        
     }
     
     var body: some Scene {

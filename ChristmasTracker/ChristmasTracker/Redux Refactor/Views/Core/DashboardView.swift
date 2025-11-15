@@ -21,7 +21,7 @@ struct DashboardView: View {
             store: store,
             observe: { appState in
                 DashboardViewState(
-                    currentTab: store.state.ui.currentTab
+                    currentTab: appState.ui.currentTab
                 )
             }
         ))
@@ -39,19 +39,13 @@ struct DashboardView: View {
                     Text(AppTab.home.rawValue)
                 }
                 .tag(AppTab.home)
-            ListsView()
-                .tabItem {
-                    Image(systemName: AppTab.lists.iconName)
-                    Text(AppTab.lists.rawValue)
-                }
-                .tag(AppTab.lists)
-            StatsView_Redux()
+            BudgetDashboardView()
                 .tabItem {
                     Image(systemName: AppTab.stats.iconName)
                     Text(AppTab.stats.rawValue)
                 }
                 .tag(AppTab.stats)
-            ProfileView_Redux()
+            ProfileViewRedux(store: store)
                 .tabItem {
                     Image(systemName: AppTab.profile.iconName)
                     Text(AppTab.profile.rawValue)
@@ -70,6 +64,7 @@ struct DashboardView: View {
         }
         .onAppear {
 //            viewStore.dispatch(UIActions.checkForUpdate)
+            viewStore.updateStore(store)
         }
     }
 }
@@ -80,4 +75,9 @@ struct DashboardViewState: Equatable {
 
 #Preview {
     DashboardView(store: StoreEnvironmentKey.defaultValue)
+}
+
+#Preview {
+    DashboardView(store: StoreEnvironmentKey.defaultValue)
+        .preferredColorScheme(.dark)
 }

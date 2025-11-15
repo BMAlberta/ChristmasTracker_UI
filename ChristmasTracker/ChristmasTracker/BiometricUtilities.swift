@@ -52,7 +52,7 @@ struct BiometricUtility {
         return .enrolled
     }
     
-    enum BiometricState {
+    enum BiometricState: Codable {
         case unenrolled
         case enrolled
         case unavailable
