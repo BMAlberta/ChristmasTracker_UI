@@ -110,7 +110,7 @@ struct HomeView: View {
                         .padding(EdgeInsets(top: 0, leading: 0, bottom: -32, trailing: 0))
                     
                     ActivityListView(store: store)
-                        .background(.white)
+                        .background(.clear)
                         .cornerRadius(6)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)

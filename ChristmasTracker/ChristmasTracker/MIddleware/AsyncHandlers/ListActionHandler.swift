@@ -43,9 +43,9 @@ struct ListActionHandler: ListActionHandling {
         case .addListFlowComplete:
             break
         case .deleteList:
-            fatalError("ListActionHandler: \(action) not implemented")
+            break
         case .deleteListSuccess:
-            fatalError("ListActionHandler: \(action) not implemented")
+            break
         case .viewListDetails(_):
             break
         case .resetListDetails:
