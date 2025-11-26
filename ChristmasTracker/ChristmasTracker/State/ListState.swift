@@ -74,9 +74,7 @@ struct ListUtility {
         let lists = appState.list.listSummaries
         
         guard let listIndex = lists.firstIndex(where: { $0.id == id }) else {
-            #if DEBUG
             return 0
-            #endif
         }
         return listIndex
     }
@@ -93,9 +91,7 @@ struct ListUtility {
         let listInContext = appState.list.listSummaries[listIndex]
         
         guard let itemIndexInContext = listInContext.items.firstIndex(where: { $0.id == itemId }) else {
-        #if DEBUG
-        return 0
-        #endif
+            return 0
         }
         
         return itemIndexInContext
