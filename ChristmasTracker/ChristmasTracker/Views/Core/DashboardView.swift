@@ -41,7 +41,7 @@ struct DashboardView: View {
                     Text(AppTab.home.rawValue)
                 }
                 .tag(AppTab.home)
-            BudgetDashboardView()
+            BudgetDashboardView(viewModel: StatsViewModel())
                 .tabItem {
                     Image(systemName: AppTab.stats.iconName)
                     Text(AppTab.stats.rawValue)

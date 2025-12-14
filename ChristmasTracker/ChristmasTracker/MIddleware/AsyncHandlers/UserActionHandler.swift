@@ -55,9 +55,13 @@ struct UserActionHandler: UserActionHandling {
                         dispatch(ListActions.loadHomeFeed)
                     }
                     
+                } catch let error as UserError {
+                    await MainActor.run {
+                        dispatch(UserActions.loginError(error))
+                    }
                 } catch {
                     await MainActor.run {
-                        dispatch(UserActions.loginError(error as! UserError))
+                        dispatch(UserActions.loginError(.authenticationFailed))
                     }
                 }
             }
@@ -75,6 +79,37 @@ struct UserActionHandler: UserActionHandling {
             dispatch(UIActions.setCurrentTab(.home))
         case .loginErrorsCleared:
             break
+            
+        case .checkForSession:
+            Task {
+                do {
+                    let _ = try await apiService.userAPI.checkSession()
+                    await MainActor.run {
+                        dispatch(UserActions.checkForSessionSuccess)
+                    }
+                    
+                }  catch let error as UserError {
+                    await MainActor.run {
+                        dispatch(UserActions.checkForSessionError(error))
+                    }
+                } catch let err {
+                    print(err)
+                    await MainActor.run {
+                        dispatch(UserActions.checkForSessionError(.authenticationFailed))
+                    }
+                }
+            }
+            
+            
+        case .checkForSessionSuccess:
+            break
+        case .checkForSessionError(_):
+            Task {
+                await MainActor.run {
+                    dispatch(UserActions.logout)
+                }
+            }
+    
         case .submitPasswordChange(currentPassword: let currentPassword, newPassword: let newPassword):
             Task {
                 do {
@@ -82,14 +117,23 @@ struct UserActionHandler: UserActionHandling {
                     await MainActor.run {
                         dispatch(UserActions.passwordChangeSuccess)
                     }
-                } catch {
+                }  catch let error as UserError {
                     await MainActor.run {
-                        dispatch(UserActions.passwordChangeError(error as! UserError))
+                        dispatch(UserActions.passwordChangeError(error))
+                    }
+                } catch let err {
+                    print(err)
+                    await MainActor.run {
+                        dispatch(UserActions.passwordChangeError(.emailNotVerified))
                     }
                 }
             }
         case .passwordChangeSuccess:
-            dispatch(UserActions.refreshMetadata)
+            Task {
+                await MainActor.run {
+                    dispatch(UserActions.refreshMetadata)
+                }
+            }
         case .passwordChangeError(_):
             break
         case .passwordChangeFlowComplete:
@@ -101,9 +145,13 @@ struct UserActionHandler: UserActionHandling {
                     await MainActor.run {
                         dispatch(UserActions.updateProfileNameSuccess)
                     }
+                } catch let error as UserError {
+                    await MainActor.run {
+                        dispatch(UserActions.updateProfileNameError(error))
+                    }
                 } catch {
                     await MainActor.run {
-                        dispatch(UserActions.updateProfileNameError(error as! UserError))
+                        dispatch(UserActions.updateProfileNameError(.authenticationFailed))
                     }
                 }
             }
@@ -165,9 +213,13 @@ struct UserActionHandler: UserActionHandling {
                     await MainActor.run {
                         dispatch(UserActions.disableBiometricsSuccess)
                     }
+                } catch let error as UserError {
+                    await MainActor.run {
+                        dispatch(UserActions.disableBiometricsError(error))
+                    }
                 } catch {
                     await MainActor.run {
-                        dispatch(UserActions.disableBiometricsError(error as! UserError))
+                        dispatch(UserActions.disableBiometricsError(.authenticationFailed))
                     }
                 }
             }
@@ -187,16 +239,20 @@ struct UserActionHandler: UserActionHandling {
                     await MainActor.run {
                         dispatch(UserActions.metadataRefreshed(metadata))
                     }
+                }catch let error as UserError {
+                    await MainActor.run {
+                        dispatch(UserActions.refreshMetadataError(error))
+                    }
                 } catch {
                     await MainActor.run {
-                        dispatch(UserActions.refreshMetadataError(error as! UserError))
+                        dispatch(UserActions.refreshMetadataError(.authenticationFailed))
                     }
                 }
             }
         case .metadataRefreshed:
             break
         case .refreshMetadataError(let error):
-            fatalError("UserActionHandler: \(action) not implemented")
+            break
         }
     }
     

@@ -20,6 +20,7 @@ struct UserState: Codable, Equatable {
     var updateNameSuccess: Bool
     var changePasswordSuccess: Bool
     var passwordChangeRequired: Bool
+    var sessionInvalidated: Bool
     
     
     
@@ -35,7 +36,8 @@ struct UserState: Codable, Equatable {
         metadata: UserMetadata.defaultMetadata(),
         updateNameSuccess: false,
         changePasswordSuccess: false,
-        passwordChangeRequired: false
+        passwordChangeRequired: false,
+        sessionInvalidated: false
     )
     
     var userName: String {

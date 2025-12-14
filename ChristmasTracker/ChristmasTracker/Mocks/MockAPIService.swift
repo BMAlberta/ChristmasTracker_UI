@@ -56,7 +56,10 @@ final class MockUserAPIService: UserDataProviding {
         return MockData.updatePassword
     }
     
-    
+    func checkSession() async throws {
+        try await simulateNetworkDelay()
+        return
+    }
 }
 
 final class MockListAPIService: ListDataProviding {

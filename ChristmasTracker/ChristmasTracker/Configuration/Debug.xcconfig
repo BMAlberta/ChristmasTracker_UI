@@ -10,6 +10,6 @@
 #include "Base.xcconfig"
 
 APP_NAME = Dev - $(inherited)
-//BASE_API_HOST = 127.0.0.1:3000
-BASE_API_HOST = 10.1.20.179:3000
+BASE_API_HOST = 127.0.0.1:3001  
+//BASE_API_HOST = 10.1.20.179:3000
 API_SCHEME = http:

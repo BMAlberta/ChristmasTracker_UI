@@ -15,6 +15,9 @@ enum UserActions: UserAction {
     case logout
     case logoutSuccess
     case loginErrorsCleared
+    case checkForSession
+    case checkForSessionSuccess
+    case checkForSessionError(UserError)
 
     
     // Registration
@@ -58,6 +61,9 @@ enum UserActions: UserAction {
         case .logout: return "USER_LOGOUT"
         case .logoutSuccess: return "USER_LOGOUT_SUCCESS"
         case .loginErrorsCleared: return "USER_LOGIN_ERRORS_CLEARED"
+        case . checkForSession: return "USER_CHECK_FOR_SESSION"
+        case .checkForSessionSuccess: return "USER_CHECK_FOR_SESSION_SUCCESS"
+        case .checkForSessionError: return "USER_CHECK_FOR_SESSION_ERROR"
         case .submitPasswordChange: return "USER_SUBMIT_PASSWORD_CHANGE"
         case .passwordChangeSuccess: return "USER_PASSWORD_CHANGE_SUCCESS"
         case .passwordChangeError: return "USER_PASSWORD_CHANGE_ERROR"

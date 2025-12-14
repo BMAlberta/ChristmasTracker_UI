@@ -27,6 +27,7 @@ func userReducer(state: UserState, action: any Action) -> UserState {
             newState.isLoggedIn = true
             newState.teaser = Teaser(type: .greeting, name: user.firstName, message: "Welcome to the 2025 Christmas Tracker!")
             newState.passwordChangeRequired = user.pcr
+            newState.sessionInvalidated = false
             
         case .loginError(_):
             newState.isLoading = false
@@ -50,6 +51,20 @@ func userReducer(state: UserState, action: any Action) -> UserState {
             newState.isLoggedIn = false
             newState.currentUser = nil
             newState.error = nil
+            newState.sessionInvalidated = false
+            
+        case .checkForSession:
+            newState.isLoading = true
+            newState.error = nil
+            
+        case .checkForSessionSuccess:
+            newState.isLoading = false
+            newState.error = nil
+            newState.sessionInvalidated = false
+            
+        case .checkForSessionError(let error):
+            newState.isLoading = false
+            newState.sessionInvalidated = true
         
         case .submitPasswordChange(currentPassword: _, newPassword: _):
             newState.isLoading = true

@@ -90,7 +90,9 @@ struct LoginView: View {
                     }
                     UIApplication.shared.open(updateUrl)
                 },
-                secondaryButton: .cancel()
+                secondaryButton: .cancel() {
+                    viewStore.dispatch(UIActions.hideUpdateDialog)
+                }
             )
         }
     }

@@ -148,7 +148,6 @@ actor ItemAPIService: ItemDataProviding {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         try APIService.validateResponse(response)
-        let _ = try JSONDecoder().decode(NetworkResponse<ItemPurchaseResponse>.self, from: data)
         
         return
     }

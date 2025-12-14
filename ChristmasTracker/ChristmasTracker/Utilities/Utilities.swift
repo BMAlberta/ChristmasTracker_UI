@@ -54,6 +54,7 @@ struct Configuration {
         case deleteItem = "/tracker/lists/details/"
         case homeFeed = "/tracker/overview/list"
         case userMetadata = "/tracker/users/metadata/list"
+        case ping = "/tracker/auth/ping"
     }
     
     static var appVersion: String {

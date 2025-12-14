@@ -22,6 +22,7 @@
 		D30F01BC2EA31C2500A6B133 /* AddItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30F01BB2EA31C2500A6B133 /* AddItemView.swift */; };
 		D30F01C02EA3248700A6B133 /* ListDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30F01BF2EA3248700A6B133 /* ListDetailView.swift */; };
 		D31DC7392EA82827009213A8 /* AnimatedCheckmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31DC7382EA82827009213A8 /* AnimatedCheckmarkView.swift */; };
+		D327C7CB2EEE0C9A00ADDEA8 /* StatsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D327C7CA2EEE0C9A00ADDEA8 /* StatsViewModel.swift */; };
 		D358FDB42E8E0B28000240F6 /* Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDB32E8E0B28000240F6 /* Actions.swift */; };
 		D358FDB62E8E0B94000240F6 /* UserActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDB52E8E0B94000240F6 /* UserActions.swift */; };
 		D358FDB82E8E0D1C000240F6 /* UIActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDB72E8E0D1C000240F6 /* UIActions.swift */; };
@@ -50,7 +51,7 @@
 		D358FDF02E91B3AC000240F6 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDEF2E91B3AC000240F6 /* DashboardView.swift */; };
 		D358FDF22E91B592000240F6 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDF12E91B592000240F6 /* HomeView.swift */; };
 		D358FDF62E91B5A2000240F6 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDF52E91B5A2000240F6 /* ProfileView.swift */; };
-		D358FDF82E91B5B2000240F6 /* StatsView_Redux.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDF72E91B5B2000240F6 /* StatsView_Redux.swift */; };
+		D358FDF82E91B5B2000240F6 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDF72E91B5B2000240F6 /* StatsView.swift */; };
 		D358FDFA2E91B741000240F6 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDF92E91B741000240F6 /* MockData.swift */; };
 		D358FDFC2E91B777000240F6 /* MockAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDFB2E91B777000240F6 /* MockAPIService.swift */; };
 		D358FDFE2E91BD29000240F6 /* ActivityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358FDFD2E91BD29000240F6 /* ActivityModels.swift */; };
@@ -130,6 +131,7 @@
 		D30F01BB2EA31C2500A6B133 /* AddItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddItemView.swift; sourceTree = "<group>"; };
 		D30F01BF2EA3248700A6B133 /* ListDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDetailView.swift; sourceTree = "<group>"; };
 		D31DC7382EA82827009213A8 /* AnimatedCheckmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedCheckmarkView.swift; sourceTree = "<group>"; };
+		D327C7CA2EEE0C9A00ADDEA8 /* StatsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsViewModel.swift; sourceTree = "<group>"; };
 		D358FDB32E8E0B28000240F6 /* Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Actions.swift; sourceTree = "<group>"; };
 		D358FDB52E8E0B94000240F6 /* UserActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserActions.swift; sourceTree = "<group>"; };
 		D358FDB72E8E0D1C000240F6 /* UIActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIActions.swift; sourceTree = "<group>"; };
@@ -157,7 +159,7 @@
 		D358FDEF2E91B3AC000240F6 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		D358FDF12E91B592000240F6 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		D358FDF52E91B5A2000240F6 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
-		D358FDF72E91B5B2000240F6 /* StatsView_Redux.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView_Redux.swift; sourceTree = "<group>"; };
+		D358FDF72E91B5B2000240F6 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		D358FDF92E91B741000240F6 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		D358FDFB2E91B777000240F6 /* MockAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIService.swift; sourceTree = "<group>"; };
 		D358FDFD2E91BD29000240F6 /* ActivityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityModels.swift; sourceTree = "<group>"; };
@@ -517,7 +519,8 @@
 		D3D78A732EB6FDE600DC8DCF /* Stats */ = {
 			isa = PBXGroup;
 			children = (
-				D358FDF72E91B5B2000240F6 /* StatsView_Redux.swift */,
+				D358FDF72E91B5B2000240F6 /* StatsView.swift */,
+				D327C7CA2EEE0C9A00ADDEA8 /* StatsViewModel.swift */,
 			);
 			path = Stats;
 			sourceTree = "<group>";
@@ -710,6 +713,7 @@
 				D38378AA25B20CAA005AD98D /* ChristmasTrackerApp.swift in Sources */,
 				D358FDC42E8E1319000240F6 /* AppReducer.swift in Sources */,
 				D358FDD52E8E2473000240F6 /* ListAPIService.swift in Sources */,
+				D327C7CB2EEE0C9A00ADDEA8 /* StatsViewModel.swift in Sources */,
 				D358FDC62E8E13B4000240F6 /* UIReducer.swift in Sources */,
 				D358FDCE2E8E148C000240F6 /* Middleware.swift in Sources */,
 				D358FE042E91FAB5000240F6 /* ActivityState.swift in Sources */,
@@ -761,7 +765,7 @@
 				D3D789FE2EAFEB0600DC8DCF /* ProfileEditNameView.swift in Sources */,
 				0BD8ECA62CE26A5F004307E8 /* EducationView.swift in Sources */,
 				D358FDFC2E91B777000240F6 /* MockAPIService.swift in Sources */,
-				D358FDF82E91B5B2000240F6 /* StatsView_Redux.swift in Sources */,
+				D358FDF82E91B5B2000240F6 /* StatsView.swift in Sources */,
 				D358FDE02E8F5794000240F6 /* StoreFactory.swift in Sources */,
 				D358FDF02E91B3AC000240F6 /* DashboardView.swift in Sources */,
 				0B73EC432922DABA000FD600 /* ServiceCache.swift in Sources */,
@@ -891,11 +895,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
@@ -904,11 +906,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.0;
+				MARKETING_VERSION = 4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Tracker - Development";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SWIFT_VERSION = 5.0;
@@ -1088,11 +1089,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
@@ -1101,11 +1100,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.0;
+				MARKETING_VERSION = 4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Tracker - Development";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SWIFT_VERSION = 5.0;
@@ -1121,11 +1119,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
@@ -1134,11 +1130,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.0;
+				MARKETING_VERSION = 4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Tracker - Development";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SWIFT_VERSION = 5.0;
@@ -1299,11 +1294,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ChristmasTracker/ChristmasTracker.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"ChristmasTracker/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2W5W9XTGL6;
+				DEVELOPMENT_TEAM = 2W5W9XTGL6;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = ChristmasTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Christmas Tracker";
@@ -1312,11 +1305,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.0;
+				MARKETING_VERSION = 4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Tracker - Development";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = YES;
 				SWIFT_VERSION = 5.0;

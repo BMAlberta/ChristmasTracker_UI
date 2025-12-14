@@ -14,7 +14,7 @@ struct PurchaseStat: Codable {
     let totalSpent: Double
     
     /// Number of items purchased.
-    let purchasedItems: Int
+    let itemPurchased: Int
     
     /// List identifier.
     let listId: String
@@ -30,7 +30,7 @@ struct PurchaseStat: Codable {
     
     init() {
         self.totalSpent = 0.0
-        self.purchasedItems = 0
+        self.itemPurchased = 0
         self.listId = ""
         self.listName = ""
         self.purchaseYear = ""

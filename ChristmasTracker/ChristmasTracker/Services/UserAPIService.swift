@@ -21,6 +21,8 @@ protocol UserDataProviding {
     func fetchUserMetadata() async throws -> UserMetadataResponse
     
     func updatePassword(oldPassword: String, newPassword: String) async throws -> ChangePasswordResponse
+    
+    func checkSession() async throws
 }
 
 
@@ -135,9 +137,25 @@ actor UserAPIService: UserDataProviding {
         let (data, response) = try await seesion.data(for: request)
         
         try APIService.validateResponse(response)
-        
+        print(String(data: data, encoding: .utf8))
         let changePasswordResponse = try decoder.decode(NetworkResponse<ChangePasswordResponse>.self, from: data)
         
         return changePasswordResponse.payload
+    }
+    
+    func checkSession() async throws {
+        let urlString = Configuration.getUrl(forKey: .ping)
+        
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidRequest
+        }
+        
+        var request = NetworkUtility.createBaseRequest(url: url, method: .get)
+        
+        let (data, response) = try await seesion.data(for: request)
+
+        try APIService.validateResponse(response)
+
+        return
     }
 }

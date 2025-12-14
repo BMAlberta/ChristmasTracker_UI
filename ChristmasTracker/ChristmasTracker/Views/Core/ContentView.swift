@@ -20,6 +20,7 @@ struct ContentView: View {
                 ContentViewState(
                     currentTab: appState.ui.currentTab,
                     isLoggedIn: appState.user.isLoggedIn,
+                    showingSessionExpiredAlert: appState.user.sessionInvalidated
                 )
             }
         ))
@@ -32,6 +33,13 @@ struct ContentView: View {
                     // Update viewStore to use environment store
                     updateViewStore()
                     viewStore.dispatch(UserActions.checkForBiometrics)
+                }
+                .alert("Session Expired", isPresented: .constant(viewStore.state.showingSessionExpiredAlert)) {
+                    Button("OK") {
+                        viewStore.dispatch(UserActions.loginErrorsCleared)
+                    }
+                } message: {
+                    Text("Your session has expired and you have been logged out. Please log back in to continue.")
                 }
         } else {
             DashboardView(store: store)
@@ -46,6 +54,7 @@ struct ContentView: View {
 struct ContentViewState: Equatable {
     let currentTab: AppTab
     let isLoggedIn: Bool
+    let showingSessionExpiredAlert: Bool
 }
 
 
