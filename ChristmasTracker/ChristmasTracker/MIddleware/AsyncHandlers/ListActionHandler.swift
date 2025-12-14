@@ -176,11 +176,11 @@ struct ListActionHandler: ListActionHandling {
         case .listErrorsCleared:
             break
         case .loadActivity:
-            fatalError("ListActionHandler: \(action) not implemented")
+            break
         case .activityLoaded:
-            fatalError("ListActionHandler: \(action) not implemented")
+            break
         case .activityError(_):
-            fatalError("ListActionHandler: \(action) not implemented")
+            break
         case .loadHomeFeed:
             Task {
                 do {

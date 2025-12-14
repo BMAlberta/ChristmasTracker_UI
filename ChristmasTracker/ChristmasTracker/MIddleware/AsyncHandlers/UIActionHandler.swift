@@ -34,7 +34,7 @@ struct UIActionHandler: UIActionHandling {
                         dispatch(UIActions.updateCheckComplete(updateResponse.version))
                     }
                 } catch {
-                    // TODO: Add update failure case?
+                    print(error)
                 }
             }
         case .updateCheckComplete(let updateInfo):

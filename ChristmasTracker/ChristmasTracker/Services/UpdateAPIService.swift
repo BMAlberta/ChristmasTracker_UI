@@ -23,8 +23,8 @@ actor UpdateAPIService: UpdateDataProviding {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         try APIService.validateResponse(response)
-        let updateResponse = try JSONDecoder().decode(NetworkResponse<UpdateInfoModelResponse>.self, from: data)
+        let updateResponse = try JSONDecoder().decode(UpdateInfoModelResponse.self, from: data)
         
-        return updateResponse.payload
+        return updateResponse
     }
 }

@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct ChristmasTrackerApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     let store: Store<AppState>
     
     init() {
@@ -35,6 +36,12 @@ struct ChristmasTrackerApp: App {
 //                    UIApplication.shared.addTapGestureRecognizer()
 //                }
             ContentView(store: store)
+        }.onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                if store.state.user.isLoggedIn {
+                    store.dispatch(UserActions.checkForSession)
+                }
+            }
         }
     }
 }

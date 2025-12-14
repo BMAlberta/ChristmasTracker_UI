@@ -87,17 +87,17 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showingEditNameSheet) {
             ProfileEditNameView(store: store)
-                .presentationBackground(.white)
+                .presentationBackground(Color.background)
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingChangePassword) {
             ProfileChangePasswordView(store: store)
-                .presentationBackground(.white)
+                .presentationBackground(Color.background)
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingSignInOptionsSheet) {
             ProfileSignInOptionsView(store: store)
-                .presentationBackground(.white)
+                .presentationBackground(Color.background)
                 .presentationDetents([.fraction(0.4)])
         }
         .alert("Reset Cache", isPresented: $showingClearCacheSheet) {
@@ -329,6 +329,10 @@ struct ProfileDetailsView: View {
             Divider()
             
             ProfileDetailRow(title: "Password Age (days)", dataPoint: "\(FormatUtility.calculateTimeInterval(from: viewStore.state.metadata.lastPasswordChange))")
+            
+            Divider()
+            
+            ProfileDetailRow(title: "App Version", dataPoint: Configuration.appVersion)
         }
 
         .background(Color.background)
