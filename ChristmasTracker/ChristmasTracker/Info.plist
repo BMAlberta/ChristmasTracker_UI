@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>API_BASE_URL</key>
+    <string>$(API_BASE_URL)</string>
+    <key>CACHE_DURATION</key>
+    <string>$(CACHE_DURATION)</string>
+    <key>SESSION_TIMEOUT</key>
+    <string>$(SESSION_TIMEOUT)</string>
+    <key>BACKGROUND_REFRESH</key>
+    <string>$(BACKGROUND_REFRESH)</string>
+    <key>LOG_FLUSH_INTERVAL</key>
+    <string>$(LOG_FLUSH_INTERVAL)</string>
+</dict>
+</plist>

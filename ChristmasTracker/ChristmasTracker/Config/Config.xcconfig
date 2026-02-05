@@ -1,0 +1,32 @@
+//
+//  Config.xcconfig
+//  ChristmasTracker
+//
+//  Created by Brian Alberta on 2/3/26.
+//
+
+// Configuration settings file format documentation can be found at:
+// https://developer.apple.com/documentation/xcode/adding-a-build-configuration-file-to-your-project
+
+// Christmas Tracker - Production Configuration
+// iOS 26.0 Minimum, Swift 6
+// Platform
+IOS_DEPLOYMENT_TARGET = 26.0
+SWIFT_VERSION = 6.0
+
+// Bundle
+PRODUCT_BUNDLE_IDENTIFIER = com.christmastracker.ios
+PRODUCT_NAME = $(TARGET_NAME)
+
+// API Configuration
+API_BASE_URL = https://api.christmastracker.com
+
+// Custom App Configuration
+CACHE_DURATION = 900        // 15 minutes
+SESSION_TIMEOUT = 7200      // 2 hours
+BACKGROUND_REFRESH = 900    // 15 minutes
+LOG_FLUSH_INTERVAL = 60     // 60 seconds
+
+// Build Settings
+ENABLE_BITCODE = NO
+ENABLE_TESTABILITY = NO

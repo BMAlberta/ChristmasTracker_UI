@@ -1,0 +1,28 @@
+//
+//  Config-Debug.xcconfig
+//  ChristmasTracker
+//
+//  Created by Brian Alberta on 2/3/26.
+//
+
+// Configuration settings file format documentation can be found at:
+// https://developer.apple.com/documentation/xcode/adding-a-build-configuration-file-to-your-project
+
+// Christmas Tracker - Debug Configuration
+// Includes production settings with debug overrides
+#include "Config.xcconfig"
+
+// Debug Overrides
+PRODUCT_BUNDLE_IDENTIFIER = com.christmastracker.ios.dev
+API_BASE_URL = https:/ /api-dev.christmastracker.com
+
+// Debug Build Settings
+ENABLE_TESTABILITY = YES
+GCC_OPTIMIZATION_LEVEL = 0
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+
+// Custom App Configuration (Debug Values)
+CACHE_DURATION = 30     // 30 seconds (faster testing)
+SESSION_TIMEOUT = 300   // 5 minutes
+BACKGROUND_REFRESH = 60 // 1 minute
+LOG_FLUSH_INTERVAL = 15 // 15 seconds

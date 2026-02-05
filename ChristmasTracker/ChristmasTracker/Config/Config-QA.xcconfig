@@ -1,0 +1,26 @@
+//
+//  Config-QA.xcconfig
+//  ChristmasTracker
+//
+//  Created by Brian Alberta on 2/3/26.
+//
+
+// Configuration settings file format documentation can be found at:
+// https://developer.apple.com/documentation/xcode/adding-a-build-configuration-file-to-your-project
+
+// Christmas Tracker - QA/UAT Configuration
+// Includes production settings with QA overrides
+#include "Config.xcconfig"
+
+// QA Overrides
+PRODUCT_BUNDLE_IDENTIFIER = com.christmastracker.ios.qa
+API_BASE_URL = https:/ /api-qa.christmastracker.com
+
+// Shorter timeouts for QA testing
+CACHE_DURATION = 60         // 1 minute
+SESSION_TIMEOUT = 1800      // 30 minutes
+BACKGROUND_REFRESH = 300    // 5 minutes
+LOG_FLUSH_INTERVAL = 30     // 30 seconds
+
+// Enable testability
+ENABLE_TESTABILITY = YES
