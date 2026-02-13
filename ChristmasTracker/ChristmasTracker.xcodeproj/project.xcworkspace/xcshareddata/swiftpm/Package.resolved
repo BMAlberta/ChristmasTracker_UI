@@ -1,0 +1,24 @@
+{
+  "originHash" : "c7232363db7e7794a24b8bdf39ebf67eec12581d068b81b1bd6b0c4aaec8d0c4",
+  "pins" : [
+    {
+      "identity" : "newrelic-ios-agent-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/newrelic/newrelic-ios-agent-spm",
+      "state" : {
+        "revision" : "939325cf0d4746f6eebe2430d3bb44d06ecd29d2",
+        "version" : "7.6.1"
+      }
+    },
+    {
+      "identity" : "sentry-cocoa",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/getsentry/sentry-cocoa.git",
+      "state" : {
+        "revision" : "f1eefffd88cd6dfe5751159a3b32ff3c8e5b3b32",
+        "version" : "9.4.0"
+      }
+    }
+  ],
+  "version" : 3
+}

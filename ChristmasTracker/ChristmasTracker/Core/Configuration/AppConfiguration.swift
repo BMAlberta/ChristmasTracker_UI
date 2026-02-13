@@ -25,7 +25,7 @@ struct AppConfiguration {
     /// Duration to cache network responses (seconds)
     /// Production: 900 (15 minutes)
     /// Debug: 30 (30 seconds)
-    static let cacheDuration: TimeInterval = {
+    nonisolated static let cacheDuration: TimeInterval = {
         guard let value = Bundle.main.infoDictionary?["CACHE_DURATION"] as? String,
               let duration = TimeInterval(value) else {
             return 900 // Default 15 minutes
