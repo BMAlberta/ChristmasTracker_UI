@@ -10,7 +10,7 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class DashboardViewModel {
+final class DashboardViewModel_old {
     
     // MARK: - Dependencies
     

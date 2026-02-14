@@ -12,6 +12,7 @@ struct ChristmasTrackerApp: App {
     // MARK: - State
     @State private var authService: AuthenticationService
     @State private var apiClient: APIClient
+    @State private var listService: ListService
     
     // MARK: - Initialization
     init() {
@@ -30,6 +31,19 @@ struct ChristmasTrackerApp: App {
 #else
         authRepository = NetworkAuthenticationRepository(apiClient: apiClient)
 #endif
+        
+        // List Service
+        let listRepository: ListRepository
+#if DEBUG
+        listRepository = MockListRepository()
+#else
+        listRepository = NetworkListRepository(apiClient: apiClient)
+#endif
+        let listDataStore = ListDataStore()
+        listService = ListService(
+            repository: listRepository,
+            dataStore: listDataStore
+        )
         // Create session manager
         let sessionManager = SessionManager(authRepository: authRepository)
         
@@ -45,6 +59,7 @@ struct ChristmasTrackerApp: App {
             ContentView()
                 .environment(\.authenticationService, authService)
                 .environment(\.apiClient, apiClient)
+                .environment(\.listService, listService)
         }
     }
 }

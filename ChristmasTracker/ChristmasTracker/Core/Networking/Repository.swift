@@ -15,9 +15,9 @@ protocol Repository: Sendable {
 // Marker protocol
 /// Example: List repository protocol
 /// (Will be fully implemented in Phase 5)
-protocol ListRepository: Repository {
-    func fetchLists() async throws -> [GiftList]
-}
+//protocol ListRepository: Repository {
+//    func fetchLists() async throws -> [GiftList]
+//}
 
 /// Example: Item repository protocol
 /// (Will be fully implemented in Phase 6)

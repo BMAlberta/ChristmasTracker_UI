@@ -7,62 +7,117 @@
 
 import SwiftUI
 struct DashboardView: View {
-    // MARK: - Environment
-    @Environment(\.authenticationService) private var authService
-    // MARK: - State
-    @State private var viewModel: DashboardViewModel
-    // MARK: - Initialization
-    init(apiClient: APIClient) {
-        self._viewModel = State(initialValue: DashboardViewModel(apiClient: apiClient))
-    }
+    @Environment(\.listService) private var listService
+    @State private var selectedListId: String?
+    @State private var showCreateSheet = false
+    @State private var listToDelete: GiftList?
+    @State private var searchText = ""
     var body: some View {
         NavigationStack {
             Group {
-                if viewModel.isLoading && viewModel.lists.isEmpty {
-                    // Initial loading
+                if listService.isLoading && listService.lists.isEmpty {
                     loadingView
-                } else if let error = viewModel.error, viewModel.lists.isEmpty {
-                    // Error state (only if no cached data)
+                } else if let error = listService.error, listService.lists.isEmpty {
                     ErrorStateView(error: error) {
-                        Task {
-                            await viewModel.loadLists()
-                        }
+                        Task { await listService.loadLists() }
                     }
-                } else if viewModel.lists.isEmpty {
-                    // Empty state
-                    EmptyStateView(
-                        icon: "gift.fill",
-                        title: "No Lists Yet",
-                        message: "Create your first gift list to get started",
-                        actionTitle: "Create List",
-                        action: {
-                            // TODO: Phase 5 - Navigate to create list
-                            print("Create list tapped")
-                        }
-                    )
+                } else if displayedLists.isEmpty {
+                    emptyStateView
                 } else {
-                    // Lists display
                     listsScrollView
                 }
             }
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Dashboard")
+            .navigationDestination(item: $selectedListId) { listId in
+                ListDetailView(listId: listId)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    filterMenu
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCreateSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search lists")
             .refreshable {
-                await viewModel.refreshLists()
+                await listService.refreshLists()
+            }
+            .sheet(isPresented: $showCreateSheet) {
+                CreateListView()
+            }
+            .confirmationDialog(
+                "Delete List",
+                isPresented: .constant(listToDelete != nil),
+                presenting: listToDelete
+            ) { list in
+                Button("Delete '\(list.name)'", role: .destructive) {
+                    Task {
+                        do {
+                            try await listService.deleteList(id: list.id)
+                            listToDelete = nil
+                        } catch {
+                            listToDelete = nil
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    listToDelete = nil
+                }
+            } message: { list in
+                Text("This will permanently delete '\(list.name)' and all its items.")
             }
             .task {
-                // Load lists on appear
-                if viewModel.lists.isEmpty {
-                    await viewModel.loadLists()
-                }
-                // Background refresh if stale
-                else if viewModel.shouldRefreshInBackground() {
-                    await viewModel.refreshLists()
+                if listService.lists.isEmpty {
+                    await listService.loadLists()
                 }
             }
         }
     }
+    // MARK: - Computed Properties
+    private var displayedLists: [GiftList] {
+        let filtered = listService.filteredLists
+        if searchText.isEmpty {
+            return filtered
+        } else {
+            return filtered.filter { list in
+                list.name.localizedCaseInsensitiveContains(searchText) ||
+                list.recipientName.localizedCaseInsensitiveContains(searchText) ||
+                (list.theme?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+        }
+    }
     // MARK: - Subviews
+    private var filterMenu: some View {
+        // Create local state that tracks service state
+        let binding = Binding(
+            get: { listService.currentFilter },
+            set: { listService.currentFilter = $0 }
+        )
+        
+        return Menu {
+            Picker("Filter", selection: binding) {
+                Label("All Lists", systemImage: "list.bullet")
+                    .tag(ListService.FilterType.all)
+                
+                Label("My Lists", systemImage: "person.fill")
+                    .tag(ListService.FilterType.owned)
+                
+                Label("Shared With Me", systemImage: "person.2.fill")
+                    .tag(ListService.FilterType.shared)
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+        }
+    }
+    
     private var loadingView: some View {
         ScrollView {
             LazyVStack(spacing: AppSpacing.lg) {
@@ -73,19 +128,45 @@ struct DashboardView: View {
             .padding(EdgeInsets.appScreenPadding)
         }
     }
+    private var emptyStateView: some View {
+        Group {
+            if searchText.isEmpty {
+                EmptyStateView(
+                    icon: "gift.fill",
+                    title: "No Lists Yet",
+                    message: "Create your first gift list to get started",
+                    actionTitle: "Create List"
+                ) {
+                    showCreateSheet = true
+                }
+            } else {
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "No Results",
+                    message: "No lists match '\(searchText)'"
+                )
+            }
+        }
+    }
     private var listsScrollView: some View {
         ScrollView {
             LazyVStack(spacing: AppSpacing.lg) {
-                // Last updated indicator
-                if let lastUpdated = viewModel.lastUpdated {
+                if let lastUpdated = listService.lastUpdated {
                     lastUpdatedView(date: lastUpdated)
                 }
-                // Lists
-                ForEach(viewModel.lists) { list in
+                ForEach(displayedLists) { list in
                     ListPreviewCard(list: list)
                         .onTapGesture {
-                            // TODO: Phase 5 - Navigate to list detail
-                            print("List tapped: \(list.name)")
+                            selectedListId = list.id
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if list.myRole == .owner {
+                                Button(role: .destructive) {
+                                    listToDelete = list
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                 }
             }
@@ -104,25 +185,17 @@ struct DashboardView: View {
         }
     }
 }
-// MARK: - Date Extension
-extension Date {
-    var timeAgoDisplay: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
-    }
-}
 #Preview("With Lists") {
-    DashboardView(apiClient: MockAPIClient.withMockData())
-        .environment(\.authenticationService, AuthenticationService(
-            repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+    DashboardView()
+        .environment(\.listService, ListService(
+            repository: MockListRepository(),
+            dataStore: ListDataStore()
         ))
 }
 #Preview("Empty") {
-    DashboardView(apiClient: MockAPIClient())
-        .environment(\.authenticationService, AuthenticationService(
-            repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+    DashboardView()
+        .environment(\.listService, ListService(
+            repository: MockListRepository(withMockData: false),
+            dataStore: ListDataStore()
         ))
 }

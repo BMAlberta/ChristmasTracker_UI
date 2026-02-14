@@ -9,7 +9,7 @@ import Foundation
 
 enum MockData {
     // MARK: - Users
-
+    
     static let user1 = User (
         id: "user-1",
         email: "john.doe@example.com",
@@ -27,49 +27,49 @@ enum MockData {
         updatedAt: Date()
     )
     // MARK: - Gift Lists
-//    static let list1 = GiftList(
-//        id: "list-1",
-//        name: "John's Christmas List",
-//        description: "Gifts for John",
-//        ownerId: user1.id,
-//        ownerName: user1.name,
-//        members: [
-//            ListMember(
-//                id: "member-1",
-//                userId: user1.id,
-//                userName: user1.name,
-//                role: .owner,
-//                invitationStatus: .accepted
-//            ),
-//            ListMember(
-//                id: "member-2",
-//                userId: user2.id,
-//                userName: user2.name,
-//                role: .member,
-//                invitationStatus: .accepted
-//            )
-//        ],
-//        createdAt: Date(),
-//        updatedAt: Date()
-//    )
-//    static let list2 = GiftList(
-//        id: "list-2",
-//        name: "Jane's Wishlist",
-//        description: "Gifts for Jane",
-//        ownerId: user2.id,
-//        ownerName: user2.name,
-//        members: [
-//            ListMember(
-//                id: "member-3",
-//                userId: user2.id,
-//                userName: user2.name,
-//                role: .owner,
-//                invitationStatus: .accepted
-//            )
-//        ],
-//        createdAt: Date(),
-//        updatedAt: Date()
-//    )
+    //    static let list1 = GiftList(
+    //        id: "list-1",
+    //        name: "John's Christmas List",
+    //        description: "Gifts for John",
+    //        ownerId: user1.id,
+    //        ownerName: user1.name,
+    //        members: [
+    //            ListMember(
+    //                id: "member-1",
+    //                userId: user1.id,
+    //                userName: user1.name,
+    //                role: .owner,
+    //                invitationStatus: .accepted
+    //            ),
+    //            ListMember(
+    //                id: "member-2",
+    //                userId: user2.id,
+    //                userName: user2.name,
+    //                role: .member,
+    //                invitationStatus: .accepted
+    //            )
+    //        ],
+    //        createdAt: Date(),
+    //        updatedAt: Date()
+    //    )
+    //    static let list2 = GiftList(
+    //        id: "list-2",
+    //        name: "Jane's Wishlist",
+    //        description: "Gifts for Jane",
+    //        ownerId: user2.id,
+    //        ownerName: user2.name,
+    //        members: [
+    //            ListMember(
+    //                id: "member-3",
+    //                userId: user2.id,
+    //                userName: user2.name,
+    //                role: .owner,
+    //                invitationStatus: .accepted
+    //            )
+    //        ],
+    //        createdAt: Date(),
+    //        updatedAt: Date()
+    //    )
     static let allLists = [sampleGiftList, sampleOwnedList]
     // MARK: - Gift Items
     static let item1 = GiftItem(
@@ -162,7 +162,7 @@ extension MockData {
 //        self.createdAt = try container.decode(Date.self, forKey: .createdAt)
 //        self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
 //    }
-//    
+//
 //    nonisolated func encode(to encoder: Encoder) throws {
 //        var container = encoder.container(keyedBy: CodingKeys.self)
 //        try container.encode(id, forKey: .id)
@@ -174,7 +174,7 @@ extension MockData {
 //        try container.encode(createdAt, forKey: .createdAt)
 //        try container.encode(updatedAt, forKey: .updatedAt)
 //    }
-//    
+//
 //    private enum CodingKeys: String, CodingKey {
 //        case id, name, description, ownerId, ownerName, members, createdAt, updatedAt
 //    }
@@ -184,8 +184,20 @@ struct ListMember: Identifiable, Codable, Sendable, Hashable {
     let id: String
     let userId: String
     let userName: String
-    let role: MemberRole
+    let userEmail: String?
+    let role: ListRole
+    let joinedAt: Date?
     let invitationStatus: InvitationStatus
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case userName = "user_name"
+        case userEmail = "user_email"
+        case role
+        case joinedAt = "joined_at"
+        case invitationStatus
+    }
 }
 enum MemberRole: String, Codable, Sendable {
     case owner

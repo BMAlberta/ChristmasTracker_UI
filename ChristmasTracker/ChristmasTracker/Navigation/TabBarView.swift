@@ -16,7 +16,7 @@ struct TabBarView: View {
     var body: some View {
         TabView(selection: $selection) {
             // Dashboard Tab
-            DashboardView(apiClient: apiClient)
+            DashboardView()
                 .tabItem {
                     Label(TabSelection.dashboard.title, systemImage: TabSelection.dashboard.icon)
                 }
