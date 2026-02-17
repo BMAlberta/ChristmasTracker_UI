@@ -7,6 +7,46 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D303C0672F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C04D2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.pdf */; };
+		D303C0682F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0612F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.pdf */; };
+		D303C0692F450B6A00BFF60A /* AGENTS.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0642F450B6A00BFF60A /* AGENTS.md */; };
+		D303C06A2F450B6A00BFF60A /* 02_Project_Structure_Blueprint.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0432F450B6A00BFF60A /* 02_Project_Structure_Blueprint.pdf */; };
+		D303C06B2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C04F2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.pdf */; };
+		D303C06C2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0582F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.md */; };
+		D303C06D2F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0462F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.md */; };
+		D303C06E2F450B6A00BFF60A /* 03_Design_System_Specification.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0452F450B6A00BFF60A /* 03_Design_System_Specification.pdf */; };
+		D303C06F2F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0512F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.pdf */; };
+		D303C0702F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0482F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.md */; };
+		D303C0712F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C04B2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.pdf */; };
+		D303C0722F450B6A00BFF60A /* Backend_Requirements_Phase3_Authentication.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0652F450B6A00BFF60A /* Backend_Requirements_Phase3_Authentication.md */; };
+		D303C0732F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0502F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.md */; };
+		D303C0742F450B6A00BFF60A /* 01_Architecture_Decision_Record.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0402F450B6A00BFF60A /* 01_Architecture_Decision_Record.md */; };
+		D303C0752F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0632F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.pdf */; };
+		D303C0762F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C05F2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.pdf */; };
+		D303C0772F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0552F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.pdf */; };
+		D303C0782F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C05A2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.md */; };
+		D303C0792F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C05B2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.pdf */; };
+		D303C07A2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C04E2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.md */; };
+		D303C07B2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0592F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.pdf */; };
+		D303C07C2F450B6A00BFF60A /* 01_Architecture_Decision_Record.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0412F450B6A00BFF60A /* 01_Architecture_Decision_Record.pdf */; };
+		D303C07D2F450B6A00BFF60A /* 02_Project_Structure_Blueprint.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0422F450B6A00BFF60A /* 02_Project_Structure_Blueprint.md */; };
+		D303C07E2F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0522F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.md */; };
+		D303C07F2F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0492F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.pdf */; };
+		D303C0802F450B6A00BFF60A /* 00_Implementation_Phases_Overview.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C03E2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.md */; };
+		D303C0812F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0562F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.md */; };
+		D303C0822F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0572F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.pdf */; };
+		D303C0832F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C04C2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.md */; };
+		D303C0842F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C05D2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.pdf */; };
+		D303C0852F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0622F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.md */; };
+		D303C0862F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0472F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.pdf */; };
+		D303C0872F450B6A00BFF60A /* 03_Design_System_Specification.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0442F450B6A00BFF60A /* 03_Design_System_Specification.md */; };
+		D303C0882F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0602F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.md */; };
+		D303C0892F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C05C2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.md */; };
+		D303C08A2F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C0532F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.pdf */; };
+		D303C08B2F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C0542F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.md */; };
+		D303C08C2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C05E2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.md */; };
+		D303C08D2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.md in Resources */ = {isa = PBXBuildFile; fileRef = D303C04A2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.md */; };
+		D303C08E2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.pdf in Resources */ = {isa = PBXBuildFile; fileRef = D303C03F2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.pdf */; };
 		D3C371D42F357BEE00C09FB4 /* NewRelic in Frameworks */ = {isa = PBXBuildFile; productRef = D3C371D32F357BEE00C09FB4 /* NewRelic */; };
 		D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = D3C371D62F357C3000C09FB4 /* SentrySwiftUI */; };
 /* End PBXBuildFile section */
@@ -29,6 +69,46 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D303C03E2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 00_Implementation_Phases_Overview.md; sourceTree = "<group>"; };
+		D303C03F2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 00_Implementation_Phases_Overview.pdf; sourceTree = "<group>"; };
+		D303C0402F450B6A00BFF60A /* 01_Architecture_Decision_Record.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 01_Architecture_Decision_Record.md; sourceTree = "<group>"; };
+		D303C0412F450B6A00BFF60A /* 01_Architecture_Decision_Record.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 01_Architecture_Decision_Record.pdf; sourceTree = "<group>"; };
+		D303C0422F450B6A00BFF60A /* 02_Project_Structure_Blueprint.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 02_Project_Structure_Blueprint.md; sourceTree = "<group>"; };
+		D303C0432F450B6A00BFF60A /* 02_Project_Structure_Blueprint.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 02_Project_Structure_Blueprint.pdf; sourceTree = "<group>"; };
+		D303C0442F450B6A00BFF60A /* 03_Design_System_Specification.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 03_Design_System_Specification.md; sourceTree = "<group>"; };
+		D303C0452F450B6A00BFF60A /* 03_Design_System_Specification.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 03_Design_System_Specification.pdf; sourceTree = "<group>"; };
+		D303C0462F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 04_Phase_1_Implementation_Guide.md; sourceTree = "<group>"; };
+		D303C0472F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 04_Phase_1_Implementation_Guide.pdf; sourceTree = "<group>"; };
+		D303C0482F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 05_Phase_2_Implementation_Guide.md; sourceTree = "<group>"; };
+		D303C0492F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 05_Phase_2_Implementation_Guide.pdf; sourceTree = "<group>"; };
+		D303C04A2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 06_Phase_3_Implementation_Guide.md; sourceTree = "<group>"; };
+		D303C04B2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 06_Phase_3_Implementation_Guide.pdf; sourceTree = "<group>"; };
+		D303C04C2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 06_Phase_3_Implementation_Guide_Part2.md; sourceTree = "<group>"; };
+		D303C04D2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 06_Phase_3_Implementation_Guide_Part2.pdf; sourceTree = "<group>"; };
+		D303C04E2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 07_Phase_4_Implementation_Guide.md; sourceTree = "<group>"; };
+		D303C04F2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 07_Phase_4_Implementation_Guide.pdf; sourceTree = "<group>"; };
+		D303C0502F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 08_Phase_5_Implementation_Guide_Part1.md; sourceTree = "<group>"; };
+		D303C0512F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 08_Phase_5_Implementation_Guide_Part1.pdf; sourceTree = "<group>"; };
+		D303C0522F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 08_Phase_5_Implementation_Guide_Part2.md; sourceTree = "<group>"; };
+		D303C0532F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 08_Phase_5_Implementation_Guide_Part2.pdf; sourceTree = "<group>"; };
+		D303C0542F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "09_Phase_5_Supplement_Sections_11-14.md"; sourceTree = "<group>"; };
+		D303C0552F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = "09_Phase_5_Supplement_Sections_11-14.pdf"; sourceTree = "<group>"; };
+		D303C0562F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "10_Phase_5_Supplement_Sections_1-10.md"; sourceTree = "<group>"; };
+		D303C0572F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = "10_Phase_5_Supplement_Sections_1-10.pdf"; sourceTree = "<group>"; };
+		D303C0582F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 10_Phase_6_Implementation_Guide_Part1.md; sourceTree = "<group>"; };
+		D303C0592F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 10_Phase_6_Implementation_Guide_Part1.pdf; sourceTree = "<group>"; };
+		D303C05A2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 10_Phase_6_Implementation_Guide_Part2.md; sourceTree = "<group>"; };
+		D303C05B2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 10_Phase_6_Implementation_Guide_Part2.pdf; sourceTree = "<group>"; };
+		D303C05C2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = 10_Phase_6_Implementation_Guide_Part3.md; sourceTree = "<group>"; };
+		D303C05D2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = 10_Phase_6_Implementation_Guide_Part3.pdf; sourceTree = "<group>"; };
+		D303C05E2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "11_Phase_6-5_Purchase_Management_Part1.md"; sourceTree = "<group>"; };
+		D303C05F2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = "11_Phase_6-5_Purchase_Management_Part1.pdf"; sourceTree = "<group>"; };
+		D303C0602F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "11_Phase_6-5_Purchase_Management_Part2.md"; sourceTree = "<group>"; };
+		D303C0612F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = "11_Phase_6-5_Purchase_Management_Part2.pdf"; sourceTree = "<group>"; };
+		D303C0622F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "11_Phase_6-5_Purchase_Management_Part3.md"; sourceTree = "<group>"; };
+		D303C0632F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = "11_Phase_6-5_Purchase_Management_Part3.pdf"; sourceTree = "<group>"; };
+		D303C0642F450B6A00BFF60A /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AGENTS.md; sourceTree = "<group>"; };
+		D303C0652F450B6A00BFF60A /* Backend_Requirements_Phase3_Authentication.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Backend_Requirements_Phase3_Authentication.md; sourceTree = "<group>"; };
 		D3C3714B2F32DFD100C09FB4 /* ChristmasTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChristmasTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3C371582F32DFD100C09FB4 /* ChristmasTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChristmasTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3C371622F32DFD100C09FB4 /* ChristmasTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChristmasTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -92,6 +172,54 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D303C0662F450B6A00BFF60A /* Docs */ = {
+			isa = PBXGroup;
+			children = (
+				D303C03E2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.md */,
+				D303C03F2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.pdf */,
+				D303C0402F450B6A00BFF60A /* 01_Architecture_Decision_Record.md */,
+				D303C0412F450B6A00BFF60A /* 01_Architecture_Decision_Record.pdf */,
+				D303C0422F450B6A00BFF60A /* 02_Project_Structure_Blueprint.md */,
+				D303C0432F450B6A00BFF60A /* 02_Project_Structure_Blueprint.pdf */,
+				D303C0442F450B6A00BFF60A /* 03_Design_System_Specification.md */,
+				D303C0452F450B6A00BFF60A /* 03_Design_System_Specification.pdf */,
+				D303C0462F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.md */,
+				D303C0472F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.pdf */,
+				D303C0482F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.md */,
+				D303C0492F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.pdf */,
+				D303C04A2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.md */,
+				D303C04B2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.pdf */,
+				D303C04C2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.md */,
+				D303C04D2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.pdf */,
+				D303C04E2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.md */,
+				D303C04F2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.pdf */,
+				D303C0502F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.md */,
+				D303C0512F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.pdf */,
+				D303C0522F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.md */,
+				D303C0532F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.pdf */,
+				D303C0542F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.md */,
+				D303C0552F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.pdf */,
+				D303C0562F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.md */,
+				D303C0572F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.pdf */,
+				D303C0582F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.md */,
+				D303C0592F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.pdf */,
+				D303C05A2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.md */,
+				D303C05B2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.pdf */,
+				D303C05C2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.md */,
+				D303C05D2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.pdf */,
+				D303C05E2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.md */,
+				D303C05F2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.pdf */,
+				D303C0602F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.md */,
+				D303C0612F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.pdf */,
+				D303C0622F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.md */,
+				D303C0632F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.pdf */,
+				D303C0642F450B6A00BFF60A /* AGENTS.md */,
+				D303C0652F450B6A00BFF60A /* Backend_Requirements_Phase3_Authentication.md */,
+			);
+			name = Docs;
+			path = ../Docs;
+			sourceTree = SOURCE_ROOT;
+		};
 		D3C371422F32DFD100C09FB4 = {
 			isa = PBXGroup;
 			children = (
@@ -99,6 +227,7 @@
 				D3C3715B2F32DFD100C09FB4 /* ChristmasTrackerTests */,
 				D3C371652F32DFD100C09FB4 /* ChristmasTrackerUITests */,
 				D3C3714C2F32DFD100C09FB4 /* Products */,
+				D303C0662F450B6A00BFF60A /* Docs */,
 			);
 			sourceTree = "<group>";
 		};
@@ -238,6 +367,46 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D303C0672F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.pdf in Resources */,
+				D303C0682F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.pdf in Resources */,
+				D303C0692F450B6A00BFF60A /* AGENTS.md in Resources */,
+				D303C06A2F450B6A00BFF60A /* 02_Project_Structure_Blueprint.pdf in Resources */,
+				D303C06B2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.pdf in Resources */,
+				D303C06C2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.md in Resources */,
+				D303C06D2F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.md in Resources */,
+				D303C06E2F450B6A00BFF60A /* 03_Design_System_Specification.pdf in Resources */,
+				D303C06F2F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.pdf in Resources */,
+				D303C0702F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.md in Resources */,
+				D303C0712F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.pdf in Resources */,
+				D303C0722F450B6A00BFF60A /* Backend_Requirements_Phase3_Authentication.md in Resources */,
+				D303C0732F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part1.md in Resources */,
+				D303C0742F450B6A00BFF60A /* 01_Architecture_Decision_Record.md in Resources */,
+				D303C0752F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.pdf in Resources */,
+				D303C0762F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.pdf in Resources */,
+				D303C0772F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.pdf in Resources */,
+				D303C0782F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.md in Resources */,
+				D303C0792F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part2.pdf in Resources */,
+				D303C07A2F450B6A00BFF60A /* 07_Phase_4_Implementation_Guide.md in Resources */,
+				D303C07B2F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part1.pdf in Resources */,
+				D303C07C2F450B6A00BFF60A /* 01_Architecture_Decision_Record.pdf in Resources */,
+				D303C07D2F450B6A00BFF60A /* 02_Project_Structure_Blueprint.md in Resources */,
+				D303C07E2F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.md in Resources */,
+				D303C07F2F450B6A00BFF60A /* 05_Phase_2_Implementation_Guide.pdf in Resources */,
+				D303C0802F450B6A00BFF60A /* 00_Implementation_Phases_Overview.md in Resources */,
+				D303C0812F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.md in Resources */,
+				D303C0822F450B6A00BFF60A /* 10_Phase_5_Supplement_Sections_1-10.pdf in Resources */,
+				D303C0832F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide_Part2.md in Resources */,
+				D303C0842F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.pdf in Resources */,
+				D303C0852F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part3.md in Resources */,
+				D303C0862F450B6A00BFF60A /* 04_Phase_1_Implementation_Guide.pdf in Resources */,
+				D303C0872F450B6A00BFF60A /* 03_Design_System_Specification.md in Resources */,
+				D303C0882F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part2.md in Resources */,
+				D303C0892F450B6A00BFF60A /* 10_Phase_6_Implementation_Guide_Part3.md in Resources */,
+				D303C08A2F450B6A00BFF60A /* 08_Phase_5_Implementation_Guide_Part2.pdf in Resources */,
+				D303C08B2F450B6A00BFF60A /* 09_Phase_5_Supplement_Sections_11-14.md in Resources */,
+				D303C08C2F450B6A00BFF60A /* 11_Phase_6-5_Purchase_Management_Part1.md in Resources */,
+				D303C08D2F450B6A00BFF60A /* 06_Phase_3_Implementation_Guide.md in Resources */,
+				D303C08E2F450B6A00BFF60A /* 00_Implementation_Phases_Overview.pdf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

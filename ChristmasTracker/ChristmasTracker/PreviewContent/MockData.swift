@@ -72,43 +72,6 @@ enum MockData {
     //    )
     static let allLists = [sampleGiftList, sampleOwnedList]
     // MARK: - Gift Items
-    static let item1 = GiftItem(
-        id: "item-1",
-        listId: sampleGiftList.id,
-        name: "Book: Swift Programming",
-        description: "Latest edition",
-        url: "https://example.com/book",
-        imageUrl: nil,
-        price: 29.99,
-        quantity: 1,
-        isPurchased: false,
-        isPending: false,
-        isOffList: false,
-        purchasedBy: nil,
-        purchasedAt: nil,
-        createdBy: user1.id,
-        createdAt: Date(),
-        updatedAt: Date()
-    )
-    static let item2 = GiftItem(
-        id: "item-2",
-        listId: sampleGiftList.id,
-        name: "Headphones",
-        description: "Noise cancelling",
-        url: nil,
-        imageUrl: nil,
-        price: 199.99,
-        quantity: 1,
-        isPurchased: true,
-        isPending: false,
-        isOffList: false,
-        purchasedBy: user2.id,
-        purchasedAt: Date(),
-        createdBy: user1.id,
-        createdAt: Date(),
-        updatedAt: Date()
-    )
-    static let allItems = [item1, item2]
 }
 
 extension MockData {
@@ -146,39 +109,7 @@ extension MockData {
         updatedAt: Date()
     )
 }
-// MARK: - Placeholder Models (Phase 1 only)
 
-//
-//// Explicitly declare nonisolated Codable conformance
-//extension GiftList: Codable {
-//    nonisolated init(from decoder: Decoder) throws {
-//        let container = try decoder.container(keyedBy: CodingKeys.self)
-//        self.id = try container.decode(String.self, forKey: .id)
-//        self.name = try container.decode(String.self, forKey: .name)
-//        self.description = try container.decodeIfPresent(String.self, forKey: .description)
-//        self.ownerId = try container.decode(String.self, forKey: .ownerId)
-//        self.ownerName = try container.decode(String.self, forKey: .ownerName)
-//        self.members = try container.decode([ListMember].self, forKey: .members)
-//        self.createdAt = try container.decode(Date.self, forKey: .createdAt)
-//        self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
-//    }
-//
-//    nonisolated func encode(to encoder: Encoder) throws {
-//        var container = encoder.container(keyedBy: CodingKeys.self)
-//        try container.encode(id, forKey: .id)
-//        try container.encode(name, forKey: .name)
-//        try container.encodeIfPresent(description, forKey: .description)
-//        try container.encode(ownerId, forKey: .ownerId)
-//        try container.encode(ownerName, forKey: .ownerName)
-//        try container.encode(members, forKey: .members)
-//        try container.encode(createdAt, forKey: .createdAt)
-//        try container.encode(updatedAt, forKey: .updatedAt)
-//    }
-//
-//    private enum CodingKeys: String, CodingKey {
-//        case id, name, description, ownerId, ownerName, members, createdAt, updatedAt
-//    }
-//}
 /// Placeholder ListMember model (will be replaced in Phase 5)
 struct ListMember: Identifiable, Codable, Sendable, Hashable {
     let id: String
@@ -209,23 +140,4 @@ enum InvitationStatus: String, Codable, Sendable {
     case pending
     case accepted
     case declined
-}
-/// Placeholder GiftItem model (will be replaced in Phase 6)
-struct GiftItem: Identifiable, Codable, Sendable, Hashable {
-    let id: String
-    let listId: String
-    let name: String
-    let description: String?
-    let url: String?
-    let imageUrl: String?
-    let price: Decimal?
-    let quantity: Int
-    let isPurchased: Bool
-    let isPending: Bool
-    let isOffList: Bool
-    let purchasedBy: String?
-    let purchasedAt: Date?
-    let createdBy: String
-    let createdAt: Date
-    let updatedAt: Date
 }

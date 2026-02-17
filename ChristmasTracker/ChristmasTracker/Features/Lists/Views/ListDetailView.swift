@@ -10,8 +10,13 @@ struct ListDetailView: View {
     let listId: String
     @Environment(\.listService) private var listService
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.itemService) private var itemService
+    
     @State private var showEditSheet = false
     @State private var showDeleteConfirmation = false
+    @State private var showAddItemSheet = false
+    @State private var selectedItemId: String?
+    
     var body: some View {
         Group {
             if listService.isLoading && listService.currentListDetail == nil {
@@ -27,6 +32,9 @@ struct ListDetailView: View {
         .background(Color.backgroundPrimaryColor)
         .navigationTitle("List Details")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedItemId) { itemId in
+            ItemDetailView(itemId: itemId)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if let detail = listService.currentListDetail, detail.canEdit {
@@ -43,9 +51,7 @@ struct ListDetailView: View {
         }
         .task {
             await listService.loadListDetail(id: listId)
-        }
-        .onDisappear {
-            listService.clearCurrentDetail()
+            await itemService.loadItems(listId: listId)
         }
     }
     private func detailContent(detail: ListDetail) -> some View {
@@ -55,7 +61,11 @@ struct ListDetailView: View {
                 if detail.itemCount != nil {
                     statsCard(detail: detail)
                 }
+                
+                itemsSection(detail: detail)
+                
                 membersCard(detail: detail)
+               
                 if detail.canEdit {
                     actionsSection(detail: detail)
                 }
@@ -115,7 +125,7 @@ struct ListDetailView: View {
                     .padding(.top, AppSpacing.xs)
             }
             HStack {
-                Label("\(detail.year)", systemImage: "calendar")
+                Label("\(detail.year.yearDisplay)", systemImage: "calendar")
                     .font(.appCaption1)
                     .foregroundColor(.textMutedColor)
                 Spacer()
@@ -241,6 +251,64 @@ struct ListDetailView: View {
             }
         }
     }
+    
+    private func itemsSection(detail: ListDetail) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            HStack {
+                Text("Items")
+                    .font(.appHeadline)
+                    .foregroundColor(.textPrimaryColor)
+                Spacer()
+                if !itemService.items.isEmpty {
+                    Text("\(itemService.filteredItems.count)")
+                        .font(.appCaption1)
+                        .foregroundColor(.textMutedColor)
+                }
+            }
+            if itemService.isLoading && itemService.items.isEmpty {
+                // Loading
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.xl)
+            } else if itemService.items.isEmpty {
+                // Empty state
+                VStack(spacing: AppSpacing.md) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.textMutedColor)
+                    Text("No items yet")
+                        .font(.appBody)
+                        .foregroundColor(.textMutedColor)
+                    if detail.canEdit {
+                        Button("Add First Item") {
+                            showAddItemSheet = true
+                        }
+                        .font(.appHeadline)
+                        .foregroundColor(.primaryColor)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.xl)
+            } else {
+                // Items list
+                ForEach(itemService.filteredItems) { item in
+                    ItemRow(item: item, detail: detail)
+                        .onTapGesture {
+                            selectedItemId = item.id
+                        }
+                    if item.id != itemService.filteredItems.last?.id {
+                        Divider()
+                            .padding(.leading, 52)
+                    }
+                }
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(Color.surfaceColor)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+    
 }
 // MARK: - ListVisibility Extension
 extension ListVisibility {
