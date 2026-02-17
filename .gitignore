@@ -4,9 +4,7 @@ ChristmasTracker_Dist/*
 *.xcuserstate
 *.xcbkptlist
 ChristmasTracker/ChristmasTracker.xcodeproj/xcuserdata/balberta.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
-ChristmasTracker/ChristmasTracker.xcodeproj/xcuserdata/balberta.xcuserdatad/xcschemes/xcschememanagement.plist
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/xcuserdata/balberta.xcuserdatad/UserInterfaceState.xcuserstate
-ChristmasTracker/ChristmasTracker.xcodeproj/xcshareddata/xcschemes/ChristmasTracker.xcscheme
 ChristmasTracker/ChristmasTracker.xcodeproj/xcuserdata/balberta.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
 ChristmasTracker/.DS_Store
 Distribution/
@@ -14,7 +12,5 @@ ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/xcuserdata/balbe
 ChristmasTracker/ChristmasTracker.xcodeproj/xcuserdata/balberta.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/xcuserdata/brian.xcuserdatad/WorkspaceSettings.xcsettings
-ChristmasTracker/ChristmasTracker.xcodeproj/xcuserdata/brian.xcuserdatad/xcschemes/xcschememanagement.plist
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/contents.xcworkspacedata
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/contents.xcworkspacedata
-ChristmasTracker/ChristmasTracker.xcodeproj/xcuserdata/brian.xcuserdatad/xcschemes/xcschememanagement.plist
