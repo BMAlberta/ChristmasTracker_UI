@@ -40,7 +40,7 @@ final class ListService {
         case .owned:
             return lists.filter { $0.myRole == .owner || $0.myRole == .coOwner}
         case .shared:
-            return lists.filter { $0.myRole == .owner || $0.myRole == .coOwner }
+            return lists.filter { $0.myRole == .member || $0.myRole == .viewer }
         }
     }
     
