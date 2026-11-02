@@ -1,35 +1,23 @@
 #!/bin/bash
-set -o pipefail
+# Gate: build, unit tests, and no prohibited frameworks in changed lines.
+cd "$(dirname "$0")/.." || exit 1
+FAIL=0
 
-echo "=== verify.sh: build ==="
-bash "scripts/build.sh"
-BUILD_STATUS=$?
+echo "=== verify: build ==="
+scripts/build.sh || { echo "=== verify: BUILD FAILED ==="; exit 1; }
 
-if [ $BUILD_STATUS -ne 0 ]; then
-    echo "=== verify.sh: BUILD FAILED ==="
-    exit $BUILD_STATUS
+echo "=== verify: unit tests ==="
+scripts/test.sh || { echo "=== verify: TESTS FAILED ==="; FAIL=1; }
+
+echo "=== verify: prohibited frameworks in changed lines ==="
+if git rev-parse --verify master > /dev/null 2>&1; then
+  if git diff master...HEAD -U0 -- '*.swift' | grep -E '^\+[^+].*(import Combine|DispatchQueue)'; then
+    echo "=== verify: PROHIBITED FRAMEWORK in changed lines ==="
+    FAIL=1
+  fi
+else
+  echo "WARNING: no local master branch; skipped this check"
 fi
 
-echo "=== verify.sh: test ==="
-bash "scripts/test.sh"
-TEST_STATUS=$?
-
-if [ $TEST_STATUS -ne 0 ]; then
-    echo "=== verify.sh: TESTS FAILED ==="
-    exit $TEST_STATUS
-fi
-
-echo "=== verify.sh: prohibited pattern check ==="
-VIOLATIONS=$(git diff master...HEAD -- "*.swift" \
-    | grep "^+" \
-    | grep -v "^+++" \
-    | grep -E "import Combine|DispatchQueue")
-
-if [ -n "$VIOLATIONS" ]; then
-    echo "FAIL: prohibited patterns found in diff:"
-    echo "$VIOLATIONS"
-    exit 1
-fi
-
-echo "=== verify.sh: PASSED ==="
-exit 0
+if [ "$FAIL" -eq 0 ]; then echo "=== verify: OK ==="; else echo "=== verify: FAILED ==="; fi
+exit "$FAIL"

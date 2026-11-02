@@ -1,16 +1,16 @@
 #!/bin/bash
-set -o pipefail
-
-DEST="${DEST:-platform=iOS Simulator,name=iPhone 16 Pro}"
-LOG=$(mktemp /tmp/ct-build.XXXXXX)
-
-xcodebuild \
-    -project "ChristmasTracker/ChristmasTracker.xcodeproj" \
-    -scheme ChristmasTracker \
-    -destination "$DEST" \
-    -derivedDataPath /tmp/ct-build \
-    build \
-    "$@" > "$LOG" 2>&1
+# Build the app for the simulator. Override the destination with DEST="...".
+cd "$(dirname "$0")/.." || exit 1
+DEST="${DEST:-platform=iOS Simulator,name=iPhone 17 Pro,OS=latest}"
+LOG="/tmp/ct-build.log"
+xcodebuild build \
+  -project "ChristmasTracker/ChristmasTracker.xcodeproj" \
+  -scheme "ChristmasTracker" \
+  -destination "$DEST" \
+  -derivedDataPath "/tmp/ct-derived" > "$LOG" 2>&1
 STATUS=$?
-tail -60 "$LOG"
-exit $STATUS
+echo "--- errors (first 20) ---"
+grep -E "error:|Unable to find a destination|BUILD FAILED" "$LOG" | head -20
+echo "--- last 8 lines of $LOG ---"
+tail -8 "$LOG"
+exit "$STATUS"
