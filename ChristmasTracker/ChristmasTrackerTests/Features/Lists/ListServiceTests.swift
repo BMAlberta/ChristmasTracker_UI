@@ -132,6 +132,16 @@ struct ListServiceTests {
         #expect(service.error != nil)
         #expect(service.lists.isEmpty)
     }
+    @Test("Failed repository fetch resets isLoading and sets error")
+    func testLoadListsFailureResetsIsLoading() async {
+        let mockRepo = MockListRepository()
+        await mockRepo.setShouldFail(true)
+        let dataStore = ListDataStore()
+        let service = ListService(repository: mockRepo, dataStore: dataStore)
+        await service.loadLists()
+        #expect(service.isLoading == false)
+        #expect(service.error != nil)
+    }
 }
 extension MockListRepository {
     func setShouldFail(_ value: Bool) {

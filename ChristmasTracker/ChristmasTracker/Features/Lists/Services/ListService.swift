@@ -52,33 +52,34 @@ final class ListService {
     // MARK: - Public Methods
     func loadLists() async {
         guard !isLoading else { return }
-        
+
         isLoading = true
+        defer { isLoading = false }
         error = nil
-        
+
         do {
             //Check cache
             let cached = await dataStore.getLists()
             if !cached.isEmpty {
                 lists = cached
-                isLoading = false
-                
+
                 //Background refresh
                 if await dataStore.shouldRefresh() {
                     await refreshLists()
                 }
                 return
             }
-            
+
             // Fetch from repository
             let fetchedLists = try await repository.fetchLists()
-            
+
             // Update cache
+            await dataStore.setLists(fetchedLists)
             lists = fetchedLists
             lastUpdated = Date()
-            
+
             LogInfo("Loaded \(fetchedLists.count) lists", category: .business)
-            
+
         } catch {
             self.error = handleError(error, operation: "load lists")
         }
