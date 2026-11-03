@@ -1,0 +1,4255 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Christmas Tracker API",
+    "version": "2.0.0",
+    "description": "API for managing Christmas gift lists, budgets, and purchases",
+    "contact": {
+      "name": "API Support",
+      "email": "admin@bmalberta.com"
+    },
+    "license": {
+      "name": "Private"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3010",
+      "description": "Development server"
+    },
+    {
+      "url": "https://api.bmalberta.com/tracker/v2",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "User authentication and authorization"
+    },
+    {
+      "name": "Users",
+      "description": "User management"
+    },
+    {
+      "name": "Lists",
+      "description": "Gift list management"
+    },
+    {
+      "name": "Members",
+      "description": "List membership management"
+    },
+    {
+      "name": "Items",
+      "description": "Gift item management"
+    },
+    {
+      "name": "Purchases",
+      "description": "Purchase tracking and management"
+    },
+    {
+      "name": "Budgets",
+      "description": "Budget management and tracking"
+    },
+    {
+      "name": "Stats",
+      "description": "Spending statistics and purchase history"
+    },
+    {
+      "name": "Version",
+      "description": "App version enforcement"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT access token from login/register"
+      }
+    },
+    "schemas": {
+      "ListVisibility": {
+        "type": "string",
+        "enum": [
+          "PRIVATE",
+          "INVITE_ONLY",
+          "FRIENDS_ONLY",
+          "PUBLIC"
+        ],
+        "description": "PRIVATE/INVITE_ONLY/FRIENDS_ONLY all behave as private for non-members (P16). PUBLIC allows registered non-members as read-only viewers."
+      },
+      "ListStatus": {
+        "type": "string",
+        "enum": [
+          "DRAFT",
+          "ACTIVE",
+          "ARCHIVED"
+        ]
+      },
+      "ListRole": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "co-owner",
+          "member",
+          "viewer"
+        ],
+        "description": "Role values per C7. co-owner has identical permissions to owner except setting/changing the co-owner (L14)."
+      },
+      "MembershipRole": {
+        "type": "string",
+        "enum": [
+          "member",
+          "viewer"
+        ]
+      },
+      "ItemStatus": {
+        "type": "string",
+        "enum": [
+          "AVAILABLE",
+          "PARTIAL",
+          "PURCHASED",
+          "WRAPPED",
+          "GIFTED"
+        ],
+        "description": "Blind viewers always receive AVAILABLE regardless of actual status (P3)."
+      },
+      "ShippingStatus": {
+        "type": "string",
+        "enum": [
+          "NOT_TRACKED",
+          "NOT_SHIPPED",
+          "SHIPPED",
+          "DELIVERED"
+        ],
+        "description": "NOT_TRACKED is the default. Any transition is allowed (S3)."
+      },
+      "RelationshipType": {
+        "type": "string",
+        "enum": [
+          "PARENT",
+          "GUARDIAN",
+          "CARETAKER"
+        ]
+      },
+      "MoneyAmount": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 999999.99,
+        "multipleOf": 0.01,
+        "description": "Monetary amount in dollars. Must have at most two decimal places; the server rejects amounts with more than two decimal places with 400 INVALID_PRICE (S11).",
+        "example": 349.99
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-12-30T10:00:00Z"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "987fcdeb-51a2-43f7-8912-314159265358"
+          }
+        }
+      },
+      "PersonRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "description": "Minimal person reference used when a person is embedded in list, item, or purchase responses.",
+        "additionalProperties": false
+      },
+      "PersonSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "firstName",
+          "displayName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "description": "Minimal person summary returned when the caller shares a list with the user (P19)",
+        "additionalProperties": false
+      },
+      "ChildProfile": {
+        "type": "object",
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "displayName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "description": "Child profile fields returned when the caller is the parent of the target user (P19)",
+        "additionalProperties": false
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "ADMIN"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastLoginAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "example": 1001
+              },
+              "errorCode": {
+                "type": "string",
+                "example": "INVALID_CREDENTIALS"
+              },
+              "message": {
+                "type": "string",
+                "example": "The email or password you entered is incorrect"
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "CapabilityFlags": {
+        "type": "object",
+        "required": [
+          "isRecipient",
+          "canSeeGiftActivity",
+          "canPurchase",
+          "canAddOffList",
+          "canSeeOffList",
+          "canCreateItem"
+        ],
+        "properties": {
+          "isRecipient": {
+            "type": "boolean",
+            "description": "True if the viewer is the recipient of this list"
+          },
+          "canSeeGiftActivity": {
+            "type": "boolean",
+            "description": "True if the viewer can see purchases and gift status. False for blind viewers and Viewers (P3, P14)"
+          },
+          "canPurchase": {
+            "type": "boolean",
+            "description": "True if the viewer can record purchases. False for blind viewers (P7)"
+          },
+          "canAddOffList": {
+            "type": "boolean",
+            "description": "True if the viewer can add off-list surprise items. True for members only (P21)"
+          },
+          "canSeeOffList": {
+            "type": "boolean",
+            "description": "True if the viewer can see off-list surprise items. False for blind viewers and Viewers (P5, P14)"
+          },
+          "canCreateItem": {
+            "type": "boolean",
+            "description": "True for owners, co-owners, and members (including blind owners). False for viewers and non-members (P20)"
+          }
+        }
+      },
+      "ListSummary": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "theme": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "year": {
+                "type": "integer"
+              },
+              "visibility": {
+                "$ref": "#/components/schemas/ListVisibility"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ListStatus"
+              },
+              "recipient": {
+                "$ref": "#/components/schemas/PersonRef"
+              },
+              "owner": {
+                "$ref": "#/components/schemas/PersonRef"
+              },
+              "coOwner": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PersonRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "myRole": {
+                "$ref": "#/components/schemas/ListRole"
+              },
+              "itemCount": {
+                "type": "integer",
+                "description": "Omitted for blind viewers to prevent revealing surprise gifts (P3)"
+              },
+              "purchasedCount": {
+                "type": "integer",
+                "description": "Omitted for blind viewers (P3) and Viewers (P14)"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/CapabilityFlags"
+          }
+        ]
+      },
+      "ListDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ListSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "members": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MemberSummary"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MemberSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/MembershipRole"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "INVITED",
+              "ACTIVE",
+              "REMOVED",
+              "EXPIRED"
+            ]
+          },
+          "invitedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "listId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedUnitPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "quantityRequested": {
+            "type": "integer"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "status": {
+            "$ref": "#/components/schemas/ItemStatus"
+          },
+          "offList": {
+            "type": "boolean",
+            "description": "True if this is a surprise off-list gift. Derived from caller role on create (P21)."
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Omitted when canSeeGiftActivity is false (P17)"
+          }
+        }
+      },
+      "Purchase": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "totalCost": {
+            "type": "number"
+          },
+          "storeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmationNumber": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trackingNumber": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shippingStatus": {
+            "$ref": "#/components/schemas/ShippingStatus"
+          },
+          "shippedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "deliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "purchaser": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "purchasedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BudgetOverageWarning": {
+        "type": "object",
+        "required": [
+          "code",
+          "warningCode",
+          "level",
+          "message",
+          "severity",
+          "requiresConfirmation",
+          "confirmationToken",
+          "details"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 6002
+          },
+          "warningCode": {
+            "type": "string",
+            "example": "BUDGET_OVERAGE_WARNING"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "recipient",
+              "total"
+            ],
+            "description": "Which budget the purchase would exceed"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning"
+            ]
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "confirmationToken": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "required": [
+              "budgetLimit",
+              "currentSpent",
+              "purchaseAmount",
+              "overage"
+            ],
+            "properties": {
+              "recipientId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Level 'recipient' only"
+              },
+              "recipientName": {
+                "type": "string",
+                "description": "Level 'recipient' only"
+              },
+              "year": {
+                "type": "integer",
+                "description": "Level 'total' only"
+              },
+              "budgetLimit": {
+                "type": "number"
+              },
+              "currentSpent": {
+                "type": "number"
+              },
+              "purchaseAmount": {
+                "type": "number"
+              },
+              "overage": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "PurchaseCreatedData": {
+        "type": "object",
+        "required": [
+          "status",
+          "purchase",
+          "requiresConfirmation"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "created"
+            ]
+          },
+          "purchase": {
+            "$ref": "#/components/schemas/Purchase"
+          },
+          "requiresConfirmation": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        }
+      },
+      "PurchaseConfirmationRequiredData": {
+        "type": "object",
+        "required": [
+          "status",
+          "requiresConfirmation",
+          "warnings",
+          "confirmationToken"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmation_required"
+            ]
+          },
+          "requiresConfirmation": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BudgetOverageWarning"
+            },
+            "description": "One entry per exceeded budget level (recipient or total)"
+          },
+          "confirmationToken": {
+            "type": "string",
+            "description": "Single shared token binding the purchase amounts as integer cents. Expires in 5 minutes (S6)."
+          }
+        }
+      },
+      "PurchaseResult": {
+        "description": "Result of creating a purchase. HTTP 201 carries `created`; HTTP 200 carries `confirmation_required`.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PurchaseCreatedData"
+          },
+          {
+            "$ref": "#/components/schemas/PurchaseConfirmationRequiredData"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "status",
+          "mapping": {
+            "created": "#/components/schemas/PurchaseCreatedData",
+            "confirmation_required": "#/components/schemas/PurchaseConfirmationRequiredData"
+          }
+        }
+      },
+      "Budget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "totalBudget": {
+            "type": "number"
+          },
+          "totalSpent": {
+            "type": "number"
+          },
+          "remaining": {
+            "type": "number"
+          },
+          "isOverBudget": {
+            "type": "boolean"
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "recipientId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "recipientName": {
+                  "type": "string"
+                },
+                "maxSpend": {
+                  "type": "number"
+                },
+                "spent": {
+                  "type": "number"
+                },
+                "remaining": {
+                  "type": "number"
+                },
+                "isOverBudget": {
+                  "type": "boolean"
+                },
+                "overage": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PurchaseHistoryRow": {
+        "type": "object",
+        "required": [
+          "id",
+          "item",
+          "list",
+          "recipient",
+          "quantity",
+          "totalCost",
+          "purchasedAt",
+          "shippingStatus"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "imageUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "list": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "year"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "year": {
+                "type": "integer"
+              }
+            }
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "totalCost": {
+            "type": "number",
+            "minimum": 0
+          },
+          "purchasedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "shippingStatus": {
+            "$ref": "#/components/schemas/ShippingStatus"
+          }
+        }
+      },
+      "PurchaseHistoryMeta": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Meta"
+          },
+          {
+            "type": "object",
+            "required": [
+              "filteredCount",
+              "filteredTotal",
+              "nextCursor"
+            ],
+            "properties": {
+              "filteredCount": {
+                "type": "integer",
+                "description": "Total number of purchases matching filters (all pages)"
+              },
+              "filteredTotal": {
+                "type": "number",
+                "description": "Sum of totalCost for all matching purchases (all pages)"
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Opaque cursor for the next page; null if this is the last page"
+              }
+            }
+          }
+        ]
+      },
+      "SpendByRecipient": {
+        "type": "object",
+        "required": [
+          "recipientId",
+          "displayName",
+          "spent",
+          "itemsPurchased"
+        ],
+        "properties": {
+          "recipientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "spent": {
+            "type": "number",
+            "description": "Total dollars spent for this recipient"
+          },
+          "itemsPurchased": {
+            "type": "integer",
+            "description": "Sum of quantity across purchases"
+          }
+        }
+      },
+      "BudgetRecipientStat": {
+        "type": "object",
+        "required": [
+          "recipientId",
+          "displayName",
+          "budget",
+          "spent",
+          "remaining"
+        ],
+        "properties": {
+          "recipientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "budget": {
+            "type": "number"
+          },
+          "spent": {
+            "type": "number"
+          },
+          "remaining": {
+            "type": "number"
+          }
+        }
+      },
+      "BudgetStats": {
+        "type": "object",
+        "required": [
+          "totalBudget",
+          "totalSpent",
+          "remaining",
+          "recipients"
+        ],
+        "properties": {
+          "totalBudget": {
+            "type": "number"
+          },
+          "totalSpent": {
+            "type": "number"
+          },
+          "remaining": {
+            "type": "number"
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BudgetRecipientStat"
+            }
+          }
+        }
+      },
+      "YearStats": {
+        "type": "object",
+        "required": [
+          "year",
+          "totalSpent",
+          "itemsPurchased",
+          "purchaseCount"
+        ],
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "totalSpent": {
+            "type": "number"
+          },
+          "itemsPurchased": {
+            "type": "integer"
+          },
+          "purchaseCount": {
+            "type": "integer"
+          },
+          "totalBudget": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "StatsYearResponse": {
+        "type": "object",
+        "required": [
+          "scope",
+          "year",
+          "totalSpent",
+          "itemsPurchased",
+          "purchaseCount",
+          "spendByRecipient",
+          "availableYears"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "year"
+            ],
+            "description": "Discriminator: always \"year\" for year-mode response"
+          },
+          "year": {
+            "type": "integer",
+            "example": 2026
+          },
+          "totalSpent": {
+            "type": "number"
+          },
+          "itemsPurchased": {
+            "type": "integer",
+            "description": "Sum of quantity across all purchases"
+          },
+          "purchaseCount": {
+            "type": "integer",
+            "description": "Number of distinct purchase records"
+          },
+          "spendByRecipient": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpendByRecipient"
+            }
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetStats"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Budget vs actual for this year, or null if no budget set"
+          },
+          "availableYears": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Years that have purchases or budgets"
+          }
+        }
+      },
+      "StatsAllResponse": {
+        "type": "object",
+        "required": [
+          "scope",
+          "totalSpent",
+          "itemsPurchased",
+          "purchaseCount",
+          "byYear",
+          "availableYears"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "all"
+            ],
+            "description": "Discriminator: always \"all\" for all-time response"
+          },
+          "totalSpent": {
+            "type": "number"
+          },
+          "itemsPurchased": {
+            "type": "integer"
+          },
+          "purchaseCount": {
+            "type": "integer"
+          },
+          "byYear": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YearStats"
+            },
+            "description": "Per-year breakdown"
+          },
+          "availableYears": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "StatsResponse": {
+        "description": "Spending statistics. scope=\"year\" for a specific year; scope=\"all\" for lifetime totals.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StatsYearResponse"
+          },
+          {
+            "$ref": "#/components/schemas/StatsAllResponse"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "scope",
+          "mapping": {
+            "year": "#/components/schemas/StatsYearResponse",
+            "all": "#/components/schemas/StatsAllResponse"
+          }
+        }
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "Authentication required",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 1004,
+                "errorCode": "TOKEN_MISSING",
+                "message": "Authentication token is required"
+              }
+            }
+          }
+        }
+      },
+      "ForbiddenError": {
+        "description": "Insufficient permissions",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 2001,
+                "errorCode": "FORBIDDEN",
+                "message": "You do not have permission to access this resource"
+              }
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request validation failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 3001,
+                "errorCode": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": {
+                  "errors": [
+                    {
+                      "field": "email",
+                      "message": "Invalid email address",
+                      "code": "invalid_string"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotFoundError": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 4001,
+                "errorCode": "RESOURCE_NOT_FOUND",
+                "message": "The requested resource was not found"
+              }
+            }
+          }
+        }
+      },
+      "ConflictError": {
+        "description": "Resource conflict — e.g. duplicate list (L5) or email already in use",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 5001,
+                "errorCode": "LIST_ALREADY_EXISTS",
+                "message": "A list already exists for this recipient in this year"
+              }
+            }
+          }
+        }
+      },
+      "UpgradeRequiredError": {
+        "description": "App version below the minimum required version (V3, V4). iOS clients only.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 9001,
+                "errorCode": "VERSION_OUTDATED",
+                "message": "App version is below the minimum required version. Please update."
+              }
+            }
+          }
+        }
+      },
+      "RateLimitError": {
+        "description": "Too many requests",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 8001,
+                "errorCode": "RATE_LIMIT_EXCEEDED",
+                "message": "Too many requests. Please try again later",
+                "details": {
+                  "retryAfter": 900
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/tracker/v2/app/version-check": {
+      "get": {
+        "summary": "Check app version against platform policy",
+        "operationId": "checkAppVersion",
+        "description": "Public endpoint — no authentication required. Returns the version state (ok, update_recommended, force_update) and all policy fields. Supports ETag/If-None-Match for 304 responses. Cache-Control: public, max-age=60. A disabled or unknown platform always returns state: ok.\n",
+        "tags": [
+          "Version"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "platform",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "ios"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "1.2.3"
+            }
+          },
+          {
+            "in": "query",
+            "name": "build",
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version state and policy"
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "400": {
+            "description": "Missing required query parameters"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/auth/register": {
+      "post": {
+        "summary": "Register a new user",
+        "operationId": "register",
+        "description": "Create a new user account. Requires a valid REGISTRATION_CODE. Web clients receive the refresh token as an HttpOnly cookie only. iOS clients (X-Client-Platform: ios) also receive the refresh token in the response body.\n",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "firstName",
+                  "lastName",
+                  "registrationCode"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "registrationCode": {
+                    "type": "string",
+                    "description": "Required registration code"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User successfully registered",
+            "headers": {
+              "Set-Cookie": {
+                "description": "HttpOnly cookie containing refresh token",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string",
+                      "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "description": "Invalid or missing registration code"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/auth/login": {
+      "post": {
+        "summary": "Login user",
+        "operationId": "login",
+        "description": "Authenticate with email and password. Web clients receive the refresh token as an HttpOnly cookie only. iOS clients (X-Client-Platform: ios) also receive the refresh token in the response body.\n",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  },
+                  "rememberMe": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "true (or omitted) sets a persistent refresh cookie whose Max-Age follows REFRESH_TOKEN_EXPIRY. false sets a session cookie with no Max-Age. The choice carries through token rotation.\n"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully logged in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string",
+                      "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "426": {
+            "$ref": "#/components/responses/UpgradeRequiredError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/auth/refresh": {
+      "post": {
+        "summary": "Refresh access token",
+        "operationId": "refreshToken",
+        "description": "Rotate refresh token and get a new access token. The refresh token is read from the HttpOnly cookie (preferred) or the request body. iOS clients may send the token in the body; all clients receive the new token as a cookie. iOS clients (X-Client-Platform: ios) also receive the new refresh token in the response body.\n",
+        "tags": [
+          "Authentication"
+        ],
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "refreshToken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "HttpOnly cookie (preferred source)"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "description": "Refresh token (for iOS clients that cannot use cookies)"
+                  },
+                  "deviceFingerprint": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens rotated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "refreshToken": {
+                      "type": "string",
+                      "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid, expired, or missing refresh token"
+          },
+          "426": {
+            "$ref": "#/components/responses/UpgradeRequiredError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/auth/me": {
+      "get": {
+        "summary": "Get current user",
+        "operationId": "getCurrentUser",
+        "description": "Get the authenticated user's full profile.",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user information"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/auth/logout": {
+      "post": {
+        "summary": "Logout user",
+        "operationId": "logout",
+        "description": "Revoke the current refresh token chain and clear the cookie.",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully logged out"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/budgets": {
+      "post": {
+        "summary": "Create a budget",
+        "operationId": "createBudget",
+        "description": "Create a new annual budget with per-recipient allocations",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "year",
+                  "totalBudget",
+                  "recipients"
+                ],
+                "properties": {
+                  "year": {
+                    "type": "integer",
+                    "minimum": 2000,
+                    "maximum": 2100,
+                    "example": 2025
+                  },
+                  "totalBudget": {
+                    "$ref": "#/components/schemas/MoneyAmount"
+                  },
+                  "recipients": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "recipientId",
+                        "maxSpend"
+                      ],
+                      "properties": {
+                        "recipientId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "123e4567-e89b-12d3-a456-426614174000"
+                        },
+                        "maxSpend": {
+                          "$ref": "#/components/schemas/MoneyAmount"
+                        }
+                      }
+                    },
+                    "description": "Sum of maxSpend must not exceed totalBudget"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Budget created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Budget"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (sum of recipients exceeds total)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": 6003,
+                    "errorCode": "RECIPIENT_BUDGET_SUM_EXCEEDS_TOTAL",
+                    "message": "Sum of recipient budgets cannot exceed total budget"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "409": {
+            "description": "Budget already exists for this year"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get all budgets",
+        "operationId": "listBudgets",
+        "description": "Get all budgets for the authenticated user with spending calculations",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of budgets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Budget"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/budgets/{year}": {
+      "get": {
+        "summary": "Get budget by year",
+        "operationId": "getBudget",
+        "description": "Get budget for a specific year with real-time spending calculations",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 2000,
+              "maximum": 2100
+            },
+            "example": 2025,
+            "description": "Budget year"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Budget details with spending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Budget"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Budget not found for this year"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update budget",
+        "operationId": "updateBudget",
+        "description": "Update budget total or recipient allocations",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 2000,
+              "maximum": 2100
+            },
+            "example": 2025,
+            "description": "Budget year"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "totalBudget": {
+                    "$ref": "#/components/schemas/MoneyAmount"
+                  },
+                  "recipients": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "recipientId",
+                        "maxSpend"
+                      ],
+                      "properties": {
+                        "recipientId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "maxSpend": {
+                          "$ref": "#/components/schemas/MoneyAmount"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Budget updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Budget"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (sum exceeds total)"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Budget not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete budget",
+        "operationId": "deleteBudget",
+        "description": "Delete budget (only if no purchases exist)",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 2000,
+              "maximum": 2100
+            },
+            "example": 2025,
+            "description": "Budget year"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Budget deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "example": "Budget deleted successfully"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Budget not found"
+          },
+          "422": {
+            "description": "Cannot delete budget with existing purchases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "success": false,
+                  "error": {
+                    "code": 6004,
+                    "errorCode": "CANNOT_DELETE_BUDGET_WITH_PURCHASES",
+                    "message": "Cannot delete budget with existing purchases"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tracker/v2/budgets/{year}/duplicate": {
+      "post": {
+        "summary": "Duplicate budget to new year",
+        "operationId": "duplicateBudget",
+        "description": "Copy budget structure (total and recipients) to a new year (purchases not copied)",
+        "tags": [
+          "Budgets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 2000,
+              "maximum": 2100
+            },
+            "example": 2025,
+            "description": "Source year"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "toYear"
+                ],
+                "properties": {
+                  "toYear": {
+                    "type": "integer",
+                    "minimum": 2000,
+                    "maximum": 2100,
+                    "example": 2026,
+                    "description": "Target year"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Budget duplicated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Budget"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Source budget not found"
+          },
+          "409": {
+            "description": "Budget already exists for target year"
+          }
+        }
+      }
+    },
+    "/tracker/v2/items/{itemId}/purchases": {
+      "post": {
+        "summary": "Create a purchase",
+        "operationId": "createPurchase",
+        "description": "Purchase an item (with optional budget overage warning)",
+        "tags": [
+          "Purchases"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "itemId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Item ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "quantity",
+                  "totalCost"
+                ],
+                "properties": {
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                  },
+                  "totalCost": {
+                    "$ref": "#/components/schemas/MoneyAmount"
+                  },
+                  "storeName": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "example": "Best Buy"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "Got it on sale!"
+                  },
+                  "confirmationNumber": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "BB-123456789"
+                  },
+                  "trackingNumber": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "1Z999AA10123456784"
+                  },
+                  "confirmationToken": {
+                    "type": "string",
+                    "description": "Required if purchase exceeds budget (from warning response)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Budget overage. `data.status` is `confirmation_required` and no purchase was created. Each entry in `warnings` names its `level` (`recipient` or `total`). Resubmit the same request with `confirmationToken` from any warning to complete the purchase. The token binds user, item, recipient, quantity, and amount in cents, and expires after 5 minutes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PurchaseResult"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BudgetOverageWarning"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Purchase created (`data.status` is `created`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PurchaseResult"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "description": "Item not found"
+          }
+        }
+      }
+    },
+    "/tracker/v2/items/{id}": {
+      "get": {
+        "summary": "Get item by ID",
+        "operationId": "getItem",
+        "description": "Get item details with purchase history",
+        "tags": [
+          "Items"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Item ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Item"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "purchases": {
+                              "type": "array",
+                              "items": {
+                                "type": "object"
+                              }
+                            },
+                            "totalQuantityPurchased": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Cannot view this item"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update item",
+        "operationId": "updateItem",
+        "description": "Update item details (owner/co-owner for regular items, creator for off-list)",
+        "tags": [
+          "Items"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Item ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "expectedUnitPrice": {
+                    "$ref": "#/components/schemas/MoneyAmount"
+                  },
+                  "quantityRequested": {
+                    "type": "integer"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Item updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Item"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Only owner/co-owner or creator can update"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete item",
+        "operationId": "deleteItem",
+        "description": "Soft delete item (cannot delete if purchases exist)",
+        "tags": [
+          "Items"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Item ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Only owner/co-owner or creator can delete"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "description": "Cannot delete item with existing purchases"
+          }
+        }
+      }
+    },
+    "/tracker/v2/items/{id}/status": {
+      "patch": {
+        "summary": "Update item status",
+        "operationId": "updateItemStatus",
+        "description": "Manually update item status (owner/co-owner only)",
+        "tags": [
+          "Items"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Item ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "$ref": "#/components/schemas/ItemStatus"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Item"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status transition"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Only list owner/co-owner can update status"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/lists/{listId}/items": {
+      "post": {
+        "summary": "Create a new item",
+        "operationId": "createItem",
+        "description": "Create a new gift item. Item type (regular or off-list) is derived from the caller's role (P21).",
+        "tags": [
+          "Items"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "description"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "example": "Nintendo Switch OLED"
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000,
+                    "example": "White model with enhanced screen"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "expectedUnitPrice": {
+                    "$ref": "#/components/schemas/MoneyAmount"
+                  },
+                  "quantityRequested": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 999,
+                    "default": 1
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "default": 5
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Item created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Item"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Cannot create item"
+          },
+          "404": {
+            "description": "List not found"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get all items for a list",
+        "operationId": "listItems",
+        "description": "Get all items (owners don't see off-list items, members see all)",
+        "tags": [
+          "Items"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List ID"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "$ref": "#/components/schemas/ItemStatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offList",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "priority",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Item"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Cannot view this list"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/lists/{id}/members": {
+      "post": {
+        "summary": "Add a member to a list",
+        "operationId": "addMember",
+        "description": "Add a user to the list by email. Only the owner and co-owner may call this.",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "role": {
+                    "$ref": "#/components/schemas/MembershipRole"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Caller lacks permission or target is ineligible"
+          },
+          "404": {
+            "description": "List not found or email not found"
+          },
+          "409": {
+            "description": "Already a member"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get list members",
+        "operationId": "listMembers",
+        "description": "Get all active and invited members. Visible to owner, co-owner, and active members only.",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Caller lacks permission"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/lists/{id}/members/{userId}": {
+      "delete": {
+        "summary": "Remove a member from a list",
+        "operationId": "removeMember",
+        "description": "Owner/co-owner can remove any member; a member can remove themselves. Purchase records are kept.",
+        "tags": [
+          "Members"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member removed"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Caller lacks permission"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/lists": {
+      "post": {
+        "summary": "Create a new list",
+        "operationId": "createList",
+        "description": "Create a new gift list for yourself or your child",
+        "tags": [
+          "Lists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "recipientId",
+                  "year",
+                  "name"
+                ],
+                "properties": {
+                  "recipientId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "User ID of recipient (self or child)"
+                  },
+                  "year": {
+                    "type": "integer",
+                    "minimum": 2000,
+                    "maximum": 2100,
+                    "example": 2025
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "example": "Tommy's Christmas 2025"
+                  },
+                  "theme": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "Video Games & Legos"
+                  },
+                  "visibility": {
+                    "$ref": "#/components/schemas/ListVisibility",
+                    "default": "PRIVATE"
+                  },
+                  "coOwnerEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Optional co-owner email (resolved server-side)",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "List created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ListSummary"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "RECIPIENT_NOT_FOUND — identical 404 for nonexistent id, another adult, or stranger's child (L3/E5)"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictError"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get all lists",
+        "operationId": "listLists",
+        "description": "Get all lists visible to the authenticated user",
+        "tags": [
+          "Lists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by year"
+          },
+          {
+            "in": "query",
+            "name": "visibility",
+            "schema": {
+              "$ref": "#/components/schemas/ListVisibility"
+            },
+            "description": "Filter by visibility"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "$ref": "#/components/schemas/ListStatus"
+            },
+            "description": "Filter by status"
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "member",
+                "all"
+              ]
+            },
+            "description": "Filter by user's role (owner, member, or all)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ListSummary"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/lists/{id}": {
+      "get": {
+        "summary": "Get list by ID",
+        "operationId": "getList",
+        "description": "Get detailed information about a specific list",
+        "tags": [
+          "Lists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ListDetail"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Cannot view this list"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update list",
+        "operationId": "updateList",
+        "description": "Update list details (owner/co-owner only)",
+        "tags": [
+          "Lists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "theme": {
+                    "type": "string"
+                  },
+                  "visibility": {
+                    "$ref": "#/components/schemas/ListVisibility"
+                  },
+                  "status": {
+                    "$ref": "#/components/schemas/ListStatus"
+                  },
+                  "coOwnerEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true,
+                    "description": "Set or clear the co-owner by email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ListDetail"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Only owner/co-owner can update"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete list",
+        "operationId": "deleteList",
+        "description": "Archive a list (soft delete, owner only)",
+        "tags": [
+          "Lists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Only owner can delete"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/purchases/{id}": {
+      "get": {
+        "summary": "Get purchase by ID",
+        "operationId": "getPurchase",
+        "description": "Get purchase details (purchaser or list owner only)",
+        "tags": [
+          "Purchases"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Purchase ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Purchase"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Purchase not found (nonexistent or belongs to another user)"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update purchase",
+        "operationId": "updatePurchase",
+        "description": "Update purchase metadata (purchaser only)",
+        "tags": [
+          "Purchases"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Purchase ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "Arrived early!"
+                  },
+                  "trackingNumber": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "1Z999AA10123456784"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Purchase updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Purchase"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Purchase not found (nonexistent or belongs to another user)"
+          }
+        }
+      }
+    },
+    "/tracker/v2/purchases": {
+      "get": {
+        "summary": "Get user's purchase history",
+        "operationId": "listPurchases",
+        "description": "Get purchases made by the authenticated user, with cursor-based pagination and aggregate meta (filteredCount, filteredTotal, nextCursor) in the response body (T4, T5, S8).",
+        "tags": [
+          "Purchases"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recipientId",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter by recipient"
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 9999
+            },
+            "description": "Filter by list year (4-digit integer, e.g. 2026)"
+          },
+          {
+            "in": "query",
+            "name": "listId",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter by list"
+          },
+          {
+            "in": "query",
+            "name": "itemId",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter by item"
+          },
+          {
+            "in": "query",
+            "name": "shippingStatus",
+            "schema": {
+              "$ref": "#/components/schemas/ShippingStatus"
+            },
+            "description": "Filter by shipping status"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "description": "Page size"
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque base64-encoded cursor for the next page (from meta.nextCursor; do not construct manually)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase history page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PurchaseHistoryRow"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/PurchaseHistoryMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/purchases/{id}/shipping": {
+      "patch": {
+        "summary": "Update shipping status",
+        "operationId": "updatePurchaseShipping",
+        "description": "Update shipping status (purchaser only). Tracking is manual, so any transition among the four states is allowed, including back to NOT_TRACKED.",
+        "tags": [
+          "Purchases"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Purchase ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "shippingStatus"
+                ],
+                "properties": {
+                  "shippingStatus": {
+                    "$ref": "#/components/schemas/ShippingStatus",
+                    "example": "SHIPPED",
+                    "description": "New shipping status"
+                  },
+                  "trackingNumber": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "1Z999AA10123456784"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Shipping status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Purchase"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Purchase not found (nonexistent or belongs to another user)"
+          }
+        }
+      }
+    },
+    "/tracker/v2/stats": {
+      "get": {
+        "summary": "Get spending statistics",
+        "operationId": "getStats",
+        "description": "Returns the authenticated user's own purchase statistics (T1, T2, T3). year=YYYY returns totals, spend by recipient, and budget vs actual. year=all (default) returns lifetime totals plus a per-year breakdown.",
+        "tags": [
+          "Stats"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{4}|all)$"
+            },
+            "description": "4-digit year (e.g. \"2026\") or \"all\" (default). year=YYYY returns StatsYearResponse; year=all returns StatsAllResponse."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistics for the requested year or all-time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StatsResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/users/me": {
+      "get": {
+        "summary": "Get current user profile",
+        "operationId": "getMe",
+        "description": "Get the authenticated user's profile information",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update user profile",
+        "operationId": "updateMe",
+        "description": "Update the authenticated user's profile information",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "example": "John"
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "example": "Doe"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "example": "Johnny"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "newemail@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "409": {
+            "description": "Email already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tracker/v2/users/me/password": {
+      "patch": {
+        "summary": "Update user password",
+        "operationId": "updatePassword",
+        "description": "Change the authenticated user's password",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "OldPass123!"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8,
+                    "example": "NewPass123!",
+                    "description": "Must contain uppercase, lowercase, number, and special character"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "example": "Password updated successfully"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Current password incorrect or new password too weak",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/users/me/children": {
+      "get": {
+        "summary": "Get user's children",
+        "operationId": "listChildren",
+        "description": "Get all children for whom the authenticated user is a parent/guardian",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "firstName": {
+                            "type": "string"
+                          },
+                          "lastName": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "relationshipType": {
+                            "$ref": "#/components/schemas/RelationshipType"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a child user",
+        "operationId": "createChild",
+        "description": "Create a non-authenticated child user linked to the authenticated user",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "firstName",
+                  "lastName"
+                ],
+                "properties": {
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "example": "Tommy"
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "example": "Doe"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "example": "Tommy D."
+                  },
+                  "relationshipType": {
+                    "$ref": "#/components/schemas/RelationshipType",
+                    "default": "PARENT",
+                    "example": "PARENT"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Child created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "firstName": {
+                          "type": "string"
+                        },
+                        "lastName": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "relationshipType": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/tracker/v2/users/me/children/{id}": {
+      "delete": {
+        "summary": "Delete a child user",
+        "operationId": "deleteChild",
+        "description": "Remove a child user (soft delete). Cannot delete if child has lists.",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Child user ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Child deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "example": "Child deleted successfully"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "description": "Cannot delete child with existing lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tracker/v2/users/{id}": {
+      "get": {
+        "summary": "Get user by ID",
+        "operationId": "getUser",
+        "description": "Returns tiered profile data based on the caller's relationship to the target user (P19). Self gets the full profile; caller's own child gets id/firstName/lastName/displayName; a user who shares any active list (as owner, co-owner, member, or recipient) gets PersonSummary (id, firstName, displayName); anyone else gets the identical 404 as a nonexistent id.\n",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "User ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tiered user profile. Returns User (self), ChildProfile (own child), or PersonSummary (shared-list connection).\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/User"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ChildProfile"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PersonSummary"
+                        }
+                      ]
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    }
+  }
+}

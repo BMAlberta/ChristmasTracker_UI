@@ -5,6 +5,7 @@
 //  Created by Brian Alberta on 2/14/26.
 //
 
+import Foundation
 import Testing
 @testable import ChristmasTracker
 @Suite("ListService Tests")
@@ -132,10 +133,101 @@ struct ListServiceTests {
         #expect(service.error != nil)
         #expect(service.lists.isEmpty)
     }
+    @Test("Failed repository fetch resets isLoading and sets error")
+    func testLoadListsFailureResetsIsLoading() async {
+        let mockRepo = MockListRepository()
+        await mockRepo.setShouldFail(true)
+        let dataStore = ListDataStore()
+        let service = ListService(repository: mockRepo, dataStore: dataStore)
+        await service.loadLists()
+        #expect(service.isLoading == false)
+        #expect(service.error != nil)
+    }
+
+    // MARK: - Cache stale-data: create then loadLists
+
+    @Test("loadLists after createList reflects the new list from cache")
+    func testLoadListsAfterCreateReflectsNewList() async throws {
+        let mockRepo = MockListRepository(withMockData: true)
+        await mockRepo.setDelay(0)
+        let dataStore = ListDataStore()
+        let service = ListService(repository: mockRepo, dataStore: dataStore)
+
+        await service.loadLists()
+        let initialCount = service.lists.count
+
+        let request = CreateListRequest(
+            name: "Cache Test List",
+            theme: nil,
+            year: 2025,
+            recipientId: "r-test",
+            description: nil,
+            visibility: .private,
+            coOwnerId: nil
+        )
+        try await service.createList(request)
+
+        // Second service shares same cache — simulates another view reloading
+        let service2 = ListService(repository: mockRepo, dataStore: dataStore)
+        await service2.loadLists()
+
+        #expect(service2.lists.count == initialCount + 1)
+        #expect(service2.lists.contains(where: { $0.name == "Cache Test List" }))
+    }
+
+    // MARK: - Cache stale-data: delete then loadLists
+
+    @Test("loadLists after deleteList does not serve the deleted list from cache")
+    func testLoadListsAfterDeleteDoesNotServeDeletedList() async throws {
+        let mockRepo = MockListRepository(withMockData: true)
+        await mockRepo.setDelay(0)
+        let dataStore = ListDataStore()
+        let service = ListService(repository: mockRepo, dataStore: dataStore)
+
+        await service.loadLists()
+        let listToDelete = service.lists.first!.id
+
+        try await service.deleteList(id: listToDelete)
+
+        // Second service shares same cache
+        let service2 = ListService(repository: mockRepo, dataStore: dataStore)
+        await service2.loadLists()
+
+        #expect(!service2.lists.contains(where: { $0.id == listToDelete }))
+    }
+
+    // MARK: - Cache stale-data: logout then loadLists for another user
+
+    @Test("loadLists after logout does not serve previous user's cached lists")
+    func testLoadListsAfterLogoutFetchesFreshData() async {
+        let dataStore = ListDataStore()
+
+        // Session 1: populate cache with 3 lists
+        let repo1 = MockListRepository(withMockData: true)
+        await repo1.setDelay(0)
+        let service1 = ListService(repository: repo1, dataStore: dataStore)
+        await service1.loadLists()
+        #expect(service1.lists.count == 3)
+
+        // Logout must clear the cache so the next user gets a fresh fetch
+        await service1.clearCache()
+
+        // Session 2: different user with no lists
+        let repo2 = MockListRepository(withMockData: false)
+        await repo2.setDelay(0)
+        let service2 = ListService(repository: repo2, dataStore: dataStore)
+        await service2.loadLists()
+
+        // Without clearCache() the stale 3 lists would be served from cache
+        #expect(service2.lists.isEmpty)
+    }
 }
 extension MockListRepository {
     func setShouldFail(_ value: Bool) {
         shouldFail = value
     }
-}
 
+    func setDelay(_ value: TimeInterval) {
+        delay = value
+    }
+}

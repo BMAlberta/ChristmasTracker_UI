@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit(**/*.swift)", "Edit(**/*.md)", "Edit(Docs/**)", "Edit(scripts/**)", "Edit(contract/**)",
+      "Edit(LocalPackages/**)", "Edit(.claude/agents/**)", "Edit(.claude/skills/**)",
+      "Bash(scripts/build.sh*)", "Bash(scripts/test.sh*)", "Bash(scripts/verify.sh*)",
+      "Bash(xcodebuild -list*)", "Bash(xcodebuild -version*)", "Bash(xcrun simctl list*)",
+      "Bash(xcrun simctl io * screenshot *)", "Bash(swift --version*)", "Bash(swift test *)",
+      "Bash(swiftlint*)", "Bash(git status*)", "Bash(git diff *)", "Bash(git log *)",
+      "Bash(git show *)", "Bash(git branch*)", "Bash(git add *)", "Bash(git commit *)",
+      "Bash(git checkout *)", "Bash(git switch *)", "Bash(git rm --cached *)",
+      "Bash(gh pr view *)", "Bash(gh pr create *)", "Bash(gh pr checks *)", "Bash(gh pr list *)",
+      "Bash(grep *)", "Bash(head *)", "Bash(tail *)", "Bash(wc *)", "Bash(ls *)"
+    ],
+    "ask": [
+      "Edit(**/*.pbxproj)", "Edit(**/*.xcscheme)", "Edit(**/*.xcconfig)", "Edit(**/*.plist)",
+      "Edit(**/*.entitlements)", "Bash(git push *)", "Bash(git reset *)", "Bash(git clean *)",
+      "Bash(git rebase *)", "Bash(git branch -D *)", "Bash(gh pr merge *)", "Bash(gh pr close *)",
+      "Bash(xcodebuild * archive*)", "Bash(xcodebuild * -exportArchive*)",
+      "Bash(xcrun simctl erase*)", "Bash(xcrun simctl delete*)", "Bash(rm *)", "Bash(node *)",
+      "WebFetch", "WebSearch"
+    ],
+    "deny": [
+      "Read(./**/*.p12)", "Read(./**/*.mobileprovision)", "Read(./**/*secret*)", "Read(./**/*.pem)",
+      "Read(./**/.env)", "Read(./**/.env.*)",
+      "Edit(.claude/settings.json)", "Edit(.claude/settings.local.json)", "Edit(.claude/hooks/**)",
+      "Bash(op:*)", "Bash(bw:*)", "Bash(curl:*)", "Bash(wget:*)", "Bash(nc:*)",
+      "Bash(ssh:*)", "Bash(scp:*)", "Bash(sftp:*)", "Bash(rm -rf *)", "Bash(sudo *)",
+      "Bash(git push --force*)", "Workflow"
+    ]
+  },
+  "hooks": {
+    "PermissionRequest": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/log-permission.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.sh" } ] }
+    ]
+  }
+}

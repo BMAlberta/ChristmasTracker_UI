@@ -14,3 +14,10 @@ ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/xcshareddata/Wor
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/xcuserdata/brian.xcuserdatad/WorkspaceSettings.xcsettings
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/contents.xcworkspacedata
 ChristmasTracker/ChristmasTracker.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+.claude/logs/
+.claude/settings.local.json
+Docs/plans/
+*.pdf
+LocalPackages/**/.build/
+LocalPackages/**/Package.resolved
+LocalPackages/**/.swiftpm/
