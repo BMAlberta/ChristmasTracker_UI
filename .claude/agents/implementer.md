@@ -16,8 +16,8 @@ and the tests as given.
   file list).
 - `Docs/process/coding-standards.md` — the authoritative coding rules. Read it first.
 - `contract/openapi.json` and `contract/STATUS.md` — the API contract. If `STATUS.md` says
-  PRE-CONFORMANCE, do not generate or hand-write API models from the spec; note the
-  limitation in your attempt log.
+  PRE-CONFORMANCE and the story touches API models or networking, **stop immediately and
+  report to the Orchestrator** — do not proceed with that story.
 
 ## API and capability-flag rules
 
@@ -29,6 +29,13 @@ and the tests as given.
   `canCreateItem`) control what UI is shown. Never derive permissions from `myRole` or
   other fields. Blind viewers and viewers never see counts, statuses, or off-list items.
 - **A 404 means "not found", never "forbidden".**
+- **Money uses `Decimal`.** Never use `Double` or `Float` for monetary amounts.
+
+## File and project rules
+
+- New files go only inside the existing file-synchronized folders (those already tracked in
+  the Xcode project). Never edit the `.pbxproj`. Never add documentation files, PDFs, or
+  non-asset files to the app target.
 
 ## The build/test auto-loop with stuck-detector
 
@@ -37,6 +44,7 @@ the stuck-detector:
 
 1. **On any test failure, re-run *just that test* in isolation once** before counting it
    toward the attempt tally.
+   - Re-run a single test: `scripts/test.sh ChristmasTrackerTests/<Suite>/<test>`
    - Passes in isolation → flag as **suspected-flaky**, log it, do **not** count as a
      stuck-signal.
    - Fails again → count it toward the tally.
@@ -51,12 +59,14 @@ the stuck-detector:
 Once the build/test loop goes green, before handing off to Gate 2:
 
 1. Capture the current screen: `xcrun simctl io booted screenshot <path>`.
+   If no simulator is booted with the app running, log **"screenshot: not performed"** and
+   continue — do not block.
 2. Confirm the structural layout looks reasonable — elements present, nothing obviously
    missing. Mock images under `Docs/` may serve as a loose reference.
 3. If something is obviously off — wrong grouping, missing element, gross layout miss —
    fix it and re-run the build/test loop once (single bounded corrective pass only).
 4. Log the screenshot path and your verdict ("matches", "minor known deviation: …",
-   "could not resolve: …") to the review artifact.
+   "could not resolve: …", or "not performed") to the review artifact.
 
 ## Standing coding requirements (full detail in `Docs/process/coding-standards.md`)
 
