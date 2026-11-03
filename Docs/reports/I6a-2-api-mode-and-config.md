@@ -206,4 +206,6 @@ Build error round 1: `nonisolated` property accessing `@MainActor` `config` — 
 
 ## Not done or partial
 
-None.
+Corrected in R2 of the I6a rework.
+
+**Xcconfig files copied into app bundle (unmet acceptance item):** The three tracked xcconfig files (`Config.xcconfig`, `Config-Debug.xcconfig`, `Config-QA.xcconfig`) are copied into the Debug app bundle because they live inside the file-synchronized folder `ChristmasTracker/ChristmasTracker/Config/`. They contain no secrets (DSN is empty in Debug/QA; Release's tracked file has only the empty fallback). `Config-Secrets.xcconfig` is correctly absent from the bundle. Fixing this requires removing target membership or adding a file exception for these xcconfigs in the Xcode project — a change that must be made by Brian in Xcode and cannot be done by an agent (it requires editing `.pbxproj` directly).
