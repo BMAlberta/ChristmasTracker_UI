@@ -11,7 +11,6 @@ import SwiftUI
 struct ProfileView: View {
 
     @Environment(\.authenticationService) private var authService
-    @Environment(\.listService) private var listService
 
     @State private var showLogoutConfirmation = false
 
@@ -67,7 +66,6 @@ struct ProfileView: View {
             ) {
                 Button("Logout", role: .destructive) {
                     Task {
-                        await listService.clearCache()
                         await authService.logout()
                     }
                 }

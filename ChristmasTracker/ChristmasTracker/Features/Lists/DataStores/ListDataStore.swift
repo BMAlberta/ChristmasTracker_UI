@@ -86,5 +86,13 @@ actor ListDataStore {
         listDetails = [:]
         lastFetch = nil
     }
-    
+
+}
+
+// MARK: - SessionClearable
+
+extension ListDataStore: SessionClearable {
+    func clearForSession() async throws {
+        clear()
+    }
 }

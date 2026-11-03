@@ -42,13 +42,13 @@ final class AuthenticationService {
         self.sessionManager = sessionManager
         
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
-        
+
         Task {
             await checkBiometricAvailability()
             await loadStoredSession()
         }
     }
-    
+
     // MARK: - Public Methods
     /// Login
     func login(email: String, password: String, rememberMe: Bool = false) async {
@@ -137,17 +137,10 @@ final class AuthenticationService {
     }
     
     /// Logout current user
-    func logout() async {
+    func logout(reason: TeardownReason = .userLogout) async {
         isLoading = true
-        
-        defer {
-            clearAuthState()
-            isLoading = false
-        }
-        
-        await sessionManager.stopSession()
-        await NetworkCache.shared.clear()
-        
+        defer { isLoading = false }
+
         if let refreshToken = tokens?.refreshToken {
             do {
                 try await authRepository.logout(refreshToken: refreshToken)
@@ -155,6 +148,12 @@ final class AuthenticationService {
                 LogError("Logout API failed: \(error)", category: .auth)
             }
         }
+
+        // Route through teardown — clears all registered clearables
+        await sessionManager.teardown(reason: reason)
+        // AuthenticationService is not a registered clearable: SessionManager must exist before
+        // AuthenticationService can be constructed (circular dependency), so it clears its own state here.
+        clearAuthState()
         clearStoredTokens()
     }
     
@@ -175,11 +174,11 @@ final class AuthenticationService {
         } catch {
             LogError("Token refresh failed: \(error)", category: .auth)
             
-            await logout()
+            await logout(reason: .sessionExpired)
         }
-        
+
     }
-    
+
     /// Setup biometric auth
     func setupBiometrics(biometricToken: String) async throws {
         guard isBiometricAvailable else {
@@ -224,7 +223,7 @@ final class AuthenticationService {
     }
     
     // MARK: - Private Helpers
-    
+
     private func handleAuthSuccess(authData: AuthData, rememberMe: Bool) async {
         // Update user
         currentUser = authData.user
@@ -331,6 +330,16 @@ final class AuthenticationService {
             biometricType = .none
             LogDebug("Biometric not available", category: .auth)
         }
+    }
+}
+
+// MARK: - SessionClearable
+
+extension AuthenticationService: SessionClearable {
+    // Actor-isolated (@MainActor): manual instrumentation only — @Instrumented not yet available (I6a)
+    func clearForSession() async throws {
+        clearAuthState()
+        clearStoredTokens()
     }
 }
 

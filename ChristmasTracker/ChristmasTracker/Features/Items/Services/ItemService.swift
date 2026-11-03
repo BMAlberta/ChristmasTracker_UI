@@ -13,9 +13,9 @@ import SwiftUI
 final class ItemService {
     
     // MARK: - Dependencies
-    
-    private let itemRepository: ItemRepository
-    private let dataStore: ItemDataStore
+
+    private nonisolated let itemRepository: any ItemRepository
+    private nonisolated let dataStore: ItemDataStore
     
     // MARK: - Published State
     
@@ -59,7 +59,7 @@ final class ItemService {
     
     // MARK: - Initialization
     
-    init(repository: ItemRepository, dataStore: ItemDataStore) {
+    init(repository: any ItemRepository, dataStore: ItemDataStore) {
         self.itemRepository = repository
         self.dataStore = dataStore
     }
@@ -239,4 +239,17 @@ final class ItemService {
     func notiftyPurchaseChase() {
         LogInfo("Purchase change notification", category: .business)
     }
+
+    // MARK: - SessionClearable
+
+    func clearForSession() async throws {
+        await dataStore.clearAll()
+        items = []
+        currentListId = nil
+        currentItem = nil
+    }
 }
+
+// MARK: - SessionClearable
+
+extension ItemService: SessionClearable {}

@@ -68,3 +68,11 @@ actor ItemDataStore {
         lastFetchByList = [:]
     }
 }
+
+// MARK: - SessionClearable
+
+extension ItemDataStore: SessionClearable {
+    func clearForSession() async throws {
+        clearAll()
+    }
+}

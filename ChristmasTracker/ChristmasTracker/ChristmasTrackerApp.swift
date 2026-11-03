@@ -14,6 +14,7 @@ struct ChristmasTrackerApp: App {
     @State private var apiClient: APIClient
     @State private var listService: ListService
     @State private var itemService: ItemService
+    private let sessionManager: SessionManager
 
     private struct AppDependencies {
         let apiClient: APIClient
@@ -47,30 +48,46 @@ struct ChristmasTrackerApp: App {
     
     // MARK: - Initialization
     init() {
+        // Wipe 4.4 legacy credentials/data on first launch — must run before store reads
+        FirstLaunchWipe().performIfNeeded()
+
         let dependencies = AppDependencies.make()
         apiClient = dependencies.apiClient
 
         // List Service
         let listDataStore = ListDataStore()
-        listService = ListService(
+        let ls = ListService(
             repository: dependencies.listRepository,
             dataStore: listDataStore
         )
+        listService = ls
 
         let itemDataStore = ItemDataStore()
-        itemService = ItemService(
+        let is_ = ItemService(
             repository: dependencies.itemRepository,
             dataStore: itemDataStore
         )
+        itemService = is_
 
-        // Create session manager
-        let sessionManager = SessionManager(authRepository: dependencies.authRepository)
+        // Create session manager with production clearables
+        let clearables = makeProductionClearables(
+            listDataStore: listDataStore,
+            itemDataStore: itemDataStore,
+            listService: ls,
+            itemService: is_,
+            networkCache: NetworkCache.shared
+        )
+        let sm = SessionManager(authRepository: dependencies.authRepository,
+                                initialClearables: clearables)
+        sessionManager = sm
 
         // Create services
-        authService = AuthenticationService(
+        let auth = AuthenticationService(
             repository: dependencies.authRepository,
-            sessionManager: sessionManager
+            sessionManager: sm
         )
+        authService = auth
+
         LogInfo("App initialized", category: .business)
     }
     var body: some Scene {
