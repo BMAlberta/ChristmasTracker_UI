@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 @main
 struct ChristmasTrackerApp: App {
@@ -15,6 +16,7 @@ struct ChristmasTrackerApp: App {
     @State private var listService: ListService
     @State private var itemService: ItemService
     private let sessionManager: SessionManager
+    private let privacyCoverCoordinator: PrivacyCoverCoordinator
 
     private struct AppDependencies {
         let apiClient: APIClient
@@ -50,6 +52,15 @@ struct ChristmasTrackerApp: App {
         SentryBootstrap.startIfConfigured()
         // Wipe 4.4 legacy credentials/data on first launch — must run before store reads
         FirstLaunchWipe().performIfNeeded()
+
+        // Start the privacy cover before any app data or session state is built.
+        // The coordinator has no dependencies; it must be alive before the first scene event.
+        let coordinator = PrivacyCoverCoordinator { object in
+            guard let scene = object as? UIWindowScene else { return nil }
+            return PrivacyCoverWindowAdapter(scene: scene)
+        }
+        coordinator.start()
+        privacyCoverCoordinator = coordinator
 
         let dependencies = AppDependencies.make()
         apiClient = dependencies.apiClient
