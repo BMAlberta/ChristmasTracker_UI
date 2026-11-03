@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D3C371D42F357BEE00C09FB4 /* NewRelic in Frameworks */ = {isa = PBXBuildFile; productRef = D3C371D32F357BEE00C09FB4 /* NewRelic */; };
+		D3BB8E43309A4A47003633BA /* TrackerInstrumentation in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB8E42309A4A47003633BA /* TrackerInstrumentation */; };
 		D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = D3C371D62F357C3000C09FB4 /* SentrySwiftUI */; };
 /* End PBXBuildFile section */
 
@@ -70,7 +70,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D3C371D42F357BEE00C09FB4 /* NewRelic in Frameworks */,
+				D3BB8E43309A4A47003633BA /* TrackerInstrumentation in Frameworks */,
 				D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -141,8 +141,8 @@
 			);
 			name = ChristmasTracker;
 			packageProductDependencies = (
-				D3C371D32F357BEE00C09FB4 /* NewRelic */,
 				D3C371D62F357C3000C09FB4 /* SentrySwiftUI */,
+				D3BB8E42309A4A47003633BA /* TrackerInstrumentation */,
 			);
 			productName = ChristmasTracker;
 			productReference = D3C3714B2F32DFD100C09FB4 /* ChristmasTracker.app */;
@@ -227,8 +227,8 @@
 			mainGroup = D3C371422F32DFD100C09FB4;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D3C371D22F357BEE00C09FB4 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */,
 				D3C371D52F357C3000C09FB4 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				D3BB8E41309A4A47003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerInstrumentation" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D3C3714C2F32DFD100C09FB4 /* Products */;
@@ -776,15 +776,14 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		D3C371D22F357BEE00C09FB4 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/newrelic/newrelic-ios-agent-spm";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 7.6.1;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		D3BB8E41309A4A47003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerInstrumentation" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../LocalPackages/TrackerInstrumentation;
 		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		D3C371D52F357C3000C09FB4 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
@@ -796,10 +795,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D3C371D32F357BEE00C09FB4 /* NewRelic */ = {
+		D3BB8E42309A4A47003633BA /* TrackerInstrumentation */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D3C371D22F357BEE00C09FB4 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */;
-			productName = NewRelic;
+			productName = TrackerInstrumentation;
 		};
 		D3C371D62F357C3000C09FB4 /* SentrySwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
