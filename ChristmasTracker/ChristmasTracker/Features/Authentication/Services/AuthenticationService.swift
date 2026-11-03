@@ -29,9 +29,6 @@ final class AuthenticationService {
     // MARK: - Private State
     private var tokens: AuthTokens?
     private let deviceFingerprint: String
-    // nonisolated(unsafe): written only during init (single-threaded) and read only in
-    // deinit (also single-threaded); @MainActor-isolated access would be unsound in deinit.
-    nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
     private static let keychainBiometricTokenKey = "auth.biometric_token"
     private static let keychainBiometricUserIdKey = "auth.user_id"
     private static let keychainReasonMessage = "Authenticate to access your Christmas Tracker account"
@@ -46,18 +43,12 @@ final class AuthenticationService {
         
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
-        setupNotificationObservers()
-
         Task {
             await checkBiometricAvailability()
             await loadStoredSession()
         }
     }
 
-    deinit {
-        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
-    }
-    
     // MARK: - Public Methods
     /// Login
     func login(email: String, password: String, rememberMe: Bool = false) async {
@@ -146,7 +137,7 @@ final class AuthenticationService {
     }
     
     /// Logout current user
-    func logout() async {
+    func logout(reason: TeardownReason = .userLogout) async {
         isLoading = true
         defer { isLoading = false }
 
@@ -159,7 +150,7 @@ final class AuthenticationService {
         }
 
         // Route through teardown — clears all registered clearables
-        await sessionManager.teardown(reason: .userLogout)
+        await sessionManager.teardown(reason: reason)
         // Explicitly clear self in case authService is not yet registered as a clearable
         clearAuthState()
         clearStoredTokens()
@@ -182,11 +173,11 @@ final class AuthenticationService {
         } catch {
             LogError("Token refresh failed: \(error)", category: .auth)
             
-            await logout()
+            await logout(reason: .sessionExpired)
         }
-        
+
     }
-    
+
     /// Setup biometric auth
     func setupBiometrics(biometricToken: String) async throws {
         guard isBiometricAvailable else {
@@ -231,30 +222,6 @@ final class AuthenticationService {
     }
     
     // MARK: - Private Helpers
-
-    private func setupNotificationObservers() {
-        let unauthorizedObserver = NotificationCenter.default.addObserver(
-            forName: .unauthorizedRequest,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.logout()
-            }
-        }
-
-        let versionObserver = NotificationCenter.default.addObserver(
-            forName: .versionUpdateRequired,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.logout()
-            }
-        }
-
-        notificationObservers = [unauthorizedObserver, versionObserver]
-    }
 
     private func handleAuthSuccess(authData: AuthData, rememberMe: Bool) async {
         // Update user

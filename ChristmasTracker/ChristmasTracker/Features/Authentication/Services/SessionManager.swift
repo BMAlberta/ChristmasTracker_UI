@@ -21,7 +21,8 @@ actor SessionManager {
     private var lastActivityTime: Date?
     private var pingTask: Task<Void, Never>?
     private var clearables: [any SessionClearable] = []
-    
+    private(set) var lastTeardownReason: TeardownReason?
+
     // MARK: - Initialization
     
     init(authRepository: AuthenticationRepository) {
@@ -38,6 +39,7 @@ actor SessionManager {
     /// Tear down the session: cancel pings, clear all registered clearables,
     /// and flush system-level caches.  A failure in one clearable never stops others.
     func teardown(reason: TeardownReason) async {
+        self.lastTeardownReason = reason
         // 1. Cancel in-flight ping
         pingTask?.cancel()
         pingTask = nil

@@ -2,32 +2,31 @@
 //  LogoutPathTests.swift
 //  ChristmasTrackerTests
 //
-//  Tests for Story I2a-2: route every session-ending path through teardown.
+//  Tests for Story R1: route every session-ending path through teardown with a reason,
+//  remove notification observers from AuthenticationService, and expose
+//  SessionManager.lastTeardownReason for verification.
 //
-//  Expected failure state BEFORE Story 2 implementation:
-//  - Test 1 (logoutViaAuthServiceClearsRegisteredDataStore): FAILS — authService.logout()
-//    calls sessionManager.stopSession() directly; it does NOT call teardown(reason:), so
-//    registered clearables (ListDataStore) are never cleared.
-//  - Test 2 (refreshTokenFailureClearsRegisteredDataStore): FAILS for the same reason.
-//  - Test 3 (unauthorizedRequestNotificationTriggersLogout): FAILS — no observer exists
-//    on ContentView for .unauthorizedRequest; after posting the notification,
-//    isAuthenticated remains true.
-//  - Test 4 (versionUpdateNotificationTriggersLogout): FAILS for the same reason.
-//  - Test 5 (networkLogoutFailureDoesNotPreventSignOut): guard/regression — passes today
-//    because logout() already ignores the network error.
+//  Expected state BEFORE R1 implementation:
+//  - Tests 1–4: compile errors on `sessionManager.lastTeardownReason` (property does not
+//    exist yet on SessionManager). The compile error IS the red state for those tests.
+//    Tests 1–2 also verify behavioral assertions that will fail at runtime once the property
+//    is added but the reason-routing logic is not yet complete.
+//  - Test 5: compiles and passes today — regression guard.
 //
 
 import Testing
 import Foundation
 @testable import ChristmasTracker
 
-// MARK: - Private mock repository for failure scenarios
+// MARK: - Private mock repository
 
-/// Configures failure on logout and/or refresh without the sleeping delays of
-/// `MockAuthenticationRepository`.
+/// Fast, configurable repository for logout and refresh failure scenarios.
+/// `loginExpiresIn` controls the `expiresIn` value returned by `login`, allowing
+/// tests to produce tokens that satisfy `AuthTokens.needsRefresh` immediately (pass 0).
 private actor ThrowingLogoutRepository: AuthenticationRepository {
     var shouldFailLogout = false
     var shouldFailRefresh = false
+    var loginExpiresIn: Int = 900
 
     private let mockUser = User(
         id: "mock-user-123",
@@ -39,7 +38,7 @@ private actor ThrowingLogoutRepository: AuthenticationRepository {
     )
 
     func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
-        AuthData(user: mockUser, accessToken: "access", refreshToken: "refresh", expiresIn: 900)
+        AuthData(user: mockUser, accessToken: "access", refreshToken: "refresh", expiresIn: loginExpiresIn)
     }
 
     func register(email: String, password: String, name: String) async throws -> AuthData {
@@ -67,9 +66,9 @@ private actor ThrowingLogoutRepository: AuthenticationRepository {
 
     func forgotPassword(email: String) async throws {}
 
-    // Mutation helpers — called via `await repo.setFailLogout(true)`
     func setFailLogout(_ value: Bool) { shouldFailLogout = value }
     func setFailRefresh(_ value: Bool) { shouldFailRefresh = value }
+    func setLoginExpiresIn(_ value: Int) { loginExpiresIn = value }
 }
 
 // MARK: - Suite
@@ -80,7 +79,6 @@ struct LogoutPathTests {
 
     // MARK: - Helpers
 
-    /// Sample `GiftList` for seeding a `ListDataStore`.
     private func makeSampleList() -> GiftList {
         let person = ListPerson(id: "u1", displayName: "Alice")
         return GiftList(
@@ -103,54 +101,57 @@ struct LogoutPathTests {
 
     // MARK: - Test 1
 
-    /// After `authService.logout()`, any `ListDataStore` registered with the same
-    /// `SessionManager` must be empty.
+    /// `logout()` (no argument) must route through teardown with `.userLogout`, clearing
+    /// any registered `ListDataStore` and recording the teardown reason.
     ///
-    /// FAILS before Story 2: `logout()` calls `sessionManager.stopSession()` directly
-    /// and never invokes `teardown(reason:)`, so registered clearables are skipped.
-    @Test("logout() clears a registered ListDataStore via teardown")
-    func logoutViaAuthServiceClearsRegisteredDataStore() async throws {
-        let mockRepo = await MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+    /// FAILS before R1:
+    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
+    ///   - After property is added but reason-routing is missing, the `lastTeardownReason`
+    ///     assertion fails because the default call path does not set the reason.
+    @Test("logout() clears a registered ListDataStore and records .userLogout reason")
+    func profileLogoutPathSendsTeardownWithUserLogoutReason() async throws {
+        let repo = ThrowingLogoutRepository()
+        let sessionManager = SessionManager(authRepository: repo)
         let listDataStore = ListDataStore()
         let authService = AuthenticationService(
-            repository: mockRepo,
+            repository: repo,
             sessionManager: sessionManager
         )
 
-        // Register the data store so teardown can reach it
         await sessionManager.register(listDataStore)
 
-        // Authenticate
         await authService.login(email: "test@example.com", password: "password", rememberMe: false)
-        #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
+        #expect(authService.isAuthenticated == true, "Precondition: must be authenticated before logout")
 
-        // Populate the data store
         await listDataStore.setLists([makeSampleList()])
         let before = await listDataStore.getLists()
         #expect(!before.isEmpty, "Precondition: ListDataStore must have data before logout")
 
-        // Act
         await authService.logout()
 
-        // Assert: teardown must have cleared the registered data store
         let after = await listDataStore.getLists()
-        #expect(
-            after.isEmpty,
-            "ListDataStore must be empty after authService.logout() — requires teardown routing"
-        )
+        #expect(after.isEmpty, "ListDataStore must be empty after authService.logout()")
+
+        // Requires R1: lastTeardownReason does not exist on SessionManager yet.
+        let reason = await sessionManager.lastTeardownReason
+        #expect(reason == .userLogout, "teardown reason must be .userLogout for a direct logout() call")
     }
 
     // MARK: - Test 2
 
-    /// When token refresh fails, the resulting implicit logout must also clear any
-    /// `ListDataStore` registered with the `SessionManager`.
+    /// When `refreshTokenIfNeeded()` fails, the resulting logout must call
+    /// `teardown(reason: .sessionExpired)`, clearing registered stores and recording the reason.
     ///
-    /// FAILS before Story 2: the refresh-failure path calls `logout()` which does not
-    /// route through `teardown(reason:)`, so registered clearables are not cleared.
-    @Test("refreshTokenIfNeeded() failure clears a registered ListDataStore via teardown")
-    func refreshTokenFailureClearsRegisteredDataStore() async throws {
+    /// FAILS before R1:
+    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
+    ///   - After property is added, `refreshTokenIfNeeded()` still calls `logout()` (no reason
+    ///     param), so `lastTeardownReason` is `.userLogout`, not `.sessionExpired`.
+    @Test("refreshTokenIfNeeded() failure calls logout with .sessionExpired reason")
+    func refreshFailureCallsLogoutWithSessionExpiredReason() async throws {
         let repo = ThrowingLogoutRepository()
+        // expiresIn: 0 → expiresAt = Date() → needsRefresh is immediately true
+        // (Date().addingTimeInterval(5*60) >= Date() is always true)
+        await repo.setLoginExpiresIn(0)
 
         let sessionManager = SessionManager(authRepository: repo)
         let listDataStore = ListDataStore()
@@ -161,102 +162,81 @@ struct LogoutPathTests {
 
         await sessionManager.register(listDataStore)
 
-        // Login succeeds (repo only fails on refreshToken when armed)
         await authService.login(email: "test@example.com", password: "password", rememberMe: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
 
-        // Populate the data store
         await listDataStore.setLists([makeSampleList()])
         let before = await listDataStore.getLists()
-        #expect(!before.isEmpty, "Precondition: data store must have data before refresh failure")
+        #expect(!before.isEmpty, "Precondition: ListDataStore must have data before refresh failure")
 
-        // Arm the refresh failure and trigger the logout that refresh failure causes.
-        // After Story 2, the session-ending path calls teardown(reason: .sessionExpired)
-        // which reaches the registered ListDataStore.
         await repo.setFailRefresh(true)
-        await authService.logout()
+        await authService.refreshTokenIfNeeded()
+
+        #expect(authService.isAuthenticated == false, "isAuthenticated must be false after refresh failure")
 
         let after = await listDataStore.getLists()
-        #expect(
-            after.isEmpty,
-            "ListDataStore must be empty after a session-ending logout triggered by refresh failure"
-        )
+        #expect(after.isEmpty, "ListDataStore must be empty after refresh-failure logout")
+
+        // Requires R1: property does not exist yet and reason will be wrong until logic is changed.
+        let reason = await sessionManager.lastTeardownReason
+        #expect(reason == .sessionExpired, "teardown reason must be .sessionExpired when refresh fails")
     }
 
     // MARK: - Test 3
 
-    /// Posting `.unauthorizedRequest` must cause `authService.isAuthenticated` to
-    /// become `false` once the Story 2 observer is wired into `ContentView`.
+    /// Calling `teardown(reason: .sessionExpired)` directly on `SessionManager` must invoke
+    /// all registered clearables and record `.sessionExpired` as the teardown reason.
     ///
-    /// FAILS before Story 2: no observer exists, so after posting the notification
-    /// `isAuthenticated` remains `true`.
-    @Test(".unauthorizedRequest notification triggers logout (observer not yet wired)")
-    func unauthorizedRequestNotificationTriggersLogout() async throws {
-        let mockRepo = await MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
-        let authService = AuthenticationService(
-            repository: mockRepo,
-            sessionManager: sessionManager
-        )
+    /// FAILS before R1:
+    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
+    @Test("teardown(.sessionExpired) clears registered clearable and records reason")
+    func sessionExpiredTeardownClearsRegisteredClearable() async throws {
+        let repo = ThrowingLogoutRepository()
+        let sessionManager = SessionManager(authRepository: repo)
+        let mockClearable = MockSessionClearable()
 
-        // Authenticate
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
-        #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
+        await sessionManager.register(mockClearable)
+        await sessionManager.teardown(reason: .sessionExpired)
 
-        // Post the notification that Story 2's observer will respond to
-        NotificationCenter.default.post(name: .unauthorizedRequest, object: nil)
+        #expect(mockClearable.wasClearCalled, "clearForSession() must be invoked by teardown")
+        #expect(mockClearable.clearCallCount == 1, "clearForSession() must be called exactly once")
 
-        // Give any synchronous or immediate-Task observer a chance to fire
-        try await Task.sleep(for: .milliseconds(100))
-
-        // After Story 2, the observer calls authService.logout() → isAuthenticated == false.
-        // Before Story 2 (no observer), isAuthenticated stays true → test FAILS.
-        #expect(
-            authService.isAuthenticated == false,
-            ".unauthorizedRequest notification must trigger logout; observer is not yet wired"
-        )
+        // Requires R1: lastTeardownReason does not exist on SessionManager yet.
+        let reason = await sessionManager.lastTeardownReason
+        #expect(reason == .sessionExpired, "lastTeardownReason must be .sessionExpired")
     }
 
     // MARK: - Test 4
 
-    /// Posting `.versionUpdateRequired` must cause `authService.isAuthenticated` to
-    /// become `false` once the Story 2 observer is wired into `ContentView`.
+    /// Calling `teardown(reason: .forcedUpdate)` directly on `SessionManager` must invoke
+    /// all registered clearables and record `.forcedUpdate` as the teardown reason.
     ///
-    /// FAILS before Story 2: no observer exists.
-    @Test(".versionUpdateRequired notification triggers logout (observer not yet wired)")
-    func versionUpdateNotificationTriggersLogout() async throws {
-        let mockRepo = await MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
-        let authService = AuthenticationService(
-            repository: mockRepo,
-            sessionManager: sessionManager
-        )
+    /// FAILS before R1:
+    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
+    @Test("teardown(.forcedUpdate) clears registered clearable and records reason")
+    func forcedUpdateTeardownClearsRegisteredClearable() async throws {
+        let repo = ThrowingLogoutRepository()
+        let sessionManager = SessionManager(authRepository: repo)
+        let mockClearable = MockSessionClearable()
 
-        // Authenticate
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
-        #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
+        await sessionManager.register(mockClearable)
+        await sessionManager.teardown(reason: .forcedUpdate)
 
-        // Post the notification that Story 2's observer will respond to
-        NotificationCenter.default.post(name: .versionUpdateRequired, object: nil)
+        #expect(mockClearable.wasClearCalled, "clearForSession() must be invoked by teardown")
+        #expect(mockClearable.clearCallCount == 1, "clearForSession() must be called exactly once")
 
-        // Give any synchronous or immediate-Task observer a chance to fire
-        try await Task.sleep(for: .milliseconds(100))
-
-        // After Story 2, the observer calls authService.logout() → isAuthenticated == false.
-        // Before Story 2 (no observer), isAuthenticated stays true → test FAILS.
-        #expect(
-            authService.isAuthenticated == false,
-            ".versionUpdateRequired notification must trigger logout; observer is not yet wired"
-        )
+        // Requires R1: lastTeardownReason does not exist on SessionManager yet.
+        let reason = await sessionManager.lastTeardownReason
+        #expect(reason == .forcedUpdate, "lastTeardownReason must be .forcedUpdate")
     }
 
     // MARK: - Test 5 (regression guard)
 
-    /// When the network logout call throws, `isAuthenticated` must still become `false`.
+    /// When the network logout call throws, `isAuthenticated` must still become `false`
+    /// and `currentUser` must be nil.
     ///
-    /// This test passes today because logout() already ignores the network error via
-    /// do/catch. It acts as a regression guard to ensure Story 2 does not accidentally
-    /// break this behavior.
+    /// This test passes today and acts as a regression guard to ensure R1 does not
+    /// accidentally break the error-tolerant sign-out path.
     @Test("Network logout failure does not prevent sign-out (regression guard)")
     func networkLogoutFailureDoesNotPreventSignOut() async throws {
         let repo = ThrowingLogoutRepository()
@@ -271,7 +251,6 @@ struct LogoutPathTests {
         await authService.login(email: "test@example.com", password: "password", rememberMe: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
 
-        // logout() — network call throws, but sign-out must still happen
         await authService.logout()
 
         #expect(
