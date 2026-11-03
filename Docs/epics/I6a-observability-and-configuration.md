@@ -207,3 +207,94 @@ ChristmasTrackerTests/Core/Configuration/AppConfigurationTests.swift:37:#if DEBU
 - Add tests: `ChristmasTrackerTests/Core/Observability/SentryBootstrapTests.swift`
 
 **Weight:** Solo.
+
+---
+
+## Rework Gate 1
+
+### Story R1 — Sentry privacy hardening
+
+**Contract slice:** None (observability layer only, no networking).
+
+**Why:** With `enableAutoBreadcrumbTracking` at its default (`true`), sentry-cocoa 9.4.0 swizzles
+`UIControl.sendAction` (records `UIButton.currentTitle` as breadcrumb data) and `viewDidAppear`
+(records `UIViewController.navigationItem.title` / `controller.title`). In this app those strings
+are list names and item names — surprise-gift data. `PIIFilter` cannot catch them because they are
+not email/token/UUID patterns. Nothing has leaked (DSN is empty), but the risk must be closed
+before a DSN is configured.
+
+**Verified from source:** Confirmed in
+`/tmp/ct-derived/SourcePackages/checkouts/sentry-cocoa/Sources/Swift/Integrations/Breadcrumbs/SentryBreadcrumbTracker.swift`
+lines 210–253 (`touch` category records `button.currentTitle`) and lines 225–231 (`ui.lifecycle`
+category records `controller.navigationItem.title` / `controller.title`).
+
+**Acceptance criteria:**
+
+1. `makeOptions` sets `enableAutoBreadcrumbTracking = false`.
+   Confirmed property exists: `Options.swift` line 496.
+
+2. `makeOptions` sets `enableLogs = false` explicitly.
+   Confirmed property exists: `Options.swift` line 132 (default already `false`).
+
+3. `makeOptions` sets `options.sessionReplay.sessionSampleRate = 0` and
+   `options.sessionReplay.onErrorSampleRate = 0` explicitly.
+   Confirmed properties exist on `SentryReplayOptions` (defaults already 0).
+
+4. No public profiling sample rate is set — there is no public `profilesSampleRate`,
+   `profilesSampler`, or `profilingOptions` in Options.swift 9.4.0; only
+   `@_spi(Private) var profiling: SentryProfileOptions?`. Profiling is therefore off by
+   default. The report must state this finding.
+
+5. `makeOptions` sets `enableMetricKit = false` explicitly.
+   Confirmed property exists: `Options.swift` line 564 (default already `false`).
+
+6. `makeOptions` sets `beforeSendSpan` to a closure that redacts `span.spanDescription` and
+   string values in `span.data` via `PIIFilter.redact`.
+   Confirmed: `SentryBeforeSendSpanCallback` exists (`Options.swift` line 127);
+   `spanDescription` is a settable nullable `String` on the `Span` protocol;
+   per-key mutation uses `span.setData(value:key:)` (public method).
+
+7. `scrubBreadcrumb` return type changes to `Breadcrumb?`. It returns `nil` for any
+   breadcrumb whose `category` is `"touch"` or `"ui.lifecycle"`. For all other categories
+   the existing message/data scrubbing logic is applied and the breadcrumb is returned.
+
+8. The `beforeBreadcrumb` closure in `makeOptions` requires no text change — the existing
+   `{ crumb in scrubBreadcrumb(crumb) }` already satisfies `SentryBeforeBreadcrumbCallback`
+   (`(Breadcrumb) -> Breadcrumb?`) once the return type of `scrubBreadcrumb` changes.
+
+9. `scrubEvent` also redacts `event.request?.url` (a `String?`) with `PIIFilter.redact`.
+   Confirmed: `SentryRequest.url` is `NSString? / String?`.
+
+10. Trimming in `makeOptions` (DSN trim), `APIMode.parse(_:)`, and
+    `readConfiguration` (DSN trim) changed from `.whitespaces` to `.whitespacesAndNewlines`.
+
+11. All existing tests still pass. The three existing `scrubBreadcrumb` tests must be
+    updated for the `Breadcrumb?` return type (use `try #require(...)`); state this in the report.
+
+12. New tests (Swift Testing, `SentryBootstrapTests` suite unless noted):
+    - `makeOptions enableAutoBreadcrumbTracking is false`
+    - `makeOptions enableLogs is false`
+    - `makeOptions session replay sample rates are zero`
+    - `makeOptions enableMetricKit is false`
+    - `scrubBreadcrumb returns nil for touch breadcrumb with title in data`
+    - `scrubBreadcrumb returns nil for ui.lifecycle breadcrumb with title in data`
+    - `scrubBreadcrumb returns breadcrumb for app.lifecycle category`
+    - `scrubBreadcrumb still redacts email in message of a kept breadcrumb`
+    - `scrubEvent redacts request URL containing UUID`
+    - `scrubEvent redacts request URL containing email in path`
+    - Trailing-newline case for `APIMode.parse` (in `APIModeTests`)
+    - Trailing-newline case for `readConfiguration` DSN (in existing config test file)
+    - Trailing-newline case for `makeOptions` DSN (new test in `SentryBootstrapTests`)
+
+13. `scripts/verify.sh` passes; test count equals 99 + (new test count) - 0.
+
+**New interface introduced:** Yes (`scrubBreadcrumb` return type changes to `Breadcrumb?`).
+
+**Scoped files:**
+- Modify: `ChristmasTracker/ChristmasTracker/Core/Observability/SentryBootstrap.swift`
+- Modify: `ChristmasTracker/ChristmasTracker/Core/Configuration/AppConfiguration.swift`
+- Modify: `ChristmasTrackerTests/Core/Observability/SentryBootstrapTests.swift`
+- Modify: `ChristmasTrackerTests/Core/Configuration/APIModeTests.swift`
+- Modify: `ChristmasTrackerTests/Core/Configuration/AppConfigurationTests.swift` (ReadConfigurationTests file)
+
+**Weight:** Solo (implementer writes failing tests, implements, loops build/test).
