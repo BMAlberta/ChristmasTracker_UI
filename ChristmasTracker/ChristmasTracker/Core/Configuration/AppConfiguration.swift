@@ -16,7 +16,7 @@ enum APIMode: Sendable {
     /// - "real" (case-insensitive, trimmed) → .real
     /// - nil, empty, or unrecognized → .real (safe default; logs a warning)
     nonisolated static func parse(_ raw: String?) -> APIMode {
-        let trimmed = raw?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         switch trimmed {
         case "mock": return .mock
         case "real": return .real
@@ -47,7 +47,7 @@ nonisolated func readConfiguration(from info: [String: Any]?) -> (
         return v
     }
 
-    let rawDSN = string("SENTRY_DSN")?.trimmingCharacters(in: .whitespaces) ?? ""
+    let rawDSN = string("SENTRY_DSN")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (
         apiMode: APIMode.parse(string("API_MODE")),
         sentryDSN: rawDSN.isEmpty ? nil : rawDSN,

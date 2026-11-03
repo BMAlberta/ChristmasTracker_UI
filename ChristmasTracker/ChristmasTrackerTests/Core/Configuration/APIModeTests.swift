@@ -42,6 +42,11 @@ struct APIModeTests {
     func parseUnknown() {
         #expect(APIMode.parse("staging") == .real)
     }
+
+    @Test("parse 'mock' with trailing newline returns mock")
+    func parseMockWithTrailingNewline() {
+        #expect(APIMode.parse("mock\n") == .mock)
+    }
 }
 
 @Suite("readConfiguration Tests")
@@ -110,5 +115,12 @@ struct ReadConfigurationTests {
         #expect(config.sessionTimeout == 300)
         #expect(config.backgroundRefreshThreshold == 60)
         #expect(config.logFlushInterval == 15)
+    }
+
+    @Test("sentryDSN with trailing newline is trimmed and non-nil")
+    func sentryDSNTrailingNewline() {
+        let info: [String: Any] = ["SENTRY_DSN": "https://key@o0.ingest.sentry.io/0\n"]
+        let config = readConfiguration(from: info)
+        #expect(config.sentryDSN == "https://key@o0.ingest.sentry.io/0")
     }
 }

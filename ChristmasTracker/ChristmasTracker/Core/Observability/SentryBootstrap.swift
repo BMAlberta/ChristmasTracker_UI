@@ -15,7 +15,7 @@ enum SentryBootstrap {
         environment: String,
         release: String
     ) -> Options? {
-        let trimmed = dsn.trimmingCharacters(in: .whitespaces)
+        let trimmed = dsn.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
         let options = Options()
@@ -29,9 +29,25 @@ enum SentryBootstrap {
         options.enableNetworkTracking = false
         options.enableCaptureFailedRequests = false
         options.enableUserInteractionTracing = false
+        options.enableAutoBreadcrumbTracking = false
+        options.enableLogs = false
+        options.sessionReplay.sessionSampleRate = 0
+        options.sessionReplay.onErrorSampleRate = 0
+        options.enableMetricKit = false
         options.tracesSampleRate = 0.05
         options.beforeSend = { event in scrubEvent(event) }
         options.beforeBreadcrumb = { crumb in scrubBreadcrumb(crumb) }
+        options.beforeSendSpan = { span in
+            if let desc = span.spanDescription {
+                span.spanDescription = PIIFilter.redact(desc)
+            }
+            for (key, value) in span.data {
+                if let strValue = value as? String {
+                    span.setData(value: PIIFilter.redact(strValue), key: key)
+                }
+            }
+            return span
+        }
         return options
     }
 
@@ -56,13 +72,19 @@ enum SentryBootstrap {
         if let qs = event.request?.queryString {
             event.request?.queryString = PIIFilter.redact(qs)
         }
+        if let url = event.request?.url {
+            event.request?.url = PIIFilter.redact(url)
+        }
         event.user = nil
         event.serverName = nil
         return event
     }
 
-    /// Scrubs PII from a breadcrumb. Returns the modified breadcrumb; never drops crumbs.
-    nonisolated static func scrubBreadcrumb(_ crumb: Breadcrumb) -> Breadcrumb {
+    /// Scrubs PII from a breadcrumb.
+    /// Returns nil for touch and ui.lifecycle breadcrumbs (may contain screen/widget names).
+    /// Returns the scrubbed breadcrumb for all other categories.
+    nonisolated static func scrubBreadcrumb(_ crumb: Breadcrumb) -> Breadcrumb? {
+        guard crumb.category != "touch" && crumb.category != "ui.lifecycle" else { return nil }
         if let msg = crumb.message { crumb.message = PIIFilter.redact(msg) }
         if let data = crumb.data {
             var cleaned: [String: Any] = [:]
