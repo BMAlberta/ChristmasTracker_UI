@@ -46,6 +46,8 @@ struct ChristmasTrackerApp: App {
     
     // MARK: - Initialization
     init() {
+        // Start crash/performance reporting before anything else
+        SentryBootstrap.startIfConfigured()
         // Wipe 4.4 legacy credentials/data on first launch — must run before store reads
         FirstLaunchWipe().performIfNeeded()
 
