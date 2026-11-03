@@ -25,7 +25,7 @@ public struct InstrumentedMacro: BodyMacro {
         let statements: [CodeBlockItemSyntax] = [
                 """
                 #if DEBUG || QA
-                let __log = OSLog(subsystem: "com.bmalberta.com.ChristmasTracker", category: "instrumentation")
+                let __log = OSLog(subsystem: "com.alberta.ChristmasTracker", category: "instrumentation")
                 os_signpost(.begin, log: __log, name: #function)
                 #endif
                 """,

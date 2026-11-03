@@ -24,9 +24,9 @@ The app has a well-structured architecture (Repository → DataStore → Service
 | Swift Language Mode | Swift 6 (`SWIFT_VERSION = 6.0`) |
 | Strict Concurrency | `-strict-concurrency=complete` via `OTHER_SWIFT_FLAGS[arch=*]` |
 | File-system Synchronized Groups | **YES** — `PBXFileSystemSynchronizedRootGroup` confirmed (3 entries); new `.swift` files need no project edits |
-| Bundle ID (main) | `com.bmalberta.com.ChristmasTracker` (**note double "com"**) |
+| Bundle ID (main) | `com.alberta.ChristmasTracker` (**note double "com"**) |
 | Bundle ID (Debug override) | `com.christmastracker.ios.dev` (from `Config-Debug.xcconfig`) |
-| Bundle ID (Tests) | `com.bmalberta.com.ChristmasTrackerTests` |
+| Bundle ID (Tests) | `com.alberta.ChristmasTrackerTests` |
 
 ### Build Configurations
 
