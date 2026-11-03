@@ -2,10 +2,12 @@
 # Build the app for the simulator. Override the destination with DEST="...".
 cd "$(dirname "$0")/.." || exit 1
 DEST="${DEST:-platform=iOS Simulator,name=iPhone 17 Pro,OS=latest}"
+CONFIGURATION="${CONFIGURATION:-Debug}"
 LOG="/tmp/ct-build.log"
 xcodebuild build \
   -project "ChristmasTracker/ChristmasTracker.xcodeproj" \
   -scheme "ChristmasTracker" \
+  -configuration "$CONFIGURATION" \
   -destination "$DEST" \
   -derivedDataPath "/tmp/ct-derived" > "$LOG" 2>&1
 STATUS=$?

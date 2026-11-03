@@ -6,6 +6,9 @@ FAIL=0
 echo "=== verify: build ==="
 scripts/build.sh || { echo "=== verify: BUILD FAILED ==="; exit 1; }
 
+echo "=== verify: configuration check ==="
+scripts/check-config.sh || { echo "=== verify: CONFIG CHECK FAILED ==="; FAIL=1; }
+
 echo "=== verify: unit tests ==="
 scripts/test.sh || { echo "=== verify: TESTS FAILED ==="; FAIL=1; }
 

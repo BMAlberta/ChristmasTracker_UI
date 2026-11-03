@@ -12,5 +12,11 @@
     <string>$(BACKGROUND_REFRESH)</string>
     <key>LOG_FLUSH_INTERVAL</key>
     <string>$(LOG_FLUSH_INTERVAL)</string>
+    <key>API_MODE</key>
+    <string>$(API_MODE)</string>
+    <key>SENTRY_DSN</key>
+    <string>$(SENTRY_DSN)</string>
+    <key>APP_ENVIRONMENT</key>
+    <string>$(APP_ENVIRONMENT)</string>
 </dict>
 </plist>

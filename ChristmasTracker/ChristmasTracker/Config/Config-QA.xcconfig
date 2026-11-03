@@ -13,7 +13,6 @@
 #include "Config.xcconfig"
 
 // QA Overrides
-PRODUCT_BUNDLE_IDENTIFIER = com.christmastracker.ios.qa
 API_BASE_URL = https:/ /api-qa.christmastracker.com
 
 // Shorter timeouts for QA testing
@@ -24,3 +23,8 @@ LOG_FLUSH_INTERVAL = 30     // 30 seconds
 
 // Enable testability
 ENABLE_TESTABILITY = YES
+
+// Observability overrides (after include so they win over Config.xcconfig)
+API_MODE = mock
+APP_ENVIRONMENT = qa
+SENTRY_DSN =

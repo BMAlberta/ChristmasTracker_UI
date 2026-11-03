@@ -21,3 +21,4 @@ Docs/plans/
 LocalPackages/**/.build/
 LocalPackages/**/Package.resolved
 LocalPackages/**/.swiftpm/
+ChristmasTracker/Config-Secrets.xcconfig

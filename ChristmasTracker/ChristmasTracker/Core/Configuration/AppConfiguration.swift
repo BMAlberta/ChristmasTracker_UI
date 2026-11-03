@@ -7,65 +7,106 @@
 
 import Foundation
 
-/// Global application configuration loaded from xcconfig
+enum APIMode: Sendable {
+    case mock
+    case real
+
+    /// Parses the API_MODE string from xcconfig/Info.plist.
+    /// - "mock" (case-insensitive, trimmed) → .mock
+    /// - "real" (case-insensitive, trimmed) → .real
+    /// - nil, empty, or unrecognized → .real (safe default; logs a warning)
+    nonisolated static func parse(_ raw: String?) -> APIMode {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        switch trimmed {
+        case "mock": return .mock
+        case "real": return .real
+        default:
+            if !trimmed.isEmpty {
+                LogWarning("Unrecognized API_MODE value '\(trimmed)'; defaulting to real", category: .business)
+            }
+            return .real
+        }
+    }
+}
+
+/// Reads typed configuration values from an Info.plist dictionary.
+/// Pure and nonisolated — injectable for tests; never reads Bundle.main directly.
+nonisolated func readConfiguration(from info: [String: Any]?) -> (
+    apiMode: APIMode,
+    sentryDSN: String?,
+    appEnvironment: String,
+    apiBaseURL: URL?,
+    cacheDuration: TimeInterval,
+    sessionTimeout: TimeInterval,
+    backgroundRefreshThreshold: TimeInterval,
+    logFlushInterval: TimeInterval
+) {
+    func string(_ key: String) -> String? { info?[key] as? String }
+    func duration(_ key: String, default def: TimeInterval) -> TimeInterval {
+        guard let s = string(key), let v = TimeInterval(s) else { return def }
+        return v
+    }
+
+    let rawDSN = string("SENTRY_DSN")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return (
+        apiMode: APIMode.parse(string("API_MODE")),
+        sentryDSN: rawDSN.isEmpty ? nil : rawDSN,
+        appEnvironment: string("APP_ENVIRONMENT") ?? "production",
+        apiBaseURL: string("API_BASE_URL").flatMap { URL(string: $0) },
+        cacheDuration: duration("CACHE_DURATION", default: 900),
+        sessionTimeout: duration("SESSION_TIMEOUT", default: 7200),
+        backgroundRefreshThreshold: duration("BACKGROUND_REFRESH", default: 900),
+        logFlushInterval: duration("LOG_FLUSH_INTERVAL", default: 60)
+    )
+}
+
+/// Global application configuration loaded from xcconfig via Info.plist.
 struct AppConfiguration {
+    // nonisolated so cacheDuration and logFlushInterval (called from Task.detached) can
+    // access it without crossing an actor boundary.
+    nonisolated private static let config = readConfiguration(from: Bundle.main.infoDictionary)
+
     // MARK: - API Configuration
-    /// API base URL loaded from xcconfig
-    /// Production: https://api.christmastracker.com
+    /// API base URL loaded from xcconfig.
+    /// Production: https://api.christmastracker.com (I1 will correct the xcconfig // escaping)
     /// QA: https://api-qa.christmastracker.com
     /// Debug: https://api-dev.christmastracker.com
     static let apiBaseURL: URL = {
-        guard let urlString = Bundle.main.infoDictionary?["API_BASE_URL"] as? String,
-              let url = URL(string: urlString) else {
+        guard let url = config.apiBaseURL else {
             fatalError("API_BASE_URL not configured in xcconfig")
         }
         return url
     }()
+
+    // MARK: - API Mode
+    /// Whether the app should use mock or real network repositories.
+    /// Driven by the API_MODE xcconfig key; never by #if DEBUG.
+    static let apiMode: APIMode = config.apiMode
+
+    // MARK: - Observability
+    /// Sentry DSN from xcconfig. nil when empty (Debug/QA default).
+    /// Never log or print this value.
+    static let sentryDSN: String? = config.sentryDSN
+
+    /// Current environment label for Sentry and logging (development / qa / production).
+    static let appEnvironment: String = config.appEnvironment
+
     // MARK: - Cache Configuration
-    /// Duration to cache network responses (seconds)
-    /// Production: 900 (15 minutes)
-    /// Debug: 30 (30 seconds)
-    nonisolated static let cacheDuration: TimeInterval = {
-        guard let value = Bundle.main.infoDictionary?["CACHE_DURATION"] as? String,
-              let duration = TimeInterval(value) else {
-            return 900 // Default 15 minutes
-        }
-        return duration
-    }()
+    /// Duration to cache network responses (seconds).
+    nonisolated static let cacheDuration: TimeInterval = config.cacheDuration
+
     // MARK: - Session Configuration
-    /// Session timeout duration (seconds)
-    /// Production: 7200 (2 hours)
-    /// Debug: 300 (5 minutes)
-    static let sessionTimeout: TimeInterval = {
-        guard let value = Bundle.main.infoDictionary?["SESSION_TIMEOUT"] as? String,
-              let duration = TimeInterval(value) else {
-            return 7200 // Default 2 hours
-        }
-        return duration
-    }()
-    /// Background refresh threshold (seconds)
-    /// Production: 900 (15 minutes)
-    /// Debug: 60 (1 minute)
-    static let backgroundRefreshThreshold: TimeInterval = {
-        guard let value = Bundle.main.infoDictionary?["BACKGROUND_REFRESH"] as? String,
-              let duration = TimeInterval(value) else {
-            return 900 // Default 15 minutes
-        }
-        return duration
-    }()
+    /// Session timeout duration (seconds).
+    static let sessionTimeout: TimeInterval = config.sessionTimeout
+
+    /// Background refresh threshold (seconds).
+    static let backgroundRefreshThreshold: TimeInterval = config.backgroundRefreshThreshold
+
     // MARK: - Logging Configuration
-    /// Log flush interval (seconds)
-    /// Production: 60 (1 minute)
-    /// Debug: 15 (15 seconds)
-    static let logFlushInterval: TimeInterval = {
-        guard let value = Bundle.main.infoDictionary?["LOG_FLUSH_INTERVAL"] as? String,
-              let duration = TimeInterval(value) else {
-            return 60 // Default 60 seconds
-        }
-        return duration
-    }()
-    // MARK: - Environment
-    /// Current environment (debug or production)
+    /// Log flush interval (seconds).
+    nonisolated static let logFlushInterval: TimeInterval = config.logFlushInterval
+
+    // MARK: - Compile-time helpers (preserved from original)
     static let environment: String = {
 #if DEBUG
         return "debug"
@@ -73,7 +114,7 @@ struct AppConfiguration {
         return "production"
 #endif
     }()
-    /// Whether running in debug mode
+
     static let isDebug: Bool = {
 #if DEBUG
         return true
