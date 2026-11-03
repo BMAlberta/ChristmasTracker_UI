@@ -31,15 +31,6 @@ actor Logger {
         // Add console in debug builds
         destinations.append(ConsoleDestination())
 #endif
-        // Try New Relic (if available)
-        if let licenseKey = ProcessInfo.processInfo.environment["NEW_RELIC_LICENSE_KEY"] {
-            if let newRelic = NewRelicDestination(licenseKey: licenseKey) {
-                destinations.append(newRelic)
-            } else {
-                // TODO: Phase 12 - Add backend fallback destination
-                print("⚠ New Relic unavailable, logs will only go to OSLog/Console")
-            }
-        }
     }
     
     // MARK: - Logging Methods (Internal - Async)
