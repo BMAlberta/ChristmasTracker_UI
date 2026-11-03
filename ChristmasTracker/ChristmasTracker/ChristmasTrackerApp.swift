@@ -23,26 +23,24 @@ struct ChristmasTrackerApp: App {
         let itemRepository: ItemRepository
 
         static func make() -> AppDependencies {
-#if DEBUG
-            // Use mocks in debug
-            let apiClient = MockAPIClient.withMockData()
-            let authRepository: AuthenticationRepository = MockAuthenticationRepository()
-            let listRepository: ListRepository = MockListRepository()
-            let itemRepository: ItemRepository = MockItemRepository()
-#else
-            // Use network in production
-            let apiClient = NetworkAPIClient()
-            let authRepository: AuthenticationRepository = NetworkAuthenticationRepository(apiClient: apiClient)
-            let listRepository: ListRepository = NetworkListRepository(apiClient: apiClient)
-            let itemRepository: ItemRepository = NetworkItemRepository(apiClient: apiClient)
-#endif
-
-            return AppDependencies(
-                apiClient: apiClient,
-                authRepository: authRepository,
-                listRepository: listRepository,
-                itemRepository: itemRepository
-            )
+            switch AppConfiguration.apiMode {
+            case .mock:
+                let apiClient = MockAPIClient.withMockData()
+                return AppDependencies(
+                    apiClient: apiClient,
+                    authRepository: MockAuthenticationRepository(),
+                    listRepository: MockListRepository(),
+                    itemRepository: MockItemRepository()
+                )
+            case .real:
+                let apiClient = NetworkAPIClient()
+                return AppDependencies(
+                    apiClient: apiClient,
+                    authRepository: NetworkAuthenticationRepository(apiClient: apiClient),
+                    listRepository: NetworkListRepository(apiClient: apiClient),
+                    itemRepository: NetworkItemRepository(apiClient: apiClient)
+                )
+            }
         }
     }
     
