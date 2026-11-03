@@ -286,3 +286,171 @@ Acceptance tests (all with injected fakes):
 6. When one step fails, the marker is NOT written.
 7. A retry after failure completes successfully.
 8. Device-level defaults (simulated with an isolated suite) survive the wipe.
+
+---
+
+## Rework Gate 1
+
+### Story R1 — Real Teardown Reasons, No Notification Observers
+
+**Problem:** Story 2 wired notification observers for `.unauthorizedRequest` and `.versionUpdateRequired`
+into `AuthenticationService.init()`. Both are wrong:
+- `.unauthorizedRequest` fires on every 401, including failed logins and the logout call itself.
+  Client-guide §3.6 says 401 must trigger a refresh-then-replay, not an immediate logout.
+- `.versionUpdateRequired` should block the app and prompt for an update (§3.6); silent logout
+  is incorrect. Wiring the full response behaviors is I1 work.
+
+**New interface introduced:** Yes — `logout(reason:)` signature and `SessionManager.lastTeardownReason`.
+
+**Scoped files:**
+- MOD: `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift`
+- MOD: `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/SessionManager.swift`
+- MOD: `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/LogoutPathTests.swift`
+
+No files under `Core/Networking`, `Core/Models`, or repository protocols are touched.
+
+**Seam choice:** Add `private(set) var lastTeardownReason: TeardownReason?` to `SessionManager`
+(set inside `teardown(reason:)` before the log line). Tests that hold a reference to the same
+`SessionManager` instance read it via `await sessionManager.lastTeardownReason`. No new protocol is
+needed — the existing actor reference is sufficient.
+
+Rationale: an observable value on SessionManager is the smallest surface that lets all four tests
+assert the reason without sleeps, global notification posting, or a new protocol type. A `-ing`
+protocol would require changing `AuthenticationService`'s stored property type, which is wider scope.
+
+**Interface signatures (delta):**
+
+```swift
+// SessionManager — add one stored property; update teardown body
+actor SessionManager {
+    private(set) var lastTeardownReason: TeardownReason?
+
+    func teardown(reason: TeardownReason) async {
+        self.lastTeardownReason = reason
+        // ... existing body unchanged ...
+    }
+}
+
+// AuthenticationService — remove observers; add reason parameter
+final class AuthenticationService {
+    // REMOVED: nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol]
+    // REMOVED: setupNotificationObservers()
+    // REMOVED: deinit
+
+    func logout(reason: TeardownReason = .userLogout) async {
+        // ... network call unchanged ...
+        await sessionManager.teardown(reason: reason)
+        clearAuthState()
+        clearStoredTokens()
+    }
+
+    func refreshTokenIfNeeded() async {
+        // ... on catch, call: await logout(reason: .sessionExpired)
+    }
+}
+```
+
+**Tests (5 total, replacing all 5 current LogoutPathTests; no notification posting; no sleeps):**
+
+1. `profileLogoutPathSendsTeardownWithUserLogoutReason`
+   — Call `authService.logout()` (default reason). Assert `lastTeardownReason == .userLogout` and a
+     registered `ListDataStore` is empty.
+
+2. `refreshFailureCallsLogoutWithSessionExpiredReason`
+   — Login via `ThrowingLogoutRepository` with `expiresIn: 0` (so `AuthTokens.needsRefresh` is
+     immediately true). Arm `shouldFailRefresh = true`. Call `refreshTokenIfNeeded()` directly.
+     Assert `isAuthenticated == false`, registered `ListDataStore` is empty, and
+     `lastTeardownReason == .sessionExpired`.
+
+3. `sessionExpiredTeardownClearsRegisteredClearable`
+   — Call `sessionManager.teardown(reason: .sessionExpired)` directly with a registered
+     `MockSessionClearable`. Assert clearable was called and `lastTeardownReason == .sessionExpired`.
+
+4. `forcedUpdateTeardownClearsRegisteredClearable`
+   — Same as test 3 but with `.forcedUpdate`. Assert clearable was called and
+     `lastTeardownReason == .forcedUpdate`.
+
+5. `networkLogoutFailureDoesNotPreventSignOut`
+   — Kept from Story 2 (regression guard). Renamed to describe what it exercises. No change in
+     behavior.
+
+**Wired in I1 (out of R1 scope):**
+- 401 path: full refresh-once, replay, then `.sessionExpired` teardown.
+- 426 path: block app, prompt for update. Whether 426 clears the session is an **OPEN QUESTION** for I1;
+  `.forcedUpdate` is available as an entry point but the UX decision (clear vs. leave) is not made here.
+
+---
+
+### Story R2 — Deterministic Registration
+
+**Problem:** `ChristmasTrackerApp.init` uses a fire-and-forget `Task { await sm.register(...) }`.
+Teardown could theoretically run before every clearable is registered. While the practical race does
+not exist today (logout requires user interaction after full app load), the code offers no structural
+guarantee.
+
+**New interface introduced:** Yes — `SessionManager.init(authRepository:initialClearables:)` and
+`makeProductionClearables(...)`.
+
+**Scoped files:**
+- MOD: `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/SessionManager.swift`
+- MOD: `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/SessionClearable.swift`
+  (add `makeProductionClearables` free function)
+- MOD: `ChristmasTracker/ChristmasTracker/ChristmasTrackerApp.swift`
+- MOD: `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/SessionTeardownTests.swift`
+
+**Mechanism:** Extend `SessionManager` with a new `init` that accepts `initialClearables`. A free
+function `makeProductionClearables(...)` at `internal` visibility lives in `SessionClearable.swift`
+so tests can call it directly. `App.init` calls the factory synchronously and passes the result to
+`SessionManager.init` — the fire-and-forget `Task` is removed.
+
+**Why `AuthenticationService` is excluded from the factory:** `AuthenticationService` requires a
+fully constructed `SessionManager` in its own `init`. Passing authService to `SessionManager.init`
+would require constructing it before the session manager exists — a circular dependency. Therefore
+authService is not registered; it self-clears via the explicit `clearAuthState()` /
+`clearStoredTokens()` calls in `logout()`. These calls are kept and documented with a code comment.
+
+**Interface signatures:**
+
+```swift
+// SessionManager — new init
+actor SessionManager {
+    init(authRepository: AuthenticationRepository,
+         initialClearables: [any SessionClearable] = []) {
+        self.authRepository = authRepository
+        self.clearables = initialClearables
+    }
+    // existing init removed (replaced by this one with default)
+}
+
+// SessionClearable.swift — new free function
+/// Returns the production clearable list for the session manager.
+/// AuthenticationService is excluded — it self-clears in AuthenticationService.logout()
+/// because constructing it requires an already-initialised SessionManager (circular dependency).
+internal func makeProductionClearables(
+    listDataStore: ListDataStore,
+    itemDataStore: ItemDataStore,
+    listService: ListService,
+    itemService: ItemService,
+    networkCache: NetworkCache
+) -> [any SessionClearable]
+
+// ChristmasTrackerApp.init — replace Task block
+let clearables = makeProductionClearables(
+    listDataStore: listDataStore,
+    itemDataStore: itemDataStore,
+    listService: listService,
+    itemService: itemService,
+    networkCache: NetworkCache.shared
+)
+let sm = SessionManager(authRepository: dependencies.authRepository, initialClearables: clearables)
+// Task { await sm.register(...) } — REMOVED
+```
+
+**Test (1 new test added to `SessionTeardownTests`):**
+
+`productionClearableSetContainsExpectedClearables`
+— Call `makeProductionClearables(...)` with real store/service instances. Assert `count == 5` and
+  that the array contains exactly one each of `ListDataStore`, `ItemDataStore`, `ListService`,
+  `ItemService`, and `NetworkCache` (in that order). The test must fail if any clearable is omitted
+  from the factory. AuthenticationService's self-clear is documented by a code comment in
+  `AuthenticationService.logout()`, not by this test.
