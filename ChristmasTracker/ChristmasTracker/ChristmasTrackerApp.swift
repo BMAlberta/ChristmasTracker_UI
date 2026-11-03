@@ -48,6 +48,9 @@ struct ChristmasTrackerApp: App {
     
     // MARK: - Initialization
     init() {
+        // Wipe 4.4 legacy credentials/data on first launch — must run before store reads
+        FirstLaunchWipe().performIfNeeded()
+
         let dependencies = AppDependencies.make()
         apiClient = dependencies.apiClient
 
