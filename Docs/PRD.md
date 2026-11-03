@@ -218,17 +218,17 @@ Amended in v2.1: P16
 | Blind viewer (self-list owner/co-owner; recipient of their own list) | ❌ Hidden | ❌ Hidden |
 | Non-blind owner/co-owner (guardian of a child's list) | ✅ Shown | ✅ Shown |
 | Member | ✅ Shown | ✅ Shown |
-| Viewer (PUBLIC non-member or viewer-role member) | ✅ Shown (normal items only) | ❌ Hidden |
+| Viewer (PUBLIC non-member or viewer-role member) | ❌ Hidden | ❌ Hidden |
 
-**Viewers and PUBLIC non-members** receive `canSeeGiftActivity: false` (P14): they see the item count (normal items only, off-list items excluded) but not the purchased count.
+**Viewers and PUBLIC non-members** receive `canSeeGiftActivity: false` (P14): **neither** `itemCount` **nor** `purchasedCount` is included in the response. Clients that need an item count must call `GET /lists/{id}/items` and count the results themselves.
 
 **Blind definition (P1):** A viewer is blind if they are the recipient of the list, or if they are the owner/co-owner of a list whose recipient can log in (a self-list).
 
-**Guardians of a child's list** (where the recipient has no login credentials) are not blind and see counts (P2).
+**Guardians of a child's list** (where the recipient has no login credentials) are not blind and see both counts (P2).
 
-**Rationale:** Blind viewers must not be able to infer the existence of surprise off-list gifts.
+**Rationale:** Blind viewers must not be able to infer the existence of surprise off-list gifts. Viewers are treated identically to blind viewers for count purposes.
 
-**Implementation:** `getViewerPrivacy(list, user)` determines blindness. The API omits count fields from responses when the viewer is blind.
+**Implementation:** `getViewerPrivacy(list, user)` determines blindness. Both `itemCount` and `purchasedCount` are gated on `canSeeGiftActivity` in `buildListSummary`; the API omits both fields for any caller with `canSeeGiftActivity = false`.
 
 Amended in v2.1: P1, P2, P3, P6, P14
 
@@ -414,7 +414,7 @@ Each purchase records:
 - Core fields (quantity, total_cost, item_id, recipient_id) are **immutable**
 - Metadata fields (notes, tracking, shipping status) can be updated
 
-Amended in v2.1: S1, S2, S3
+Amended in v2.1: S1, S2, S3, S11
 
 ### 5.3 Shipping Status Tracking
 
@@ -498,6 +498,8 @@ Each budget has:
 - Sum of all recipient budgets **must not exceed** total budget
 - Enforced at application layer during create/update
 - Overages calculated at both total and per-recipient level
+
+Amended in v2.1: S11
 
 ### 6.3 Budget Ownership
 
@@ -613,7 +615,7 @@ All reporting strictly respects:
 - **Budget privacy** - Users only see their own budgets
 - **List visibility** - Users only see lists they have access to
 - **Off-list item secrecy** - Hidden from blind viewers and Viewers; owners and co-owners of a child's list are non-blind and do see off-list items (P5)
-- **Count visibility** - Follows the recipient rule in section 3.2 (P1 to P3); blind viewers do not see item or purchase counts
+- **Count visibility** - Follows the recipient rule in section 3.2 (P1 to P3, P14); blind viewers, VIEWER-role members, and PUBLIC non-members do not see `itemCount` or `purchasedCount`
 
 Amended in v2.1: P1, P2, P3, P5
 

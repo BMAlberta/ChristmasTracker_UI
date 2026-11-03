@@ -134,6 +134,14 @@
           "CARETAKER"
         ]
       },
+      "MoneyAmount": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 999999.99,
+        "multipleOf": 0.01,
+        "description": "Monetary amount in dollars. Must have at most two decimal places; the server rejects amounts with more than two decimal places with 400 INVALID_PRICE (S11).",
+        "example": 349.99
+      },
       "Meta": {
         "type": "object",
         "properties": {
@@ -1688,10 +1696,7 @@
                     "example": 2025
                   },
                   "totalBudget": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 9999999.99,
-                    "example": 1500
+                    "$ref": "#/components/schemas/MoneyAmount"
                   },
                   "recipients": {
                     "type": "array",
@@ -1708,10 +1713,7 @@
                           "example": "123e4567-e89b-12d3-a456-426614174000"
                         },
                         "maxSpend": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9999999.99,
-                          "example": 500
+                          "$ref": "#/components/schemas/MoneyAmount"
                         }
                       }
                     },
@@ -1906,10 +1908,7 @@
                 "type": "object",
                 "properties": {
                   "totalBudget": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 9999999.99,
-                    "example": 2000
+                    "$ref": "#/components/schemas/MoneyAmount"
                   },
                   "recipients": {
                     "type": "array",
@@ -1925,9 +1924,7 @@
                           "format": "uuid"
                         },
                         "maxSpend": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9999999.99
+                          "$ref": "#/components/schemas/MoneyAmount"
                         }
                       }
                     }
@@ -2176,10 +2173,7 @@
                     "example": 1
                   },
                   "totalCost": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 999999.99,
-                    "example": 349.99
+                    "$ref": "#/components/schemas/MoneyAmount"
                   },
                   "storeName": {
                     "type": "string",
@@ -2395,7 +2389,7 @@
                     "format": "uri"
                   },
                   "expectedUnitPrice": {
-                    "type": "number"
+                    "$ref": "#/components/schemas/MoneyAmount"
                   },
                   "quantityRequested": {
                     "type": "integer"
@@ -2648,10 +2642,7 @@
                     "format": "uri"
                   },
                   "expectedUnitPrice": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 999999.99,
-                    "example": 349.99
+                    "$ref": "#/components/schemas/MoneyAmount"
                   },
                   "quantityRequested": {
                     "type": "integer",

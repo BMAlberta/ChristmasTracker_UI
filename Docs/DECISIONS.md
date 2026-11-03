@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 17 (2026-11-02)
+**Revision:** 19 (2026-11-02)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,14 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 19
+
+- **P14 (rev 2)**: VIEWER-role members and PUBLIC non-members receive **neither** `itemCount` **nor** `purchasedCount` on `ListSummary` and `ListDetail`. Both fields are gated on `canSeeGiftActivity`, which is `false` for viewers and non-members. The previous revision 4 wording erroneously stated "their `itemCount` reflects only visible items"; in the implementation `itemCount` is `undefined` for any caller with `canSeeGiftActivity = false`. Clients must count visible items from the items list if they need a count. PRD 3.2 table and 7.2 reporting rules updated accordingly.
+
+### Changes in revision 18
+
+- **S11 (new)**: Money amounts in requests carry at most two decimal places; otherwise 400 INVALID_PRICE. The shared `moneyAmountSchema` validates `String(value)` against `/^\d+(\.\d{1,2})?$/`, which also rejects exponent forms and floating-point noise (e.g. `0.1 + 0.2`). Applies to `totalCost`, `expectedUnitPrice`, `totalBudget`, and `maxSpend`. The internal `toCents` rounding is unchanged. See section 6.
 
 ### Changes in revision 17
 
@@ -90,7 +98,7 @@
 
 - **P16 (updated in rev 15)**: INVITE_ONLY and FRIENDS_ONLY both behave as PRIVATE. Non-members of either list type receive the identical 404 as a PRIVATE list on every route. No viewer role is granted for either. FRIENDS_ONLY is reserved for a future friends-graph feature; when that system is built, this decision must be revisited. INVITE_ONLY is available for invite-based access flows.
 - **P12** (revised): Blind viewers can always soft-delete items, whether or not purchases exist. Purchase records are kept. Non-blind viewers retain `CANNOT_DELETE_ITEM_WITH_PURCHASES`. Acceptance test 5 updated.
-- **P14** (new): Viewers of PUBLIC lists see only normal (non-off-list) items; their `itemCount` reflects only visible items. `canSeeOffList` is added as an explicit flag to `getViewerPrivacy`, `ListSummary`, and `ListDetail`. Non-members of a non-PUBLIC list receive `LIST_NOT_FOUND` (404) identical to a nonexistent ID on every list, item, and purchase route.
+- **P14** (new; revised in revision 19): Viewers of PUBLIC lists see only normal (non-off-list) items. `canSeeOffList` is added as an explicit flag. Non-members of a non-PUBLIC list receive `LIST_NOT_FOUND` (404) identical to a nonexistent ID. **Revision 19 correction:** `itemCount` is also omitted for viewers (not only `purchasedCount`); both fields require `canSeeGiftActivity = true`.
 - **P15** (new): `CANNOT_PURCHASE_OWN_LIST` maps to HTTP 403.
 - **P5** (clarified): Off-list items are visible to non-blind owners, co-owners, and members (`canSeeOffList=true`). Viewers of public lists and blind users see only normal items (`canSeeOffList=false`).
 - **Seed (revision 4)**: Scenario C is now Mike's self-list (owner=recipient=Mike, member=John). Jane added as Tommy's second parent in `user_relationships`.
@@ -204,6 +212,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | P11 | In item detail and `GET /purchases`, each user sees only their own purchases in full. Non-blind viewers also see the aggregate `totalQuantityPurchased`. Nobody sees another user's purchaser identity or amount. | B |
 | P12 | Blind viewers can edit and delete items. Errors never reveal that purchases exist, and purchase records are kept. | B |
 | P13 | Revealing status after a date (for example Dec 25) is a later, backend-only enhancement. | B |
+| P14 (rev 2) | VIEWER-role members and PUBLIC non-members receive **neither** `itemCount` **nor** `purchasedCount` on `ListSummary` and `ListDetail` — both fields require `canSeeGiftActivity = true`. Clients that need a count must call `GET /lists/{id}/items` and count the results. Non-members of a non-PUBLIC list receive `LIST_NOT_FOUND` (404). | B, W, I |
 | P17 (new) | `updatedAt` is omitted from item responses when `canSeeGiftActivity=false` (blind viewers). The `ItemResponse.updatedAt` field is optional (`updatedAt?: string`). Also applies to `createItem` and `updateItem` response paths. | B |
 | P18 (new) | A non-member of a PUBLIC list gets 403 on every write route: `PATCH /lists/{id}`, `DELETE /lists/{id}`, `POST /lists/{id}/members`, `DELETE /lists/{id}/members/{userId}`, `POST /lists/{id}/items`, `PATCH /items/{id}`, `PATCH /items/{id}/status`, `DELETE /items/{id}`, `POST /items/{id}/purchases`. Read routes (`GET /lists/{id}`, `GET /items/{id}`, `GET /lists/{id}/items`) still return 200. For non-PUBLIC non-member routes the existing P14/P16 rules (404) are unchanged. | B |
 | P14b (new) | The `role` field on `PrivacyList.memberships[]` is required in the TypeScript interface (`role: string`, not `role?: string`). Any service that constructs a `PrivacyList` without including `role` fails to compile. At runtime, a row with a missing or unknown role string does not match `'member'` or `'viewer'` and is treated as neither — fail-closed. The structural test in `__tests__/unit/privacy.unit.test.ts` enforces that no service file (except `list.service.ts`) compares membership role strings directly; `list.service.ts` is exempted because it makes three legitimate L9 access-control comparisons: `m.role.toLowerCase() === 'member'` (getMembers scope), `m.role.toLowerCase() === 'viewer'` (getMembers scope), and `callerMembership?.role?.toLowerCase() === 'viewer'` (remove-self guard). | B |
@@ -225,6 +234,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | S8 | `GET /items/:itemId/purchases` (a stub that returns an empty array) is deleted. Clients use `GET /purchases?itemId=`. | B, I |
 | S9 (rev 6) | Off-list purchases count toward the buyer's budget. | B |
 | S10 | Budgets are personal. A user can read and write only their own budgets. Members and owners never read another user's budget, and a user's budget counts only their own purchases (T3, S9). | B |
+| S11 | Money amounts in requests carry at most two decimal places; otherwise 400 INVALID_PRICE. Applies to `totalCost`, `expectedUnitPrice`, `totalBudget`, and `maxSpend`. The internal `toCents` rounding is unchanged. | B, W, I |
 
 ## 7. Statistics and purchase history
 
