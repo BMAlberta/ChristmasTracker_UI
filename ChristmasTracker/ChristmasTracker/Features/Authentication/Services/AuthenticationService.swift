@@ -29,6 +29,9 @@ final class AuthenticationService {
     // MARK: - Private State
     private var tokens: AuthTokens?
     private let deviceFingerprint: String
+    // nonisolated(unsafe): written only during init (single-threaded) and read only in
+    // deinit (also single-threaded); @MainActor-isolated access would be unsound in deinit.
+    nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
     private static let keychainBiometricTokenKey = "auth.biometric_token"
     private static let keychainBiometricUserIdKey = "auth.user_id"
     private static let keychainReasonMessage = "Authenticate to access your Christmas Tracker account"
@@ -42,11 +45,17 @@ final class AuthenticationService {
         self.sessionManager = sessionManager
         
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
-        
+
+        setupNotificationObservers()
+
         Task {
             await checkBiometricAvailability()
             await loadStoredSession()
         }
+    }
+
+    deinit {
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
     
     // MARK: - Public Methods
@@ -139,15 +148,8 @@ final class AuthenticationService {
     /// Logout current user
     func logout() async {
         isLoading = true
-        
-        defer {
-            clearAuthState()
-            isLoading = false
-        }
-        
-        await sessionManager.stopSession()
-        await NetworkCache.shared.clear()
-        
+        defer { isLoading = false }
+
         if let refreshToken = tokens?.refreshToken {
             do {
                 try await authRepository.logout(refreshToken: refreshToken)
@@ -155,6 +157,11 @@ final class AuthenticationService {
                 LogError("Logout API failed: \(error)", category: .auth)
             }
         }
+
+        // Route through teardown — clears all registered clearables
+        await sessionManager.teardown(reason: .userLogout)
+        // Explicitly clear self in case authService is not yet registered as a clearable
+        clearAuthState()
         clearStoredTokens()
     }
     
@@ -224,7 +231,31 @@ final class AuthenticationService {
     }
     
     // MARK: - Private Helpers
-    
+
+    private func setupNotificationObservers() {
+        let unauthorizedObserver = NotificationCenter.default.addObserver(
+            forName: .unauthorizedRequest,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.logout()
+            }
+        }
+
+        let versionObserver = NotificationCenter.default.addObserver(
+            forName: .versionUpdateRequired,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.logout()
+            }
+        }
+
+        notificationObservers = [unauthorizedObserver, versionObserver]
+    }
+
     private func handleAuthSuccess(authData: AuthData, rememberMe: Bool) async {
         // Update user
         currentUser = authData.user

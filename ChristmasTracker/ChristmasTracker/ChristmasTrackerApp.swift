@@ -14,6 +14,7 @@ struct ChristmasTrackerApp: App {
     @State private var apiClient: APIClient
     @State private var listService: ListService
     @State private var itemService: ItemService
+    private let sessionManager: SessionManager
 
     private struct AppDependencies {
         let apiClient: APIClient
@@ -64,13 +65,30 @@ struct ChristmasTrackerApp: App {
         )
 
         // Create session manager
-        let sessionManager = SessionManager(authRepository: dependencies.authRepository)
+        let sm = SessionManager(authRepository: dependencies.authRepository)
+        sessionManager = sm
 
         // Create services
-        authService = AuthenticationService(
+        let auth = AuthenticationService(
             repository: dependencies.authRepository,
-            sessionManager: sessionManager
+            sessionManager: sm
         )
+        authService = auth
+
+        // Register clearables with the session manager
+        let lds = listDataStore
+        let ids = itemDataStore
+        let ls = listService
+        let is_ = itemService
+        Task {
+            await sm.register(lds)
+            await sm.register(ids)
+            await sm.register(ls)
+            await sm.register(is_)
+            await sm.register(auth)
+            await sm.register(NetworkCache.shared)
+        }
+
         LogInfo("App initialized", category: .business)
     }
     var body: some Scene {
