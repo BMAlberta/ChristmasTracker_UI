@@ -206,6 +206,12 @@ final class ListService {
     func clearCurrentDetail() {
         currentListDetail = nil
     }
+
+    func clearCache() async {
+        await dataStore.clear()
+        lists = []
+        currentListDetail = nil
+    }
     
     // MARK: - Private Functions
     
