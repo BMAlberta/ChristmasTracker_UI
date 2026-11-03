@@ -46,9 +46,29 @@ Reviewer's job). You are **read-only**: report findings, never edit.
    accidental files in the diff. Diff size is plausible for the described scope — an
    oversized diff is itself a signal.
 
+7. **`myRole` used for authorization (changed lines only).** Any use of `myRole` (or a
+   role field) to decide what a user may see or do is a **hard block** — visibility must
+   come from capability flags only.
+
+8. **Non-asset files inside `ChristmasTracker/` (changed lines only).** A new `.md`,
+   `.pdf`, or `.png` file added anywhere under `ChristmasTracker/` outside
+   `Assets.xcassets` is a **hard block**.
+
+9. **`offList` on a create-item request (changed lines only).** Any `offList` field on a
+   create-item request type is a **hard block** — the create-item request has no such
+   field per the contract.
+
+10. **Money type (changed lines only).** `Double` or `Float` used for a monetary amount is
+    a **warning**. `Decimal` is required.
+
+11. **Hand-written API response struct outside repository mapping (changed lines only).** A
+    new struct that mirrors a raw API response shape outside the repository mapping layer is
+    a **warning**. Once `contract/STATUS.md` says CONFORMANT, this becomes a **hard block**.
+
 ## Output
 
 A structured findings list: each finding names the file/line, the rule, and whether it
 is a **hard block** (missing instrumentation, prohibited framework, force unwrap,
-design-token violation) or a **surfaced warning** (naming, oversized diff). Do not fix
-anything — routing and fixes are the Orchestrator's call.
+design-token violation, `myRole` authorization, non-asset file in app folder, `offList` on
+create-item) or a **surfaced warning** (naming, oversized diff, money type, hand-written
+API struct). Do not fix anything — routing and fixes are the Orchestrator's call.
