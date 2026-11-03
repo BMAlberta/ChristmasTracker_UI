@@ -94,7 +94,7 @@ enum ListRole: String, Codable, Sendable {
         }
     }
     
-    var color: Color {
+    @MainActor var color: Color {
         switch self {
         case .owner: return .primaryColor
         case .coOwner: return .accentColor

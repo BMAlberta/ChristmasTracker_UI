@@ -15,11 +15,12 @@ actor SessionManager {
     private let maxSessionDuration: TimeInterval = 24 * 60 * 60 // 24 hours
     
     // MARK: - Properties
-    
+
     private let authRepository: AuthenticationRepository
     private var sessionStartTime: Date?
     private var lastActivityTime: Date?
     private var pingTask: Task<Void, Never>?
+    private var clearables: [any SessionClearable] = []
     
     // MARK: - Initialization
     
@@ -27,8 +28,42 @@ actor SessionManager {
         self.authRepository = authRepository
     }
     
+    // MARK: - Clearable Registration
+
+    /// Register a clearable store or service for teardown.
+    func register(_ clearable: any SessionClearable) {
+        clearables.append(clearable)
+    }
+
+    /// Tear down the session: cancel pings, clear all registered clearables,
+    /// and flush system-level caches.  A failure in one clearable never stops others.
+    func teardown(reason: TeardownReason) async {
+        // 1. Cancel in-flight ping
+        pingTask?.cancel()
+        pingTask = nil
+        sessionStartTime = nil
+        lastActivityTime = nil
+
+        // 2. Clear all clearables — never abort early, collect failures
+        for clearable in clearables {
+            do {
+                try await clearable.clearForSession()
+            } catch {
+                LogError("Teardown clearable failed: \(error.localizedDescription)", category: .auth)
+            }
+        }
+
+        // 3. Clear system caches (URLCache, cookies) — user-scoped precaution
+        URLCache.shared.removeAllCachedResponses()
+        if let cookies = HTTPCookieStorage.shared.cookies {
+            for cookie in cookies { HTTPCookieStorage.shared.deleteCookie(cookie) }
+        }
+
+        LogInfo("Session torn down — reason: \(reason)", category: .auth)
+    }
+
     // MARK: - Session Management
-    
+
     /// Start session keep-alive
     func startSession() {
         sessionStartTime = Date()

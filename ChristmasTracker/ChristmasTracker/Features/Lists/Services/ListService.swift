@@ -12,8 +12,8 @@ import SwiftUI
 @Observable
 final class ListService {
     // MARK: - Dependencies
-    private let repository: ListRepository
-    private let dataStore: ListDataStore
+    private nonisolated let repository: any ListRepository
+    private nonisolated let dataStore: ListDataStore
     
     // MARK: - Publlished State
     private(set) var lists: [GiftList] = []
@@ -45,7 +45,7 @@ final class ListService {
     }
     
     // MARK: - Initialization
-    init(repository: ListRepository, dataStore: ListDataStore) {
+    init(repository: any ListRepository, dataStore: ListDataStore) {
         self.repository = repository
         self.dataStore = dataStore
     }
@@ -212,9 +212,17 @@ final class ListService {
         lists = []
         currentListDetail = nil
     }
-    
+
     // MARK: - Private Functions
     
+    // MARK: - SessionClearable
+
+    func clearForSession() async throws {
+        await dataStore.clear()
+        lists = []
+        currentListDetail = nil
+    }
+
     private func handleError(_ error: Error, operation: String) -> ListError {
         if let apiError = error as? APIError {
             switch apiError {
@@ -253,4 +261,6 @@ final class ListService {
     }
 }
 
+// MARK: - SessionClearable
 
+extension ListService: SessionClearable {}

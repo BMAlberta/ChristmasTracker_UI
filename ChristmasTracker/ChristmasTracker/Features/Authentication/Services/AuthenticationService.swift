@@ -334,6 +334,16 @@ final class AuthenticationService {
     }
 }
 
+// MARK: - SessionClearable
+
+extension AuthenticationService: SessionClearable {
+    // Actor-isolated (@MainActor): manual instrumentation only — @Instrumented not yet available (I6a)
+    func clearForSession() async throws {
+        clearAuthState()
+        clearStoredTokens()
+    }
+}
+
 // MARK: - Supporting Types
 enum BiometricType {
     case none

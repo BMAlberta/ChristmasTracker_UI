@@ -92,7 +92,7 @@ enum ShippingStatus: String, Codable, Sendable, Hashable {
         }
     }
     
-    var color: Color {
+    @MainActor var color: Color {
         switch self {
         case .notShipped: return .gray
         case .shipped: return .blue

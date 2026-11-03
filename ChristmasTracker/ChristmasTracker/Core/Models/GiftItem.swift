@@ -7,7 +7,7 @@
 import SwiftUI
 import Foundation
 
-struct GiftItem: Identifiable, Codable, Sendable, Hashable {
+nonisolated struct GiftItem: Identifiable, Codable, Sendable, Hashable {
     
     // MARK: - Basic Info
     let id: String
@@ -99,7 +99,7 @@ struct PurchaseSummary: Codable, Identifiable, Sendable, Equatable, Hashable {
 
 // MARK: - ItemPerson
 
-struct ItemPerson: Codable, Sendable, Identifiable, Hashable {
+nonisolated struct ItemPerson: Codable, Sendable, Identifiable, Hashable {
     let id: String
     let displayName: String
 }
@@ -133,7 +133,7 @@ enum ItemStatus: String, Codable, Sendable, Hashable {
         }
     }
     
-    var color: Color {
+    @MainActor var color: Color {
         switch self {
         case .available: return .gray
         case .partial: return .orange
@@ -142,7 +142,7 @@ enum ItemStatus: String, Codable, Sendable, Hashable {
         case .gifted: return .purple
         }
     }
-    
+
 }
 
 // MARK: - Request Types
