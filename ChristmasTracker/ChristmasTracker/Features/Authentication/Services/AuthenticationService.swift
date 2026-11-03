@@ -151,7 +151,8 @@ final class AuthenticationService {
 
         // Route through teardown — clears all registered clearables
         await sessionManager.teardown(reason: reason)
-        // Explicitly clear self in case authService is not yet registered as a clearable
+        // AuthenticationService is not a registered clearable: SessionManager must exist before
+        // AuthenticationService can be constructed (circular dependency), so it clears its own state here.
         clearAuthState()
         clearStoredTokens()
     }
