@@ -84,3 +84,17 @@ No stuck-detector trigger. Implementer completed in one pass.
 ## Not done or partial
 
 None.
+
+---
+
+## Addendum: device fingerprint and education flags (added by R3)
+
+### Device fingerprint (inventory item 9)
+
+`FirstLaunchWipe` performs a class-wide `kSecClassGenericPassword` delete via `SecItemDelete`. This also deletes the device fingerprint UUID stored by `DeviceFingerprintService` at key `com.christmastracker.deviceFingerprintUUID` (inventory item 9, classified device-level). The device fingerprint is regenerated on next use — `DeviceFingerprintService.getFingerprint()` creates a new UUID and stores it if the key is absent.
+
+No test covers this specific behavior. `FirstLaunchWipeTests` uses the injected `MockKeychainWiper` (a fake that conforms to `KeychainWiping` without touching the real Keychain), so the device fingerprint is not exercised by any unit test. A device-level integration test would require a real Keychain and a physical device or simulator; it is noted as pending until a distribution certificate exists.
+
+### 4.4 education flags
+
+The 4.4 education flags (`@AppStorage` keys with server-provided runtime names — `EducationViewModel.educationId` values) are intentionally left in place. The keys are not known at wipe time (they are runtime values), and the flags are low-risk stale data (the education feature does not exist in v2). They will be cleared if the user reinstalls the app (reinstall re-runs the wipe, which does a class-wide Keychain delete and removes `savedEmail`, but UserDefaults keys with unknown names are not removed). This is documented as an accepted tradeoff in the epic brief.

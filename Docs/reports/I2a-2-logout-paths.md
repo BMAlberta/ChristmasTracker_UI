@@ -1,3 +1,5 @@
+Superseded in part by I2a-4 and I2a-5.
+
 # I2a Story 2 — Route All Session-Ending Paths Through Teardown
 
 Branch: `feat/i2a-session-hygiene`
@@ -43,17 +45,16 @@ Branch: `feat/i2a-session-hygiene`
 
 ## Test arithmetic
 
-Previous total: 51 tests.  
-New tests added: 4 (tests 1–4; test 5 was already passing as a guard).  
+Previous total: 50 tests (after Story 1).
+New tests added: 5 (`LogoutPathTests.swift` is a new file; all 5 tests count as new).
+New total: **55 tests**.
 
-Wait — test 5 was already passing before Story 2, so the net new *passing* tests is 4. Total went from 51 to 55. New test names:
+Test names:
 1. `logoutViaAuthServiceClearsRegisteredDataStore`
 2. `refreshTokenFailureClearsRegisteredDataStore`
 3. `unauthorizedRequestNotificationTriggersLogout`
 4. `versionUpdateNotificationTriggersLogout`
-5. `networkLogoutFailureDoesNotPreventSignOut` (regression guard, was passing before)
-
-Total rose by exactly 4 net new (the guard test was already counted in the 51). **55 total.**
+5. `networkLogoutFailureDoesNotPreventSignOut`
 
 Verification source: running `scripts/verify.sh`.
 
