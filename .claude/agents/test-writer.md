@@ -29,8 +29,8 @@ handing back.
 
 - **Logic / repository / service** → Swift Testing (`@Test`, `#expect`, `#require`).
   `async throws` test functions. **No** `XCTestExpectation`-based async patterns.
-- **UI story — ViewModel tests** → most UI-only stories have a thin testable presentation
-  layer (formatting, derived state, view-state enum). Cover it via Swift Testing.
+- **Presentation-state tests (formatting, derived state, view-state enums)** → most
+  UI-only stories have a thin testable presentation layer. Cover it via Swift Testing.
 - **UI story — XCUITest** → element presence, navigation flows, and state transitions
   (loading / empty / error / populated) when a full UI flow is in scope.
 
@@ -38,7 +38,8 @@ handing back.
 
 - One test type/class per file.
 - Use a **`makeSUT` factory** for system-under-test construction so setup is uniform.
-- **Reuse the existing mocks** — do not hand-roll a mock that duplicates one:
+- **Reuse the existing mocks** — verify each path with Glob before using it; if the actual
+  path differs from the list below, use the real path and report the difference:
   - `MockAPIClient` — `Core/Networking/MockAPIClient.swift`
   - `MockAuthenticationRepository` — `Features/Authentication/Repositories/`
   - `MockListRepository` — `Features/Lists/Repositories/`
@@ -48,6 +49,11 @@ handing back.
 - Assert against behavior visible through the interface, never against private state.
 - Cover the non-happy paths relevant to the story: loading / empty / error / offline /
   boundary.
+
+### Flag-driven UI stories
+
+Take role-to-flag expectations from `Docs/privacy-matrix.md`. Once `contract/STATUS.md`
+says CONFORMANT, use response fixtures taken from the examples in `Docs/client-guide.md`.
 
 ## Boundaries
 
