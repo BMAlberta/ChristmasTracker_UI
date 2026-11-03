@@ -56,19 +56,29 @@ struct ChristmasTrackerApp: App {
 
         // List Service
         let listDataStore = ListDataStore()
-        listService = ListService(
+        let ls = ListService(
             repository: dependencies.listRepository,
             dataStore: listDataStore
         )
+        listService = ls
 
         let itemDataStore = ItemDataStore()
-        itemService = ItemService(
+        let is_ = ItemService(
             repository: dependencies.itemRepository,
             dataStore: itemDataStore
         )
+        itemService = is_
 
-        // Create session manager
-        let sm = SessionManager(authRepository: dependencies.authRepository)
+        // Create session manager with production clearables
+        let clearables = makeProductionClearables(
+            listDataStore: listDataStore,
+            itemDataStore: itemDataStore,
+            listService: ls,
+            itemService: is_,
+            networkCache: NetworkCache.shared
+        )
+        let sm = SessionManager(authRepository: dependencies.authRepository,
+                                initialClearables: clearables)
         sessionManager = sm
 
         // Create services
@@ -77,20 +87,6 @@ struct ChristmasTrackerApp: App {
             sessionManager: sm
         )
         authService = auth
-
-        // Register clearables with the session manager
-        let lds = listDataStore
-        let ids = itemDataStore
-        let ls = listService
-        let is_ = itemService
-        Task {
-            await sm.register(lds)
-            await sm.register(ids)
-            await sm.register(ls)
-            await sm.register(is_)
-            await sm.register(auth)
-            await sm.register(NetworkCache.shared)
-        }
 
         LogInfo("App initialized", category: .business)
     }

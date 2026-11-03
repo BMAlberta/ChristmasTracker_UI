@@ -277,6 +277,32 @@ struct SessionTeardownTests {
         #expect(afterAuth == false, "AuthenticationService must be signed out even when a preceding clearable throws")
     }
 
+    // MARK: - Test 11: Production clearable set contains expected clearables (R2)
+
+    @Test("Production clearable set contains expected clearables")
+    @MainActor
+    func productionClearableSetContainsExpectedClearables() async throws {
+        let listDataStore = ListDataStore()
+        let itemDataStore = ItemDataStore()
+        let listService = ListService(repository: MockListRepository(), dataStore: listDataStore)
+        let itemService = ItemService(repository: MockItemRepository(), dataStore: itemDataStore)
+
+        let clearables = makeProductionClearables(
+            listDataStore: listDataStore,
+            itemDataStore: itemDataStore,
+            listService: listService,
+            itemService: itemService,
+            networkCache: NetworkCache.shared
+        )
+
+        #expect(clearables.count == 5, "Factory must return exactly 5 clearables")
+        #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
+        #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
+        #expect(clearables[2] is ListService, "clearables[2] must be ListService")
+        #expect(clearables[3] is ItemService, "clearables[3] must be ItemService")
+        #expect(clearables[4] is NetworkCache, "clearables[4] must be NetworkCache")
+    }
+
     // MARK: - Test 10: Device-level UserDefaults survive teardown
 
     @Test("Device-level UserDefaults key survives teardown")

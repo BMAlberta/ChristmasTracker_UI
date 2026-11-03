@@ -25,8 +25,10 @@ actor SessionManager {
 
     // MARK: - Initialization
     
-    init(authRepository: AuthenticationRepository) {
+    init(authRepository: AuthenticationRepository,
+         initialClearables: [any SessionClearable] = []) {
         self.authRepository = authRepository
+        self.clearables = initialClearables
     }
     
     // MARK: - Clearable Registration
@@ -38,6 +40,7 @@ actor SessionManager {
 
     /// Tear down the session: cancel pings, clear all registered clearables,
     /// and flush system-level caches.  A failure in one clearable never stops others.
+    // Actor-isolated: manual instrumentation only — @Instrumented not yet available (I6a)
     func teardown(reason: TeardownReason) async {
         self.lastTeardownReason = reason
         // 1. Cancel in-flight ping

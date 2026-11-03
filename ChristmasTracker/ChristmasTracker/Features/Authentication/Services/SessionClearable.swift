@@ -16,3 +16,16 @@ internal enum TeardownReason: Sendable {
     case sessionExpired
     case forcedUpdate
 }
+
+/// Returns the production clearable list for the session manager.
+/// AuthenticationService is excluded — it self-clears in AuthenticationService.logout()
+/// because constructing it requires an already-initialised SessionManager (circular dependency).
+internal func makeProductionClearables(
+    listDataStore: ListDataStore,
+    itemDataStore: ItemDataStore,
+    listService: ListService,
+    itemService: ItemService,
+    networkCache: NetworkCache
+) -> [any SessionClearable] {
+    [listDataStore, itemDataStore, listService, itemService, networkCache]
+}
