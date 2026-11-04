@@ -20,5 +20,7 @@
     <string>$(APP_ENVIRONMENT)</string>
     <key>INACTIVITY_LOCK_MINUTES</key>
     <string>$(INACTIVITY_LOCK_MINUTES)</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Use Face ID to unlock Christmas Tracker.</string>
 </dict>
 </plist>

@@ -52,6 +52,17 @@ internal nonisolated func showBiometricButton(
     isAvailable && preferenceEnabled && !isPasswordOnly
 }
 
+/// Returns true iff all conditions are met to auto-attempt biometric unlock on appearance.
+internal nonisolated func shouldAutoAttemptBiometrics(
+    isAvailable: Bool,
+    preferenceEnabled: Bool,
+    isPasswordOnly: Bool,
+    alreadyAttempted: Bool,
+    appIsActive: Bool
+) -> Bool {
+    isAvailable && preferenceEnabled && !isPasswordOnly && !alreadyAttempted && appIsActive
+}
+
 // MARK: - LockView
 
 struct LockView: View {
@@ -61,6 +72,8 @@ struct LockView: View {
 
     @State private var showPasswordOnly = false
     @State private var biometricHint: String?
+    @State private var hasAutoAttempted: Bool = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private let buttonCornerRadius: CGFloat = AppSpacing.md
 
@@ -79,6 +92,15 @@ struct LockView: View {
         }
         .onAppear {
             UIAccessibility.post(notification: .screenChanged, argument: nil)
+            guard shouldAutoAttemptBiometrics(
+                isAvailable: biometricAuthenticator.isAvailable,
+                preferenceEnabled: controller.preference?.biometricUnlockEnabled ?? false,
+                isPasswordOnly: showPasswordOnly,
+                alreadyAttempted: hasAutoAttempted,
+                appIsActive: scenePhase == .active
+            ) else { return }
+            hasAutoAttempted = true
+            Task { await attemptBiometricUnlock() }
         }
     }
 

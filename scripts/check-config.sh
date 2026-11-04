@@ -58,6 +58,12 @@ check_config "Debug"   "mock" "development" "1"
 check_config "QA"      "mock" "qa"          "1"
 check_config "Release" "real" "production"  "0"
 
+PLIST="ChristmasTracker/ChristmasTracker/Info.plist"
+if ! grep -q "NSFaceIDUsageDescription" "$PLIST"; then
+    echo "FAIL NSFaceIDUsageDescription missing from $PLIST"
+    FAIL=1
+fi
+
 if [ "$FAIL" -eq 0 ]; then
     echo "check-config: all configuration values OK"
 fi
