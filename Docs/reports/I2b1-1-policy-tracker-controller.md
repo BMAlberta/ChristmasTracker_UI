@@ -1,5 +1,7 @@
 # I2b-1 Story 1 Report: Lock Policy, Inactivity Tracker, and Controller
 
+> **SUPERSEDED** — `InactivityTracker` and `InactivityLockController` were reworked in Story R1 (commit a2c3eaf). See `I2b1-4-controller-correctness.md` for the authoritative description of those types. `LockPolicy` is unchanged.
+
 **Package:** I2b-1 — Inactivity lock (local half of I2b)
 **Story:** 1 — Lock policy, inactivity tracker, controller (logic only, no UI)
 **Branch:** feat/i2b1-inactivity-lock

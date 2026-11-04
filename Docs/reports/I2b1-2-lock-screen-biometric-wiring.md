@@ -1,5 +1,7 @@
 # I2b-1 Story 2 Report: Lock Screen, Biometric Gate, and Wiring
 
+> **SUPERSEDED (partly)** — `LockView.attemptBiometricUnlock()` and `ChristmasTrackerApp` lock wiring were reworked in Story R2 (commit 611ded0). See `I2b1-5-presentation-and-biometric-mapping.md` for the authoritative description of those changes. `LockWindowAdapter`, `AppWindowLevels`, `InactivityTouchRecognizer`, and `BiometricAuthenticating` are unchanged.
+
 **Package:** I2b-1 — Inactivity lock (local half of I2b)
 **Story:** 2 — Lock screen, biometric gate, activity capture, app wiring
 **Branch:** feat/i2b1-inactivity-lock
