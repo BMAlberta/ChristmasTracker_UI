@@ -76,10 +76,12 @@ struct ChristmasTrackerApp: App {
     @State private var apiClient: APIClient
     @State private var listService: ListService
     @State private var itemService: ItemService
+    @State private var showBiometricSetup = false
     private let sessionManager: SessionManager
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
     private let lockController: InactivityLockController
     private let lockCoordinator: LockCoordinator
+    @State private var preference = BiometricUnlockPreference()
 
     // nonisolated(unsafe): written exactly once during init on MainActor;
     // read in deinit where the app is exclusively owned — no concurrent access.
@@ -132,6 +134,7 @@ struct ChristmasTrackerApp: App {
         // Build the lock controller before wiring.
         let lockPolicy = LockPolicy()
         let lc = InactivityLockController(policy: lockPolicy)
+        lc.preference = BiometricUnlockPreference()
         lockController = lc
         lockCoordinator = LockCoordinator(
             lockController: lc,
@@ -227,12 +230,23 @@ struct ChristmasTrackerApp: App {
                     if isAuthenticated {
                         lockController.authService = authService
                         lockController.start()
+                        if !preference.biometricSetupOfferShown && authService.isBiometricAvailable {
+                            showBiometricSetup = true
+                        }
                     } else {
                         lockController.stop()
                     }
                 }
                 .onChange(of: lockController.lockState) { _, lockState in
                     lockCoordinator.handleLockStateChange(lockState)
+                }
+                .sheet(isPresented: $showBiometricSetup) {
+                    BiometricSetupView(onComplete: { enabled in
+                        preference.biometricSetupOfferShown = true
+                        preference.biometricUnlockEnabled = enabled
+                        lockController.preference = preference
+                    })
+                    .environment(\.authenticationService, authService)
                 }
         }
     }

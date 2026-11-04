@@ -56,11 +56,19 @@ struct LockView: View {
         }
     }
 
+    // MARK: - Biometric visibility
+
+    private var showBiometricButton: Bool {
+        biometricAuthenticator.isAvailable
+            && (controller.preference?.biometricUnlockEnabled ?? true)
+            && !showPasswordOnly
+    }
+
     // MARK: - Buttons
 
     private var buttonSection: some View {
         VStack(spacing: AppSpacing.md) {
-            if !showPasswordOnly && biometricAuthenticator.isAvailable {
+            if showBiometricButton {
                 biometricButton
             }
             passwordButton

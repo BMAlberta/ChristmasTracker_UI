@@ -37,6 +37,7 @@ internal final class InactivityLockController {
 
     var sceneEventProvider: (any SceneEventProviding)?
     weak var authService: AuthenticationService?
+    var preference: (any BiometricUnlockPreferring)?
 
     // MARK: - Private
 

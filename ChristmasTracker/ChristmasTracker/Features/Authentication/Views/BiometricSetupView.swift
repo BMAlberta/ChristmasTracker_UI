@@ -10,6 +10,7 @@ struct BiometricSetupView: View {
     @Environment(\.authenticationService) private var authService
     @Environment(\.dismiss) private var dismiss
     @State private var isEnabling: Bool = false
+    var onComplete: ((Bool) -> Void)?
     var body: some View {
         contentView
             .padding(EdgeInsets.appScreenPadding)
@@ -25,7 +26,10 @@ struct BiometricSetupView: View {
                 biometricType: authService.biometricType,
                 isEnabling: isEnabling,
                 onEnable: handleEnableBiometric,
-                onSkip: { dismiss() }
+                onSkip: {
+                    onComplete?(false)
+                    dismiss()
+                }
             )
         }
     }
@@ -46,7 +50,8 @@ struct BiometricSetupView: View {
                 return
             }
             try await authService.setupBiometrics(biometricToken: refreshToken)
-            // Success - dismiss
+            // Success - notify caller then dismiss
+            onComplete?(true)
             dismiss()
         } catch {
             LogError("Biometric setup failed: \(error)", category: .auth)
