@@ -1,5 +1,7 @@
 # I2c-1: Privacy Cover — Story Report
 
+> **Superseded in part by I2c-2.** The rework (commit `39c7ab3`) replaced async-sequence notification observation with synchronous `addObserver` observers, made `hideCover()` explicitly hide before releasing, and added disconnect handling. The two claims corrected below are marked with *(corrected by I2c-2)*.
+
 **Branch:** feat/i2c-privacy-cover  
 **Date:** 2026-11-03
 
@@ -81,11 +83,11 @@ UIKit's `.alert` window level is 2000.0; the cover is at 2001.0, above every sta
 **Cover window never made key:**  
 `makeKey()` and `makeKeyAndVisible()` are absent from all new files (confirmed by convention reviewer grep). The cover window is shown via `isHidden = false` only. Source: code read + convention reviewer finding 9.
 
-**Main window remains key after cover is removed:**  
-`hideCover()` sets `coverWindow = nil`, releasing the UIWindow. The app's main window (created by SwiftUI's `WindowGroup`) was never displaced as key window, so it remains key. Source: code read (no `makeKey` call anywhere in new files).
+**Main window remains key after cover is removed** *(corrected by I2c-2)*:  
+In I2c-1, `hideCover()` only sets `coverWindow = nil`. Since the cover window was never made key, the main window was never displaced. The claim that the main window remains key is accurate. However, I2c-2 strengthens this: by calling `coverWindow?.isHidden = true` before release, the window is explicitly hidden before it may be deallocated by UIKit; UIKit does not reassign the key window when a non-key window is hidden or deallocated, so the guarantee is the same either way. Source (I2c-1): code read; source (correction): I2c-2 rework commit `39c7ab3`.
 
-**Cover released on removal:**  
-`PrivacyCoverWindowAdapter` holds the cover window in `private var coverWindow: UIWindow?`. `hideCover()` sets `coverWindow = nil`; the window's reference count drops to zero (no other holder) and it is deallocated, removing it from the screen. Source: code read.
+**Cover released on removal** *(corrected by I2c-2)*:  
+`PrivacyCoverWindowAdapter` holds the cover window in `private var coverWindow: UIWindow?`. In I2c-1, `hideCover()` only sets `coverWindow = nil`; the original claim that "the window's reference count drops to zero and it is deallocated" is overstated — UIKit may hold additional retain counts on visible windows, so ARC timing is not guaranteed. I2c-2 corrects this by calling `coverWindow?.isHidden = true` and `coverWindow?.rootViewController = nil` before `coverWindow = nil`, ensuring the window is hidden and its view hierarchy is dismantled synchronously regardless of ARC timing. Source (I2c-1): code read; source (correction): I2c-2 rework commit `39c7ab3`.
 
 **Cover contains no app data:**  
 `PrivacyCoverView.swift` has no stored properties, `@Environment`, `@State`, or service injection. The only content is `Text("Christmas Tracker")` (the app name, not app data) and DesignSystem color/font tokens. Source: code read.
