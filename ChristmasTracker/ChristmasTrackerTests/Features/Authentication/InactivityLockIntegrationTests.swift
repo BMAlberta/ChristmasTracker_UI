@@ -5,11 +5,14 @@
 //  Tests for Story I2b-1 (Story 2): integration between
 //  makeProductionClearables(lockController:) and InactivityLockController.
 //
-//  These tests will fail because:
-//    - makeProductionClearables has no lockController: parameter yet
-//    - The 6-parameter overload does not exist yet
+//  R1 rework: lockControllerConformsToSessionClearable rewritten to use FakeClock +
+//  FakeSleeper instead of tracker.enteredBackground(at:), which is removed in R1.
 //
-//  Compile-time failures ARE the expected "failing for the right reason".
+//  Will fail (pre-R1) because:
+//    - makeProductionClearables has no lockController: parameter yet
+//  Will fail (R1) because:
+//    - InactivityLockController gains clockNow: and sleepUntil: params (compile error
+//      until implemented)
 //
 //  Concurrency: @MainActor throughout (controller is @MainActor).
 //
@@ -166,23 +169,36 @@ struct InactivityLockIntegrationTests {
                 "clearables[5] must be InactivityLockController")
     }
 
+    // R1 rework: drive to locked via fake clock + sceneDidBecomeActive(),
+    // replacing tracker.enteredBackground(at:) which is removed in R1.
+    // Will fail to compile until InactivityLockController gains clockNow: and sleepUntil: params.
     @Test("lockController clearForSession() resets lockState to .unlocked and is SessionClearable")
     func lockControllerConformsToSessionClearable() async throws {
         let (_, _, _, _, _, lockController) = makeSUT()
 
-        // Drive to .locked via tracker injection.
-        lockController.start()
-        let now = ContinuousClock().now
-        lockController.tracker.enteredBackground(at: now - .seconds(10 * 60 + 1))
-        lockController.sceneDidBecomeActive()
-        try #require(lockController.lockState == .locked,
+        // Drive to .locked via fake clock + scene event (R1 rework).
+        let clock = FakeClock()
+        let sleeper = FakeSleeper()
+        let lockedController = InactivityLockController(
+            policy: FakePolicy10(),
+            clockNow: { clock.now },
+            sleepUntil: { deadline in try await sleeper.sleep(until: deadline) }
+        )
+        lockedController.start()
+        await Task.yield()
+        clock.advance(by: .seconds(10 * 60 + 1))
+        lockedController.sceneDidBecomeActive()
+        try #require(lockedController.lockState == .locked,
                      "Precondition: controller must be locked before clearForSession()")
 
         // clearForSession() satisfies the SessionClearable contract.
-        try await lockController.clearForSession()
+        try await lockedController.clearForSession()
 
-        #expect(lockController.lockState == .unlocked,
+        #expect(lockedController.lockState == .unlocked,
                 "clearForSession() must reset lockState to .unlocked")
+
+        // Keep original makeSUT controller reference alive to avoid deallocation warning.
+        _ = lockController
     }
 
     // MARK: - Lock-only-when-started integration test
@@ -212,12 +228,7 @@ struct InactivityLockIntegrationTests {
         // After stop(), no further lock transitions should occur via scene events
         // (the timer is cancelled and no new deadline is set).
         lockController.sceneWillResignActive()
-        // Inject elapsed time past timeout to verify that scene event path
-        // alone does not lock after stop() cancels the timer.
-        // Note: sceneDidBecomeActive WILL still run the tracker check (it is
-        // independent of the timer task). This test verifies the timer path only.
-        // The tracker-based lock is a separate path tested in InactivityLockControllerTests.
-        // Here we verify that stop() cancels the timer task without crashing.
+        // After stop(), isRunning == false, so sceneDidBecomeActive is a no-op.
         lockController.stop() // idempotent — second call must not crash
         #expect(lockController.lockState == .unlocked)
     }

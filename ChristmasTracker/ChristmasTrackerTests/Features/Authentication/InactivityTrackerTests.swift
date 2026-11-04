@@ -2,10 +2,21 @@
 //  InactivityTrackerTests.swift
 //  ChristmasTrackerTests
 //
-//  Tests for Story I2b-1: inactivity lock — InactivityTracker semantics.
+//  Tests for Story I2b-1 / R1: InactivityTracker semantics.
 //
-//  These tests are intentionally written against the Gate 1 interface contract.
-//  They will fail to compile until InactivityTracker and LockTimeoutProviding are implemented.
+//  Deleted (R1 rework — API removed):
+//    - backgroundReturnAfterTimeoutLocks          (tested enteredBackground/becameActive old API)
+//    - backgroundReturnBeforeTimeoutDoesNotLock   (same)
+//    - enteredBackgroundThenRecordActivityDoesNotAffectBecameActive (same)
+//
+//  Rewritten:
+//    - trackerUsesOnlyInstant — enteredBackground/becameActive calls replaced with
+//      new API: recordActivity(at:), becameActive(at:), isTimedOut(at:)
+//
+//  Added (R1 new semantics — will compile once enteredBackground is removed and
+//  becameActive gains no-side-effect semantics):
+//    - becameActiveAtExactDeadlineLocks
+//    - becameActiveOneNanosecondBeforeDeadlineDoesNotLock
 //
 //  All time is injected via ContinuousClock.Instant — no real sleeps.
 //
@@ -69,27 +80,9 @@ struct InactivityTrackerTests {
         #expect(sut.isTimedOut(at: t150) == false)
     }
 
-    @Test("Background return after > timeout → becameActive returns true")
-    func backgroundReturnAfterTimeoutLocks() {
-        var sut = makeSUT(timeoutMinutes: 2)
-        let t0 = base
-        sut.recordActivity(at: t0)
-        sut.enteredBackground(at: t0)
-        let returnInstant = t0 + .seconds(121)
-        let shouldLock = sut.becameActive(at: returnInstant)
-        #expect(shouldLock == true)
-    }
-
-    @Test("Background return after < timeout → becameActive returns false")
-    func backgroundReturnBeforeTimeoutDoesNotLock() {
-        var sut = makeSUT(timeoutMinutes: 2)
-        let t0 = base
-        sut.recordActivity(at: t0)
-        sut.enteredBackground(at: t0)
-        let returnInstant = t0 + .seconds(60)
-        let shouldLock = sut.becameActive(at: returnInstant)
-        #expect(shouldLock == false)
-    }
+    // MARK: - trackerUsesOnlyInstant (rewritten — R1)
+    // enteredBackground and old becameActive calls removed.
+    // Uses only the new simplified API: recordActivity(at:), becameActive(at:), isTimedOut(at:).
 
     @Test("Tracker compiles and operates using only ContinuousClock.Instant — no Date dependency")
     func trackerUsesOnlyInstant() {
@@ -99,27 +92,47 @@ struct InactivityTrackerTests {
         var sut = makeSUT()
         let now: ContinuousClock.Instant = ContinuousClock().now
         sut.recordActivity(at: now)
-        sut.enteredBackground(at: now)
+        // R1: becameActive(at:) is now a pure read — no enteredBackground needed.
         let _ = sut.becameActive(at: now + .seconds(1))
         let _ = sut.isTimedOut(at: now + .seconds(1))
         // No assertion needed — compilation success is the assertion.
         #expect(Bool(true))
     }
 
-    @Test("enteredBackground then recordActivity does not affect becameActive result")
-    func enteredBackgroundThenRecordActivityDoesNotAffectBecameActive() {
-        // Semantics: becameActive checks elapsed time since enteredBackground,
-        // not since last activity. A recordActivity between background and foreground
-        // should not suppress the lock.
-        var sut = makeSUT(timeoutMinutes: 2)
+    // MARK: - New tests (R1) — becameActive boundary semantics
+
+    // T-new-1: becameActive at exactly the deadline returns true.
+    // Will compile once becameActive(at:) is simplified to `return isTimedOut(at: now)`.
+    @Test("becameActive at exactly the deadline returns true")
+    func becameActiveAtExactDeadlineLocks() {
+        var sut = makeSUT(timeoutMinutes: 10)
         let t0 = base
         sut.recordActivity(at: t0)
-        sut.enteredBackground(at: t0)
-        // Simulate a background activity record — should not reset the background clock
-        sut.recordActivity(at: t0 + .seconds(10))
-        // Return after > timeout from background entry
-        let returnInstant = t0 + .seconds(130)
-        let shouldLock = sut.becameActive(at: returnInstant)
-        #expect(shouldLock == true)
+        let deadline = t0 + .seconds(10 * 60)
+        // R1: becameActive(at: deadline) == isTimedOut(at: deadline) == (deadline >= deadline) == true
+        let result = sut.becameActive(at: deadline)
+        #expect(result == true,
+                "becameActive(at: deadline) must return true when now == deadline")
+    }
+
+    // T-new-2: becameActive one nanosecond before the deadline returns false,
+    // AND does NOT reset the deadline (new no-side-effect contract).
+    // Fails to compile until enteredBackground is removed (old `becameActive` reset deadline).
+    @Test("becameActive one nanosecond before deadline returns false and does not reset deadline")
+    func becameActiveOneNanosecondBeforeDeadlineDoesNotLock() {
+        var sut = makeSUT(timeoutMinutes: 10)
+        let t0 = base
+        sut.recordActivity(at: t0)
+        let deadline = t0 + .seconds(10 * 60)
+        let oneNsBefore = deadline - .nanoseconds(1)
+        // Capture deadline before the call.
+        let deadlineBefore = sut.deadline
+        // R1: becameActive(at:) is a pure read — no side effects, does not reset deadline.
+        let result = sut.becameActive(at: oneNsBefore)
+        #expect(result == false,
+                "becameActive one nanosecond before deadline must return false")
+        // Deadline must be unchanged — becameActive must not reset it.
+        #expect(sut.deadline == deadlineBefore,
+                "becameActive must not change the deadline (no side effects)")
     }
 }

@@ -4,6 +4,7 @@
 //
 //  Manages the inactivity lock state machine. Runs on @MainActor.
 //  Scene event wiring is injected via SceneEventProviding for testability.
+//  Clock and sleep seams are injected via closures for deterministic unit tests.
 //
 
 import Foundation
@@ -32,6 +33,7 @@ internal final class InactivityLockController {
     }
 
     private(set) var lockState: LockState = .unlocked
+    private(set) var isRunning: Bool = false
 
     // MARK: - Dependencies
 
@@ -41,25 +43,39 @@ internal final class InactivityLockController {
 
     // MARK: - Private
 
-    // internal for test injection of pre-expired tracker state
+    // internal for test inspection of deadline state
     internal var tracker: InactivityTracker
     private var timerTask: Task<Void, Never>?
 
+    private let clockNow: @MainActor () -> ContinuousClock.Instant
+    private let sleepUntil: @MainActor (ContinuousClock.Instant) async throws -> Void
+
     // MARK: - Init
 
-    internal init(policy: any LockTimeoutProviding) {
+    internal init(
+        policy: any LockTimeoutProviding,
+        clockNow: @escaping @MainActor () -> ContinuousClock.Instant = { ContinuousClock().now },
+        sleepUntil: @escaping @MainActor (ContinuousClock.Instant) async throws -> Void = { deadline in
+            try await Task.sleep(until: deadline, clock: .continuous)
+        }
+    ) {
         self.tracker = InactivityTracker(policy: policy)
+        self.clockNow = clockNow
+        self.sleepUntil = sleepUntil
     }
 
     // MARK: - Lifecycle
 
-    /// Starts the foreground idle timer. Idempotent — only one timer runs at a time.
+    /// Starts the foreground idle timer and resets the deadline to now + timeout.
     internal func start() {
-        scheduleTimer()
+        isRunning = true
+        tracker.recordActivity(at: clockNow())
+        scheduleTimerTask()
     }
 
-    /// Cancels the timer. Does NOT change lockState.
+    /// Cancels the timer and marks the controller as not running. Does NOT change lockState.
     internal func stop() {
+        isRunning = false
         timerTask?.cancel()
         timerTask = nil
     }
@@ -67,34 +83,43 @@ internal final class InactivityLockController {
     // MARK: - Activity
 
     /// Records user activity and reschedules the idle timer.
-    /// No-op when the controller is locked.
+    /// No-op when the controller is not running or is locked.
     internal func recordActivity() {
-        guard lockState == .unlocked else { return }
-        tracker.recordActivity(at: ContinuousClock().now)
-        scheduleTimer()
+        guard isRunning, lockState == .unlocked else { return }
+        tracker.recordActivity(at: clockNow())
+        scheduleTimerTask()
     }
 
     // MARK: - Scene Events
 
     /// Called when the scene will resign active (app backgrounds or is interrupted).
+    /// R1: no-op when running — deadline is unchanged; cumulative time is measured from
+    /// last recordActivity(). The guard prevents spurious calls when not started.
     internal func sceneWillResignActive() {
-        tracker.enteredBackground(at: ContinuousClock().now)
+        guard isRunning else { return }
+        // Intentional no-op: deadline accumulates naturally; no backgroundEntryInstant tracking.
     }
 
     /// Called when the scene becomes active again.
+    /// Checks whether the cumulative elapsed time since last activity meets or exceeds
+    /// the timeout, and locks if so.
     internal func sceneDidBecomeActive() {
-        let shouldLock = tracker.becameActive(at: ContinuousClock().now)
-        if shouldLock {
+        guard isRunning else { return }
+        if tracker.becameActive(at: clockNow()) {
             lockState = .locked
+            timerTask?.cancel()
+            timerTask = nil
         }
     }
 
     // MARK: - Unlock
 
-    /// Unlocks the controller and restarts the idle timer.
+    /// Unlocks the controller, resets the inactivity deadline, and restarts the idle timer.
     internal func unlock() {
+        guard lockState == .locked else { return }
+        tracker.recordActivity(at: clockNow())
         lockState = .unlocked
-        scheduleTimer()
+        scheduleTimerTask()
     }
 
     // MARK: - Fallback
@@ -110,26 +135,28 @@ internal final class InactivityLockController {
 
     // MARK: - Private
 
-    private func scheduleTimer() {
+    private func scheduleTimerTask() {
         timerTask?.cancel()
         let deadline = tracker.deadline
         timerTask = Task { [weak self] in
-            let clock = ContinuousClock()
+            guard let self else { return }
             do {
-                try await clock.sleep(until: deadline)
+                try await self.sleepUntil(deadline)
             } catch {
-                return // Task was cancelled
+                return // Task was cancelled or CancellationError thrown
             }
-            await self?.checkTimeout()
+            self.checkTimeout()
         }
     }
 
     private func checkTimeout() {
-        guard lockState == .unlocked else { return }
-        if tracker.isTimedOut(at: ContinuousClock().now) {
+        guard isRunning, lockState == .unlocked else { return }
+        if tracker.isTimedOut(at: clockNow()) {
             lockState = .locked
+            timerTask = nil
         } else {
-            scheduleTimer()
+            // Not yet timed out — reschedule for the same deadline (no reset)
+            scheduleTimerTask()
         }
     }
 }
@@ -145,6 +172,7 @@ extension InactivityLockController: SessionClearable {
             operation: "service.lockController.clearForSession"
         )
         defer { transaction.finish() }
+        isRunning = false
         timerTask?.cancel()
         timerTask = nil
         lockState = .unlocked

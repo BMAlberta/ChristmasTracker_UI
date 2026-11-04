@@ -5,14 +5,16 @@
 //  Tests for Story I2b-1 (Story 2): BiometricAuthenticating protocol and
 //  the mapping of BiometricResult values to InactivityLockController lock state.
 //
-//  These tests will fail to compile until:
+//  R1 rework: makeLockedController() helper rewritten to use FakeClock + FakeSleeper
+//  instead of tracker.enteredBackground(at:), which is removed in R1.
+//
+//  Will fail to compile until:
+//    - InactivityLockController gains clockNow: and sleepUntil: init params (R1)
 //    - BiometricAuthenticating.swift is added (protocol + BiometricResult enum)
 //    - FakeBiometricAuthenticator is accessible from the test target
 //
-//  Compile-time failures ARE the expected "failing for the right reason".
-//
 //  Concurrency: all controller tests are @MainActor (controller is @MainActor).
-//  No real Task.sleep — lock state is driven via tracker injection.
+//  No real Task.sleep — lock state is driven via fake clock + scene events (R1).
 //
 
 import Testing
@@ -39,14 +41,23 @@ struct BiometricAuthenticatingTests {
         FakeBiometricAuthenticator()
     }
 
-    /// Returns a fresh InactivityLockController driven into .locked state via tracker
-    /// injection, ready for biometric-result tests.
+    /// Returns a fresh InactivityLockController driven into .locked state using
+    /// the fake clock + sceneDidBecomeActive() pattern (R1 rework).
+    ///
+    /// Will fail to compile until InactivityLockController gains clockNow: and
+    /// sleepUntil: init params.
     private func makeLockedController() -> InactivityLockController {
-        let controller = InactivityLockController(policy: FakePolicy10())
+        let clock = FakeClock()
+        let sleeper = FakeSleeper()
+        let controller = InactivityLockController(
+            policy: FakePolicy10(),
+            clockNow: { clock.now },
+            sleepUntil: { deadline in try await sleeper.sleep(until: deadline) }
+        )
         controller.start()
-        // Inject a background instant that is 1 second past the 10-minute timeout.
-        let now = ContinuousClock().now
-        controller.tracker.enteredBackground(at: now - .seconds(10 * 60 + 1))
+        // Advance fake clock past the 10-minute deadline.
+        clock.advance(by: .seconds(10 * 60 + 1))
+        // sceneDidBecomeActive checks isTimedOut(at: clock.now) → true → locks.
         controller.sceneDidBecomeActive()
         return controller
     }
@@ -152,7 +163,8 @@ struct BiometricAuthenticatingTests {
         let authenticator = makeSUT()
         authenticator.stubbedResult = .success
 
-        try #require(controller.lockState == .locked, "Precondition: controller must be locked before authenticate()")
+        try #require(controller.lockState == .locked,
+                     "Precondition: controller must be locked before authenticate()")
 
         let result = await authenticator.authenticate(reason: "Unlock Christmas Tracker")
         // Contract: on .success the caller calls controller.unlock()
