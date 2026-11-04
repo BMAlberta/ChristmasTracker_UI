@@ -6,12 +6,6 @@
 //  Verifies that the controller calls presentLock() / dismissLock() SYNCHRONOUSLY —
 //  no yield required after the triggering method returns.
 //
-//  Compile failures expected until the implementer:
-//    - Creates App/InactivityLockPresenting.swift with the protocol
-//    - Adds `var lockPresenter: (any InactivityLockPresenting)?` to InactivityLockController
-//    - Calls lockPresenter?.presentLock() synchronously in sceneDidBecomeActive() and checkTimeout()
-//    - Calls lockPresenter?.dismissLock() synchronously in unlock() and clearForSession()
-//
 
 import Testing
 import Foundation

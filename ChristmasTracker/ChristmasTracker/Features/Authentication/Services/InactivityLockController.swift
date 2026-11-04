@@ -129,10 +129,11 @@ internal final class InactivityLockController {
     // MARK: - Fallback
 
     /// Triggers a full logout via the auth service with reason `.lockFallback`.
-    internal func usePasswordTeardown() {
+    @discardableResult
+    internal func usePasswordTeardown() -> Task<Void, Never> {
         // Actor-isolated (@MainActor): manual dispatch to Task — @Instrumented not applicable here.
         let service = authService
-        Task {
+        return Task {
             await service?.logout(reason: .lockFallback)
         }
     }

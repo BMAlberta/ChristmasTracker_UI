@@ -34,13 +34,6 @@
 //  Concurrency: all controller tests are @MainActor (controller is @MainActor).
 //  Tests that use the timer/sleeper path use Task.yield() — no real Task.sleep.
 //
-//  Compile failures expected until:
-//    - InactivityLockController gains clockNow: and sleepUntil: init params
-//    - InactivityLockController gains isRunning: Bool property
-//    - InactivityTracker.enteredBackground is removed
-//    - InactivityTracker.becameActive gains no-side-effect semantics
-//    - FakeClock and FakeSleeper exist in this test target (see those files)
-//
 
 import Testing
 import Foundation
@@ -136,8 +129,8 @@ struct InactivityLockControllerTests {
                 "Precondition: must be authenticated before lockFallback")
 
         controller.authService = authService
-        controller.usePasswordTeardown()
-        try await Task.sleep(for: .milliseconds(50))
+        let teardownTask = controller.usePasswordTeardown()
+        await teardownTask.value
         #expect(authService.isAuthenticated == false,
                 "usePasswordTeardown must call logout(reason: .lockFallback), leaving authService signed out")
     }

@@ -5,12 +5,6 @@
 //  Tests for Story R2: BiometricOutcome enum and biometricOutcome(for:biometryTypeName:) mapping.
 //  Also tests showBiometricButton(isAvailable:preferenceEnabled:isPasswordOnly:).
 //
-//  Compile failures expected until the implementer:
-//    - Creates `BiometricOutcome` enum in LockView.swift (or a new file)
-//    - Creates `biometricOutcome(for:biometryTypeName:) -> BiometricOutcome` free function
-//    - Creates `showBiometricButton(isAvailable:preferenceEnabled:isPasswordOnly:) -> Bool`
-//    - Fixes LockView.attemptBiometricUnlock() to use BiometricOutcome instead of inline logic
-//
 //  Contract (from Gate 1 spec, R2):
 //
 //    enum BiometricOutcome: Equatable {

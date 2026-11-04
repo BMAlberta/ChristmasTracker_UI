@@ -59,8 +59,10 @@ nonisolated internal struct LockPolicy: LockTimeoutProviding {
     /// Parses a string into a valid timeout value (1...30), returning nil for
     /// blank, non-numeric, zero, negative, or out-of-range (>30) inputs.
     nonisolated internal static func parse(_ raw: String?) -> Int? {
-        guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-        guard let parsed = Int(raw) else { return nil }
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        guard let parsed = Int(trimmed) else { return nil }
         guard parsed >= 1, parsed <= 30 else { return nil }
         return parsed
     }

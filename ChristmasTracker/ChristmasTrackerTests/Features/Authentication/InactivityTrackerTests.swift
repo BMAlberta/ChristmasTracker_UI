@@ -13,8 +13,7 @@
 //    - trackerUsesOnlyInstant — enteredBackground/becameActive calls replaced with
 //      new API: recordActivity(at:), becameActive(at:), isTimedOut(at:)
 //
-//  Added (R1 new semantics — will compile once enteredBackground is removed and
-//  becameActive gains no-side-effect semantics):
+//  Added (R1 new semantics):
 //    - becameActiveAtExactDeadlineLocks
 //    - becameActiveOneNanosecondBeforeDeadlineDoesNotLock
 //

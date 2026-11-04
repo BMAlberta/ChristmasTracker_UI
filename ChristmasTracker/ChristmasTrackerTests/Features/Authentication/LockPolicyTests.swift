@@ -4,9 +4,6 @@
 //
 //  Tests for Story I2b-1: inactivity lock — LockPolicy resolution and clamping.
 //
-//  These tests are intentionally written against the Gate 1 interface contract.
-//  They will fail to compile until LockPolicy and LockTimeoutProviding are implemented.
-//
 
 import Testing
 import Foundation
@@ -135,5 +132,13 @@ struct LockPolicyTests {
         #expect(LockPolicy.parse("abc") == nil)
         #expect(LockPolicy.parse(nil) == nil)
         #expect(LockPolicy.parse("99") == nil)
+    }
+
+    @Test("parse handles leading and trailing whitespace")
+    func parseTrimsWhitespace() {
+        #expect(LockPolicy.parse("  10  ") == 10)
+        #expect(LockPolicy.parse("  1") == 1)
+        #expect(LockPolicy.parse("30  ") == 30)
+        #expect(LockPolicy.parse("   ") == nil)
     }
 }

@@ -6,10 +6,6 @@
 //  both unit tests and SwiftUI Previews can share the same fixture without
 //  duplicating the type.
 //
-//  This file intentionally compiles against the BiometricAuthenticating protocol
-//  and BiometricResult / BiometricType declared in BiometricAuthenticating.swift.
-//  The file will not compile until that production file is added.
-//
 
 import Foundation
 
