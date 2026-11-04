@@ -498,3 +498,371 @@ internal final class FakeBiometricUnlockPreference: BiometricUnlockPreferring {
 - If the user later enables biometric unlock in Profile (after declining the initial offer), the toggle sets `biometricUnlockEnabled = true` without re-showing the BiometricSetupView (it was already shown once; re-enabling via toggle goes straight to UserDefaults).
 - The existing `setupBiometrics(biometricToken:)` Keychain behavior in AuthenticationService is unchanged (I2b-2).
 - BiometricSetupView modification is minimal: only the `onComplete` callback is added. The view's existing behavior (prompt, Keychain setup, dismiss) is preserved.
+
+---
+
+## Rework Gate 1: Story R1 — Controller and Tracker Correctness
+
+### Defects confirmed by code review
+
+**D1 (unlock relock loop):** `InactivityLockController.unlock()` calls `scheduleTimer()` which uses `tracker.deadline`. After a foreground-idle lock the deadline is in the past, so the timer fires immediately, `checkTimeout` sees the deadline still passed, and locks again. Confirmed: `scheduleTimer()` does not reset the deadline; `recordActivity()` is a no-op while locked.
+
+**D2 (scene events while not running):** `sceneDidBecomeActive()` calls `tracker.becameActive(at:)` unconditionally; there is no `isRunning` guard. A scene cycle on the login screen can lock the app while unauthenticated.
+
+**D3 (tracker measures only background duration):** `InactivityTracker.becameActive()` computes `elapsed = now - backgroundEntryInstant` and returns `elapsed >= timeout`. Foreground idle time preceding the background does not contribute. After 9 idle foreground minutes and a 2-minute background, the check sees 2 minutes elapsed — does not lock. Deadline is also reset unconditionally in `becameActive`, so a brief Control Center dismissal extends the session by a full timeout.
+
+### New semantics (required)
+
+**InactivityTracker** (pure value type, no UIKit):
+- Removes `enteredBackground(at:)` and `backgroundEntryInstant`.
+- `becameActive(at: now)` → `return isTimedOut(at: now)`. No side effect; does not reset deadline.
+- `recordActivity(at: now)` → `deadline = now + timeout`. Unchanged.
+- `isTimedOut(at: now)` → `now >= deadline`. Unchanged.
+- Inactivity is measured continuously from last activity; background time counts toward the timeout automatically because the deadline is not reset on backgrounding.
+
+**InactivityLockController**:
+- Adds `private(set) var isRunning: Bool = false`.
+- Adds clock and sleeper seams for testability (see signatures below).
+- `start()`: sets `isRunning = true`, resets tracker deadline to `clockNow() + timeout`, then schedules the timer.
+- `stop()`: sets `isRunning = false`, cancels the timer. Does not change `lockState`.
+- `sceneDidBecomeActive()`: no-op if `!isRunning`; calls `tracker.becameActive(at: clockNow())`; locks if true.
+- `sceneWillResignActive()`: no-op (background-entry tracking removed).
+- `recordActivity()`: no-op if `!isRunning` or if locked; calls `tracker.recordActivity(at: clockNow())`; reschedules timer.
+- `unlock()`: calls `tracker.recordActivity(at: clockNow())` to reset the deadline, sets `lockState = .unlocked`, then reschedules the timer for the new deadline.
+- Timer task calls `sleepUntil(tracker.deadline)`; on wakeup calls `checkTimeout()` which calls `clockNow()` for the timedout check.
+- `clearForSession()`: cancels timer, sets `isRunning = false`, sets `lockState = .unlocked`.
+
+### Type signatures (delta)
+
+```swift
+// InactivityTracker.swift — remove these:
+//   mutating func enteredBackground(at now: Instant)
+//   mutating func becameActive(at now: Instant) -> Bool  // old signature with side effects
+// Add (simplified becameActive, no side effects):
+internal mutating func becameActive(at now: Instant) -> Bool  // return isTimedOut(at: now)
+
+// InactivityLockController.swift — new init signature:
+internal init(
+    policy: any LockTimeoutProviding,
+    clockNow: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock().now },
+    sleepUntil: @escaping @Sendable (ContinuousClock.Instant) async throws -> Void = {
+        deadline in try await ContinuousClock().sleep(until: deadline)
+    }
+)
+
+// New property:
+private(set) var isRunning: Bool = false
+
+// sceneWillResignActive becomes a no-op:
+internal func sceneWillResignActive()  // no-op; kept for wiring compatibility
+
+// tracker visibility: keep internal (the rework must NOT use tracker.enteredBackground
+// any longer in tests; instead use fake clock + scene events)
+```
+
+### Fake infrastructure (test target only)
+
+```swift
+// FakeClock.swift — test target
+@MainActor
+final class FakeClock {
+    var now: ContinuousClock.Instant
+    init(startingAt instant: ContinuousClock.Instant = ContinuousClock().now) { self.now = instant }
+    func advance(by duration: Duration) { now = now + duration }
+}
+
+// FakeSleeper.swift — test target
+// nonisolated(unsafe) on pending: accessed from both @MainActor release() and the
+// nonisolated withTaskCancellationHandler.onCancel block. Safe because onCancel runs
+// only when the Task is being cancelled (exclusive access to pending at that point).
+@MainActor
+final class FakeSleeper {
+    private(set) var requestedDeadline: ContinuousClock.Instant?
+    nonisolated(unsafe) private var pending: CheckedContinuation<Void, Error>?
+
+    func sleep(until deadline: ContinuousClock.Instant) async throws {
+        requestedDeadline = deadline
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { [self] c in self.pending = c }
+        } onCancel: {
+            self.pending?.resume(throwing: CancellationError())
+            self.pending = nil
+        }
+        pending = nil
+    }
+
+    func release() {
+        pending?.resume(returning: ())
+        pending = nil
+    }
+}
+
+// Helper: make controller with injected seams
+func makeController(
+    timeoutMinutes: Int = 10,
+    clock: FakeClock,
+    sleeper: FakeSleeper
+) -> InactivityLockController {
+    InactivityLockController(
+        policy: FakePolicy(timeoutMinutes: timeoutMinutes),
+        clockNow: { clock.now },
+        sleepUntil: { deadline in try await sleeper.sleep(until: deadline) }
+    )
+}
+```
+
+### Test yield pattern
+
+After `start()` or any method that creates/reschedules the timer Task, the test must yield once so the Task runs to its first suspension point:
+
+```swift
+// Let the new timer task start and hit sleeper.sleep():
+await Task.yield()
+// Now sleeper.requestedDeadline is set.
+```
+
+After `sleeper.release()`, yield again to let the timer task wake and run `checkTimeout()`:
+
+```swift
+sleeper.release()
+await Task.yield()
+// Now lockState reflects the timeout check.
+```
+
+### Tests to delete (prompt-specified)
+
+Delete from `InactivityLockControllerTests.swift` with reason:
+
+| Test name | Reason |
+|---|---|
+| `sceneCycleExceedingTimeoutCausesLock` | Vacuous: only asserts `.unlocked` after `stop()`; never actually locked. |
+| `unlockAfterLockRestoresUnlockedState` | Vacuous: calls `unlock()` on an already-unlocked controller. |
+| `recordActivityWhenLockedIsNoOp` (first, line 138) | Vacuous: only calls `recordActivity()` on an *unlocked* controller; asserts `.unlocked`. |
+| `sceneHandlersAttachedAfterStart` | Redundant: R1 test 7 (scene events before start never lock) covers the same guard. |
+| `controllerDoesNotLockWhenNotStarted` | Redundant: R1 test 7 covers this directly. |
+
+Delete from `InactivityTrackerTests.swift` with reason:
+
+| Test name | Reason |
+|---|---|
+| `backgroundReturnAfterTimeoutLocks` | Tests `enteredBackground`/`becameActive` old semantics; both removed. |
+| `backgroundReturnBeforeTimeoutDoesNotLock` | Same. |
+| `enteredBackgroundThenRecordActivityDoesNotAffectBecameActive` | Same. |
+
+Rewrite (keep name or give new name) with reason:
+
+| Old test | New test name | Reason |
+|---|---|---|
+| `trackerUsesOnlyInstant` | `trackerUsesOnlyInstant` | Remove `enteredBackground`/`becameActive` calls; replace with `becameActive(at:)` new API. |
+| Controller locked-state tests using `tracker.enteredBackground` (5 tests) | Same names, new body | Remove `tracker.enteredBackground`; use fake clock + `sceneDidBecomeActive()`. |
+| `makeLockedController()` in `BiometricAuthenticatingTests` | Helper rewritten | Use fake clock; advance past deadline; call `sceneDidBecomeActive()`. |
+| `lockControllerConformsToSessionClearable` in `InactivityLockIntegrationTests` | Same name | Use fake clock to reach locked state. |
+
+### New tests (R1) — 11 controller tests + 2 tracker tests
+
+Tracker additions (2 new):
+- T-new-1: `becameActiveAtExactDeadlineLocks` — `becameActive(at: deadline)` returns `true`.
+- T-new-2: `becameActiveOneNanosecondBeforeDeadlineDoesNotLock` — `becameActive(at: deadline - .nanoseconds(1))` returns `false`. Deadline is unchanged after the call.
+
+Controller additions (11 new, with fake clock + fake sleeper):
+1. `foregroundIdleFiresTimerAtDeadline` — after `start()` and sleeper released at deadline, `lockState == .locked`.
+2. `timerReleasedOneSecondEarlyReschedulesForSameDeadline` — sleeper released at deadline - 1s: state stays `.unlocked`; `sleeper.requestedDeadline` is unchanged (same deadline).
+3. `unlockAfterIdleLock_freshDeadlineAndNoRelockOnNewDeadlineMinusOne` — after idle lock, `unlock()` resets deadline to `now + timeout`; releasing sleeper 1s before that new deadline does not relock.
+4. `cumulativeInactivity_9minIdle_2minBackground_locks` — advance clock 9m, call `sceneWillResignActive`, advance 2 more minutes, call `sceneDidBecomeActive`: `lockState == .locked`.
+5. `cumulativeInactivity_5minIdle_3minBackground_doesNotLock_deadlineUnchanged` — advance 5m, background, advance 3m, foreground: not locked; `tracker.deadline` equals original deadline.
+6. `becameActiveBoundary_exactDeadlineLocks_oneNanosecondBeforeDoesNot` — two controller subtests using fake clock at exactly deadline and at deadline - 1ns.
+7. `sceneEventsBeforeStartAndAfterStopNeverLock` — advance fake clock far past deadline; call scene events before `start()` and after `stop()`; never locked.
+8. `startResetsDeadline_priorFakeClockAdvanceDoesNotCauseLock` — advance fake clock 15m, then call `start()`; immediate `sceneDidBecomeActive()` does not lock.
+9. `recordActivityWhileRunningPushesDeadlineAndReschedules` — while running and unlocked: `recordActivity()` advances deadline by timeout; sleeper reschedules for new deadline. While locked: `recordActivity()` changes nothing.
+10. `clearForSession_resetsLockedRunningControllerToUnlockedAndNotRunning` — drive to locked+running state; `clearForSession()`: `lockState == .unlocked`, `isRunning == false`.
+11. `trackerAlone_activityDeadline_isTimedOutBoundary_becameActiveSemantics` (tracker test): `recordActivity` sets deadline; `isTimedOut` at boundary; `becameActive` returns `now >= deadline` without changing deadline.
+
+### Scoped file list
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/InactivityTracker.swift`
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/InactivityLockController.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/InactivityTrackerTests.swift` (delete 3, rewrite 1, add 2)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/InactivityLockControllerTests.swift` (delete 5, rewrite 5, add 11)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/BiometricAuthenticatingTests.swift` (rewrite `makeLockedController` helper)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/InactivityLockIntegrationTests.swift` (rewrite `lockControllerConformsToSessionClearable`)
+
+**New (test target):**
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/FakeClock.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/FakeSleeper.swift`
+
+---
+
+## Rework Gate 1: Story R2 — Synchronous Lock Presentation and Biometric Outcome Mapping
+
+### Defects confirmed by code review
+
+**D4 (async lock presentation):** `ChristmasTrackerApp.body` has `.onChange(of: lockController.lockState)` which calls `lockCoordinator.handleLockStateChange(lockState)`. `.onChange` is delivered asynchronously on the next SwiftUI render cycle, not synchronously within the scene notification handler. On return from background, the privacy cover hides synchronously (PrivacyCoverCoordinator uses synchronous `addObserver(queue: nil)`) but the lock window appears on the next frame — a gap of app content is visible.
+
+**D5 (failed biometric hides the button):** `LockView.attemptBiometricUnlock()` maps `.failed` to `showPasswordOnly = true`. A transient failure (non-matching face, lighting, slightly wet finger) permanently hides the biometric button for the rest of that lock event, forcing the user to log in entirely. The correct behavior: `.failed` keeps the biometric button visible and shows a short "try again" hint. Only `.userFallback`, `.lockedOut`, and `.unavailable` warrant password-only mode.
+
+### New semantics (required)
+
+**InactivityLockPresenting protocol** (new, `App/InactivityLockPresenting.swift`):
+```swift
+internal protocol InactivityLockPresenting: AnyObject {
+    func presentLock()
+    func dismissLock()
+}
+```
+
+`InactivityLockController` gains:
+```swift
+var lockPresenter: (any InactivityLockPresenting)?
+```
+
+The controller calls `lockPresenter?.presentLock()` SYNCHRONOUSLY (before the method returns) inside:
+- `sceneDidBecomeActive()` — if `becameActive` returns true
+- `checkTimeout()` — if `isTimedOut` returns true
+- It does NOT call `presentLock` if already locked (guard `lockState == .unlocked`).
+
+The controller calls `lockPresenter?.dismissLock()` synchronously inside:
+- `unlock()` — before rescheduling the timer
+- `clearForSession()` — only if `lockState == .locked` at the time of the call
+
+`LockCoordinator` in `ChristmasTrackerApp.swift` conforms to `InactivityLockPresenting`. The `handleLockStateChange(_:)` method and the `.onChange(of: lockController.lockState)` path in `body` are **removed**. Instead, `lockController.lockPresenter` is set to the `lockCoordinator` after construction.
+
+**Biometric outcome mapping** (extracted from `LockView` for testability):
+
+```swift
+// Pure nonisolated function (new file or added to LockView.swift):
+internal func biometricOutcome(
+    for result: BiometricResult,
+    biometryTypeName: String
+) -> BiometricOutcome
+
+internal enum BiometricOutcome: Equatable {
+    case unlock               // success
+    case keepBiometricButton  // userCancelled, systemCancelled, failed
+    case showHint(String)     // failed only — includes biometryTypeName for the message
+    case passwordOnly         // userFallback, lockedOut, unavailable
+}
+```
+
+Wait — simplify the enum. The prompt says `.failed` keeps the biometric button visible AND shows a hint. So:
+
+```swift
+internal enum BiometricOutcome: Equatable {
+    case unlock
+    case keepBiometric(hint: String?)  // hint is non-nil for .failed only
+    case passwordOnly
+}
+
+internal nonisolated func biometricOutcome(
+    for result: BiometricResult,
+    biometryTypeName: String
+) -> BiometricOutcome {
+    switch result {
+    case .success:
+        return .unlock
+    case .userCancelled, .systemCancelled:
+        return .keepBiometric(hint: nil)
+    case .failed:
+        let hint = "\(biometryTypeName) didn't recognize you. Try again or use your password."
+        return .keepBiometric(hint: hint)
+    case .userFallback, .lockedOut, .unavailable:
+        return .passwordOnly
+    }
+}
+```
+
+**Button visibility rule** (extracted for testing):
+
+```swift
+internal nonisolated func showBiometricButton(
+    isAvailable: Bool,
+    preferenceEnabled: Bool,
+    isPasswordOnly: Bool
+) -> Bool {
+    isAvailable && preferenceEnabled && !isPasswordOnly
+}
+```
+
+`LockView` calls these two functions instead of inline logic. `attemptBiometricUnlock` applies the `BiometricOutcome`:
+- `.unlock` → `controller.unlock()`
+- `.keepBiometric(hint:)` → set `hintText = hint` (new `@State`); biometric button stays visible
+- `.passwordOnly` → `showPasswordOnly = true`
+
+### New Gate 1 type signatures
+
+```swift
+// App/InactivityLockPresenting.swift (new)
+internal protocol InactivityLockPresenting: AnyObject {
+    func presentLock()
+    func dismissLock()
+}
+
+// InactivityLockController.swift (modified)
+var lockPresenter: (any InactivityLockPresenting)?
+// Called synchronously on lock (before returning from sceneDidBecomeActive/checkTimeout)
+// Called synchronously on unlock (before rescheduling timer in unlock())
+// Called synchronously on clearForSession (if was locked)
+
+// LockView.swift (modified) — added @State:
+@State private var hintText: String? = nil
+// biometricButton shows hintText below button when non-nil
+
+// New pure functions (can live in LockView.swift or a new file):
+internal nonisolated func biometricOutcome(
+    for result: BiometricResult,
+    biometryTypeName: String
+) -> BiometricOutcome
+
+internal nonisolated func showBiometricButton(
+    isAvailable: Bool,
+    preferenceEnabled: Bool,
+    isPasswordOnly: Bool
+) -> Bool
+```
+
+### Tests (R2, Swift Testing, `@MainActor`)
+
+```swift
+// FakeLockPresenter (test target, alongside FakeClock/FakeSleeper)
+@MainActor
+final class FakeLockPresenter: InactivityLockPresenting {
+    private(set) var presentCallCount = 0
+    private(set) var dismissCallCount = 0
+    func presentLock() { presentCallCount += 1 }
+    func dismissLock() { dismissCallCount += 1 }
+}
+```
+
+Required tests (new file `InactivityLockPresenterTests.swift`):
+1. `presentLockCalledBeforeSceneDidBecomeActiveReturns` — after advance-past-deadline + `sceneDidBecomeActive()`: `presentCallCount == 1` and `lockState == .locked` before yielding.
+2. `dismissLockCalledBeforeUnlockReturns` — after lock then `unlock()`: `dismissCallCount == 1`.
+3. `presentLockNotCalledTwiceForRepeatedLockTriggers` — `sceneDidBecomeActive()` twice when already locked: `presentCallCount` stays 1.
+4. `clearForSessionCallsDismissWhenLocked` — drive to locked, `clearForSession()`: `dismissCallCount == 1`.
+5. `clearForSessionDoesNotCallDismissWhenUnlocked` — `clearForSession()` without locking first: `dismissCallCount == 0`.
+
+Required tests (new file `BiometricOutcomeTests.swift`):
+6. `.success` → `.unlock`
+7. `.userCancelled` → `.keepBiometric(hint: nil)`
+8. `.systemCancelled` → `.keepBiometric(hint: nil)`
+9. `.failed` → `.keepBiometric(hint:)` with non-nil hint containing "try again"
+10. `.userFallback` → `.passwordOnly`
+11. `.lockedOut` → `.passwordOnly`
+12. `.unavailable` → `.passwordOnly`
+13. `showBiometricButton(isAvailable: true, preferenceEnabled: true, isPasswordOnly: false)` → true
+14. `showBiometricButton(isAvailable: false, ...)` → false
+15. `showBiometricButton(isAvailable: true, preferenceEnabled: false, ...)` → false
+16. `showBiometricButton(isAvailable: true, preferenceEnabled: true, isPasswordOnly: true)` → false
+
+### Scoped file list (R2)
+
+**New:**
+- `ChristmasTracker/ChristmasTracker/App/InactivityLockPresenting.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/InactivityLockPresenterTests.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/BiometricOutcomeTests.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/InactivityLockController.swift` — add `lockPresenter`; call synchronously
+- `ChristmasTracker/ChristmasTracker/App/LockView.swift` — extract outcome mapping; fix `.failed` behavior; add `hintText` state
+- `ChristmasTracker/ChristmasTracker/ChristmasTrackerApp.swift` — remove `.onChange(of: lockController.lockState)`; set `lockController.lockPresenter = lockCoordinator`; `LockCoordinator` conforms to `InactivityLockPresenting`
+
+**No new test file for the BiometricAuthenticatingTests mapping tests:** those tests test via the LockView mock-caller pattern and remain valid; only the production `attemptBiometricUnlock` path changes.
