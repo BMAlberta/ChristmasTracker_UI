@@ -18,5 +18,7 @@
     <string>$(SENTRY_DSN)</string>
     <key>APP_ENVIRONMENT</key>
     <string>$(APP_ENVIRONMENT)</string>
+    <key>INACTIVITY_LOCK_MINUTES</key>
+    <string>$(INACTIVITY_LOCK_MINUTES)</string>
 </dict>
 </plist>

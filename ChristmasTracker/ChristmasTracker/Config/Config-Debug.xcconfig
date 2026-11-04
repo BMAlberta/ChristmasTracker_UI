@@ -25,6 +25,7 @@ CACHE_DURATION = 30     // 30 seconds (faster testing)
 SESSION_TIMEOUT = 300   // 5 minutes
 BACKGROUND_REFRESH = 60 // 1 minute
 LOG_FLUSH_INTERVAL = 15 // 15 seconds
+INACTIVITY_LOCK_MINUTES = 10
 
 // Observability overrides (after include so they win over Config.xcconfig)
 API_MODE = mock

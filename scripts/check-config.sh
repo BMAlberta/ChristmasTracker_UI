@@ -25,6 +25,7 @@ check_config() {
     actual_app_env=$(echo "$SETTINGS" | grep "^\s*APP_ENVIRONMENT\s*=" | sed 's/.*= *//' | tr -d '[:space:]')
     actual_dsn=$(echo "$SETTINGS" | grep "^\s*SENTRY_DSN\s*=" | sed 's/.*= *//' | tr -d '[:space:]')
     actual_bundle=$(echo "$SETTINGS" | grep "^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=" | grep -v "DERIVE_MACCATALYST" | sed 's/.*= *//' | tr -d '[:space:]')
+    actual_inactivity_lock=$(echo "$SETTINGS" | grep "^\s*INACTIVITY_LOCK_MINUTES\s*=" | sed 's/.*= *//' | tr -d '[:space:]')
 
     if [ "$actual_api_mode" != "$EXPECTED_API_MODE" ]; then
         echo "FAIL [$CFG] API_MODE: expected '$EXPECTED_API_MODE', got '$actual_api_mode'"
@@ -43,6 +44,11 @@ check_config() {
 
     if [ "$actual_bundle" != "$EXPECTED_BUNDLE_ID" ]; then
         echo "FAIL [$CFG] PRODUCT_BUNDLE_IDENTIFIER: expected '$EXPECTED_BUNDLE_ID', got '$actual_bundle'"
+        FAIL=1
+    fi
+
+    if [ "$actual_inactivity_lock" != "10" ]; then
+        echo "FAIL [$CFG] INACTIVITY_LOCK_MINUTES: expected '10', got '$actual_inactivity_lock'"
         FAIL=1
     fi
 }

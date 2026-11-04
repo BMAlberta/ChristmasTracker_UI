@@ -15,6 +15,7 @@ internal enum TeardownReason: Sendable {
     case userLogout
     case sessionExpired
     case forcedUpdate
+    case lockFallback
 }
 
 /// Returns the production clearable list for the session manager.

@@ -20,6 +20,7 @@ CACHE_DURATION = 60         // 1 minute
 SESSION_TIMEOUT = 1800      // 30 minutes
 BACKGROUND_REFRESH = 300    // 5 minutes
 LOG_FLUSH_INTERVAL = 30     // 30 seconds
+INACTIVITY_LOCK_MINUTES = 10
 
 // Enable testability
 ENABLE_TESTABILITY = YES
