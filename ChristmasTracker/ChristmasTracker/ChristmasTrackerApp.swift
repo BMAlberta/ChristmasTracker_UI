@@ -6,7 +6,53 @@
 //
 
 import SwiftUI
-import UIKit
+@preconcurrency import UIKit
+
+// MARK: - LockCoordinator
+
+/// Manages per-scene LockWindowAdapter instances and responds to lock state changes.
+/// MainActor by default (SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor).
+private final class LockCoordinator {
+    private let lockController: InactivityLockController
+    private let biometricAuthenticator: any BiometricAuthenticating
+    private var adapters: [ObjectIdentifier: LockWindowAdapter] = [:]
+
+    init(lockController: InactivityLockController,
+         biometricAuthenticator: any BiometricAuthenticating) {
+        self.lockController = lockController
+        self.biometricAuthenticator = biometricAuthenticator
+    }
+
+    func handleLockStateChange(_ state: InactivityLockController.LockState) {
+        guard let windowScene = UIApplication.shared
+            .connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: {
+                $0.activationState == .foregroundActive
+                    || $0.activationState == .foregroundInactive
+            })
+        else { return }
+
+        let key = ObjectIdentifier(windowScene)
+        switch state {
+        case .locked:
+            if adapters[key] == nil {
+                let adapter = LockWindowAdapter(scene: windowScene)
+                adapters[key] = adapter
+                adapter.showLock(
+                    controller: lockController,
+                    biometricAuthenticator: biometricAuthenticator
+                )
+            }
+        case .unlocked:
+            if let adapter = adapters.removeValue(forKey: key) {
+                adapter.hideLock()
+            }
+        }
+    }
+}
+
+// MARK: - ChristmasTrackerApp
 
 @main
 struct ChristmasTrackerApp: App {
@@ -17,6 +63,12 @@ struct ChristmasTrackerApp: App {
     @State private var itemService: ItemService
     private let sessionManager: SessionManager
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
+    private let lockController: InactivityLockController
+    private let lockCoordinator: LockCoordinator
+
+    // nonisolated(unsafe): written exactly once during init on MainActor;
+    // read in deinit where the app is exclusively owned — no concurrent access.
+    nonisolated(unsafe) private var lockObservers: [any NSObjectProtocol] = []
 
     private struct AppDependencies {
         let apiClient: APIClient
@@ -45,7 +97,7 @@ struct ChristmasTrackerApp: App {
             }
         }
     }
-    
+
     // MARK: - Initialization
     init() {
         // Start crash/performance reporting before anything else
@@ -61,6 +113,15 @@ struct ChristmasTrackerApp: App {
         }
         coordinator.start()
         privacyCoverCoordinator = coordinator
+
+        // Build the lock controller before wiring.
+        let lockPolicy = LockPolicy()
+        let lc = InactivityLockController(policy: lockPolicy)
+        lockController = lc
+        lockCoordinator = LockCoordinator(
+            lockController: lc,
+            biometricAuthenticator: LocalAuthenticationService()
+        )
 
         let dependencies = AppDependencies.make()
         apiClient = dependencies.apiClient
@@ -80,13 +141,14 @@ struct ChristmasTrackerApp: App {
         )
         itemService = is_
 
-        // Create session manager with production clearables
+        // Create session manager with production clearables (6 total; lockController is #6)
         let clearables = makeProductionClearables(
             listDataStore: listDataStore,
             itemDataStore: itemDataStore,
             listService: ls,
             itemService: is_,
-            networkCache: NetworkCache.shared
+            networkCache: NetworkCache.shared,
+            lockController: lc
         )
         let sm = SessionManager(authRepository: dependencies.authRepository,
                                 initialClearables: clearables)
@@ -99,8 +161,41 @@ struct ChristmasTrackerApp: App {
         )
         authService = auth
 
+        // Wire the lock controller's authService reference.
+        lc.authService = auth
+
+        // Register scene lifecycle observers for the lock controller.
+        // Using synchronous observers (queue: nil) so they run on the main thread inline
+        // with the UIKit notification — same pattern as PrivacyCoverCoordinator.start().
+        var observers: [any NSObjectProtocol] = []
+
+        let willResign = NotificationCenter.default.addObserver(
+            forName: UIScene.willDeactivateNotification,
+            object: nil,
+            queue: nil
+        ) { [weak lc] _ in
+            MainActor.assumeIsolated {
+                lc?.sceneWillResignActive()
+            }
+        }
+        observers.append(willResign)
+
+        let didActivate = NotificationCenter.default.addObserver(
+            forName: UIScene.didActivateNotification,
+            object: nil,
+            queue: nil
+        ) { [weak lc] _ in
+            MainActor.assumeIsolated {
+                lc?.sceneDidBecomeActive()
+            }
+        }
+        observers.append(didActivate)
+
+        lockObservers = observers
+
         LogInfo("App initialized", category: .business)
     }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -108,6 +203,17 @@ struct ChristmasTrackerApp: App {
                 .environment(\.apiClient, apiClient)
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)
+                .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
+                    if isAuthenticated {
+                        lockController.authService = authService
+                        lockController.start()
+                    } else {
+                        lockController.stop()
+                    }
+                }
+                .onChange(of: lockController.lockState) { _, lockState in
+                    lockCoordinator.handleLockStateChange(lockState)
+                }
         }
     }
 }

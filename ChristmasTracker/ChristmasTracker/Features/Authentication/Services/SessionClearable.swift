@@ -26,7 +26,8 @@ internal func makeProductionClearables(
     itemDataStore: ItemDataStore,
     listService: ListService,
     itemService: ItemService,
-    networkCache: NetworkCache
+    networkCache: NetworkCache,
+    lockController: InactivityLockController
 ) -> [any SessionClearable] {
-    [listDataStore, itemDataStore, listService, itemService, networkCache]
+    [listDataStore, itemDataStore, listService, itemService, networkCache, lockController]
 }
