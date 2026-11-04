@@ -268,4 +268,13 @@ struct BiometricAuthenticatingTests {
         #expect(controller.lockState == .locked,
                 ".failed must leave lockState .locked")
     }
+
+    // MARK: - R5: stubbedBiometryTypeName
+
+    @Test("FakeBiometricAuthenticator.biometryTypeName reflects stubbedBiometryTypeName")
+    func fakeBiometricAuthenticatorBiometryTypeNameReflectsStubbedValue() {
+        let fake = makeSUT()
+        fake.stubbedBiometryTypeName = "Touch ID"
+        #expect(fake.biometryTypeName == "Touch ID")
+    }
 }

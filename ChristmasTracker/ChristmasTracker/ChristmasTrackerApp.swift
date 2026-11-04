@@ -91,6 +91,7 @@ struct ChristmasTrackerApp: App {
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
     private let lockController: InactivityLockController
     private let lockCoordinator: LockCoordinator
+    private let sharedLocalAuth: LocalAuthenticationService
     @State private var preference = BiometricUnlockPreference()
 
     // nonisolated(unsafe): written exactly once during init on MainActor;
@@ -142,13 +143,15 @@ struct ChristmasTrackerApp: App {
         privacyCoverCoordinator = coordinator
 
         // Build the lock controller before wiring.
+        let localAuth = LocalAuthenticationService()
+        sharedLocalAuth = localAuth
         let lockPolicy = LockPolicy()
         let lc = InactivityLockController(policy: lockPolicy)
         lc.preference = BiometricUnlockPreference()
         lockController = lc
         let lkCoord = LockCoordinator(
             lockController: lc,
-            biometricAuthenticator: LocalAuthenticationService()
+            biometricAuthenticator: localAuth
         )
         lc.lockPresenter = lkCoord
         lockCoordinator = lkCoord
@@ -250,11 +253,17 @@ struct ChristmasTrackerApp: App {
                     }
                 }
                 .sheet(isPresented: $showBiometricSetup) {
-                    BiometricSetupView(onComplete: { enabled in
-                        preference.biometricSetupOfferShown = true
-                        preference.biometricUnlockEnabled = enabled
-                        lockController.preference = preference
-                    })
+                    BiometricSetupView(
+                        model: BiometricEnablementModel(
+                            authenticator: sharedLocalAuth,
+                            preference: preference
+                        ),
+                        onComplete: { enabled in
+                            preference.biometricSetupOfferShown = true
+                            preference.biometricUnlockEnabled = enabled
+                            lockController.preference = preference
+                        }
+                    )
                     .environment(\.authenticationService, authService)
                 }
         }

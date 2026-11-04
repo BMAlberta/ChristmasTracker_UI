@@ -82,4 +82,68 @@ struct AuthenticationServiceTests {
         #expect(service.isAuthenticated == false)
         #expect(service.currentUser == nil)
     }
+
+    // MARK: - R5: refreshBiometricAvailability() via injected BiometricAuthenticating
+
+    @Test("Injected authenticator with isAvailable=false sets isBiometricAvailable false")
+    func injectedAuthenticatorWithIsAvailableFalseSetsIsBiometricAvailableFalse() {
+        let fakeAuth = FakeBiometricAuthenticator()
+        fakeAuth.stubbedIsAvailable = false
+        let mockRepo = MockAuthenticationRepository()
+        let sessionManager = SessionManager(authRepository: mockRepo)
+        let service = AuthenticationService(
+            repository: mockRepo,
+            sessionManager: sessionManager,
+            biometricAuthenticator: fakeAuth
+        )
+        service.refreshBiometricAvailability()
+        #expect(service.isBiometricAvailable == false)
+    }
+
+    @Test("Injected authenticator with .touchID sets biometricType to .touchID")
+    func injectedAuthenticatorWithTouchIDSetsBiometricTypeTouchID() {
+        let fakeAuth = FakeBiometricAuthenticator()
+        fakeAuth.stubbedBiometryType = .touchID
+        let mockRepo = MockAuthenticationRepository()
+        let sessionManager = SessionManager(authRepository: mockRepo)
+        let service = AuthenticationService(
+            repository: mockRepo,
+            sessionManager: sessionManager,
+            biometricAuthenticator: fakeAuth
+        )
+        service.refreshBiometricAvailability()
+        #expect(service.biometricType == .touchID)
+    }
+
+    @Test("Injected authenticator with .faceID sets biometricType to .faceID")
+    func injectedAuthenticatorWithFaceIDSetsBiometricTypeFaceID() {
+        let fakeAuth = FakeBiometricAuthenticator()
+        fakeAuth.stubbedBiometryType = .faceID
+        let mockRepo = MockAuthenticationRepository()
+        let sessionManager = SessionManager(authRepository: mockRepo)
+        let service = AuthenticationService(
+            repository: mockRepo,
+            sessionManager: sessionManager,
+            biometricAuthenticator: fakeAuth
+        )
+        service.refreshBiometricAvailability()
+        #expect(service.biometricType == .faceID)
+    }
+
+    @Test("handleAuthSuccess refreshes biometric availability from injected authenticator")
+    func handleAuthSuccessRefreshesBiometricAvailability() async {
+        let fakeAuth = FakeBiometricAuthenticator()
+        fakeAuth.stubbedIsAvailable = false
+        let mockRepo = MockAuthenticationRepository()
+        let sessionManager = SessionManager(authRepository: mockRepo)
+        let service = AuthenticationService(
+            repository: mockRepo,
+            sessionManager: sessionManager,
+            biometricAuthenticator: fakeAuth
+        )
+        #expect(service.isBiometricAvailable == false)
+        fakeAuth.stubbedIsAvailable = true
+        await service.login(email: "test@example.com", password: "password", rememberMe: false)
+        #expect(service.isBiometricAvailable == true)
+    }
 }

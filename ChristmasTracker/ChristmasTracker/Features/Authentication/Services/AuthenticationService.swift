@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import LocalAuthentication
 
 @MainActor
 @Observable
@@ -16,6 +15,7 @@ final class AuthenticationService {
     // MARK: - Dependencies
     private let authRepository: AuthenticationRepository
     private let sessionManager: SessionManager
+    private let biometricAuthenticator: any BiometricAuthenticating
     
     // MARK: - Published State (Observable)
     private(set) var currentUser: User?
@@ -37,14 +37,19 @@ final class AuthenticationService {
     
     // MARK: - Initialization
     
-    init(repository: AuthenticationRepository, sessionManager: SessionManager) {
+    init(
+        repository: AuthenticationRepository,
+        sessionManager: SessionManager,
+        biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService()
+    ) {
         self.authRepository = repository
         self.sessionManager = sessionManager
-        
+        self.biometricAuthenticator = biometricAuthenticator
+
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
+        refreshBiometricAvailability()
         Task {
-            await checkBiometricAvailability()
             await loadStoredSession()
         }
     }
@@ -225,6 +230,7 @@ final class AuthenticationService {
     // MARK: - Private Helpers
 
     private func handleAuthSuccess(authData: AuthData, rememberMe: Bool) async {
+        refreshBiometricAvailability()
         // Update user
         currentUser = authData.user
         isAuthenticated = true
@@ -317,18 +323,15 @@ final class AuthenticationService {
         }
     }
     
-    private func checkBiometricAvailability() async {
-        // Check if device supports biometric authentication
-        let context = LAContext()
-        var error: NSError?
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            isBiometricAvailable = true
-            biometricType = context.biometryType == .faceID ? .faceID : .touchID
-            LogDebug("Biometric available: \(biometricType)", category: .auth)
-        } else {
-            isBiometricAvailable = false
+    internal func refreshBiometricAvailability() {
+        isBiometricAvailable = biometricAuthenticator.isAvailable
+        switch biometricAuthenticator.biometryType {
+        case .faceID:
+            biometricType = .faceID
+        case .touchID:
+            biometricType = .touchID
+        case .none:
             biometricType = .none
-            LogDebug("Biometric not available", category: .auth)
         }
     }
 }
