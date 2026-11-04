@@ -1164,3 +1164,261 @@ private func performLegacyKeychainCleanup()
 - `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift`
 - `ChristmasTracker/ChristmasTracker/Features/Authentication/Views/LoginView.swift`
 - `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/AuthenticationServiceTests.swift`
+
+---
+
+## Rework 3 Gate 1: Story R9 — Remember-email correctness and legacy-cleanup seam
+
+### Defects addressed
+
+**C1a (email written before login attempt):** `LoginView.handleLogin()` writes the remembered email BEFORE calling `authService.login()`. A failed login persists a mistyped address; unticking clears the email even on failure. Fix: move all email-store writes into `AuthenticationService.login()` and execute them only after a successful authentication.
+
+**C1b (rememberEmail parameter unused):** `AuthenticationService.login(email:password:rememberEmail:)` accepts `rememberEmail` but ignores it. Fix: use it to conditionally store or remove the email after success.
+
+**C1c (LoginView overwrites typed text on every appear):** `.onAppear` in `LoginView` unconditionally seeds `email` and `rememberEmail` on every appearance, clobbering any text the user has typed. Fix: seed the state ONCE at init time using a pure `loginInitialState(remembered:)` function and remove the `.onAppear` seeding.
+
+### New interface: Yes
+
+### Type signatures
+
+```swift
+// MARK: Features/Authentication/Services/LegacyTokenCleaning.swift (new)
+
+/// Seam for the one-time legacy-token cleanup that runs at init.
+/// Allows tests to verify it is called exactly once and that login performs no additional token storage.
+internal protocol LegacyTokenCleaning {
+    func cleanUpLegacyTokens()
+}
+
+/// Production implementation: deletes the two legacy Keychain keys exactly as
+/// performLegacyKeychainCleanup() did.
+internal struct LegacyTokenCleanup: LegacyTokenCleaning {
+    func cleanUpLegacyTokens() {
+        try? KeychainService.delete("auth.tokens")
+        try? KeychainService.delete("auth.refresh_token")
+    }
+}
+
+// MARK: Features/Authentication/Services/AuthenticationService.swift (modified)
+
+// New init signature (default values preserve existing callers):
+init(
+    repository: any AuthenticationRepository,
+    sessionManager: SessionManager,
+    biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService(),
+    emailStore: any RememberedEmailStoring = RememberedEmailStore(),
+    legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup()
+)
+// - Stores emailStore and legacyCleanup as private properties.
+// - Calls legacyCleanup.cleanUpLegacyTokens() exactly once from init
+//   (replaces performLegacyKeychainCleanup()).
+// - Removes performLegacyKeychainCleanup() method.
+
+// login() — after SUCCESSFUL authentication only:
+//   if rememberEmail { emailStore.rememberedEmail = email }
+//   else             { emailStore.rememberedEmail = nil }
+// A failed login does not touch emailStore.
+// Registration does not touch emailStore.
+
+// MARK: Features/Authentication/Views/LoginView.swift (modified)
+
+// New pure function (nonisolated, module-level, testable independently of the view):
+internal nonisolated func loginInitialState(remembered: String?) -> (email: String, rememberEmail: Bool)
+// Returns (email: remembered ?? "", rememberEmail: remembered != nil).
+
+// LoginView gains a custom init that seeds @State once:
+//   _email = State(wrappedValue: initial.email)
+//   _rememberEmail = State(wrappedValue: initial.rememberEmail)
+//   where initial = loginInitialState(remembered: RememberedEmailStore().rememberedEmail)
+// Removes @State private var emailStore = RememberedEmailStore()
+// Removes .onAppear seeding block entirely.
+// handleLogin() no longer writes to any email store.
+```
+
+### Acceptance criteria
+
+1. A successful login with `rememberEmail: true` stores the email in the `emailStore`.
+2. A failed login (`fail@example.com`) with `rememberEmail: true` stores nothing; a previously stored email is left unchanged.
+3. A successful login with `rememberEmail: false` removes any previously stored email.
+4. `register()` does not touch `emailStore` on success or failure.
+5. The stored email survives `logout(reason:)` for every `TeardownReason` case (userLogout, sessionExpired, forcedUpdate, lockFallback).
+6. `loginInitialState(remembered: "a@b.com")` returns `("a@b.com", true)`; `loginInitialState(remembered: nil)` returns `("", false)`.
+7. `legacyCleanup.cleanUpLegacyTokens()` is called exactly once at `init()`. After a successful `login()` call, the cleanup call count is still 1.
+8. A failed registration leaves `isLoading == false`.
+9. `LoginView.handleLogin()` does not reference any `emailStore` write — verified by code review.
+
+### Scoped file list
+
+**New:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/LegacyTokenCleaning.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift` (emailStore + legacyCleanup injection; email-store writes in login(); remove performLegacyKeychainCleanup)
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Views/LoginView.swift` (init-time seed; remove emailStore state; remove handleLogin store writes)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/AuthenticationServiceTests.swift` (11 new tests)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/RememberedEmailStoreTests.swift` (2 new tests for loginInitialState)
+
+**New test helper (test target only — no Preview use):**
+- `FakeLegacyTokenCleanup` (class, tracks cleanUpCallCount) — can be defined in AuthenticationServiceTests.swift or a new helper file.
+- Extension on `MockAuthenticationRepository` for `func setFail(_ value: Bool)` (actor-isolated, test-only setter; can be in AuthenticationServiceTests.swift).
+
+### Test list
+
+**AuthenticationServiceTests.swift (11 new):**
+1. `successfulLoginWithRememberEmailTrueStoresEmail`
+2. `failedLoginWithRememberEmailTrueStoresNothing`
+3. `failedLoginLeavesExistingStoredEmailUntouched`
+4. `successfulLoginWithRememberEmailFalseRemovesStoredEmail`
+5. `registrationLeavesEmailStoreUntouched`
+6. `storedEmailSurvivesLogout_userLogout`
+7. `storedEmailSurvivesLogout_sessionExpired`
+8. `storedEmailSurvivesLogout_forcedUpdate`
+9. `storedEmailSurvivesLogout_lockFallback`
+10. `legacyCleanupCalledExactlyOnceAtInit`
+11. `failedRegistrationLeavesIsLoadingFalse`
+
+**RememberedEmailStoreTests.swift (2 new):**
+12. `loginInitialStateWithStoredEmailReturnsEmailAndTrue`
+13. `loginInitialStateWithNoEmailReturnsEmptyStringAndFalse`
+
+### Test arithmetic
+
+Baseline: 257 | +13 new = 270 after R9.
+
+---
+
+## Rework 3 Gate 1: Story R10 — Profile toggle, live availability, lock auto-attempt guard
+
+### Defects addressed
+
+**C2a (Profile toggle bypasses biometric check):** The toggle uses a plain `Binding` to `preference.biometricUnlockEnabled`; turning it ON never runs a biometric evaluation. Fix: introduce `ProfileBiometricToggleModel` that runs `BiometricEnablementModel.enable()` on "turn ON" and immediately sets the preference on "turn OFF". The toggle binding is replaced with a custom setter.
+
+**C2b (availability staleness):** `refreshBiometricAvailability()` is called only at init and after login. Face ID enrolled after app launch is never reflected. Fix: call it in the `UIScene.didActivateNotification` handler (inside the existing `MainActor.assumeIsolated` block in `ChristmasTrackerApp`) and in `ProfileView.body` via `.task`.
+
+**C3 (scenePhase unreliable in LockView):** `LockView` uses `@Environment(\.scenePhase)` to decide `appIsActive`, but LockView is hosted in its own `UIWindow` outside the app's scene. `scenePhase` there is unreliable. Fix: remove the environment property; pass `UIApplication.shared.applicationState == .active` as the `appIsActive` argument.
+
+### New interface: Yes (`ProfileBiometricToggleModel`)
+
+### Type signatures
+
+```swift
+// MARK: Features/Profile/Services/ProfileBiometricToggleModel.swift (new)
+//   (or Features/Authentication/Services/; wherever fits the module layout)
+
+@MainActor
+@Observable
+internal final class ProfileBiometricToggleModel {
+    private let enablmentModel: BiometricEnablementModel
+    private(set) var failureMessage: String? = nil
+    private(set) var isEnabled: Bool
+
+    init(enablmentModel: BiometricEnablementModel, initiallyEnabled: Bool = false)
+
+    /// Runs `enablmentModel.enable()`.
+    /// .succeeded   → isEnabled = true; failureMessage = nil
+    /// .idle (cancel) → isEnabled = false; failureMessage = nil (no message for cancel)
+    /// .failed(msg) → isEnabled = false; failureMessage = msg
+    func handleToggleOn() async
+
+    /// Sets isEnabled = false and failureMessage = nil without calling the authenticator.
+    /// Caller is responsible for persisting preference.biometricUnlockEnabled = false.
+    func handleToggleOff()
+}
+
+// MARK: Features/Authentication/Services/AuthenticationService.swift (modified)
+
+// Change visibility of biometricAuthenticator from private to internal:
+internal let biometricAuthenticator: any BiometricAuthenticating
+// (Needed so ProfileView can supply it to BiometricEnablementModel)
+
+// MARK: Features/Profile/Views/ProfileView.swift (modified)
+
+// ProfileView.body gains:
+.task {
+    authService.refreshBiometricAvailability()
+}
+
+// SettingsSectionView receives biometricAuthenticator:
+// (passed from ProfileView as authService.biometricAuthenticator)
+// Internally creates @State private var toggleModel: ProfileBiometricToggleModel in its init.
+// Toggle binding:
+Toggle(
+    "Unlock with \(biometricType.displayName)",
+    isOn: Binding(
+        get: { toggleModel.isEnabled },
+        set: { isOn in
+            if isOn { Task { await toggleModel.handleToggleOn() } }
+            else    { toggleModel.handleToggleOff(); preference.biometricUnlockEnabled = false }
+        }
+    )
+)
+// If toggleModel.failureMessage is non-nil, show it as a Text below the toggle.
+// Cancelled (failureMessage == nil but isEnabled == false) shows no message.
+
+// MARK: ChristmasTrackerApp.swift (modified)
+
+// In the UIScene.didActivateNotification handler, inside MainActor.assumeIsolated {  }:
+// Add: auth.refreshBiometricAvailability()
+// (auth is the captured authService from init; type: AuthenticationService)
+// Note: the init() currently captures `auth` in the observer but the closure must
+// capture it weakly or strongly based on the existing pattern. Adjust to capture auth.
+
+// MARK: App/LockView.swift (modified)
+
+// Remove: @Environment(\.scenePhase) private var scenePhase
+// In .onAppear, change:
+//   appIsActive: scenePhase == .active
+// To:
+//   appIsActive: UIApplication.shared.applicationState == .active
+```
+
+### Acceptance criteria
+
+1. `ProfileBiometricToggleModel.handleToggleOn()` with `.success` → `isEnabled == true`, `failureMessage == nil`.
+2. `handleToggleOn()` with `.failed` → `isEnabled == false`, `failureMessage` is non-nil.
+3. `handleToggleOn()` with `.userCancelled` → `isEnabled == false`, `failureMessage == nil`.
+4. `handleToggleOn()` with `.systemCancelled` → same as `.userCancelled`.
+5. `handleToggleOn()` with `.lockedOut` → `isEnabled == false`, `failureMessage` non-nil.
+6. `handleToggleOn()` with `.unavailable` → same shape as lockedOut.
+7. `handleToggleOn()` with `.userFallback` → same shape as lockedOut.
+8. `handleToggleOff()` → `isEnabled == false`, `failureMessage == nil`; authenticator NOT called (zero calls to `FakeBiometricAuthenticator.authenticate`).
+9. `shouldAutoAttemptBiometrics` truth table: ONE `@Test` with `arguments:` covering all 32 combinations; existing 6 tests remain unchanged.
+10. `showBiometricButton` truth table: 8 combinations (all 3-boolean cases) added to `BiometricOutcomeTests`; existing 4 tests remain unchanged.
+11. `refreshBiometricAvailability()` call sites in `ChristmasTrackerApp.didActivate` and `ProfileView.task` verified by code review (not unit-testable via pure functions; stated in report).
+12. `LockView` uses `UIApplication.shared.applicationState == .active` for `appIsActive` — verified by code review.
+
+### Scoped file list
+
+**New:**
+- `ChristmasTracker/ChristmasTracker/Features/Profile/Services/ProfileBiometricToggleModel.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Profile/ProfileBiometricToggleModelTests.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift` (biometricAuthenticator visibility change)
+- `ChristmasTracker/ChristmasTracker/Features/Profile/Views/ProfileView.swift` (toggle model, task refresh)
+- `ChristmasTracker/ChristmasTracker/App/LockView.swift` (remove scenePhase, use UIApplication)
+- `ChristmasTracker/ChristmasTracker/ChristmasTrackerApp.swift` (add auth.refreshBiometricAvailability() to didActivate)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/LockAutoAttemptTests.swift` (add 32-case parameterized test)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/BiometricOutcomeTests.swift` (add 8-case truth table for showBiometricButton)
+
+### Test list
+
+**ProfileBiometricToggleModelTests.swift (8 new):**
+1. `toggleOnWithSuccess_setsIsEnabledTrueAndNilMessage`
+2. `toggleOnWithFailed_setsIsEnabledFalseAndNonNilMessage`
+3. `toggleOnWithUserCancelled_setsIsEnabledFalseAndNilMessage`
+4. `toggleOnWithSystemCancelled_setsIsEnabledFalseAndNilMessage`
+5. `toggleOnWithLockedOut_setsIsEnabledFalseAndNonNilMessage`
+6. `toggleOnWithUnavailable_setsIsEnabledFalseAndNonNilMessage`
+7. `toggleOnWithUserFallback_setsIsEnabledFalseAndNonNilMessage`
+8. `toggleOff_setsIsEnabledFalseWithNoAuthenticatorCall`
+
+**LockAutoAttemptTests.swift (32 cases via parameterized @Test — adds 32 results):**
+9. `shouldAutoAttemptBiometrics_fullTruthTable` (parameterized over all 32 combinations)
+
+**BiometricOutcomeTests.swift (8 cases via parameterized @Test — adds 8 results):**
+10. `showBiometricButton_fullTruthTable` (parameterized over all 8 combinations)
+
+### Test arithmetic
+
+After R9: 270 | +8 (toggle model) +32 (shouldAutoAttempt truth table) +8 (showBiometricButton truth table) = +48 → 318 after R10.
