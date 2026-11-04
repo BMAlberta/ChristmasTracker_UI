@@ -145,8 +145,9 @@ struct PrivacyCoverCoordinatorTests {
 
     // Synchronous delivery proof: showCover is called before post() returns.
     // There is intentionally no await between post() and the assertion.
-    // If the observer were async (e.g. a Task or DispatchQueue.async), showCallCount
-    // would still be 0 here. The fact that it is 1 proves synchronous delivery.
+    // If the observer were deferred (for example queued onto another task or the main
+    // queue), showCallCount would still be 0 here. The fact that it is 1 proves
+    // synchronous delivery.
     @Test("will-deactivate notification shows cover synchronously — no await required")
     func willDeactivateNotificationShowsCoverSynchronously() {
         let center = NotificationCenter()
