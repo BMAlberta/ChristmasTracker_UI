@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import UIKit
 import Testing
 @testable import ChristmasTracker
 
@@ -44,11 +45,14 @@ private final class FakePresenterCollection: @unchecked Sendable {
 @MainActor
 struct PrivacyCoverCoordinatorTests {
 
-    private func makeSUT() -> (coordinator: PrivacyCoverCoordinator, collection: FakePresenterCollection) {
+    private func makeSUT(
+        notificationCenter: NotificationCenter = NotificationCenter()
+    ) -> (coordinator: PrivacyCoverCoordinator, collection: FakePresenterCollection) {
         let collection = FakePresenterCollection()
-        let coordinator = PrivacyCoverCoordinator { [collection] object in
-            collection.makePresenter(for: object)
-        }
+        let coordinator = PrivacyCoverCoordinator(
+            notificationCenter: notificationCenter,
+            presenterFactory: { [collection] object in collection.makePresenter(for: object) }
+        )
         return (coordinator, collection)
     }
 
@@ -135,5 +139,101 @@ struct PrivacyCoverCoordinatorTests {
         #expect(collection.allCreated[1].showCallCount == 1)
         #expect(collection.allCreated[1].hideCallCount == 0)
         #expect(sut.activePresenters[ObjectIdentifier(scene)] != nil)
+    }
+
+    // MARK: - Rework R1: synchronous observer tests
+
+    // Synchronous delivery proof: showCover is called before post() returns.
+    // There is intentionally no await between post() and the assertion.
+    // If the observer were async (e.g. a Task or DispatchQueue.async), showCallCount
+    // would still be 0 here. The fact that it is 1 proves synchronous delivery.
+    @Test("will-deactivate notification shows cover synchronously — no await required")
+    func willDeactivateNotificationShowsCoverSynchronously() {
+        let center = NotificationCenter()
+        let (sut, collection) = makeSUT(notificationCenter: center)
+        sut.start()
+        let scene = NSObject()
+
+        center.post(name: UIScene.willDeactivateNotification, object: scene)
+
+        #expect(collection.latest(for: scene)?.showCallCount == 1)
+    }
+
+    @Test("did-activate notification hides cover for the deactivated scene")
+    func didActivateNotificationHidesCoverForScene() {
+        let center = NotificationCenter()
+        let (sut, collection) = makeSUT(notificationCenter: center)
+        sut.start()
+        let scene = NSObject()
+
+        center.post(name: UIScene.willDeactivateNotification, object: scene)
+        center.post(name: UIScene.didActivateNotification, object: scene)
+
+        #expect(collection.latest(for: scene)?.hideCallCount == 1)
+        #expect(sut.activePresenters[ObjectIdentifier(scene)] == nil)
+    }
+
+    @Test("posting will-deactivate twice for the same scene shows cover only once")
+    func willDeactivateTwiceForSameSceneShowsOnce() {
+        let center = NotificationCenter()
+        let (sut, collection) = makeSUT(notificationCenter: center)
+        sut.start()
+        let scene = NSObject()
+
+        center.post(name: UIScene.willDeactivateNotification, object: scene)
+        center.post(name: UIScene.willDeactivateNotification, object: scene)
+
+        #expect(collection.allCreated.count == 1)
+        #expect(collection.allCreated.first?.showCallCount == 1)
+    }
+
+    @Test("calling start() twice and posting once still shows cover once")
+    func startTwicePostOnceShowsOnce() {
+        let center = NotificationCenter()
+        let (sut, collection) = makeSUT(notificationCenter: center)
+        sut.start()
+        sut.start()
+        let scene = NSObject()
+
+        center.post(name: UIScene.willDeactivateNotification, object: scene)
+
+        #expect(collection.allCreated.count == 1)
+        #expect(collection.allCreated.first?.showCallCount == 1)
+    }
+
+    @Test("did-disconnect hides active cover and removes it; with no cover it is a no-op")
+    func didDisconnectHidesActiveCoverAndIsNoOpWhenNoCover() {
+        let center = NotificationCenter()
+        let (sut, collection) = makeSUT(notificationCenter: center)
+        sut.start()
+        let sceneA = NSObject()
+        let sceneB = NSObject()
+
+        // Show cover for sceneA then disconnect it.
+        center.post(name: UIScene.willDeactivateNotification, object: sceneA)
+        center.post(name: UIScene.didDisconnectNotification, object: sceneA)
+
+        #expect(collection.latest(for: sceneA)?.hideCallCount == 1)
+        #expect(sut.activePresenters[ObjectIdentifier(sceneA)] == nil)
+
+        // Disconnect sceneB which never had a cover — must be a no-op, no crash.
+        center.post(name: UIScene.didDisconnectNotification, object: sceneB)
+        #expect(collection.allCreated.count == 1)
+    }
+
+    @Test("after a disconnect, will-deactivate for a different scene still shows a cover")
+    func afterDisconnect_willDeactivateForDifferentSceneShowsCover() {
+        let center = NotificationCenter()
+        let (sut, collection) = makeSUT(notificationCenter: center)
+        sut.start()
+        let sceneA = NSObject()
+        let sceneB = NSObject()
+
+        center.post(name: UIScene.willDeactivateNotification, object: sceneA)
+        center.post(name: UIScene.didDisconnectNotification, object: sceneA)
+        center.post(name: UIScene.willDeactivateNotification, object: sceneB)
+
+        #expect(collection.latest(for: sceneB)?.showCallCount == 1)
+        #expect(sut.activePresenters[ObjectIdentifier(sceneB)] != nil)
     }
 }

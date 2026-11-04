@@ -37,6 +37,9 @@ final class PrivacyCoverWindowAdapter: PrivacyCoverPresenting {
     }
 
     func hideCover() {
+        // Explicitly hide and dismantle before releasing; don't rely on ARC timing.
+        coverWindow?.isHidden = true
+        coverWindow?.rootViewController = nil
         coverWindow = nil
     }
 }
