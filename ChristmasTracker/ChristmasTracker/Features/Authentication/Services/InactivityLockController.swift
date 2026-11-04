@@ -40,6 +40,7 @@ internal final class InactivityLockController {
     var sceneEventProvider: (any SceneEventProviding)?
     weak var authService: AuthenticationService?
     var preference: (any BiometricUnlockPreferring)?
+    var lockPresenter: (any InactivityLockPresenting)?
 
     // MARK: - Private
 
@@ -106,9 +107,11 @@ internal final class InactivityLockController {
     internal func sceneDidBecomeActive() {
         guard isRunning else { return }
         if tracker.becameActive(at: clockNow()) {
+            guard lockState == .unlocked else { return }
             lockState = .locked
             timerTask?.cancel()
             timerTask = nil
+            lockPresenter?.presentLock()
         }
     }
 
@@ -119,6 +122,7 @@ internal final class InactivityLockController {
         guard lockState == .locked else { return }
         tracker.recordActivity(at: clockNow())
         lockState = .unlocked
+        lockPresenter?.dismissLock()
         scheduleTimerTask()
     }
 
@@ -154,6 +158,7 @@ internal final class InactivityLockController {
         if tracker.isTimedOut(at: clockNow()) {
             lockState = .locked
             timerTask = nil
+            lockPresenter?.presentLock()
         } else {
             // Not yet timed out — reschedule for the same deadline (no reset)
             scheduleTimerTask()
@@ -175,6 +180,9 @@ extension InactivityLockController: SessionClearable {
         isRunning = false
         timerTask?.cancel()
         timerTask = nil
+        if lockState == .locked {
+            lockPresenter?.dismissLock()
+        }
         lockState = .unlocked
     }
 }

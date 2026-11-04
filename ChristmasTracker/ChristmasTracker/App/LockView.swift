@@ -9,12 +9,58 @@
 import SwiftUI
 import UIKit
 
+// MARK: - BiometricOutcome
+
+/// The outcome of a biometric authentication attempt, mapped from BiometricResult.
+/// Lives at module scope (not inside LockView) so it is testable via free functions.
+internal enum BiometricOutcome: Equatable {
+    /// Authentication succeeded — unlock immediately.
+    case unlock
+    /// Keep the biometric button visible. hint is non-nil only for a transient `.failed`.
+    case keepBiometric(hint: String?)
+    /// Hide the biometric button and show only the password option.
+    case passwordOnly
+}
+
+// MARK: - Pure mapping functions
+
+/// Maps a BiometricResult to a BiometricOutcome.
+/// nonisolated so it can be called from any context without an actor hop.
+internal nonisolated func biometricOutcome(
+    for result: BiometricResult,
+    biometryTypeName: String
+) -> BiometricOutcome {
+    switch result {
+    case .success:
+        return .unlock
+    case .userCancelled, .systemCancelled:
+        return .keepBiometric(hint: nil)
+    case .failed:
+        let hint = "\(biometryTypeName) didn't recognize you. Try again or use your password."
+        return .keepBiometric(hint: hint)
+    case .userFallback, .lockedOut, .unavailable:
+        return .passwordOnly
+    }
+}
+
+/// Returns whether the biometric unlock button should be visible.
+internal nonisolated func showBiometricButton(
+    isAvailable: Bool,
+    preferenceEnabled: Bool,
+    isPasswordOnly: Bool
+) -> Bool {
+    isAvailable && preferenceEnabled && !isPasswordOnly
+}
+
+// MARK: - LockView
+
 struct LockView: View {
 
     let controller: InactivityLockController
     let biometricAuthenticator: any BiometricAuthenticating
 
     @State private var showPasswordOnly = false
+    @State private var biometricHint: String?
 
     private let buttonCornerRadius: CGFloat = AppSpacing.md
 
@@ -58,18 +104,27 @@ struct LockView: View {
 
     // MARK: - Biometric visibility
 
-    private var showBiometricButton: Bool {
-        biometricAuthenticator.isAvailable
-            && (controller.preference?.biometricUnlockEnabled ?? true)
-            && !showPasswordOnly
+    private var shouldShowBiometricButton: Bool {
+        showBiometricButton(
+            isAvailable: biometricAuthenticator.isAvailable,
+            preferenceEnabled: controller.preference?.biometricUnlockEnabled ?? true,
+            isPasswordOnly: showPasswordOnly
+        )
     }
 
     // MARK: - Buttons
 
     private var buttonSection: some View {
         VStack(spacing: AppSpacing.md) {
-            if showBiometricButton {
+            if shouldShowBiometricButton {
                 biometricButton
+                if let hint = biometricHint {
+                    Text(hint)
+                        .font(.appCaption1)
+                        .foregroundStyle(Color.textMutedColor)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AppSpacing.xl)
+                }
             }
             passwordButton
         }
@@ -111,12 +166,16 @@ struct LockView: View {
 
     private func attemptBiometricUnlock() async {
         let result = await biometricAuthenticator.authenticate(reason: "Unlock Christmas Tracker")
-        switch result {
-        case .success:
+        let outcome = biometricOutcome(
+            for: result,
+            biometryTypeName: biometricAuthenticator.biometryTypeName
+        )
+        switch outcome {
+        case .unlock:
             controller.unlock()
-        case .userCancelled, .systemCancelled:
-            break
-        case .userFallback, .lockedOut, .unavailable, .failed:
+        case .keepBiometric(let hint):
+            biometricHint = hint
+        case .passwordOnly:
             showPasswordOnly = true
         }
     }

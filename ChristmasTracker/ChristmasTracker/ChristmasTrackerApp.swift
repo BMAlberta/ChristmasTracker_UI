@@ -12,7 +12,7 @@ import SwiftUI
 
 /// Manages per-scene LockWindowAdapter instances and responds to lock state changes.
 /// MainActor by default (SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor).
-private final class LockCoordinator {
+private final class LockCoordinator: InactivityLockPresenting {
     private let lockController: InactivityLockController
     private let biometricAuthenticator: any BiometricAuthenticating
     private var adapters: [ObjectIdentifier: LockWindowAdapter] = [:]
@@ -64,6 +64,16 @@ private final class LockCoordinator {
                 adapter.hideLock()
             }
         }
+    }
+
+    // MARK: - InactivityLockPresenting
+
+    func presentLock() {
+        handleLockStateChange(.locked)
+    }
+
+    func dismissLock() {
+        handleLockStateChange(.unlocked)
     }
 }
 
@@ -136,10 +146,12 @@ struct ChristmasTrackerApp: App {
         let lc = InactivityLockController(policy: lockPolicy)
         lc.preference = BiometricUnlockPreference()
         lockController = lc
-        lockCoordinator = LockCoordinator(
+        let lkCoord = LockCoordinator(
             lockController: lc,
             biometricAuthenticator: LocalAuthenticationService()
         )
+        lc.lockPresenter = lkCoord
+        lockCoordinator = lkCoord
 
         let dependencies = AppDependencies.make()
         apiClient = dependencies.apiClient
@@ -236,9 +248,6 @@ struct ChristmasTrackerApp: App {
                     } else {
                         lockController.stop()
                     }
-                }
-                .onChange(of: lockController.lockState) { _, lockState in
-                    lockCoordinator.handleLockStateChange(lockState)
                 }
                 .sheet(isPresented: $showBiometricSetup) {
                     BiometricSetupView(onComplete: { enabled in

@@ -30,6 +30,7 @@ internal enum BiometricResult: Equatable {
 /// production; inject `FakeBiometricAuthenticator` in tests and previews.
 internal protocol BiometricAuthenticating: Sendable {
     var biometryType: BiometricType { get }
+    var biometryTypeName: String { get }
     var isAvailable: Bool { get }
     func authenticate(reason: String) async -> BiometricResult
 }
@@ -48,6 +49,20 @@ internal final class LocalAuthenticationService: BiometricAuthenticating {
             return .none
         }
         return context.biometryType == .faceID ? .faceID : .touchID
+    }
+
+    var biometryTypeName: String {
+        let context = LAContext()
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            return "Biometrics"
+        }
+        switch context.biometryType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
+        @unknown default: return "Biometrics"
+        }
     }
 
     var isAvailable: Bool {
