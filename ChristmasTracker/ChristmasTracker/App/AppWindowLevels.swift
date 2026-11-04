@@ -7,7 +7,7 @@
 
 import UIKit
 
-extension UIWindow.Level {
+internal extension UIWindow.Level {
     /// Privacy cover window (I2c): above all alerts and sheets.
     /// Matches the hardcoded value in PrivacyCoverWindowAdapter (not modified).
     static let privacyCoverLevel: UIWindow.Level = .alert + 1

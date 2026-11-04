@@ -12,7 +12,7 @@ import SwiftUI
 
 /// Shows and hides the inactivity lock window above all app content but below the
 /// privacy cover window.
-final class LockWindowAdapter {
+internal final class LockWindowAdapter {
 
     private weak var scene: UIWindowScene?
     private var lockWindow: UIWindow?

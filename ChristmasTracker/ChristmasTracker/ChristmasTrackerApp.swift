@@ -16,11 +16,26 @@ private final class LockCoordinator {
     private let lockController: InactivityLockController
     private let biometricAuthenticator: any BiometricAuthenticating
     private var adapters: [ObjectIdentifier: LockWindowAdapter] = [:]
+    private var touchRecognizers: [ObjectIdentifier: InactivityTouchRecognizer] = [:]
 
     init(lockController: InactivityLockController,
          biometricAuthenticator: any BiometricAuthenticating) {
         self.lockController = lockController
         self.biometricAuthenticator = biometricAuthenticator
+    }
+
+    /// Attaches a passive touch recognizer to the main window of the given scene so
+    /// that any user interaction resets the inactivity timer.
+    func attachTouchRecognizer(to windowScene: UIWindowScene) {
+        let key = ObjectIdentifier(windowScene)
+        guard touchRecognizers[key] == nil else { return }
+        guard let window = windowScene.windows.first(where: { $0.windowLevel == .normal }) else { return }
+        let recognizer = InactivityTouchRecognizer(target: nil, action: nil)
+        recognizer.activityHandler = { [weak lockController] in
+            lockController?.recordActivity()
+        }
+        window.addGestureRecognizer(recognizer)
+        touchRecognizers[key] = recognizer
     }
 
     func handleLockStateChange(_ state: InactivityLockController.LockState) {
@@ -180,13 +195,18 @@ struct ChristmasTrackerApp: App {
         }
         observers.append(willResign)
 
+        let lkCoordinator = lockCoordinator
         let didActivate = NotificationCenter.default.addObserver(
             forName: UIScene.didActivateNotification,
             object: nil,
             queue: nil
-        ) { [weak lc] _ in
+        ) { [weak lc] notification in
+            let windowScene = notification.object as? UIWindowScene
             MainActor.assumeIsolated {
                 lc?.sceneDidBecomeActive()
+                if let windowScene {
+                    lkCoordinator.attachTouchRecognizer(to: windowScene)
+                }
             }
         }
         observers.append(didActivate)

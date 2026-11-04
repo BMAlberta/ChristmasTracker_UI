@@ -10,7 +10,7 @@
 
 /// Passive touch recognizer that calls `activityHandler` on every touchesBegan event,
 /// then immediately fails so it never claims ownership of the touch.
-final class InactivityTouchRecognizer: UIGestureRecognizer {
+internal final class InactivityTouchRecognizer: UIGestureRecognizer {
 
     // MARK: - Properties
 

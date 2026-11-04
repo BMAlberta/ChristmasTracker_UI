@@ -16,6 +16,8 @@ struct LockView: View {
 
     @State private var showPasswordOnly = false
 
+    private let buttonCornerRadius: CGFloat = AppSpacing.md
+
     var body: some View {
         ZStack {
             Color.backgroundPrimaryColor
@@ -39,7 +41,7 @@ struct LockView: View {
     private var headerSection: some View {
         VStack(spacing: AppSpacing.md) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 56))
+                .font(.appLargeTitle)
                 .foregroundStyle(Color.primaryColor)
 
             Text("Christmas Tracker")
@@ -78,7 +80,7 @@ struct LockView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppSpacing.md)
                 .background(Color.primaryColor)
-                .clipShape(.rect(cornerRadius: 12))
+                .clipShape(.rect(cornerRadius: buttonCornerRadius))
         }
         .frame(minHeight: 44)
         .accessibilityLabel("Unlock with \(biometricAuthenticator.biometryType.displayName)")
