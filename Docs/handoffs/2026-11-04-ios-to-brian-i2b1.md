@@ -45,11 +45,32 @@ None. This package makes no networking, API model, or token-persistence changes.
 - `Info.plist` — `INACTIVITY_LOCK_MINUTES` key.
 - `scripts/check-config.sh` — adds `INACTIVITY_LOCK_MINUTES = 10` check.
 
+**Rework 2 (R5–R7, defects B1–B8):**
+
+New files:
+- `BiometricEnablementModel.swift` — `@MainActor @Observable`; `EnablementState` enum; `enable() async` calls authenticator directly (no Keychain read); manual SentrySDK span.
+- `RememberedEmailStoring.swift` — `RememberedEmailStoring` protocol + `RememberedEmailStore` struct; UserDefaults key `"login.rememberedEmail"`.
+
+Modified files:
+- `AuthenticationService.swift` — injected `BiometricAuthenticating`; `refreshBiometricAvailability()` replaces `checkBiometricAvailability()`; `defer { isLoading = false }` on all public async methods; `clearError()`; `handleAuthSuccess(authData:)` (removed `rememberMe:` param); `storeTokens` removed; `loadStoredSession` replaced by `performLegacyKeychainCleanup()`.
+- `FakeBiometricAuthenticator.swift` — `stubbedBiometryTypeName` added.
+- `BiometricSetupView.swift` — accepts `BiometricEnablementModel`; calls `model.enable()`.
+- `ChristmasTrackerApp.swift` — shared `LocalAuthenticationService` instance; `BiometricSetupView` sheet passes model.
+- `LockView.swift` — `shouldAutoAttemptBiometrics(...)` pure function; `.onAppear` auto-prompt; `hasAutoAttempted` guard.
+- `Info.plist` — `NSFaceIDUsageDescription` added.
+- `scripts/check-config.sh` — `NSFaceIDUsageDescription` grep check added.
+- `LoginView.swift` — error alert uses `$showError` state + `clearError()`; `BiometricOptionView` removed from body; `rememberMe` → `rememberEmail`; seeds/persists email via `RememberedEmailStore`.
+
 ---
 
 ## Commit Hashes (master..HEAD)
 
 ```
+7e4a90c I2b-1: reset loading state, make the error alert dismissible, hide legacy Face ID sign-in, remember the email, and stop persisting sessions
+62b9ebc I2b-1: prompt for biometrics automatically when the lock appears and declare the Face ID usage
+f08338a I2b-1: enable biometrics without a stored token and keep availability live
+4815213 I2b-1: add rework 2 Gate 1 spec
+0ac8987 I2b-1: correct reports and handoff after rework
 518809b I2b-1: remove vacuous tests and fix test hygiene
 611ded0 I2b-1: present the lock synchronously and keep Try Again after a failed biometric attempt
 a2c3eaf I2b-1: fix unlock relock loop, gate controller on running, measure inactivity from last activity
@@ -69,7 +90,7 @@ eb68701 I2b-1: add Story 1 report
 ## git diff --stat master...HEAD
 
 ```
-40 files changed, 4582 insertions(+), 22 deletions(-)
+53 files changed, ~5100 insertions(+), ~170 deletions(-)
 ```
 
 ---
@@ -92,7 +113,7 @@ Nothing. This package has no API dependencies.
 
 5. **BiometricUnlockPreference sync** — `ProfileView` holds its own `BiometricUnlockPreference()` instance (backed by `.standard` UserDefaults). Writes are reflected on the lock screen's next read; `controller.preference` is not `@Observable` so the biometric button won't reactively hide while the lock screen is on-screen.
 
-6. **`FakeBiometricAuthenticator.biometryTypeName`** — Hardcoded to `"Face ID"` regardless of `stubbedBiometryType`. Previews using `.touchID` will show "Face ID" in the hint text. No production impact; consider adding `stubbedBiometryTypeName` in a future story.
+6. **`FakeBiometricAuthenticator.biometryTypeName`** — Now backed by `stubbedBiometryTypeName` (added in Rework 2 / R5). No production impact.
 
 7. **I2b-2 prerequisite** — This package (I2b-1) is the local half. I2b-2 (auth flows, token persistence, Keychain redesign, registration) requires the CONFORMANT contract. The old SessionManager ping and session-duration code is untouched and will be cleaned up in I1 per decisions.
 
@@ -100,4 +121,4 @@ Nothing. This package has no API dependencies.
 
 ## Section 9 of PROGRAM.md (one line)
 
-I2b-1 (inactivity lock, local half): `InactivityLockController` with monotonic clock tracking, cumulative inactivity measurement, `InactivityLockPresenting` for synchronous lock presentation, `LockView` in a UIWindow at `.alert+0.5`, biometric gate via `LocalAuthenticationService` (`.failed` keeps button with retry hint), preference in UserDefaults, touch recognizer per scene; 228 tests (104 new); no networking; simulator/device verification pending.
+I2b-1 (inactivity lock, local half): `InactivityLockController` with monotonic clock tracking, `InactivityLockPresenting` for synchronous lock presentation, `LockView` in a UIWindow at `.alert+0.5`, biometric gate via `LocalAuthenticationService`, auto-prompt on lock appear, `BiometricEnablementModel` for token-free setup, `RememberedEmailStore` for email-only persistence, `performLegacyKeychainCleanup` on init; 257 tests; no networking; simulator/device verification pending.
