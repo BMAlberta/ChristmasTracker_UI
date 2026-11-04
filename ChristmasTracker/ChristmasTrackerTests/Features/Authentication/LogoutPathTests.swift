@@ -120,7 +120,7 @@ struct LogoutPathTests {
 
         await sessionManager.register(listDataStore)
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated before logout")
 
         await listDataStore.setLists([makeSampleList()])
@@ -162,7 +162,7 @@ struct LogoutPathTests {
 
         await sessionManager.register(listDataStore)
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
 
         await listDataStore.setLists([makeSampleList()])
@@ -248,7 +248,7 @@ struct LogoutPathTests {
             sessionManager: sessionManager
         )
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated")
 
         await authService.logout()

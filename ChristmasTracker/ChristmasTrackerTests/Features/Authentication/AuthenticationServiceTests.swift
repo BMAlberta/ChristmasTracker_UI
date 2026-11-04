@@ -21,7 +21,7 @@ struct AuthenticationServiceTests {
         await service.login(
             email: "test@example.com",
             password: "password",
-            rememberMe: false
+            rememberEmail: false
         )
         #expect(service.isAuthenticated == true)
         #expect(service.currentUser != nil)
@@ -39,7 +39,7 @@ struct AuthenticationServiceTests {
         await service.login(
             email: "fail@example.com",
             password: "wrong",
-            rememberMe: false
+            rememberEmail: false
         )
         #expect(service.isAuthenticated == false)
         #expect(service.currentUser == nil)
@@ -74,7 +74,7 @@ struct AuthenticationServiceTests {
         await service.login(
             email: "test@example.com",
             password: "password",
-            rememberMe: false
+            rememberEmail: false
         )
         #expect(service.isAuthenticated == true)
         // Logout
@@ -143,7 +143,50 @@ struct AuthenticationServiceTests {
         )
         #expect(service.isBiometricAvailable == false)
         fakeAuth.stubbedIsAvailable = true
-        await service.login(email: "test@example.com", password: "password", rememberMe: false)
+        await service.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(service.isBiometricAvailable == true)
+    }
+
+    // MARK: - R7: isLoading reset, clearError, rememberEmail param rename
+
+    private func makeSUT() -> (service: AuthenticationService, mockRepo: MockAuthenticationRepository) {
+        let mockRepo = MockAuthenticationRepository()
+        let sessionManager = SessionManager(authRepository: mockRepo)
+        let service = AuthenticationService(
+            repository: mockRepo,
+            sessionManager: sessionManager,
+            biometricAuthenticator: FakeBiometricAuthenticator()
+        )
+        return (service, mockRepo)
+    }
+
+    @Test("isLoading is false after login() returns on failure")
+    func loginResetsIsLoadingOnFailure() async {
+        let (service, _) = makeSUT()
+        await service.login(email: "fail@example.com", password: "wrong", rememberEmail: false)
+        #expect(service.isLoading == false)
+    }
+
+    @Test("isLoading is false after login() returns on success")
+    func loginResetsIsLoadingOnSuccess() async {
+        let (service, _) = makeSUT()
+        await service.login(email: "test@example.com", password: "password", rememberEmail: false)
+        #expect(service.isLoading == false)
+    }
+
+    @Test("isLoading is false after forgotPassword() returns")
+    func forgotPasswordResetsIsLoadingOnReturn() async {
+        let (service, _) = makeSUT()
+        await service.forgotPassword(email: "any@example.com")
+        #expect(service.isLoading == false)
+    }
+
+    @Test("clearError sets service.error to nil")
+    func clearErrorClearsServiceError() async {
+        let (service, _) = makeSUT()
+        await service.login(email: "fail@example.com", password: "wrong", rememberEmail: false)
+        #expect(service.error != nil)
+        service.clearError()
+        #expect(service.error == nil)
     }
 }

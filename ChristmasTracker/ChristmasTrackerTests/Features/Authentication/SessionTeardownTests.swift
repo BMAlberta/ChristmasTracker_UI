@@ -170,7 +170,7 @@ struct SessionTeardownTests {
         )
 
         // Login first
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated before teardown")
 
         // Use a fresh SessionManager as the teardown driver
@@ -234,7 +234,7 @@ struct SessionTeardownTests {
             sessionManager: innerSessionManager
         )
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
 
         let teardownManager = await makeSUT()
         await teardownManager.register(authService)
@@ -265,7 +265,7 @@ struct SessionTeardownTests {
             sessionManager: innerSessionManager
         )
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         let authenticated = await authService.isAuthenticated
         #expect(authenticated == true, "Precondition: must be authenticated")
 

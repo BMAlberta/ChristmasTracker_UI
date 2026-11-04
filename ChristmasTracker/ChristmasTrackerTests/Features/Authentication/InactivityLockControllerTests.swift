@@ -124,7 +124,7 @@ struct InactivityLockControllerTests {
             repository: mockRepo,
             sessionManager: sessionManager
         )
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true,
                 "Precondition: must be authenticated before lockFallback")
 

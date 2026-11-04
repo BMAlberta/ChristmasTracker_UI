@@ -334,7 +334,7 @@ private struct ProfilePreviewContainer: View {
         ProfileView()
             .environment(\.authenticationService, authService)
             .task {
-                await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+                await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
             }
     }
 }
