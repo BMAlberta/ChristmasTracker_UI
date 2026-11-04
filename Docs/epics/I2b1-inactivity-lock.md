@@ -866,3 +866,301 @@ Required tests (new file `BiometricOutcomeTests.swift`):
 - `ChristmasTracker/ChristmasTracker/ChristmasTrackerApp.swift` — remove `.onChange(of: lockController.lockState)`; set `lockController.lockPresenter = lockCoordinator`; `LockCoordinator` conforms to `InactivityLockPresenting`
 
 **No new test file for the BiometricAuthenticatingTests mapping tests:** those tests test via the LockView mock-caller pattern and remain valid; only the production `attemptBiometricUnlock` path changes.
+
+---
+
+## Rework 2 Gate 1: Story R5 — Enablement model and live biometric availability
+
+### Defects addressed
+
+**B1 (`BiometricSetupView` silently returns):** `enableBiometric()` reads `KeychainService.get("auth.refresh_token")`, returns without notifying `onComplete` when nil (normal login without "Remember me"). Fix: introduce `BiometricEnablementModel` that evaluates biometrics directly and writes the preference; `BiometricSetupView` uses the model. No Keychain read; `setupBiometrics` not called from this path.
+
+**B2 (stale biometric availability):** `AuthenticationService.isBiometricAvailable` and `biometricType` are set once at launch via `checkBiometricAvailability()` which creates `LAContext` directly. Permissions or enrollment changes later in the session are never reflected. Fix: inject `any BiometricAuthenticating` into `AuthenticationService`; replace `checkBiometricAvailability()` with `refreshBiometricAvailability()` that reads from the authenticator; call it from `init()` and `handleAuthSuccess`.
+
+### New interface: Yes
+
+### Type signatures
+
+```swift
+// MARK: Features/Authentication/Services/BiometricEnablementModel.swift (new)
+
+@MainActor
+@Observable
+internal final class BiometricEnablementModel {
+
+    enum EnablementState: Equatable {
+        case idle
+        case inProgress
+        case succeeded
+        case failed(String)   // localised message; not logged
+    }
+
+    private(set) var state: EnablementState = .idle
+
+    init(authenticator: any BiometricAuthenticating, preference: any BiometricUnlockPreferring)
+
+    // Calls authenticator.authenticate(reason:).
+    // .success        → preference.biometricUnlockEnabled = true; state = .succeeded
+    // .userCancelled / .systemCancelled → state = .idle (silent)
+    // .failed / .lockedOut / .unavailable / .userFallback → state = .failed(message)
+    // Sets state = .inProgress before the await; always leaves a terminal state on return.
+    func enable() async
+
+    func reset()   // state = .idle
+}
+
+// MARK: Features/Authentication/Services/AuthenticationService.swift (modified)
+
+// Existing init gains a third parameter (default keeps existing behaviour):
+init(
+    repository: any AuthenticationRepository,
+    sessionManager: SessionManager,
+    biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService()
+)
+
+// Replaces checkBiometricAvailability(); reads from biometricAuthenticator:
+internal func refreshBiometricAvailability()
+// Sets isBiometricAvailable = biometricAuthenticator.isAvailable
+// Sets biometricType derived from biometricAuthenticator.biometryType
+// Called from init() Task and handleAuthSuccess (all existing call sites of checkBiometricAvailability).
+
+// MARK: Features/Authentication/Services/FakeBiometricAuthenticator.swift (modified)
+
+// Add (previously biometryTypeName was hardcoded "Face ID"):
+var stubbedBiometryTypeName: String    // default = stubbedBiometryType.displayName
+var biometryTypeName: String { stubbedBiometryTypeName }
+
+// MARK: Features/Authentication/Views/BiometricSetupView.swift (modified)
+
+// Accept model as a parameter (caller creates it):
+init(model: BiometricEnablementModel, onComplete: ((Bool) -> Void)? = nil)
+// enableBiometric() path: await model.enable(); call onComplete(model.state == .succeeded); dismiss if terminal
+// onComplete(false) on skip — unchanged
+// Must not read Keychain; must not call authService.setupBiometrics
+
+// MARK: ChristmasTrackerApp.swift (modified)
+
+// AuthenticationService init gains biometricAuthenticator (share LocalAuthenticationService() already created for LockCoordinator):
+let localAuth = LocalAuthenticationService()
+let lkCoord = LockCoordinator(lockController: lc, biometricAuthenticator: localAuth)
+let auth = AuthenticationService(repository: ..., sessionManager: sm, biometricAuthenticator: localAuth)
+
+// Sheet presentation creates the model:
+BiometricSetupView(
+    model: BiometricEnablementModel(
+        authenticator: localAuth,
+        preference: preference
+    ),
+    onComplete: { enabled in
+        preference.biometricSetupOfferShown = true
+        preference.biometricUnlockEnabled = enabled
+        lockController.preference = preference
+    }
+)
+```
+
+### Acceptance criteria
+
+1. After `model.enable()` with a fake returning `.success`, `model.state == .succeeded` and `preference.biometricUnlockEnabled == true`.
+2. After `model.enable()` with `.userCancelled` or `.systemCancelled`, `model.state == .idle` and preference is unchanged.
+3. After `model.enable()` with `.failed`, `.lockedOut`, `.unavailable`, or `.userFallback`, `model.state` is `.failed(...)` and preference is unchanged.
+4. `model.reset()` sets `state = .idle` from any terminal state.
+5. `AuthenticationService` constructed with a fake authenticator where `stubbedIsAvailable = false` → `service.isBiometricAvailable == false` after init.
+6. `AuthenticationService.refreshBiometricAvailability()` with a fake returning `.touchID` → `service.biometricType == .touchID`.
+7. `FakeBiometricAuthenticator` with `stubbedBiometryTypeName = "Touch ID"` → `biometryTypeName == "Touch ID"`.
+8. `BiometricSetupView.enableBiometric()` calls `model.enable()` and does not read the Keychain or call `setupBiometrics` — verified by code review.
+
+### Scoped file list
+
+**New:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/BiometricEnablementModel.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/BiometricEnablementModelTests.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift`
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/FakeBiometricAuthenticator.swift`
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Views/BiometricSetupView.swift`
+- `ChristmasTracker/ChristmasTracker/ChristmasTrackerApp.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/AuthenticationServiceTests.swift`
+
+---
+
+## Rework 2 Gate 1: Story R6 — Automatic biometric prompt and Face ID usage key
+
+### Defects addressed
+
+**B3 (no auto-prompt):** The lock screen appears but never automatically requests Face ID/Touch ID. The user must tap the button. Fix: on `LockView.onAppear`, if conditions allow, attempt biometrics automatically — once per lock event.
+
+**B4 (missing usage key):** `NSFaceIDUsageDescription` is likely absent from Info.plist; the system may kill the app when it first requests Face ID without the key. Fix: add the key; extend `scripts/check-config.sh` to verify it.
+
+### New interface: No new protocol; new pure function only
+
+### Type signatures
+
+```swift
+// Pure function (can live in LockView.swift):
+internal nonisolated func shouldAutoAttemptBiometrics(
+    isAvailable: Bool,
+    preferenceEnabled: Bool,
+    isPasswordOnly: Bool,
+    alreadyAttempted: Bool,
+    appIsActive: Bool
+) -> Bool
+// Returns true iff all five conditions are satisfied (isAvailable && preferenceEnabled
+// && !isPasswordOnly && !alreadyAttempted && appIsActive).
+
+// LockView.swift (modified):
+// Add: @State private var hasAutoAttempted: Bool = false
+// Add: @Environment(\.scenePhase) private var scenePhase
+// In .onAppear:
+//   guard shouldAutoAttemptBiometrics(
+//       isAvailable: biometricAuthenticator.isAvailable,
+//       preferenceEnabled: controller.preference?.biometricUnlockEnabled ?? false,
+//       isPasswordOnly: showPasswordOnly,
+//       alreadyAttempted: hasAutoAttempted,
+//       appIsActive: scenePhase == .active
+//   ) else { return }
+//   hasAutoAttempted = true
+//   Task { await attemptBiometricUnlock() }
+
+// Info.plist (modified):
+// Add: <key>NSFaceIDUsageDescription</key>
+//      <string>Use Face ID to unlock Christmas Tracker.</string>
+
+// scripts/check-config.sh (modified):
+// After the existing checks, add a grep-based check that NSFaceIDUsageDescription
+// exists in ChristmasTracker/ChristmasTracker/Info.plist; fail if missing.
+```
+
+### Acceptance criteria (truth table for `shouldAutoAttemptBiometrics`)
+
+| isAvailable | preferenceEnabled | isPasswordOnly | alreadyAttempted | appIsActive | result |
+|---|---|---|---|---|---|
+| true | true | false | false | true | true |
+| false | true | false | false | true | false |
+| true | false | false | false | true | false |
+| true | true | true | false | true | false |
+| true | true | false | true | true | false |
+| true | true | false | false | false | false |
+
+7. `NSFaceIDUsageDescription` present in Info.plist — verified by code review and `check-config.sh`.
+8. `scripts/verify.sh` passes with the new check in place.
+
+### Scoped file list
+
+**New:**
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/LockAutoAttemptTests.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/App/LockView.swift`
+- `ChristmasTracker/ChristmasTracker/Info.plist`
+- `scripts/check-config.sh`
+
+---
+
+## Rework 2 Gate 1: Story R7 — Loading state, error alert, biometric login removal, remember-email, no token persistence
+
+### Defects addressed
+
+**B5 (`isLoading` never reset on failure):** `login()`, `loginWithBiometric()`, and `forgotPassword()` set `isLoading = true` and have no `defer`; on the error paths the flag stays `true` permanently. Fix: `defer { isLoading = false }` in all four mutating methods.
+
+**B6 (error alert never clears):** `LoginView` uses `.alert("Error", isPresented: .constant(authService.error != nil))`; the OK tap does nothing because `.constant` is read-only. Fix: add `clearError()` to `AuthenticationService`; use a proper `@State var showError` binding that calls `clearError()` on dismiss.
+
+**B7 (legacy Face ID sign-in button):** `BiometricOptionView` ("Sign in with Face ID") in `LoginView.contentView` uses the legacy Keychain token flow that I2b-2 is redesigning. Fix: remove it from the view body. I2b-2 reinstates it via the new flow.
+
+**B8 ("Remember me" persists tokens):** "Remember me" means persist `auth.tokens` and `auth.refresh_token` to the Keychain and silently restore on next launch. This is I2b-2's concern (token persistence, Keychain redesign). Fix: "Remember me" becomes remember-email-only; `storeTokens` is never called; `loadStoredSession` is replaced with a one-time legacy key cleanup; repository always receives `rememberMe: true` (the one permitted networking change).
+
+### New interface: Yes (`RememberedEmailStoring`)
+
+### Type signatures
+
+```swift
+// MARK: Features/Authentication/Services/RememberedEmailStoring.swift (new)
+
+internal protocol RememberedEmailStoring {
+    var rememberedEmail: String? { get set }
+}
+
+internal struct RememberedEmailStore: RememberedEmailStoring {
+    static let key = "login.rememberedEmail"
+
+    init(defaults: UserDefaults = .standard)
+
+    // Reads and writes UserDefaults key "login.rememberedEmail".
+    // Setting nil removes the key.
+    var rememberedEmail: String? { get set }
+}
+
+// MARK: Features/Authentication/Services/AuthenticationService.swift (modified)
+
+// login() signature: rename rememberMe → rememberEmail (default false)
+func login(email: String, password: String, rememberEmail: Bool = false) async
+// - defer { isLoading = false }
+// - passes rememberMe: true to authRepository.login (always, regardless of rememberEmail)
+// - does NOT log the email string anywhere in the method body
+
+// loginWithBiometric()
+// - defer { isLoading = false }
+
+// forgotPassword()
+// - defer { isLoading = false }
+
+// register()
+// - add defer { isLoading = false }; remove the existing explicit isLoading = false at end
+
+// handleAuthSuccess(authData:rememberMe:) — remove rememberMe param:
+private func handleAuthSuccess(authData: AuthData) async
+// - remove the `if rememberMe { storeTokens(newTokens) }` block entirely
+
+// Add new public method:
+func clearError()   // sets self.error = nil
+
+// Replace loadStoredSession() with:
+private func performLegacyKeychainCleanup()
+// - Attempts to delete "auth.tokens" (keychainAuthTokensKey); ignores KeychainError.itemNotFound
+// - Attempts to delete "auth.refresh_token" (keychainAuthRefreshTokenKey); ignores KeychainError.itemNotFound
+// - Called once from init() Task in place of loadStoredSession()
+// - storeTokens() is removed; updateTokens() no longer calls storeTokens()
+
+// MARK: Features/Authentication/Views/LoginView.swift (modified)
+
+// Add @State private var showError: Bool = false
+// Replace .alert("Error", isPresented: .constant(authService.error != nil)) { ... }
+// with    .alert("Error", isPresented: $showError) { Button("OK") { authService.clearError() } }
+//         .onChange(of: authService.error) { _, e in showError = e != nil }
+
+// Remove BiometricOptionView from contentView body (B7)
+
+// Add @State private var rememberEmail: Bool
+// Add @State private var emailStore = RememberedEmailStore()
+// On appear: email = emailStore.rememberedEmail ?? ""; rememberEmail = emailStore.rememberedEmail != nil
+// On successful login attempt: if rememberEmail { emailStore.rememberedEmail = email }
+//                              else             { emailStore.rememberedEmail = nil }
+// Rename `rememberMe` state variable → `rememberEmail`
+// Call authService.login(email:password:rememberEmail:rememberEmail)
+```
+
+### Acceptance criteria
+
+1. `service.isLoading == false` after `login()` with invalid credentials (fail path).
+2. `service.isLoading == false` after `login()` with valid credentials (success path).
+3. `service.isLoading == false` after `forgotPassword()` (any outcome).
+4. `service.clearError()` sets `service.error` to `nil`.
+5. `RememberedEmailStore` returns `nil` before any write.
+6. `RememberedEmailStore` returns a stored email after a write.
+7. `RememberedEmailStore` returns `nil` after the email is set to `nil`.
+8. `AuthenticationService.login()` does not log the email string — verified by code and convention review.
+9. `BiometricOptionView` absent from `LoginView` body — verified by code review.
+10. `storeTokens` is absent from production code — verified by code review.
+11. `authRepository.login(rememberMe:)` is always called with `true` — verified by code review.
+
+### Scoped file list
+
+**New:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/RememberedEmailStoring.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/RememberedEmailStoreTests.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift`
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Views/LoginView.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/AuthenticationServiceTests.swift`
