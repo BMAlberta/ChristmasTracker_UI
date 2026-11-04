@@ -135,3 +135,55 @@ Inside each task's `for await notification in NotificationCenter.default.notific
 
 ### Test seam justification
 `UIWindowScene` cannot be instantiated in unit tests (requires a running UIKit application). The coordinator's `presenterFactory` takes `AnyObject` (the notification's `object`), not `UIWindowScene` directly. Tests supply plain `NSObject()` instances as scene proxies; the factory returns a `FakePrivacyCoverPresenter` for each. The `handleWillDeactivate(for:)` and `handleDidActivate(for:)` methods are called directly (synchronously, on MainActor) from tests, bypassing the notification observation tasks entirely. This is the smallest seam: it tests all coordinator state machine logic without requiring async notification delivery or real UIKit scenes.
+
+---
+
+## Rework Gate 1 (I2c-2)
+
+**Amendment to original brief:** The original brief required consuming notifications with async sequences (`NotificationCenter.notifications(named:)`). This is replaced by synchronous `NotificationCenter.addObserver(forName:object:queue:using:)` observers with `queue: nil`. **Reason:** With the async-sequence approach the cover handler runs on a future MainActor turn — after the notification has been delivered and the method has returned. iOS takes the app-switcher snapshot at or just after the `sceneWillDeactivate` callback. If the cover is shown one run-loop turn later, the snapshot may not include it and the privacy guarantee is lost. The synchronous observer with `queue: nil` runs the handler inside the notification post call, before it returns, so the cover window is visible when the snapshot is taken.
+
+### R1 Change 1 — Explicit hide in PrivacyCoverWindowAdapter
+
+**Problem:** `hideCover()` only sets `coverWindow = nil`. Relying on ARC deallocation to remove a visible UIWindow is fragile; under some retain conditions the window may outlive the expected release point.
+
+**Fix:** Before releasing, set `coverWindow?.isHidden = true` and `coverWindow?.rootViewController = nil`, then set `coverWindow = nil`. This ensures the window is hidden and its view hierarchy is dismantled synchronously, regardless of when ARC releases it.
+
+### R1 Change 2 — Synchronous observation in PrivacyCoverCoordinator
+
+Replace the two `Task`-based async-sequence observers (and `observationTasks: [Task<Void, Never>]`) with `NotificationCenter.addObserver(forName:object:queue:using:)` registered with `queue: nil`. With `queue: nil` the handler runs synchronously on the posting thread (the main thread for UIKit scene notifications). Inside the handler, use `MainActor.assumeIsolated` to call the coordinator's MainActor-isolated handle methods without an async hop.
+
+**Injectable NotificationCenter:** Change `init` to `init(notificationCenter: NotificationCenter = .default, presenterFactory:)`. The `notificationCenter` let property is `nonisolated` (it is a stable reference) and usable from `deinit`.
+
+**Observer lifetime:** Store the returned `any NSObjectProtocol` tokens in a `nonisolated(unsafe) private var observers: [any NSObjectProtocol]`. Mark `nonisolated(unsafe)` with the justification that `observers` is written exactly once during `start()` on MainActor and then only read in `deinit` where the coordinator is exclusively owned — no concurrent access is possible. Remove all observers in `deinit` using `notificationCenter.removeObserver(_:)`. Keep `start()` idempotent: guard on `observers.isEmpty`.
+
+**Strict concurrency shape:** The outer `@Sendable (Notification) -> Void` closure captures `[weak self]`. `PrivacyCoverCoordinator` is `@MainActor`-isolated and therefore `Sendable`; `Notification` is `@unchecked Sendable`. Both captures are permissible in a `@Sendable` closure. The `@MainActor`-annotated `assumeIsolated` closure then calls `handleWillDeactivate`, `handleDidActivate`, or `handleDidDisconnect` with full MainActor isolation.
+
+### R1 Change 3 — Disconnect handling
+
+Observe `UIScene.didDisconnectNotification` with the same synchronous observer pattern. Add `handleDidDisconnect(for object: AnyObject)`: if an active presenter exists for the scene, call `hideCover()` on it and remove it from `activePresenters`; otherwise no-op. This prevents a stale entry from suppressing a future will-deactivate for a recycled scene slot or a different scene.
+
+### Rework Gate 1 — Type signatures (delta)
+
+```swift
+// PrivacyCoverWindowAdapter (modified)
+func hideCover() {
+    // explicit: hide → nil rootVC → release
+    coverWindow?.isHidden = true
+    coverWindow?.rootViewController = nil
+    coverWindow = nil
+}
+
+// PrivacyCoverCoordinator (modified init; new property; new method)
+init(notificationCenter: NotificationCenter = .default, presenterFactory: @escaping PresenterFactory)
+
+nonisolated(unsafe) private var observers: [any NSObjectProtocol] = []
+// (replaces observationTasks: [Task<Void, Never>])
+
+func handleDidDisconnect(for object: AnyObject)
+
+deinit // removes all observer tokens
+```
+
+### Rework test seam
+
+The coordinator is now injectable with a `NotificationCenter`. Tests inject a private `NotificationCenter()` instance, call `start()`, and post notifications directly — proving synchronous delivery because there is no `await` between `post()` and the assertion. `NSObject()` instances serve as scene stand-ins (notification `object`). Existing 6 tests (which call `handleWillDeactivate`/`handleDidActivate` directly) remain unchanged.
