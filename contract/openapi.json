@@ -15,11 +15,11 @@
   "servers": [
     {
       "url": "http://localhost:3010",
-      "description": "Development server"
+      "description": "Development"
     },
     {
-      "url": "https://api.bmalberta.com/tracker/v2",
-      "description": "Production server"
+      "url": "https://api.bmalberta.com",
+      "description": "Production"
     }
   ],
   "tags": [
@@ -134,6 +134,12 @@
           "CARETAKER"
         ]
       },
+      "Money": {
+        "type": "number",
+        "multipleOf": 0.01,
+        "description": "Monetary amount in dollars, rounded to at most two decimal places (C11). May be negative.",
+        "example": 349.99
+      },
       "MoneyAmount": {
         "type": "number",
         "minimum": 0,
@@ -144,6 +150,11 @@
       },
       "Meta": {
         "type": "object",
+        "required": [
+          "timestamp",
+          "requestId",
+          "sessionId"
+        ],
         "properties": {
           "timestamp": {
             "type": "string",
@@ -230,6 +241,16 @@
       },
       "User": {
         "type": "object",
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "displayName",
+          "role",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -280,6 +301,11 @@
       },
       "Error": {
         "type": "object",
+        "required": [
+          "success",
+          "error",
+          "meta"
+        ],
         "properties": {
           "success": {
             "type": "boolean",
@@ -287,6 +313,11 @@
           },
           "error": {
             "type": "object",
+            "required": [
+              "code",
+              "errorCode",
+              "message"
+            ],
             "properties": {
               "code": {
                 "type": "integer",
@@ -303,6 +334,106 @@
               "details": {
                 "type": "object",
                 "additionalProperties": true
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "VersionOutdatedDetails": {
+        "type": "object",
+        "required": [
+          "minimumVersion",
+          "minimumBuild",
+          "latestVersion",
+          "latestBuild",
+          "manifestUrl",
+          "ipaUrl"
+        ],
+        "properties": {
+          "minimumVersion": {
+            "type": "string",
+            "example": "2.0.0",
+            "description": "Minimum acceptable app version string"
+          },
+          "minimumBuild": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "example": 10,
+            "description": "Minimum acceptable build number, or null if not enforced by build"
+          },
+          "latestVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "2.1.0",
+            "description": "Latest released version string, if known"
+          },
+          "latestBuild": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "example": 20,
+            "description": "Latest released build number, if known"
+          },
+          "manifestUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "OTA manifest URL for enterprise distribution, or null if not set"
+          },
+          "ipaUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "Direct IPA download URL, or null if not set"
+          }
+        }
+      },
+      "VersionOutdatedError": {
+        "type": "object",
+        "required": [
+          "success",
+          "error",
+          "meta"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "errorCode",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "integer",
+                "example": 1014
+              },
+              "errorCode": {
+                "type": "string",
+                "example": "VERSION_OUTDATED"
+              },
+              "message": {
+                "type": "string",
+                "example": "App version is outdated. Please update to continue."
+              },
+              "details": {
+                "$ref": "#/components/schemas/VersionOutdatedDetails"
               }
             }
           },
@@ -352,6 +483,21 @@
         "allOf": [
           {
             "type": "object",
+            "required": [
+              "id",
+              "name",
+              "theme",
+              "year",
+              "visibility",
+              "status",
+              "recipient",
+              "owner",
+              "coOwner",
+              "myRole",
+              "memberCount",
+              "createdAt",
+              "updatedAt"
+            ],
             "properties": {
               "id": {
                 "type": "string",
@@ -402,6 +548,11 @@
                 "type": "integer",
                 "description": "Omitted for blind viewers (P3) and Viewers (P14)"
               },
+              "memberCount": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Count of ACTIVE memberships (C14)"
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time"
@@ -424,6 +575,7 @@
           },
           {
             "type": "object",
+            "required": [],
             "properties": {
               "members": {
                 "type": "array",
@@ -437,6 +589,14 @@
       },
       "MemberSummary": {
         "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "displayName",
+          "role",
+          "status",
+          "invitedAt"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -448,6 +608,11 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Only present for owner/co-owner viewing their own list members"
           },
           "role": {
             "$ref": "#/components/schemas/MembershipRole"
@@ -483,6 +648,18 @@
       },
       "Item": {
         "type": "object",
+        "required": [
+          "id",
+          "listId",
+          "name",
+          "description",
+          "quantityRequested",
+          "priority",
+          "status",
+          "offList",
+          "createdBy",
+          "createdAt"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -513,9 +690,13 @@
             ]
           },
           "expectedUnitPrice": {
-            "type": [
-              "number",
-              "null"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "quantityRequested": {
@@ -552,6 +733,19 @@
       },
       "Purchase": {
         "type": "object",
+        "required": [
+          "id",
+          "itemId",
+          "quantity",
+          "totalCost",
+          "shippingStatus",
+          "purchaser",
+          "recipient",
+          "item",
+          "purchasedAt",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -565,7 +759,7 @@
             "type": "integer"
           },
           "totalCost": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "storeName": {
             "type": [
@@ -614,6 +808,27 @@
           "recipient": {
             "$ref": "#/components/schemas/PersonRef"
           },
+          "item": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "listId"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "listId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
           "purchasedAt": {
             "type": "string",
             "format": "date-time"
@@ -623,6 +838,40 @@
             "format": "date-time"
           },
           "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PurchaseSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "quantity",
+          "totalCost",
+          "purchaser",
+          "shippingStatus",
+          "purchasedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "totalCost": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "purchaser": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "shippingStatus": {
+            "$ref": "#/components/schemas/ShippingStatus"
+          },
+          "purchasedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -695,16 +944,16 @@
                 "description": "Level 'total' only"
               },
               "budgetLimit": {
-                "type": "number"
+                "$ref": "#/components/schemas/Money"
               },
               "currentSpent": {
-                "type": "number"
+                "$ref": "#/components/schemas/Money"
               },
               "purchaseAmount": {
-                "type": "number"
+                "$ref": "#/components/schemas/Money"
               },
               "overage": {
-                "type": "number"
+                "$ref": "#/components/schemas/Money"
               }
             }
           }
@@ -740,8 +989,7 @@
         "required": [
           "status",
           "requiresConfirmation",
-          "warnings",
-          "confirmationToken"
+          "purchase"
         ],
         "properties": {
           "status": {
@@ -756,16 +1004,8 @@
               true
             ]
           },
-          "warnings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BudgetOverageWarning"
-            },
-            "description": "One entry per exceeded budget level (recipient or total)"
-          },
-          "confirmationToken": {
-            "type": "string",
-            "description": "Single shared token binding the purchase amounts as integer cents. Expires in 5 minutes (S6)."
+          "purchase": {
+            "type": "null"
           }
         }
       },
@@ -789,6 +1029,17 @@
       },
       "Budget": {
         "type": "object",
+        "required": [
+          "id",
+          "year",
+          "totalBudget",
+          "totalSpent",
+          "remaining",
+          "isOverBudget",
+          "recipients",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -798,13 +1049,13 @@
             "type": "integer"
           },
           "totalBudget": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "totalSpent": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "remaining": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "isOverBudget": {
             "type": "boolean"
@@ -813,6 +1064,16 @@
             "type": "array",
             "items": {
               "type": "object",
+              "required": [
+                "id",
+                "recipientId",
+                "recipientName",
+                "maxSpend",
+                "spent",
+                "remaining",
+                "isOverBudget",
+                "overage"
+              ],
               "properties": {
                 "id": {
                   "type": "string",
@@ -826,19 +1087,19 @@
                   "type": "string"
                 },
                 "maxSpend": {
-                  "type": "number"
+                  "$ref": "#/components/schemas/Money"
                 },
                 "spent": {
-                  "type": "number"
+                  "$ref": "#/components/schemas/Money"
                 },
                 "remaining": {
-                  "type": "number"
+                  "$ref": "#/components/schemas/Money"
                 },
                 "isOverBudget": {
                   "type": "boolean"
                 },
                 "overage": {
-                  "type": "number"
+                  "$ref": "#/components/schemas/Money"
                 }
               }
             }
@@ -920,8 +1181,7 @@
             "minimum": 1
           },
           "totalCost": {
-            "type": "number",
-            "minimum": 0
+            "$ref": "#/components/schemas/Money"
           },
           "purchasedAt": {
             "type": "string",
@@ -950,8 +1210,7 @@
                 "description": "Total number of purchases matching filters (all pages)"
               },
               "filteredTotal": {
-                "type": "number",
-                "description": "Sum of totalCost for all matching purchases (all pages)"
+                "$ref": "#/components/schemas/Money"
               },
               "nextCursor": {
                 "type": [
@@ -981,8 +1240,7 @@
             "type": "string"
           },
           "spent": {
-            "type": "number",
-            "description": "Total dollars spent for this recipient"
+            "$ref": "#/components/schemas/Money"
           },
           "itemsPurchased": {
             "type": "integer",
@@ -1008,13 +1266,13 @@
             "type": "string"
           },
           "budget": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "spent": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "remaining": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           }
         }
       },
@@ -1028,13 +1286,13 @@
         ],
         "properties": {
           "totalBudget": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "totalSpent": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "remaining": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "recipients": {
             "type": "array",
@@ -1057,7 +1315,7 @@
             "type": "integer"
           },
           "totalSpent": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "itemsPurchased": {
             "type": "integer"
@@ -1066,9 +1324,13 @@
             "type": "integer"
           },
           "totalBudget": {
-            "type": [
-              "number",
-              "null"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         }
@@ -1097,7 +1359,7 @@
             "example": 2026
           },
           "totalSpent": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "itemsPurchased": {
             "type": "integer",
@@ -1152,7 +1414,7 @@
             "description": "Discriminator: always \"all\" for all-time response"
           },
           "totalSpent": {
-            "type": "number"
+            "$ref": "#/components/schemas/Money"
           },
           "itemsPurchased": {
             "type": "integer"
@@ -1208,6 +1470,11 @@
                 "code": 1004,
                 "errorCode": "TOKEN_MISSING",
                 "message": "Authentication token is required"
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1226,6 +1493,11 @@
                 "code": 2001,
                 "errorCode": "FORBIDDEN",
                 "message": "You do not have permission to access this resource"
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1253,6 +1525,11 @@
                     }
                   ]
                 }
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1271,6 +1548,11 @@
                 "code": 4001,
                 "errorCode": "RESOURCE_NOT_FOUND",
                 "message": "The requested resource was not found"
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1286,9 +1568,14 @@
             "example": {
               "success": false,
               "error": {
-                "code": 5001,
+                "code": 5002,
                 "errorCode": "LIST_ALREADY_EXISTS",
                 "message": "A list already exists for this recipient in this year"
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1299,14 +1586,27 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "$ref": "#/components/schemas/VersionOutdatedError"
             },
             "example": {
               "success": false,
               "error": {
-                "code": 9001,
+                "code": 1014,
                 "errorCode": "VERSION_OUTDATED",
-                "message": "App version is below the minimum required version. Please update."
+                "message": "App version is outdated. Please update to continue.",
+                "details": {
+                  "minimumVersion": "2.0.0",
+                  "minimumBuild": 10,
+                  "latestVersion": "2.1.0",
+                  "latestBuild": 20,
+                  "manifestUrl": null,
+                  "ipaUrl": "https://example.com/app.ipa"
+                }
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1328,6 +1628,57 @@
                 "details": {
                   "retryAfter": 900
                 }
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
+              }
+            }
+          }
+        }
+      },
+      "UnprocessableEntityError": {
+        "description": "Unprocessable entity — e.g. cannot delete a resource that has dependents",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 6201,
+                "errorCode": "CANNOT_DELETE_ITEM_WITH_PURCHASES",
+                "message": "Cannot delete item with existing purchases"
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
+              }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Unexpected server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "error": {
+                "code": 9001,
+                "errorCode": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred"
+              },
+              "meta": {
+                "timestamp": "2025-12-30T10:00:00Z",
+                "requestId": "123e4567-e89b-12d3-a456-426614174000",
+                "sessionId": "987fcdeb-51a2-43f7-8912-314159265358"
               }
             }
           }
@@ -1374,16 +1725,107 @@
         ],
         "responses": {
           "200": {
-            "description": "Version state and policy"
+            "description": "Version state and policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "state",
+                        "platform",
+                        "minimumVersion",
+                        "recommendedVersion",
+                        "latestVersion",
+                        "minimumBuild",
+                        "latestBuild",
+                        "enabled",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "update_recommended",
+                            "force_update"
+                          ]
+                        },
+                        "platform": {
+                          "type": "string"
+                        },
+                        "minimumVersion": {
+                          "type": "string"
+                        },
+                        "recommendedVersion": {
+                          "type": "string"
+                        },
+                        "latestVersion": {
+                          "type": "string"
+                        },
+                        "minimumBuild": {
+                          "type": "integer"
+                        },
+                        "latestBuild": {
+                          "type": "integer"
+                        },
+                        "manifestUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ipaUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "releaseNotes": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
           },
           "304": {
             "description": "Not modified"
           },
           "400": {
-            "description": "Missing required query parameters"
+            "$ref": "#/components/responses/ValidationError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimitError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1452,13 +1894,37 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
-                    "accessToken": {
-                      "type": "string"
+                    "success": {
+                      "type": "boolean",
+                      "example": true
                     },
-                    "refreshToken": {
-                      "type": "string",
-                      "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "user",
+                        "accessToken"
+                      ],
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        },
+                        "accessToken": {
+                          "type": "string"
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
                     }
                   }
                 }
@@ -1469,13 +1935,16 @@
             "$ref": "#/components/responses/ValidationError"
           },
           "403": {
-            "description": "Invalid or missing registration code"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "409": {
             "$ref": "#/components/responses/ConflictError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimitError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1524,13 +1993,37 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
-                    "accessToken": {
-                      "type": "string"
+                    "success": {
+                      "type": "boolean",
+                      "example": true
                     },
-                    "refreshToken": {
-                      "type": "string",
-                      "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "user",
+                        "accessToken"
+                      ],
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        },
+                        "accessToken": {
+                          "type": "string"
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
                     }
                   }
                 }
@@ -1541,13 +2034,16 @@
             "$ref": "#/components/responses/ValidationError"
           },
           "401": {
-            "description": "Invalid credentials"
+            "$ref": "#/components/responses/UnauthorizedError"
           },
           "426": {
             "$ref": "#/components/responses/UpgradeRequiredError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimitError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1576,6 +2072,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "refreshToken": {
                     "type": "string",
@@ -1596,13 +2093,42 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
-                    "accessToken": {
-                      "type": "string"
+                    "success": {
+                      "type": "boolean",
+                      "example": true
                     },
-                    "refreshToken": {
-                      "type": "string",
-                      "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "user",
+                        "accessToken",
+                        "expiresIn"
+                      ],
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        },
+                        "accessToken": {
+                          "type": "string"
+                        },
+                        "expiresIn": {
+                          "type": "integer",
+                          "example": 900
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "Only present for iOS clients (X-Client-Platform: ios)"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
                     }
                   }
                 }
@@ -1610,10 +2136,13 @@
             }
           },
           "401": {
-            "description": "Invalid, expired, or missing refresh token"
+            "$ref": "#/components/responses/UnauthorizedError"
           },
           "426": {
             "$ref": "#/components/responses/UpgradeRequiredError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1633,10 +2162,37 @@
         ],
         "responses": {
           "200": {
-            "description": "Current user information"
+            "description": "Current user information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1656,10 +2212,45 @@
         ],
         "responses": {
           "200": {
-            "description": "Successfully logged out"
+            "description": "Successfully logged out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "message"
+                      ],
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1731,6 +2322,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -1748,28 +2344,16 @@
             }
           },
           "400": {
-            "description": "Validation error (sum of recipients exceeds total)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "success": false,
-                  "error": {
-                    "code": 6003,
-                    "errorCode": "RECIPIENT_BUDGET_SUM_EXCEEDS_TOTAL",
-                    "message": "Sum of recipient budgets cannot exceed total budget"
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "409": {
-            "description": "Budget already exists for this year"
+            "$ref": "#/components/responses/ConflictError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -1792,6 +2376,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -1813,6 +2402,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -1851,6 +2443,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -1870,7 +2467,10 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Budget not found for this year"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -1906,6 +2506,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "totalBudget": {
                     "$ref": "#/components/schemas/MoneyAmount"
@@ -1941,6 +2542,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -1957,13 +2563,16 @@
             }
           },
           "400": {
-            "description": "Validation error (sum exceeds total)"
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Budget not found"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -2000,12 +2609,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
                     },
                     "data": {
                       "type": "object",
+                      "required": [
+                        "message"
+                      ],
                       "properties": {
                         "message": {
                           "type": "string",
@@ -2025,25 +2642,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Budget not found"
+            "$ref": "#/components/responses/NotFoundError"
           },
           "422": {
-            "description": "Cannot delete budget with existing purchases",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "success": false,
-                  "error": {
-                    "code": 6004,
-                    "errorCode": "CANNOT_DELETE_BUDGET_WITH_PURCHASES",
-                    "message": "Cannot delete budget with existing purchases"
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2104,6 +2709,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -2123,10 +2733,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Source budget not found"
+            "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "Budget already exists for target year"
+            "$ref": "#/components/responses/ConflictError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2211,6 +2824,12 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "warnings",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -2239,6 +2858,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -2265,7 +2889,10 @@
             "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
-            "description": "Item not found"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2302,6 +2929,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -2314,11 +2946,12 @@
                         },
                         {
                           "type": "object",
+                          "required": [],
                           "properties": {
                             "purchases": {
                               "type": "array",
                               "items": {
-                                "type": "object"
+                                "$ref": "#/components/schemas/PurchaseSummary"
                               }
                             },
                             "totalQuantityPurchased": {
@@ -2340,10 +2973,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Cannot view this item"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -2377,6 +3013,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -2413,6 +3050,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -2428,14 +3070,20 @@
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Only owner/co-owner or creator can update"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -2470,12 +3118,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
                     },
                     "data": {
                       "type": "object",
+                      "required": [
+                        "message"
+                      ],
                       "properties": {
                         "message": {
                           "type": "string"
@@ -2494,13 +3150,16 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Only owner/co-owner or creator can delete"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
           "422": {
-            "description": "Cannot delete item with existing purchases"
+            "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2559,6 +3218,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -2575,16 +3239,19 @@
             }
           },
           "400": {
-            "description": "Invalid status transition"
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Only list owner/co-owner can update status"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2672,6 +3339,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -2695,10 +3367,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Cannot create item"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
-            "description": "List not found"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -2760,6 +3435,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -2783,10 +3463,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Cannot view this list"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2844,7 +3527,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemberSummary"
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/MemberSummary"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
                 }
               }
             }
@@ -2856,13 +3556,16 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Caller lacks permission or target is ineligible"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
-            "description": "List not found or email not found"
+            "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "Already a member"
+            "$ref": "#/components/responses/ConflictError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -2895,9 +3598,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/MemberSummary"
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MemberSummary"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
                   }
                 }
               }
@@ -2907,10 +3627,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Caller lacks permission"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -2950,16 +3673,51 @@
         ],
         "responses": {
           "200": {
-            "description": "Member removed"
+            "description": "Member removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "message"
+                      ],
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Caller lacks permission"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3016,10 +3774,12 @@
                     "default": "PRIVATE"
                   },
                   "coOwnerEmail": {
-                    "type": "string",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "format": "email",
-                    "description": "Optional co-owner email (resolved server-side)",
-                    "nullable": true
+                    "description": "Optional co-owner email (resolved server-side)"
                   }
                 }
               }
@@ -3033,12 +3793,17 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/ListSummary"
+                      "$ref": "#/components/schemas/ListDetail"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/Meta"
@@ -3054,11 +3819,17 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
-            "description": "RECIPIENT_NOT_FOUND — identical 404 for nonexistent id, another adult, or stranger's child (L3/E5)"
+            "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
             "$ref": "#/components/responses/ConflictError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -3120,6 +3891,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3140,6 +3916,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3176,6 +3955,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3195,10 +3979,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Cannot view this list"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -3231,6 +4018,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -3245,9 +4033,11 @@
                     "$ref": "#/components/schemas/ListStatus"
                   },
                   "coOwnerEmail": {
-                    "type": "string",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "format": "email",
-                    "nullable": true,
                     "description": "Set or clear the co-owner by email"
                   }
                 }
@@ -3262,6 +4052,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3281,10 +4076,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Only owner/co-owner can update"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -3318,12 +4116,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
                     },
                     "data": {
                       "type": "object",
+                      "required": [
+                        "message"
+                      ],
                       "properties": {
                         "message": {
                           "type": "string"
@@ -3342,10 +4148,13 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "403": {
-            "description": "Only owner can delete"
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3382,6 +4191,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3401,7 +4215,10 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Purchase not found (nonexistent or belongs to another user)"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -3435,6 +4252,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "notes": {
                     "type": "string",
@@ -3458,6 +4276,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3473,11 +4296,17 @@
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Purchase not found (nonexistent or belongs to another user)"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3568,6 +4397,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3591,6 +4425,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3652,6 +4489,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3674,7 +4516,10 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "Purchase not found (nonexistent or belongs to another user)"
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3710,6 +4555,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean"
@@ -3730,6 +4580,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3754,6 +4607,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -3772,6 +4630,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -3793,6 +4654,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [],
                 "properties": {
                   "firstName": {
                     "type": "string",
@@ -3828,6 +4690,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -3851,14 +4718,10 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "409": {
-            "description": "Email already exists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ConflictError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3911,6 +4774,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -3918,6 +4786,9 @@
                     },
                     "data": {
                       "type": "object",
+                      "required": [
+                        "message"
+                      ],
                       "properties": {
                         "message": {
                           "type": "string",
@@ -3934,17 +4805,13 @@
             }
           },
           "400": {
-            "description": "Current password incorrect or new password too weak",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -3969,6 +4836,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -3978,6 +4850,12 @@
                       "type": "array",
                       "items": {
                         "type": "object",
+                        "required": [
+                          "id",
+                          "firstName",
+                          "lastName",
+                          "relationshipType"
+                        ],
                         "properties": {
                           "id": {
                             "type": "string",
@@ -4008,6 +4886,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       },
@@ -4068,6 +4949,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -4075,6 +4961,12 @@
                     },
                     "data": {
                       "type": "object",
+                      "required": [
+                        "id",
+                        "firstName",
+                        "lastName",
+                        "relationshipType"
+                      ],
                       "properties": {
                         "id": {
                           "type": "string",
@@ -4107,6 +4999,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -4143,6 +5038,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -4150,6 +5050,9 @@
                     },
                     "data": {
                       "type": "object",
+                      "required": [
+                        "message"
+                      ],
                       "properties": {
                         "message": {
                           "type": "string",
@@ -4172,14 +5075,10 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "422": {
-            "description": "Cannot delete child with existing lists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -4216,6 +5115,11 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
                   "properties": {
                     "success": {
                       "type": "boolean",
@@ -4247,6 +5151,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }

@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 19 (2026-11-02)
+**Revision:** 21 (2026-11-05)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,19 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 21
+
+- **A15 (new)** [I B]: iOS keeps its refresh token across logout; clients never send a refresh token to logout.
+
+### Changes in revision 20
+
+- **C9 (new)**: Every integration and e2e response is validated against its documented OpenAPI response schema in strict mode in CI.
+- **C10 (new)**: Every path key in the OpenAPI spec carries the /tracker/v2 prefix; `servers` entries are host-only. Clients set their generated client's base URL to the host only and never append the prefix.
+- **C11 (new)**: Money amounts in responses are JSON numbers with at most two decimal places on every endpoint. Decimal strings are not used.
+- **C12 (new)**: Every operation documents a 500 response using the shared Error envelope.
+- **C13 (new)**: Every purchase response includes item {id, name, listId}.
+- **C14 (new)**: List summaries (GET /lists) carry memberCount (the number of ACTIVE members, always present) and no members array. List detail carries members as an optional field. Gating detail members by L9 is deferred.
 
 ### Changes in revision 19
 
@@ -139,6 +152,12 @@
 | C6 | iOS gets a Debug-Network scheme that runs against a dev or local backend. Debug builds no longer default to mocks only. | I |
 | C7 | Enum values come from generated types. Role values are `owner`, `co-owner`, `member`, `viewer`. | W, I |
 | C8 | CI (GitHub Actions) runs `tsc`, the test suite, the route parity test, and the spec snapshot check on every push. No CI exists today. | B, W, I |
+| C9 | Every integration and e2e response is validated against its documented OpenAPI response schema, in strict mode in CI. The client sync script treats the contract as CONFORMANT only when this row and Docs/contract-conformance-report.md both exist on main. | B, W, I |
+| C10 | Every path key in the OpenAPI spec carries the /tracker/v2 prefix. servers entries are host-only: https://api.bmalberta.com (production) and http://localhost:3010 (development). Clients set their generated client's base URL to the host only and never append the prefix. | B, W, I |
+| C11 | Money amounts in responses are JSON numbers with at most two decimal places, on every endpoint. Decimal strings are not used. The conformance harness enforces this exactly. | B, W, I |
+| C12 | Every operation documents a 500 response using the shared Error envelope. | B, W, I |
+| C13 | Every purchase response includes item {id, name, listId}. | B, W, I |
+| C14 | List summaries (GET /lists) carry memberCount (the number of ACTIVE members, always present) and no members array. List detail carries members as an optional field. Gating detail members by L9 is deferred. | B, W, I |
 
 ## 2. Auth and sessions
 
@@ -158,6 +177,7 @@
 | A12 | Registration requires the shared code, held in an environment variable. The verification run did not confirm the v2 API enforces it. Add it if missing, with a test. | B |
 | A13 | Accounts are created fresh in v2 through registration with the shared code. No migration from the v1 system. | B |
 | A14 | `rememberMe: false` on login gives a session cookie (no `Max-Age`). `true` or omitted gives a persistent cookie with `maxAge` derived from `REFRESH_TOKEN_EXPIRY`. The choice is a signed claim in the refresh JWT and is preserved on every rotation. Tokens issued without the claim count as persistent. | B |
+| A15 | iOS keeps its Keychain refresh token across an explicit logout and sends neither a cookie nor a refresh token to POST /auth/logout, so the server session is not revoked. The handler revokes the chain for a refresh token sent in the cookie or, with no cookie, in the JSON body, so clients must never send one. Interim until the biometric credential (A9). | B, I |
 
 ## 3. Version enforcement (API-based)
 

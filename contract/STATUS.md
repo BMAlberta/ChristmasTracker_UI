@@ -1,9 +1,7 @@
 # Contract status
 
-Status: PRE-CONFORMANCE
+Status: CONFORMANT
 
-contract/openapi.json is known to disagree with the server (for example the login response lacks the
-{success, data, meta} envelope and the user object). Do not generate, or hand-write, API models from it.
-It becomes CONFORMANT after the backend's contract-conformance package merges and this script is rerun.
-
-Last synced from the backend at commit 91f1069e9afb484778f373937878f30606ab2073 (decisions revision 19) on 2026-11-03T01:46:57Z.
+Synced from the backend at commit 35ff2bc6710a98cedd568663a39771a54b89605b (decisions revision 21, spec sha256 e2dab4f631fa) on 2026-11-05T20:10:38Z.
+The spec is validated against real responses in the backend's test suite (decision C9).
+API models come from this spec. Do not hand-edit contract/openapi.json; rerun scripts/sync-contract.sh.
