@@ -109,14 +109,28 @@ internal final class KeychainBiometricCredentialStore: BiometricCredentialStorin
     @Instrumented
     func readRefreshToken(reason: String) async throws(BiometricCredentialError) -> String {
         let context = LAContext()
-        context.localizedReason = reason
+        context.localizedFallbackTitle = ""
+
+        do {
+            try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+        } catch let laError as LAError {
+            switch laError.code {
+            case .userCancel:
+                throw BiometricCredentialError.userCancelled
+            case .biometryLockout:
+                throw BiometricCredentialError.lockedOut
+            default:
+                throw BiometricCredentialError.other
+            }
+        } catch {
+            throw BiometricCredentialError.other
+        }
 
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrAccount: Self.key,
             kSecReturnData: true,
             kSecUseAuthenticationContext: context,
-            kSecUseAuthenticationUI: kSecUseAuthenticationUIAllow,
         ]
 
         var result: AnyObject?
