@@ -13,7 +13,13 @@ struct ProfileView: View {
     @Environment(\.authenticationService) private var authService
 
     @State private var showLogoutConfirmation = false
-    @State private var preference = BiometricUnlockPreference()
+    @State private var toggleModel = ProfileBiometricToggleModel(
+        preference: BiometricUnlockPreference(),
+        enablementModel: BiometricEnablementModel(
+            authenticator: LocalAuthenticationService(),
+            preference: BiometricUnlockPreference()
+        )
+    )
 
     var body: some View {
         NavigationStack {
@@ -26,7 +32,7 @@ struct ProfileView: View {
                     SettingsSectionView(
                         isBiometricAvailable: authService.isBiometricAvailable,
                         biometricType: authService.biometricType,
-                        preference: $preference,
+                        toggleModel: toggleModel,
                         onEditProfile: {
                             // TODO: Phase 8 - Navigate to edit profile
                             print("Edit profile tapped")
@@ -57,6 +63,20 @@ struct ProfileView: View {
             }
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Profile")
+            .task {
+                authService.refreshBiometricAvailability()
+            }
+            .alert(
+                "Biometric Setup Failed",
+                isPresented: Binding(
+                    get: { toggleModel.errorMessage != nil },
+                    set: { if !$0 { toggleModel.errorMessage = nil } }
+                )
+            ) {
+                Button("OK") { toggleModel.errorMessage = nil }
+            } message: {
+                Text(toggleModel.errorMessage ?? "")
+            }
             .confirmationDialog(
                 "Are you sure you want to logout?",
                 isPresented: $showLogoutConfirmation,
@@ -115,7 +135,7 @@ private struct SettingsSectionView: View {
 
     let isBiometricAvailable: Bool
     let biometricType: BiometricType
-    @Binding var preference: BiometricUnlockPreference
+    let toggleModel: ProfileBiometricToggleModel
     let onEditProfile: () -> Void
     let onNotifications: () -> Void
 
@@ -150,12 +170,14 @@ private struct SettingsSectionView: View {
 
                         Toggle(
                             "Unlock with \(biometricType.displayName)",
-                            isOn: $preference.biometricUnlockEnabled
+                            isOn: Binding(
+                                get: { toggleModel.isEnabled },
+                                set: { newValue in Task { await toggleModel.toggle(to: newValue) } }
+                            )
                         )
                         .font(.appBody)
                         .foregroundStyle(Color.textPrimaryColor)
                         .padding(AppSpacing.md)
-                        .disabled(!isBiometricAvailable)
                     }
                 }
             }

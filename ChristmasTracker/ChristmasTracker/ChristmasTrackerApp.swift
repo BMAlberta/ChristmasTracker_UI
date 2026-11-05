@@ -218,13 +218,14 @@ struct ChristmasTrackerApp: App {
             forName: UIScene.didActivateNotification,
             object: nil,
             queue: nil
-        ) { [weak lc] notification in
+        ) { [weak lc, weak auth] notification in
             let windowScene = notification.object as? UIWindowScene
             MainActor.assumeIsolated {
                 lc?.sceneDidBecomeActive()
                 if let windowScene {
                     lkCoordinator.attachTouchRecognizer(to: windowScene)
                 }
+                auth?.refreshBiometricAvailability()
             }
         }
         observers.append(didActivate)

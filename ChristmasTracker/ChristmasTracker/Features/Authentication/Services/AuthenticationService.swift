@@ -15,7 +15,7 @@ final class AuthenticationService {
     // MARK: - Dependencies
     private let authRepository: AuthenticationRepository
     private let sessionManager: SessionManager
-    private let biometricAuthenticator: any BiometricAuthenticating
+    internal let biometricAuthenticator: any BiometricAuthenticating
     private var emailStore: any RememberedEmailStoring
     private let legacyCleanup: any LegacyTokenCleaning
     

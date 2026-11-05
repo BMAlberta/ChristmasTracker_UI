@@ -73,7 +73,6 @@ struct LockView: View {
     @State private var showPasswordOnly = false
     @State private var biometricHint: String?
     @State private var hasAutoAttempted: Bool = false
-    @Environment(\.scenePhase) private var scenePhase
 
     private let buttonCornerRadius: CGFloat = AppSpacing.md
 
@@ -97,7 +96,7 @@ struct LockView: View {
                 preferenceEnabled: controller.preference?.biometricUnlockEnabled ?? false,
                 isPasswordOnly: showPasswordOnly,
                 alreadyAttempted: hasAutoAttempted,
-                appIsActive: scenePhase == .active
+                appIsActive: UIApplication.shared.applicationState == .active
             ) else { return }
             hasAutoAttempted = true
             Task { await attemptBiometricUnlock() }
