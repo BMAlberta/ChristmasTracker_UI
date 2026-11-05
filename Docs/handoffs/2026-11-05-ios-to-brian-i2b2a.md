@@ -3,7 +3,8 @@
 **Branch:** feat/i2b2a-face-id-sign-in (not yet merged to master — Brian pushes and merges)
 **Commits (original):** 7a07c44 → 4775f59 → b56c40e → 6468c5a → 54b63f9 → 84b169c
 **Commits (rework):** 46ce117 (Gate 1 spec) → e24cd34 (R1) → 59d2bcf (R2) → 72848e7 (R3)
-**Verify:** 450 passed, 0 failed, build green
+**Commits (fix pass):** 8885d1c (Gate 1 spec) → f693b59 (F1) → cf7b7fa (F2) → ca3b686 (F3) → (F4 this commit)
+**Verify:** 486 passed, 0 failed, build green
 
 ---
 
@@ -21,6 +22,11 @@ iOS users can sign in with Face ID or Touch ID. The login screen shows a biometr
 - **R1** — `BiometricSignInState` enum + pure mapping function; `enrolledUserSnapshot` observable stored property on `AuthenticationService` (replaces live Keychain read); `refreshBiometricState()` refreshes snapshot + availability atomically; `signInWithBiometric()` sets state on every path; stale items deleted; `KeychainBiometricCredentialStore.enrolledUser()` hardened with `interactionNotAllowed = true` LAContext; `isCredentialFailure` moved from `LoginView.swift` to service layer.
 - **R2** — `BiometricOfferAction` enum + 7-rule pure function; `EnrollmentHistoryStoring` protocol + `UserDefaultsEnrollmentHistory`; `AuthenticationService.login()` computes offer action before `handleAuthSuccess`, executes silent enrollment/re-enrollment, marks offer shown; `ProfileBiometricToggleModel.toggle(off)` clears previously-enrolled marker; `BiometricUnlockPreference.swift` and `BiometricUnlockPreferring` deleted.
 - **R3** — `LoginBiometricModel` view model (`@MainActor @Observable`); `LoginView.body` wired with biometric button, two alerts, outcome text, auto-prompt on appear; `BiometricOptionView` deleted.
+
+### Fix pass stories (F1–F3, correcting defects E1–E7 found after rework)
+- **F1** — `enrollCurrentSession()` now calls `enrollmentHistory.setPreviouslyEnrolledUserId(user.id)` after enrolling (E1); both silent login paths do the same; `register()` gains the same offer logic as `login()` (E2); `enrollCurrentSession()` no longer calls `biometricAuthenticator.authenticate()` — authentication is the caller's responsibility; `ProfileBiometricToggleModel.toggle(to: true)` authenticates once before calling `enrollCurrentSession()` (E4). `EphemeralEnrollmentHistory` added as the default for `AuthenticationService.init()` to prevent cross-test UserDefaults contamination; production code passes `UserDefaultsEnrollmentHistory()` explicitly.
+- **F2** — `KeychainBiometricCredentialStore.readRefreshToken` now calls `context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)` before the Keychain query; `localizedFallbackTitle = ""` hides the passcode fallback; the same pre-evaluated `LAContext` is passed as `kSecUseAuthenticationContext` so exactly one biometric prompt fires (E5).
+- **F3** — `LoginBiometricModel.autoAttemptIfNeeded()` now consumes `hasAutoAttempted` on the first appearance regardless of button state (E6); `ChristmasTrackerApp.body` sheet is now driven by `.onChange(of: authService.biometricOfferAction)` checking `.showEnablementScreen` instead of `shouldShowBiometricEnablementAfterLogin` (E3); `BiometricType.none.displayName` returns `"Face ID or Touch ID"` instead of `"None"` (E7).
 
 ### Key design decisions (implemented)
 - Biometric login is local only: the stored refresh token is exchanged with POST /auth/refresh, never a dedicated biometric server endpoint.
@@ -61,7 +67,7 @@ The following risks were identified during the rework and are unresolved or acce
 
 1. **`KeychainBiometricCredentialStore.enrolledUser()` with `interactionNotAllowed`**: The `errSecInteractionNotAllowed` path returns nil without deleting the item. If the item exists but the device is locked, the login screen will show "not enrolled" state instead of the enrolled button. This is intentional (avoid Keychain prompt during view rendering) but means the first biometric button appearance after a device lock may show "not enrolled" until the user interacts. Mitigated by calling `refreshBiometricState()` on scene activation.
 
-2. **`LoginBiometricModel.hasAutoAttempted` is a process-level static flag**: It is never reset by logout, re-login, or the lock screen. A user who fails biometric sign-in on cold launch, then uses password, will NOT be auto-prompted again in the same process even if they log out and log back in. This is intentional (avoid annoying repeat prompts) but means biometric auto-prompt fires at most once per process regardless of session changes.
+2. **`LoginBiometricModel.hasAutoAttempted` is a process-level static flag**: It is consumed on the FIRST appearance of the login screen regardless of biometric state (E6 fix). It is never reset by logout, re-login, or the lock screen. A user who arrives at the login screen with `.hidden` or `.showNotEnrolled` state will consume the flag on that first appearance; a later appearance in the same process (e.g. after logout + re-login) will NOT auto-prompt even if the state becomes `.showEnrolled`. This is intentional (avoid annoying repeat prompts) but means biometric auto-prompt fires at most once per process regardless of session changes.
 
 3. **`EnrollmentHistoryStoring` defaults to `.standard` UserDefaults**: If the app is reinstalled, enrollment history is cleared but the Keychain item may survive (Keychain is not wiped on reinstall by default). A user may be enrolled with a live credential but `hasSeenOffer` returns false, causing the offer to show again. This is benign — the offer will simply re-appear, and accepting it will silently replace the token.
 
@@ -69,4 +75,4 @@ The following risks were identified during the rework and are unresolved or acce
 
 ## Section 9 line for PROGRAM.md
 
-> I2b-2a complete (2026-11-05, rework 2026-11-05): Face ID / Touch ID sign-in fully implemented — credential store, readiness mapping, signInWithBiometric with outcome state, single-flight refresh, observable enrollment snapshot, 7-rule offer logic, enrollment history, login screen button + auto-prompt, profile toggle, lock eligibility; 450 tests green, PRE-CONFORMANCE respected; no contract issues found.
+> I2b-2a complete (2026-11-05, rework 2026-11-05, fix pass 2026-11-05): Face ID / Touch ID sign-in fully implemented — credential store, readiness mapping, signInWithBiometric with single biometric prompt (evaluatePolicy before Keychain read), single-flight refresh, observable enrollment snapshot, 7-rule offer logic with enrollment history marker, registration offer, login screen button + first-appearance auto-prompt, profile toggle with single enroll prompt, lock eligibility; 486 tests green, PRE-CONFORMANCE respected; no contract issues found.
