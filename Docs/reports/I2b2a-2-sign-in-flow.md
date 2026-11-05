@@ -32,7 +32,7 @@
   - Added `loginBiometricButtonState(readiness:enrolledUser:biometryTypeName:)` nonisolated free function.
   - Added `shouldAutoAttemptBiometricLogin(readiness:hasEnrolledUser:alreadyAttemptedThisLaunch:appIsActive:)` nonisolated free function.
   - Added `isCredentialFailure(_:)` nonisolated free function.
-  - Added biometric button UI driven by `loginBiometricButtonState`.
+  - **NOTE (corrected in rework):** `LoginBiometricButtonState`, `loginBiometricButtonState`, `shouldAutoAttemptBiometricLogin`, and `isCredentialFailure` free functions were added to `LoginView.swift`, but the view body did NOT call them — `BiometricOptionView` was wired independently and ignored the state functions. This was identified as defect D1 and corrected in rework story R3.
 
 ---
 
@@ -96,4 +96,9 @@ New total: **373 passed**
 
 ## Not done or partial
 
-None. All S2 acceptance criteria met and committed.
+The following items were not done in S2 and were identified as defects during rework:
+
+- **D1 — Biometric button not wired into view body**: `loginBiometricButtonState`, `shouldAutoAttemptBiometricLogin`, and `isCredentialFailure` existed in `LoginView.swift` but the body never called them. `BiometricOptionView` was an independent, unused stub. Corrected in R3.
+- **D3 — `signInWithBiometric()` returned silently on all failures**: No outcome state was set on any error path. Corrected in R1.
+- **D5 — `KeychainBiometricCredentialStore.enrolledUser()` lacked `interactionNotAllowed` guard**: Could potentially prompt the user during a view-layer read. Corrected in R1.
+- **`isCredentialFailure` architecturally misplaced**: Lived in a view file but was called from the service layer. Corrected in R1 (moved to `BiometricSignInState.swift`).

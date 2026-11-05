@@ -91,9 +91,11 @@ New tests:
 - `ProfileToggleEnrollmentTests.swift`: 8 tests
 - `BiometricEnablementModelTests.swift`: 6 tests (net new: replaced 0 existing tests)
 
-Retired tests: `LockControllerPreferenceTests.swift` (5 tests), `ProfileBiometricToggleModelTests.swift` (pre-existing, retired when API was replaced — count not separately tracked since those files had existing passing tests removed).
+Retired tests:
+- `LockControllerPreferenceTests.swift`: 5 tests (tested removed `preference` property)
+- `ProfileBiometricToggleModelTests.swift`: 16 tests (tested removed `init(preference:enablementModel:)` API)
 
-New total: **388 passed**
+Net: 373 + 36 − 5 − 16 = **388 passed**
 
 ---
 
@@ -125,4 +127,7 @@ New total: **388 passed**
 
 ## Not done or partial
 
-None. All S3 acceptance criteria met and committed.
+The following items were not done in S3 and were identified as defects during rework:
+
+- **D2 — Enrollment offer logic incomplete**: `shouldShowBiometricEnablementAfterLogin` was only set when `pendingBiometricEnablement && !enrolledUserMatchesSession` — an impossible combination because `pendingBiometricEnablement` could only be true from `pendBiometricEnablementRequest()`, which required the user to already be on the login screen without enrollment. No per-user offer-shown markers, no silent re-enrollment, no race protection. Corrected in R2.
+- **D4 — `enrolledUser` was a live Keychain read**: The computed property called `credentialStore.enrolledUser()` on every access, making SwiftUI observations unreliable and potentially prompting the user. Corrected in R1 (observable snapshot).
