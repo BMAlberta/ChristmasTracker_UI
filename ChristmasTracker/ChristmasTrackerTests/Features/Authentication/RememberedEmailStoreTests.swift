@@ -50,4 +50,22 @@ struct RememberedEmailStoreTests {
     func rememberedEmailStoreKeyIsCorrect() {
         #expect(RememberedEmailStore.key == "login.rememberedEmail")
     }
+
+    // MARK: - R9: loginInitialState free function
+
+    // AC6: loginInitialState with a non-nil remembered address returns it and rememberEmail true.
+    @Test("loginInitialState with remembered email returns that email and rememberEmail true")
+    func loginInitialStateWithRememberedEmailReturnsTrueAndEmail() {
+        let result = loginInitialState(remembered: "a@b.com")
+        #expect(result.email == "a@b.com")
+        #expect(result.rememberEmail == true)
+    }
+
+    // AC6: loginInitialState with nil returns empty string and rememberEmail false.
+    @Test("loginInitialState with nil remembered email returns empty string and rememberEmail false")
+    func loginInitialStateWithNilReturnsFalseAndEmptyString() {
+        let result = loginInitialState(remembered: nil)
+        #expect(result.email == "")
+        #expect(result.rememberEmail == false)
+    }
 }

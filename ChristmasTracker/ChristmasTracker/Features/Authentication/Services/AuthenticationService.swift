@@ -16,6 +16,8 @@ final class AuthenticationService {
     private let authRepository: AuthenticationRepository
     private let sessionManager: SessionManager
     private let biometricAuthenticator: any BiometricAuthenticating
+    private var emailStore: any RememberedEmailStoring
+    private let legacyCleanup: any LegacyTokenCleaning
     
     // MARK: - Published State (Observable)
     private(set) var currentUser: User?
@@ -40,16 +42,20 @@ final class AuthenticationService {
     init(
         repository: AuthenticationRepository,
         sessionManager: SessionManager,
-        biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService()
+        biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService(),
+        emailStore: any RememberedEmailStoring = RememberedEmailStore(),
+        legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup()
     ) {
         self.authRepository = repository
         self.sessionManager = sessionManager
         self.biometricAuthenticator = biometricAuthenticator
+        self.emailStore = emailStore
+        self.legacyCleanup = legacyCleanup
 
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
         refreshBiometricAvailability()
-        performLegacyKeychainCleanup()
+        legacyCleanup.cleanUpLegacyTokens()
     }
 
     // MARK: - Public Methods
@@ -65,6 +71,12 @@ final class AuthenticationService {
                                                           rememberMe: true)
 
             await handleAuthSuccess(authData: authData)
+
+            if rememberEmail {
+                emailStore.rememberedEmail = email
+            } else {
+                emailStore.rememberedEmail = nil
+            }
 
             LogInfo("User logged in", category: .auth)
         } catch let authError as AuthenticationError {
@@ -257,12 +269,6 @@ final class AuthenticationService {
             expiresAt: Date().addingTimeInterval(TimeInterval(authData.expiresIn))
         )
         tokens = newTokens
-    }
-    
-    private func performLegacyKeychainCleanup() {
-        // One-time cleanup of tokens that may have been stored before this architecture change.
-        try? KeychainService.delete(Self.keychainAuthTokensKey)
-        try? KeychainService.delete(Self.keychainAuthRefreshTokenKey)
     }
     
     private func clearAuthState() {

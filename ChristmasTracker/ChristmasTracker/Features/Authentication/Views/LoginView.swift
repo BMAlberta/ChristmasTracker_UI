@@ -6,18 +6,28 @@
 //
 
 import SwiftUI
+
+internal nonisolated func loginInitialState(remembered: String?) -> (email: String, rememberEmail: Bool) {
+    (email: remembered ?? "", rememberEmail: remembered != nil)
+}
+
 struct LoginView: View {
     // MARK: - Environment
     @Environment(\.authenticationService) private var authService
     
     // MARK: - State
-    @State private var email: String = ""
+    @State private var email: String
     @State private var password: String = ""
-    @State private var rememberEmail: Bool = false
+    @State private var rememberEmail: Bool
     @State private var showPassword: Bool = false
     @State private var showForgotPassword: Bool = false
     @State private var showError: Bool = false
-    @State private var emailStore = RememberedEmailStore()
+
+    init() {
+        let initial = loginInitialState(remembered: RememberedEmailStore().rememberedEmail)
+        _email = State(wrappedValue: initial.email)
+        _rememberEmail = State(wrappedValue: initial.rememberEmail)
+    }
     // MARK: - Body
     var body: some View {
         NavigationStack {
@@ -34,10 +44,6 @@ struct LoginView: View {
                 Text(authService.error?.localizedDescription ?? "")
             }
             .onChange(of: authService.error) { _, e in showError = e != nil }
-            .onAppear {
-                email = emailStore.rememberedEmail ?? ""
-                rememberEmail = emailStore.rememberedEmail != nil
-            }
             .sheet(isPresented: $showForgotPassword) {
                 ForgotPasswordView()
             }
@@ -65,11 +71,6 @@ struct LoginView: View {
     // MARK: - Actions
     private func handleLogin() {
         Task {
-            if rememberEmail {
-                emailStore.rememberedEmail = email
-            } else {
-                emailStore.rememberedEmail = nil
-            }
             await authService.login(
                 email: email,
                 password: password,
