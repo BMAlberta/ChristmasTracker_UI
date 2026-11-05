@@ -305,7 +305,7 @@ final class AuthenticationService {
 // MARK: - SessionClearable
 
 extension AuthenticationService: SessionClearable {
-    // Actor-isolated (@MainActor): manual instrumentation only — @Instrumented not yet available (I6a)
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied; manual SentrySDK instrumentation per coding-standards.md
     func clearForSession() async throws {
         clearAuthState()
         clearStoredTokens()

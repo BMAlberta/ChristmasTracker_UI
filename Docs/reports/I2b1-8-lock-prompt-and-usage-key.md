@@ -48,10 +48,10 @@ check-config: all configuration values OK
 
 ## Deviations
 
-None.
+- `LockView` added `@Environment(\.scenePhase)` for the `shouldAutoAttemptBiometrics` guard (`appIsActive: scenePhase == .active`). This is unreliable when `LockView` is hosted in its own `UIWindow` — scene-phase propagation does not reach that window. Identified as defect C3 in Rework 3; corrected in Rework 3 R10 by using `UIApplication.shared.applicationState == .active` instead.
 
 ---
 
 ## Not Done or Partial
 
-None. All R6 acceptance criteria met.
+None. All R6 acceptance criteria met at the time of this story; defect C3 was identified and corrected in Rework 3 R10.

@@ -61,11 +61,31 @@ Modified files:
 - `scripts/check-config.sh` — `NSFaceIDUsageDescription` grep check added.
 - `LoginView.swift` — error alert uses `$showError` state + `clearError()`; `BiometricOptionView` removed from body; `rememberMe` → `rememberEmail`; seeds/persists email via `RememberedEmailStore`.
 
+**Rework 3 (R9–R11, defects C1a–C3):**
+
+New files:
+- `LegacyTokenCleaning.swift` — `LegacyTokenCleaning` protocol (`-ing` suffix) + `LegacyTokenCleanup` struct; body extracted from deleted `performLegacyKeychainCleanup()`.
+- `ProfileBiometricToggleModel.swift` — `@MainActor @Observable final class`; `isEnabled` initialized from preference; `toggle(to:) async` — OFF is immediate, ON runs `BiometricEnablementModel.enable()` and sets state only on `.succeeded`; manual SentrySDK span.
+- `ProfileBiometricToggleModelTests.swift` — 8 tests.
+
+Modified files:
+- `AuthenticationService.swift` — injected `RememberedEmailStoring` and `LegacyTokenCleaning` (both with concrete defaults); email-store writes in `login()` after successful `handleAuthSuccess`; `performLegacyKeychainCleanup()` deleted and replaced by seam; `biometricAuthenticator` visibility `private` → `internal`; stale `clearForSession` comment corrected.
+- `LoginView.swift` — `loginInitialState(remembered:)` pure nonisolated free function; `init()` seeds `@State` once from `RememberedEmailStore().rememberedEmail`; `.onAppear` and `handleLogin()` store writes removed.
+- `ChristmasTrackerApp.swift` — `auth?.refreshBiometricAvailability()` added in `UIScene.didActivateNotification` handler.
+- `ProfileView.swift` — `toggleModel` is a non-optional `@State` initialized eagerly at declaration; `SettingsSectionView` toggle unconditionally uses model binding; `.task` calls `authService.refreshBiometricAvailability()`.
+- `LockView.swift` — `@Environment(\.scenePhase)` removed; `shouldAutoAttemptBiometrics` guard uses `UIApplication.shared.applicationState == .active`.
+- `LockAutoAttemptTests.swift` — 32-case `shouldAutoAttemptBiometrics` truth table + 8-case `showBiometricButton` truth table (parameterized `@Test(arguments:)`).
+
 ---
 
 ## Commit Hashes (master..HEAD)
 
 ```
+(pending) I2b-1: correct reports and handoff after rework 3  ← R11 (this commit)
+23a9c32 I2b-1: verify biometrics before the Profile toggle turns on, keep availability live, and guard the lock prompt with the real app state
+3a69e57 I2b-1: remember the email only after a successful login and seed the login screen once
+3609083 I2b-1: add rework 3 Gate 1 spec
+e454ad4 I2b-1: correct reports and handoff after rework 2
 7e4a90c I2b-1: reset loading state, make the error alert dismissible, hide legacy Face ID sign-in, remember the email, and stop persisting sessions
 62b9ebc I2b-1: prompt for biometrics automatically when the lock appears and declare the Face ID usage
 f08338a I2b-1: enable biometrics without a stored token and keep availability live
@@ -90,7 +110,7 @@ eb68701 I2b-1: add Story 1 report
 ## git diff --stat master...HEAD
 
 ```
-53 files changed, ~5100 insertions(+), ~170 deletions(-)
+56 files changed, ~6530 insertions(+), ~164 deletions(-)
 ```
 
 ---
@@ -111,7 +131,7 @@ Nothing. This package has no API dependencies.
 
 4. **Touch recognizer on additional windows** — `InactivityTouchRecognizer` is added only to the `.normal`-level window. Touches on sheets reset the timer correctly (sheets are in the main window hierarchy). Touches on the lock window do NOT reset the timer — intentional.
 
-5. **BiometricUnlockPreference sync** — `ProfileView` holds its own `BiometricUnlockPreference()` instance (backed by `.standard` UserDefaults). Writes are reflected on the lock screen's next read; `controller.preference` is not `@Observable` so the biometric button won't reactively hide while the lock screen is on-screen.
+5. **BiometricUnlockPreference sync** — `ProfileView` now uses `ProfileBiometricToggleModel` with an eagerly-initialized `BiometricUnlockPreference()` (backed by `.standard` UserDefaults). The `LockView` constructs its own `BiometricUnlockPreference()` on each unlock attempt; writes from the Profile toggle are reflected on the lock screen's next read. The biometric button will not reactively hide mid-session if the preference is turned off while the lock screen is on-screen.
 
 6. **`FakeBiometricAuthenticator.biometryTypeName`** — Now backed by `stubbedBiometryTypeName` (added in Rework 2 / R5). No production impact.
 
@@ -121,4 +141,4 @@ Nothing. This package has no API dependencies.
 
 ## Section 9 of PROGRAM.md (one line)
 
-I2b-1 (inactivity lock, local half): `InactivityLockController` with monotonic clock tracking, `InactivityLockPresenting` for synchronous lock presentation, `LockView` in a UIWindow at `.alert+0.5`, biometric gate via `LocalAuthenticationService`, auto-prompt on lock appear, `BiometricEnablementModel` for token-free setup, `RememberedEmailStore` for email-only persistence, `performLegacyKeychainCleanup` on init; 257 tests; no networking; simulator/device verification pending.
+I2b-1 (inactivity lock, local half): `InactivityLockController` with monotonic clock tracking, `InactivityLockPresenting` for synchronous lock presentation, `LockView` in a UIWindow at `.alert+0.5` using `UIApplication.shared.applicationState` for auto-prompt guard, biometric gate via `LocalAuthenticationService`, `BiometricEnablementModel` for token-free setup, `ProfileBiometricToggleModel` for Profile toggle with biometric gate, `RememberedEmailStore` for email-only persistence written only after successful login, `LegacyTokenCleaning` seam for Keychain cleanup; 281 tests; no networking; simulator/device verification pending.

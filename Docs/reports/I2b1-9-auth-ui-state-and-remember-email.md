@@ -61,10 +61,14 @@ check-config: all configuration values OK
 
 ## Deviations
 
-None after rework.
+None after the Gate 2 rework. However, the following defects were present in the R7 implementation and identified in Rework 3:
+
+- **C1a** — `LoginView.handleLogin()` wrote to `RememberedEmailStore` BEFORE calling `authService.login()`, persisting a typo even on a failed login attempt. Corrected in Rework 3 R9.
+- **C1b** — `AuthenticationService.login()`'s `rememberEmail` parameter was accepted but unused in the service; the email store writes were performed in `LoginView` instead. Corrected in Rework 3 R9 by moving email-store writes inside the service after successful login.
+- **C1c** — `LoginView.onAppear` overwrote any in-progress typed text on every scene appearance, not just on first display. Corrected in Rework 3 R9 by seeding the email field once at init time via `loginInitialState(remembered:)`.
 
 ---
 
 ## Not Done or Partial
 
-None. All R7 acceptance criteria met.
+None. All R7 acceptance criteria were met at the time of this story; defects C1a, C1b, C1c were identified and corrected in Rework 3 R9.

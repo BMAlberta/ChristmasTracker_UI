@@ -58,6 +58,7 @@ check-config: all configuration values OK
 ## Deviations
 
 - `@Instrumented` not applied to `BiometricEnablementModel.enable()` because it is `@MainActor`-isolated. Manual SentrySDK span used per coding-standards.md convention for actor-isolated methods.
+- `AuthenticationService.clearForSession()` had stale explaining comment `// ... @Instrumented not yet available (I6a)` — the "(I6a)" framing implied a temporary workaround, but the convention is permanent (actor-isolated methods always use manual SentrySDK). Comment corrected in Rework 3 R11.
 
 ---
 
