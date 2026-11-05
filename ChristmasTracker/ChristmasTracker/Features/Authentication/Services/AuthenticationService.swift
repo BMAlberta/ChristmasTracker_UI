@@ -217,7 +217,8 @@ final class AuthenticationService {
 
         let typeName = biometricType.displayName
 
-        // Read the refresh token — this triggers the biometric prompt.
+        // Read the refresh token — this triggers the biometric prompt via evaluatePolicy
+        // inside KeychainBiometricCredentialStore.readRefreshToken (F2 fix).
         let refreshToken: String
         do {
             refreshToken = try await credentialStore.readRefreshToken(
@@ -561,7 +562,7 @@ enum BiometricType {
     case faceID
     var displayName: String {
         switch self {
-        case .none: return "None"
+        case .none: return "Face ID or Touch ID"
         case .touchID: return "Touch ID"
         case .faceID: return "Face ID"
         }

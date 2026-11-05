@@ -252,11 +252,13 @@ struct ChristmasTrackerApp: App {
                             authService?.enrolledUserMatchesSession ?? false
                         }
                         lockController.start()
-                        if authService.shouldShowBiometricEnablementAfterLogin && authService.isBiometricAvailable {
-                            showBiometricSetup = true
-                        }
                     } else {
                         lockController.stop()
+                    }
+                }
+                .onChange(of: authService.biometricOfferAction) { _, action in
+                    if case .showEnablementScreen = action {
+                        showBiometricSetup = true
                     }
                 }
                 .sheet(isPresented: $showBiometricSetup) {
@@ -269,6 +271,7 @@ struct ChristmasTrackerApp: App {
                         ),
                         onComplete: { _ in
                             showBiometricSetup = false
+                            authService.clearBiometricOfferAction()
                         }
                     )
                     .environment(\.authenticationService, authService)

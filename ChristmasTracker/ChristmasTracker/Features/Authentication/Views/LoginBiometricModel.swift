@@ -88,10 +88,10 @@ import Foundation
     }
 
     func autoAttemptIfNeeded() async {
-        syncFromService()
-        guard case .showEnrolled = buttonState else { return }
         guard !LoginBiometricModel.hasAutoAttempted else { return }
         LoginBiometricModel.hasAutoAttempted = true
+        syncFromService()
+        guard case .showEnrolled = buttonState else { return }
         await authService.signInWithBiometric()
     }
 }
