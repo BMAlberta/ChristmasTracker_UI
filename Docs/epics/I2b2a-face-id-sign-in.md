@@ -508,3 +508,136 @@ No separate enum needed if `tap()` directly manipulates `showSetupAlert`/`showNo
 - `ChristmasTracker/Features/Authentication/Views/LoginView.swift` — `LoginBiometricModel`, body changes, delete `BiometricOptionView`
 
 **New interface: Yes** → full pipeline
+
+---
+
+## Fix pass Gate 1
+
+Eight defects (E1–E8) found during manual testing and code review after the rework. Four stories:
+F1 (marker + registration + single enroll prompt), F2 (single sign-in prompt), F3 (cold-launch auto-prompt, offer presentation, display names), F4 (docs corrections). Full pipeline for F1–F3 per CLAUDE.md.
+
+Superseded brief text — overrides everything below for the two items it covers:
+- `readRefreshToken` (F2): ONE LAContext, `evaluatePolicy` once (`.deviceOwnerAuthenticationWithBiometrics`, reason string, `localizedFallbackTitle = ""`), then pass that SAME authenticated context as `kSecUseAuthenticationContext` to the Keychain query. The system then prompts exactly once (the evaluation), on the simulator and on a device.
+- Auto-prompt flag (F3): the FIRST appearance of the login screen in a process consumes `hasAutoAttempted` whatever the state (not ready, not enrolled, enrolled). Logout, the lock, and teardown never re-arm it.
+
+---
+
+### F1 — Previously-enrolled marker, registration offer, single enroll prompt
+
+**Defects fixed:** E1 (`enrollCurrentSession()` and silent paths never call `setPreviouslyEnrolledUserId`), E2 (`register()` has no offer logic), E4 (double biometric prompt: `BiometricEnablementModel.enable()` calls `authenticator.authenticate()` and `enrollCurrentSession()` also calls `biometricAuthenticator.authenticate()`).
+
+**Contract slice:** Pure local changes. No networking. No new types in production code.
+
+**Interface changes:**
+- `AuthenticationService.enrollCurrentSession()`: removes the `biometricAuthenticator.authenticate()` call (authentication is now the caller's responsibility); adds `enrollmentHistory.setPreviouslyEnrolledUserId(user.id)` after `credentialStore.enroll(...)`.
+- `AuthenticationService.login()` silent paths (`silentlyReplaceToken`, `silentlyReenroll`): each gains `enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)` after `credentialStore.enroll(...)`.
+- `AuthenticationService.register(email:password:name:)`: gains offer logic identical to `login()` — compute `computeOfferAction(readiness:signedInUserId:pendingRequest:)` before `handleAuthSuccess`, execute silent paths if applicable, set `biometricOfferAction`, call `handleAuthSuccess`. Consumes `pendingBiometricEnablement` flag.
+- `ProfileBiometricToggleModel.toggle(to: true)`: authenticates with `authService.biometricAuthenticator.authenticate(reason: "Enable Face ID for Christmas Tracker")` before calling `enrollCurrentSession()`. If authentication fails or is cancelled, sets `errorMessage` and returns without calling `enrollCurrentSession()`.
+- `FakeBiometricAuthenticator`: gains `var evaluationCount: Int = 0` incremented on every `authenticate(_:)` call, and `func resetEvaluationCount()`.
+
+**Acceptance criteria:**
+1. After `enrollCurrentSession()`, `enrollmentHistory.previouslyEnrolledUserId` equals the enrolled user's id.
+2. After `enrollCurrentSession()`, `FakeBiometricAuthenticator.evaluationCount` is 0 (no auth inside `enrollCurrentSession()`).
+3. After `login()` with the `silentlyReplaceToken` path, `enrollmentHistory.previouslyEnrolledUserId` equals the signed-in user's id.
+4. After `login()` with the `silentlyReenroll` path, `enrollmentHistory.previouslyEnrolledUserId` equals the signed-in user's id.
+5. After `register()` for a first-time user on a device with no prior enrollment and `isBiometricAvailable == true`, `biometricOfferAction == .showEnablementScreen`.
+6. After `register()` with `pendingBiometricEnablement = true`, `biometricOfferAction == .showEnablementScreen`.
+7. After `register()` for a user who was previously enrolled and whose credential was lost (silentlyReenroll case), enrollment completes silently and `biometricOfferAction != .showEnablementScreen`.
+8. `ProfileBiometricToggleModel.toggle(to: true)` with a succeeding fake authenticator calls `enrollCurrentSession()` exactly once and results in `isEnabled == true`.
+9. `ProfileBiometricToggleModel.toggle(to: true)` with a failing fake authenticator never calls `enrollCurrentSession()` (evaluationCount == 1, `isEnabled == false`, `errorMessage != nil`).
+10. Full enable-in-Profile flow: `FakeBiometricAuthenticator.evaluationCount == 1` after the toggle turns on (exactly one prompt across toggle model + enrollCurrentSession).
+
+**Scoped file list:**
+- Modified: `ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift`
+- Modified: `ChristmasTracker/Features/Profile/Services/ProfileBiometricToggleModel.swift`
+- Modified: `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/FakeBiometricAuthenticator.swift`
+- Modified (possible): `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/EnrollCurrentSessionTests.swift`
+- Modified (possible): `ChristmasTracker/ChristmasTrackerTests/Features/Profile/ProfileToggleEnrollmentTests.swift`
+- New: `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/EnrollMarkerRegistrationTests.swift`
+
+**New interface: Yes** → full pipeline (F1)
+
+---
+
+### F2 — Single sign-in prompt via evaluatePolicy-then-reuse-context
+
+**Defect fixed:** E5 (`KeychainBiometricCredentialStore.readRefreshToken` creates an LAContext and passes it to the Keychain query, but never calls `evaluatePolicy` — the iOS Simulator does not enforce biometric Keychain access control, so sign-in shows no prompt on device either).
+
+**Contract slice:** Pure local change to `BiometricCredentialStoring.swift`. No new types.
+
+**Interface changes:**
+- `KeychainBiometricCredentialStore.readRefreshToken(reason:)`:
+  1. Create `LAContext`, set `localizedFallbackTitle = ""` (no passcode fallback button in the prompt).
+  2. Call `try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)`. If this throws, map the `LAError` to `BiometricCredentialError` using the same mapping already in the file (`.userCancel` → `.cancelled`, `.biometryLockout` → `.lockedOut`, any other → `.unavailable`).
+  3. Remove `kSecUseAuthenticationUI: kSecUseAuthenticationUIAllow` from the Keychain query.
+  4. Pass the already-evaluated context as `kSecUseAuthenticationContext` in the query.
+
+**Acceptance criteria:**
+1. `readRefreshToken` on a credential that has no stored token throws `BiometricCredentialError.notEnrolled` (no regression via `InMemoryBiometricCredentialStore`).
+2. `readRefreshToken` on a successfully enrolled `InMemoryBiometricCredentialStore` returns the token (no regression).
+3. `KeychainBiometricCredentialStore.readRefreshToken` calls `context.evaluatePolicy` before the Keychain query (verified by code inspection at Gate 2).
+4. The same LAContext instance is passed to both `evaluatePolicy` and the Keychain query (code inspection).
+5. `localizedFallbackTitle` is set to `""` before `evaluatePolicy` is called (code inspection).
+
+**Scoped file list:**
+- Modified: `ChristmasTracker/Features/Authentication/Services/BiometricCredentialStoring.swift`
+
+**New interface: Yes (behavior change)** → full pipeline (F2)
+
+---
+
+### F3 — Cold-launch auto-prompt, offer presentation, display names
+
+**Defects fixed:** E3 (sheet presented from `.onChange(of: authService.isAuthenticated)` checking `shouldShowBiometricEnablementAfterLogin` instead of from `biometricOfferAction`), E6 (`LoginBiometricModel.hasAutoAttempted` only consumed when enrolled, so logout→re-login auto-signs-in again), E7 (`BiometricType.none.displayName` returns `"None"` causing "Sign in with None" in the UI).
+
+**Contract slice:** Pure local changes. No new types.
+
+**Interface changes:**
+- `AuthenticationService.BiometricType.none.displayName`: return `"Face ID or Touch ID"` (was `"None"`).
+- `LoginBiometricModel.autoAttemptIfNeeded()`: consume `hasAutoAttempted = true` BEFORE the enrolled guard, so the first appearance of the login screen always arms the flag regardless of biometric state:
+  ```
+  guard !LoginBiometricModel.hasAutoAttempted else { return }
+  LoginBiometricModel.hasAutoAttempted = true
+  syncFromService()
+  guard case .showEnrolled = buttonState else { return }
+  await authService.signInWithBiometric()
+  ```
+- `ChristmasTrackerApp.body`:
+  - Remove the `shouldShowBiometricEnablementAfterLogin` check from the `.onChange(of: authService.isAuthenticated)` block.
+  - Add `.onChange(of: authService.biometricOfferAction) { _, action in if case .showEnablementScreen = action { showBiometricSetup = true } }`.
+  - In the sheet's `onComplete` closure: also call `authService.clearBiometricOfferAction()` after `showBiometricSetup = false`.
+
+**Acceptance criteria:**
+1. `autoAttemptIfNeeded()` when `buttonState == .hidden`: `hasAutoAttempted` becomes true, `signInWithBiometric()` is NOT called.
+2. `autoAttemptIfNeeded()` when `buttonState == .showNotEnrolled`: `hasAutoAttempted` becomes true, `signInWithBiometric()` is NOT called.
+3. `autoAttemptIfNeeded()` when `buttonState == .showEnrolled`: `hasAutoAttempted` becomes true, `signInWithBiometric()` IS called.
+4. A second call to `autoAttemptIfNeeded()` (any state) after the first call: no-op regardless of state.
+5. `BiometricType.none.displayName` returns `"Face ID or Touch ID"`.
+6. `BiometricType.touchID.displayName` returns `"Touch ID"` (no regression).
+7. `BiometricType.faceID.displayName` returns `"Face ID"` (no regression).
+8. `shouldShowBiometricEnablementAfterLogin` is NOT used in `ChristmasTrackerApp.body` after F3 (code inspection at Gate 2).
+9. `biometricOfferAction == .showEnablementScreen` triggers `showBiometricSetup = true` (code inspection at Gate 2).
+10. `clearBiometricOfferAction()` is called in the `onComplete` closure (code inspection at Gate 2).
+
+**Scoped file list:**
+- Modified: `ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift` (BiometricType.none.displayName)
+- Modified: `ChristmasTracker/Features/Authentication/Views/LoginBiometricModel.swift`
+- Modified: `ChristmasTracker/ChristmasTrackerApp.swift`
+- Modified: `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/LoginBiometricModelTests.swift`
+
+**New interface: Yes (behavior change)** → full pipeline (F3)
+
+---
+
+### F4 — Correct reports and handoff
+
+**Defect fixed:** E8 (reports and handoff contain inaccurate claims made before defects E1–E7 were known).
+
+**Contract slice:** Docs only. No code changes.
+
+**Changes:**
+- `Docs/reports/I2b2a-2-sign-in-flow.md`: add Not-done entry for E5 (single prompt requirement not met; `readRefreshToken` lacked `evaluatePolicy` call; corrected in F2).
+- `Docs/reports/I2b2a-3-enrollment-toggle-lock.md`: add Not-done entry for E1 (previously-enrolled marker not set; corrected in F1); add Not-done entry for E4 (double biometric prompt; corrected in F1).
+- `Docs/handoffs/2026-11-05-ios-to-brian-i2b2a.md`: add fix-pass stories F1–F3, update verify count to post-F3 actual, correct Open Risks to reflect E6 resolution (flag now consumed on first appearance regardless of state).
+
+**New interface: No** → docs-only, no pipeline
