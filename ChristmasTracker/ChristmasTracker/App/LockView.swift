@@ -93,7 +93,7 @@ struct LockView: View {
             UIAccessibility.post(notification: .screenChanged, argument: nil)
             guard shouldAutoAttemptBiometrics(
                 isAvailable: biometricAuthenticator.isAvailable,
-                preferenceEnabled: controller.preference?.biometricUnlockEnabled ?? false,
+                preferenceEnabled: controller.biometricEligibility?() ?? false,
                 isPasswordOnly: showPasswordOnly,
                 alreadyAttempted: hasAutoAttempted,
                 appIsActive: UIApplication.shared.applicationState == .active
@@ -128,7 +128,7 @@ struct LockView: View {
     private var shouldShowBiometricButton: Bool {
         showBiometricButton(
             isAvailable: biometricAuthenticator.isAvailable,
-            preferenceEnabled: controller.preference?.biometricUnlockEnabled ?? true,
+            preferenceEnabled: controller.biometricEligibility?() ?? false,
             isPasswordOnly: showPasswordOnly
         )
     }

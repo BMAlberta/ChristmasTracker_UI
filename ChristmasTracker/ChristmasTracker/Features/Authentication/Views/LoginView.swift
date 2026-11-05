@@ -11,10 +11,49 @@ internal nonisolated func loginInitialState(remembered: String?) -> (email: Stri
     (email: remembered ?? "", rememberEmail: remembered != nil)
 }
 
+// MARK: - Biometric Button State
+
+internal enum LoginBiometricButtonState: Equatable {
+    case hidden
+    case showNotEnrolled
+    case showNeedsSetup(message: String, opensSettings: Bool)
+    case showEnrolled(firstName: String)
+}
+
+internal nonisolated func loginBiometricButtonState(
+    readiness: BiometricReadiness,
+    enrolledUser: (userId: String, firstName: String)?,
+    biometryTypeName: String
+) -> LoginBiometricButtonState {
+    switch readiness {
+    case .noHardware:
+        return .hidden
+    case .needsSetup:
+        let msg = biometricReadinessMessage(for: readiness, biometryTypeName: biometryTypeName)
+        return .showNeedsSetup(message: msg.message, opensSettings: msg.opensSettings)
+    case .ready:
+        if let enrolled = enrolledUser {
+            return .showEnrolled(firstName: enrolled.firstName)
+        }
+        return .showNotEnrolled
+    }
+}
+
+internal nonisolated func shouldAutoAttemptBiometricLogin(
+    readiness: BiometricReadiness,
+    hasEnrolledUser: Bool,
+    alreadyAttemptedThisLaunch: Bool,
+    appIsActive: Bool
+) -> Bool {
+    guard case .ready = readiness else { return false }
+    return hasEnrolledUser && !alreadyAttemptedThisLaunch && appIsActive
+}
+
+
 struct LoginView: View {
     // MARK: - Environment
     @Environment(\.authenticationService) private var authService
-    
+
     // MARK: - State
     @State private var email: String
     @State private var password: String = ""
@@ -22,12 +61,14 @@ struct LoginView: View {
     @State private var showPassword: Bool = false
     @State private var showForgotPassword: Bool = false
     @State private var showError: Bool = false
+    @State private var biometricModel: LoginBiometricModel? = nil
 
     init() {
         let initial = loginInitialState(remembered: RememberedEmailStore().rememberedEmail)
         _email = State(wrappedValue: initial.email)
         _rememberEmail = State(wrappedValue: initial.rememberEmail)
     }
+
     // MARK: - Body
     var body: some View {
         NavigationStack {
@@ -43,12 +84,53 @@ struct LoginView: View {
             } message: {
                 Text(authService.error?.localizedDescription ?? "")
             }
+            .alert(
+                "Set Up Biometrics",
+                isPresented: Binding(
+                    get: { biometricModel?.showSetupAlert ?? false },
+                    set: { biometricModel?.showSetupAlert = $0 }
+                )
+            ) {
+                if biometricModel?.setupOpensSettings == true {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(biometricModel?.setupMessage ?? "")
+            }
+            .alert(
+                "Enable \(authService.biometricType.displayName)",
+                isPresented: Binding(
+                    get: { biometricModel?.showNotEnrolledAlert ?? false },
+                    set: { biometricModel?.showNotEnrolledAlert = $0 }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Sign in with your password to enable \(authService.biometricType.displayName) for future logins.")
+            }
             .onChange(of: authService.error) { _, e in showError = e != nil }
+            .onChange(of: authService.biometricSignInState) { _, _ in
+                biometricModel?.syncFromService()
+            }
             .sheet(isPresented: $showForgotPassword) {
                 ForgotPasswordView()
             }
+            .task {
+                authService.refreshBiometricState()
+                if biometricModel == nil {
+                    biometricModel = LoginBiometricModel(authService: authService)
+                }
+                biometricModel?.syncFromService()
+                await biometricModel?.autoAttemptIfNeeded()
+            }
         }
     }
+
     // MARK: - Subviews
     private var contentView: some View {
         VStack(spacing: AppSpacing.xl) {
@@ -65,9 +147,13 @@ struct LoginView: View {
                 isFormValid: isFormValid,
                 onLogin: handleLogin
             )
+            if let model = biometricModel, model.buttonState != .hidden {
+                BiometricButtonSection(model: model, biometricType: authService.biometricType)
+            }
             SignUpRow()
         }
     }
+
     // MARK: - Actions
     private func handleLogin() {
         Task {
@@ -78,6 +164,7 @@ struct LoginView: View {
             )
         }
     }
+
     // MARK: - Validation
     private var isFormValid: Bool {
         !email.isEmpty && !password.isEmpty && email.contains("@")
@@ -207,34 +294,49 @@ private struct LoginActionSection: View {
     }
 }
 // MARK: - Biometrics
-private struct BiometricOptionView: View {
+private struct BiometricButtonSection: View {
+    @Bindable var model: LoginBiometricModel
     let biometricType: BiometricType
-    let isLoading: Bool
-    let onBiometricLogin: () -> Void
 
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             DividerRow()
-            Button(action: onBiometricLogin) {
+            Button {
+                Task { await model.tap() }
+            } label: {
                 HStack(spacing: AppSpacing.sm) {
                     Image(systemName: biometricType == .faceID ? "faceid" : "touchid")
-                    Text("Sign in with \(biometricType.displayName)")
+                        .font(.system(size: 20))
+                    if case .showEnrolled(let firstName) = model.buttonState {
+                        Text("Sign in as \(firstName)")
+                    } else {
+                        Text("Sign in with \(biometricType.displayName)")
+                    }
                 }
             }
             .font(.appHeadline)
             .foregroundStyle(Color.primaryColor)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, AppSpacing.md)
             .background(Color.surfaceColor)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.primaryColor, lineWidth: 2)
-            )
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primaryColor, lineWidth: 2))
             .clipShape(.rect(cornerRadius: 12))
-            .disabled(isLoading)
+            .disabled(model.isLoading)
+            .accessibilityLabel(biometricType == .faceID ? "Sign in with Face ID" : "Sign in with Touch ID")
+            .accessibilityHint("Uses biometric authentication to sign in")
+            switch model.biometricSignInState {
+            case .retryHint(let msg), .passwordOnly(let msg), .neutralError(let msg):
+                Text(msg)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textMutedColor)
+                    .multilineTextAlignment(.center)
+            default:
+                EmptyView()
+            }
         }
     }
 }
+
 private struct DividerRow: View {
     var body: some View {
         HStack {

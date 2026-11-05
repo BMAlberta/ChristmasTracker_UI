@@ -14,18 +14,24 @@ internal final class ProfileBiometricToggleModel {
 
     var isEnabled: Bool
     var errorMessage: String?
+    var isDisabledForOtherUser: Bool
+    var disabledMessage: String?
 
     // MARK: - Dependencies
 
-    private var preference: any BiometricUnlockPreferring
-    private let enablementModel: BiometricEnablementModel
+    private let authService: AuthenticationService
 
     // MARK: - Initialization
 
-    init(preference: any BiometricUnlockPreferring, enablementModel: BiometricEnablementModel) {
-        self.preference = preference
-        self.enablementModel = enablementModel
-        self.isEnabled = preference.biometricUnlockEnabled
+    init(authService: AuthenticationService) {
+        self.authService = authService
+        let matchesSession = authService.enrolledUserMatchesSession
+        let hasOtherEnrollment = authService.enrolledUser != nil && !matchesSession
+        self.isEnabled = matchesSession
+        self.isDisabledForOtherUser = hasOtherEnrollment
+        self.disabledMessage = hasOtherEnrollment
+            ? "Face ID is set up for another account on this device."
+            : nil
     }
 
     // MARK: - Toggle
@@ -39,24 +45,30 @@ internal final class ProfileBiometricToggleModel {
         )
         defer { transaction.finish() }
 
+        guard !isDisabledForOtherUser else { return }
+
         if !newValue {
-            preference.biometricUnlockEnabled = false
+            try? authService.revokeEnrollment()
+            authService.clearPreviouslyEnrolledUserId()
             isEnabled = false
             return
         }
 
-        await enablementModel.enable()
+        let authResult = await authService.biometricAuthenticator.authenticate(
+            reason: "Enable Face ID for Christmas Tracker"
+        )
+        guard authResult == .success else {
+            isEnabled = false
+            errorMessage = "Biometric authentication failed. Try again or use your password."
+            return
+        }
 
-        switch enablementModel.state {
-        case .succeeded:
-            preference.biometricUnlockEnabled = true
+        do {
+            try await authService.enrollCurrentSession()
             isEnabled = true
-        case .failed(let message):
+        } catch {
             isEnabled = false
-            errorMessage = message
-        case .idle, .inProgress:
-            isEnabled = false
-            errorMessage = "Biometric authentication was not completed. Please try again."
+            errorMessage = "Biometric enrollment failed. Try again or use your password."
         }
     }
 }

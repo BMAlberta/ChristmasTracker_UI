@@ -92,7 +92,6 @@ struct ChristmasTrackerApp: App {
     private let lockController: InactivityLockController
     private let lockCoordinator: LockCoordinator
     private let sharedLocalAuth: LocalAuthenticationService
-    @State private var preference = BiometricUnlockPreference()
 
     // nonisolated(unsafe): written exactly once during init on MainActor;
     // read in deinit where the app is exclusively owned — no concurrent access.
@@ -147,7 +146,6 @@ struct ChristmasTrackerApp: App {
         sharedLocalAuth = localAuth
         let lockPolicy = LockPolicy()
         let lc = InactivityLockController(policy: lockPolicy)
-        lc.preference = BiometricUnlockPreference()
         lockController = lc
         let lkCoord = LockCoordinator(
             lockController: lc,
@@ -188,9 +186,14 @@ struct ChristmasTrackerApp: App {
         sessionManager = sm
 
         // Create services
+        // Pass UserDefaultsEnrollmentHistory explicitly for persistence across app launches.
+        // AuthenticationService's default enrollmentHistory is EphemeralEnrollmentHistory
+        // (non-persistent) so that tests creating instances without an explicit history
+        // get per-instance isolation and do not contaminate each other via UserDefaults.
         let auth = AuthenticationService(
             repository: dependencies.authRepository,
-            sessionManager: sm
+            sessionManager: sm,
+            enrollmentHistory: UserDefaultsEnrollmentHistory()
         )
         authService = auth
 
@@ -245,24 +248,30 @@ struct ChristmasTrackerApp: App {
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         lockController.authService = authService
-                        lockController.start()
-                        if !preference.biometricSetupOfferShown && authService.isBiometricAvailable {
-                            showBiometricSetup = true
+                        lockController.biometricEligibility = { [weak authService] in
+                            authService?.enrolledUserMatchesSession ?? false
                         }
+                        lockController.start()
                     } else {
                         lockController.stop()
+                    }
+                }
+                .onChange(of: authService.biometricOfferAction) { _, action in
+                    if case .showEnablementScreen = action {
+                        showBiometricSetup = true
                     }
                 }
                 .sheet(isPresented: $showBiometricSetup) {
                     BiometricSetupView(
                         model: BiometricEnablementModel(
                             authenticator: sharedLocalAuth,
-                            preference: preference
+                            enrollAction: { [weak authService] in
+                                try await authService?.enrollCurrentSession()
+                            }
                         ),
-                        onComplete: { enabled in
-                            preference.biometricSetupOfferShown = true
-                            preference.biometricUnlockEnabled = enabled
-                            lockController.preference = preference
+                        onComplete: { _ in
+                            showBiometricSetup = false
+                            authService.clearBiometricOfferAction()
                         }
                     )
                     .environment(\.authenticationService, authService)
