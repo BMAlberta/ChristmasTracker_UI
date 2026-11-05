@@ -6,7 +6,7 @@
 //
 
 import Foundation
-struct User: Codable, Identifiable, Sendable {
+nonisolated struct User: Codable, Identifiable, Sendable {
     let id: String
     let email: String?
     let name: String
@@ -19,7 +19,7 @@ struct User: Codable, Identifiable, Sendable {
         case updatedAt = "updated_at"
     }
 }
-enum UserRole: String, Codable, Sendable {
+nonisolated enum UserRole: String, Codable, Sendable {
     case user = "USER"
     case admin = "ADMIN"
 }

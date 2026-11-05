@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import TrackerInstrumentation
 
 @MainActor
 @Observable
@@ -117,44 +118,6 @@ final class AuthenticationService {
         }
     }
     
-    /// Login with biometric auth
-    func loginWithBiometric() async {
-        guard isBiometricAvailable else {
-            error = .biometricNotAvailable
-            return
-        }
-        
-        isLoading = true
-        defer { isLoading = false }
-        error = nil
-
-        do {
-            // Get token from keychain
-            let biometricToken = try await KeychainService.getWithBiometric(Self.keychainBiometricTokenKey,
-                                                                            reason: Self.keychainReasonMessage)
-            
-            // Get user id
-            let userId = try KeychainService.get(Self.keychainBiometricUserIdKey)
-        
-            // Call auth
-            let authData = try await authRepository.biometricLogin(userId: userId,
-                                                                   biometricToken: biometricToken)
-            
-            await handleAuthSuccess(authData: authData)
-
-            LogInfo("Biometric authentication successful", category: .auth)
-            
-            
-        } catch KeychainService.KeychainError.biometricFailed {
-            error = .biometricFailed
-            LogError("Biometric authentication failed", category: .auth)
-        } catch {
-            self.error = .networkError
-            LogError("Biometric login failed: \(error)", category: .auth)
-        }
-        
-    }
-    
     /// Logout current user
     func logout(reason: TeardownReason = .userLogout) async {
         isLoading = true
@@ -198,25 +161,6 @@ final class AuthenticationService {
 
     }
 
-    /// Setup biometric auth
-    func setupBiometrics(biometricToken: String) async throws {
-        guard isBiometricAvailable else {
-            throw AuthenticationError.biometricNotAvailable
-        }
-        
-        guard let userId = currentUser?.id else {
-            throw AuthenticationError.networkError
-        }
-        
-        try KeychainService.set(biometricToken,
-                                for: Self.keychainBiometricTokenKey,
-                                accessControl: .biometry)
-        
-        try KeychainService.set(userId, for: Self.keychainBiometricUserIdKey)
-        
-        LogInfo("Biometric authentication enabled", category: .auth)
-    }
-    
     /// Forgot password flow
     func forgotPassword(email: String) async {
         isLoading = true
@@ -281,8 +225,6 @@ final class AuthenticationService {
         do {
             try KeychainService.delete(Self.keychainAuthTokensKey)
             try KeychainService.delete(Self.keychainAuthRefreshTokenKey)
-            try KeychainService.delete(Self.keychainBiometricUserIdKey)
-            try KeychainService.delete(Self.keychainBiometricTokenKey)
             LogDebug("Stored tokens cleared", category: .auth)
         } catch {
             LogError("Failed to clear tokens: \(error)", category: .auth)
@@ -305,8 +247,14 @@ final class AuthenticationService {
 // MARK: - SessionClearable
 
 extension AuthenticationService: SessionClearable {
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied; manual SentrySDK instrumentation per coding-standards.md
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
     func clearForSession() async throws {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.clearForSession",
+            operation: "service.authentication.clearForSession"
+        )
+        defer { transaction.finish() }
         clearAuthState()
         clearStoredTokens()
     }

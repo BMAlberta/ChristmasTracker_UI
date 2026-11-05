@@ -19,12 +19,14 @@ internal final class FakeBiometricAuthenticator: BiometricAuthenticating {
     var stubbedIsAvailable: Bool = true
     var stubbedResult: BiometricResult = .success
     var stubbedBiometryTypeName: String = "Face ID"
+    var stubbedReadiness: BiometricReadiness = .ready
 
     // MARK: - BiometricAuthenticating
 
     var biometryType: BiometricType { stubbedBiometryType }
     var biometryTypeName: String { stubbedBiometryTypeName }
     var isAvailable: Bool { stubbedIsAvailable }
+    var readiness: BiometricReadiness { stubbedReadiness }
 
     func authenticate(reason: String) async -> BiometricResult {
         stubbedResult
