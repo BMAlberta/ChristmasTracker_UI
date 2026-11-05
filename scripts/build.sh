@@ -9,7 +9,8 @@ xcodebuild build \
   -scheme "ChristmasTracker" \
   -configuration "$CONFIGURATION" \
   -destination "$DEST" \
-  -derivedDataPath "/tmp/ct-derived" > "$LOG" 2>&1
+  -derivedDataPath "/tmp/ct-derived" \
+  -skipPackagePluginValidation > "$LOG" 2>&1
 STATUS=$?
 echo "--- errors (first 20) ---"
 grep -E "error:|Unable to find a destination|BUILD FAILED" "$LOG" | head -20

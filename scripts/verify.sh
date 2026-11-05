@@ -12,6 +12,9 @@ scripts/check-config.sh || { echo "=== verify: CONFIG CHECK FAILED ==="; FAIL=1;
 echo "=== verify: unit tests ==="
 scripts/test.sh || { echo "=== verify: TESTS FAILED ==="; FAIL=1; }
 
+echo "=== verify: TrackerAPI package tests ==="
+swift test --package-path "LocalPackages/TrackerAPI" || { echo "=== verify: PACKAGE TESTS FAILED ==="; FAIL=1; }
+
 echo "=== verify: prohibited frameworks in changed lines ==="
 if git rev-parse --verify master > /dev/null 2>&1; then
   if git diff master...HEAD -U0 -- '*.swift' | grep -E '^\+[^+].*(import Combine|DispatchQueue)'; then
