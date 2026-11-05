@@ -25,6 +25,7 @@ CACHE_DURATION = 900        // 15 minutes
 SESSION_TIMEOUT = 7200      // 2 hours
 BACKGROUND_REFRESH = 900    // 15 minutes
 LOG_FLUSH_INTERVAL = 60     // 60 seconds
+INACTIVITY_LOCK_MINUTES = 10
 
 // Observability and API mode (Release defaults)
 // SENTRY_DSN_RELEASE defaults empty; overridden by the untracked secrets file.

@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import LocalAuthentication
 
 @MainActor
 @Observable
@@ -16,6 +15,9 @@ final class AuthenticationService {
     // MARK: - Dependencies
     private let authRepository: AuthenticationRepository
     private let sessionManager: SessionManager
+    internal let biometricAuthenticator: any BiometricAuthenticating
+    private var emailStore: any RememberedEmailStoring
+    private let legacyCleanup: any LegacyTokenCleaning
     
     // MARK: - Published State (Observable)
     private(set) var currentUser: User?
@@ -37,32 +39,46 @@ final class AuthenticationService {
     
     // MARK: - Initialization
     
-    init(repository: AuthenticationRepository, sessionManager: SessionManager) {
+    init(
+        repository: AuthenticationRepository,
+        sessionManager: SessionManager,
+        biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService(),
+        emailStore: any RememberedEmailStoring = RememberedEmailStore(),
+        legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup()
+    ) {
         self.authRepository = repository
         self.sessionManager = sessionManager
-        
+        self.biometricAuthenticator = biometricAuthenticator
+        self.emailStore = emailStore
+        self.legacyCleanup = legacyCleanup
+
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
-        Task {
-            await checkBiometricAvailability()
-            await loadStoredSession()
-        }
+        refreshBiometricAvailability()
+        legacyCleanup.cleanUpLegacyTokens()
     }
 
     // MARK: - Public Methods
     /// Login
-    func login(email: String, password: String, rememberMe: Bool = false) async {
+    func login(email: String, password: String, rememberEmail: Bool = false) async {
         isLoading = true
+        defer { isLoading = false }
         error = nil
-        
+
         do {
             let authData = try await authRepository.login(email: email,
                                                           password: password,
-                                                          rememberMe: rememberMe)
-            
-            await handleAuthSuccess(authData: authData, rememberMe: rememberMe)
-            
-            LogInfo("User logged in: \(email)", category: .auth)
+                                                          rememberMe: true)
+
+            await handleAuthSuccess(authData: authData)
+
+            if rememberEmail {
+                emailStore.rememberedEmail = email
+            } else {
+                emailStore.rememberedEmail = nil
+            }
+
+            LogInfo("User logged in", category: .auth)
         } catch let authError as AuthenticationError {
             error = authError
             LogError("Login failed: \(authError)", category: .auth)
@@ -71,22 +87,27 @@ final class AuthenticationService {
             LogError("Login failed: \(error)", category: .auth)
         }
     }
+
+    /// Clear current error
+    func clearError() {
+        error = nil
+    }
     
     
     /// Register a user
     func register(email: String, password: String, name: String) async {
         isLoading = true
+        defer { isLoading = false }
         error = nil
-        
+
         do {
             let authData = try await authRepository.register(email: email,
                                                    password: password,
                                                    name: name)
-            
-            await handleAuthSuccess(authData: authData,
-                                    rememberMe: true)
-            
-            LogInfo("User registered: \(email)", category: .auth)
+
+            await handleAuthSuccess(authData: authData)
+
+            LogInfo("User registered", category: .auth)
         } catch let authError as AuthenticationError {
             error = authError
             LogError("Registration failed: \(authError)", category: .auth)
@@ -94,8 +115,6 @@ final class AuthenticationService {
             self.error = .networkError
             LogError("Registration failed: \(error)", category: .auth)
         }
-        
-        isLoading = false
     }
     
     /// Login with biometric auth
@@ -106,8 +125,9 @@ final class AuthenticationService {
         }
         
         isLoading = true
+        defer { isLoading = false }
         error = nil
-        
+
         do {
             // Get token from keychain
             let biometricToken = try await KeychainService.getWithBiometric(Self.keychainBiometricTokenKey,
@@ -120,9 +140,8 @@ final class AuthenticationService {
             let authData = try await authRepository.biometricLogin(userId: userId,
                                                                    biometricToken: biometricToken)
             
-            await handleAuthSuccess(authData: authData,
-                                    rememberMe: true)
-            
+            await handleAuthSuccess(authData: authData)
+
             LogInfo("Biometric authentication successful", category: .auth)
             
             
@@ -201,8 +220,9 @@ final class AuthenticationService {
     /// Forgot password flow
     func forgotPassword(email: String) async {
         isLoading = true
+        defer { isLoading = false }
         error = nil
-        
+
         do {
             try await authRepository.forgotPassword(email: email)
             LogInfo("Password reset email sent", category: .auth)
@@ -224,7 +244,8 @@ final class AuthenticationService {
     
     // MARK: - Private Helpers
 
-    private func handleAuthSuccess(authData: AuthData, rememberMe: Bool) async {
+    private func handleAuthSuccess(authData: AuthData) async {
+        refreshBiometricAvailability()
         // Update user
         currentUser = authData.user
         isAuthenticated = true
@@ -235,10 +256,6 @@ final class AuthenticationService {
             expiresAt: Date().addingTimeInterval(TimeInterval(authData.expiresIn))
         )
         tokens = newTokens
-        // Store tokens if remember me
-        if rememberMe {
-            storeTokens(newTokens)
-        }
         // Set session ID in cache
         await NetworkCache.shared.setSessionId(authData.user.id)
         // Start session keep-alive
@@ -252,51 +269,6 @@ final class AuthenticationService {
             expiresAt: Date().addingTimeInterval(TimeInterval(authData.expiresIn))
         )
         tokens = newTokens
-        // Update stored tokens if they exist
-        if (try? KeychainService.get(Self.keychainAuthRefreshTokenKey)) != nil {
-            storeTokens(newTokens)
-        }
-    }
-    
-    private func storeTokens(_ tokens: AuthTokens) {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(tokens)
-            let string = String(data: data, encoding: .utf8)!
-            try KeychainService.set(string, for: Self.keychainAuthTokensKey)
-            try KeychainService.set(tokens.refreshToken, for: Self.keychainAuthRefreshTokenKey)
-            LogDebug("Tokens stored in keychain", category: .auth)
-        } catch {
-            LogError("Failed to store tokens: \(error)", category: .auth)
-        }
-    }
-    
-    private func loadStoredSession() async {
-        do {
-            // Try to load stored tokens
-            let tokenString = try KeychainService.get(Self.keychainAuthTokensKey)
-            guard let data = tokenString.data(using: .utf8) else { return }
-            let decoder = JSONDecoder()
-            let storedTokens = try decoder.decode(AuthTokens.self, from: data)
-            // Check if tokens expired
-            guard !storedTokens.isExpired else {
-                LogDebug("Stored tokens expired", category: .auth)
-                clearStoredTokens()
-                return
-            }
-            // Try to refresh token
-            LogDebug("Found stored session, attempting refresh", category: .auth)
-            let authData = try await authRepository.refreshToken(
-                storedTokens.refreshToken)
-            await handleAuthSuccess(authData: authData, rememberMe: true)
-            LogInfo("Session restored from stored tokens", category: .auth)
-        } catch KeychainService.KeychainError.itemNotFound {
-            // No stored session - expected
-            LogDebug("No stored session found", category: .auth)
-        } catch {
-            LogError("Failed to restore session: \(error)", category: .auth)
-            clearStoredTokens()
-        }
     }
     
     private func clearAuthState() {
@@ -317,18 +289,15 @@ final class AuthenticationService {
         }
     }
     
-    private func checkBiometricAvailability() async {
-        // Check if device supports biometric authentication
-        let context = LAContext()
-        var error: NSError?
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            isBiometricAvailable = true
-            biometricType = context.biometryType == .faceID ? .faceID : .touchID
-            LogDebug("Biometric available: \(biometricType)", category: .auth)
-        } else {
-            isBiometricAvailable = false
+    internal func refreshBiometricAvailability() {
+        isBiometricAvailable = biometricAuthenticator.isAvailable
+        switch biometricAuthenticator.biometryType {
+        case .faceID:
+            biometricType = .faceID
+        case .touchID:
+            biometricType = .touchID
+        case .none:
             biometricType = .none
-            LogDebug("Biometric not available", category: .auth)
         }
     }
 }
@@ -336,7 +305,7 @@ final class AuthenticationService {
 // MARK: - SessionClearable
 
 extension AuthenticationService: SessionClearable {
-    // Actor-isolated (@MainActor): manual instrumentation only — @Instrumented not yet available (I6a)
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied; manual SentrySDK instrumentation per coding-standards.md
     func clearForSession() async throws {
         clearAuthState()
         clearStoredTokens()

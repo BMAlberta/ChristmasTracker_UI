@@ -15,6 +15,7 @@ internal enum TeardownReason: Sendable {
     case userLogout
     case sessionExpired
     case forcedUpdate
+    case lockFallback
 }
 
 /// Returns the production clearable list for the session manager.
@@ -25,7 +26,8 @@ internal func makeProductionClearables(
     itemDataStore: ItemDataStore,
     listService: ListService,
     itemService: ItemService,
-    networkCache: NetworkCache
+    networkCache: NetworkCache,
+    lockController: InactivityLockController
 ) -> [any SessionClearable] {
-    [listDataStore, itemDataStore, listService, itemService, networkCache]
+    [listDataStore, itemDataStore, listService, itemService, networkCache, lockController]
 }

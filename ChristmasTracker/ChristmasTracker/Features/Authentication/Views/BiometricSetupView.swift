@@ -9,7 +9,8 @@ import SwiftUI
 struct BiometricSetupView: View {
     @Environment(\.authenticationService) private var authService
     @Environment(\.dismiss) private var dismiss
-    @State private var isEnabling: Bool = false
+    var model: BiometricEnablementModel
+    var onComplete: ((Bool) -> Void)?
     var body: some View {
         contentView
             .padding(EdgeInsets.appScreenPadding)
@@ -23,9 +24,12 @@ struct BiometricSetupView: View {
             Spacer()
             BiometricActionSection(
                 biometricType: authService.biometricType,
-                isEnabling: isEnabling,
+                isEnabling: model.state == .inProgress,
                 onEnable: handleEnableBiometric,
-                onSkip: { dismiss() }
+                onSkip: {
+                    onComplete?(false)
+                    dismiss()
+                }
             )
         }
     }
@@ -37,21 +41,18 @@ struct BiometricSetupView: View {
     }
 
     private func enableBiometric() async {
-        isEnabling = true
-        do {
-            // Generate biometric token (use refresh token as biometric token)
-            guard let refreshToken = try? KeychainService.get("auth.refresh_token") else {
-                LogError("No refresh token available for biometric setup", category: .auth)
-                isEnabling = false
-                return
-            }
-            try await authService.setupBiometrics(biometricToken: refreshToken)
-            // Success - dismiss
+        await model.enable()
+        switch model.state {
+        case .succeeded:
+            onComplete?(true)
             dismiss()
-        } catch {
-            LogError("Biometric setup failed: \(error)", category: .auth)
+        case .idle:
+            break
+        case .failed:
+            break
+        case .inProgress:
+            break
         }
-        isEnabling = false
     }
 }
 // MARK: - Header
@@ -107,7 +108,9 @@ private struct BiometricActionSection: View {
     }
 }
 #Preview {
-    BiometricSetupView()
+    let auth = FakeBiometricAuthenticator()
+    let pref = BiometricUnlockPreference()
+    BiometricSetupView(model: BiometricEnablementModel(authenticator: auth, preference: pref))
         .environment(\.authenticationService, AuthenticationService(
             repository: MockAuthenticationRepository(),
             sessionManager: SessionManager(authRepository: MockAuthenticationRepository())

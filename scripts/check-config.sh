@@ -25,6 +25,7 @@ check_config() {
     actual_app_env=$(echo "$SETTINGS" | grep "^\s*APP_ENVIRONMENT\s*=" | sed 's/.*= *//' | tr -d '[:space:]')
     actual_dsn=$(echo "$SETTINGS" | grep "^\s*SENTRY_DSN\s*=" | sed 's/.*= *//' | tr -d '[:space:]')
     actual_bundle=$(echo "$SETTINGS" | grep "^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=" | grep -v "DERIVE_MACCATALYST" | sed 's/.*= *//' | tr -d '[:space:]')
+    actual_inactivity_lock=$(echo "$SETTINGS" | grep "^\s*INACTIVITY_LOCK_MINUTES\s*=" | sed 's/.*= *//' | tr -d '[:space:]')
 
     if [ "$actual_api_mode" != "$EXPECTED_API_MODE" ]; then
         echo "FAIL [$CFG] API_MODE: expected '$EXPECTED_API_MODE', got '$actual_api_mode'"
@@ -45,12 +46,23 @@ check_config() {
         echo "FAIL [$CFG] PRODUCT_BUNDLE_IDENTIFIER: expected '$EXPECTED_BUNDLE_ID', got '$actual_bundle'"
         FAIL=1
     fi
+
+    if [ "$actual_inactivity_lock" != "10" ]; then
+        echo "FAIL [$CFG] INACTIVITY_LOCK_MINUTES: expected '10', got '$actual_inactivity_lock'"
+        FAIL=1
+    fi
 }
 
 # CONFIGURATION  API_MODE  APP_ENVIRONMENT  DSN_MUST_BE_EMPTY
 check_config "Debug"   "mock" "development" "1"
 check_config "QA"      "mock" "qa"          "1"
 check_config "Release" "real" "production"  "0"
+
+PLIST="ChristmasTracker/ChristmasTracker/Info.plist"
+if ! grep -q "NSFaceIDUsageDescription" "$PLIST"; then
+    echo "FAIL NSFaceIDUsageDescription missing from $PLIST"
+    FAIL=1
+fi
 
 if [ "$FAIL" -eq 0 ]; then
     echo "check-config: all configuration values OK"

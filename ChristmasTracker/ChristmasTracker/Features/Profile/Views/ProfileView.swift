@@ -13,6 +13,13 @@ struct ProfileView: View {
     @Environment(\.authenticationService) private var authService
 
     @State private var showLogoutConfirmation = false
+    @State private var toggleModel = ProfileBiometricToggleModel(
+        preference: BiometricUnlockPreference(),
+        enablementModel: BiometricEnablementModel(
+            authenticator: LocalAuthenticationService(),
+            preference: BiometricUnlockPreference()
+        )
+    )
 
     var body: some View {
         NavigationStack {
@@ -25,6 +32,7 @@ struct ProfileView: View {
                     SettingsSectionView(
                         isBiometricAvailable: authService.isBiometricAvailable,
                         biometricType: authService.biometricType,
+                        toggleModel: toggleModel,
                         onEditProfile: {
                             // TODO: Phase 8 - Navigate to edit profile
                             print("Edit profile tapped")
@@ -32,10 +40,6 @@ struct ProfileView: View {
                         onNotifications: {
                             // TODO: Phase 10 - Navigate to notifications
                             print("Notifications tapped")
-                        },
-                        onBiometric: {
-                            // TODO: Phase 8 - Navigate to biometric settings
-                            print("Biometric settings tapped")
                         }
                     )
 
@@ -59,6 +63,20 @@ struct ProfileView: View {
             }
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Profile")
+            .task {
+                authService.refreshBiometricAvailability()
+            }
+            .alert(
+                "Biometric Setup Failed",
+                isPresented: Binding(
+                    get: { toggleModel.errorMessage != nil },
+                    set: { if !$0 { toggleModel.errorMessage = nil } }
+                )
+            ) {
+                Button("OK") { toggleModel.errorMessage = nil }
+            } message: {
+                Text(toggleModel.errorMessage ?? "")
+            }
             .confirmationDialog(
                 "Are you sure you want to logout?",
                 isPresented: $showLogoutConfirmation,
@@ -117,9 +135,9 @@ private struct SettingsSectionView: View {
 
     let isBiometricAvailable: Bool
     let biometricType: BiometricType
+    let toggleModel: ProfileBiometricToggleModel
     let onEditProfile: () -> Void
     let onNotifications: () -> Void
-    let onBiometric: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -150,13 +168,16 @@ private struct SettingsSectionView: View {
                         Divider()
                             .padding(.leading, 52)
 
-                        SettingsRowView(
-                            icon: biometricType == .faceID ? "faceid" : "touchid",
-                            title: biometricType.displayName,
-                            subtitle: "Sign in with biometrics",
-                            showChevron: true,
-                            action: onBiometric
+                        Toggle(
+                            "Unlock with \(biometricType.displayName)",
+                            isOn: Binding(
+                                get: { toggleModel.isEnabled },
+                                set: { newValue in Task { await toggleModel.toggle(to: newValue) } }
+                            )
                         )
+                        .font(.appBody)
+                        .foregroundStyle(Color.textPrimaryColor)
+                        .padding(AppSpacing.md)
                     }
                 }
             }
@@ -335,7 +356,7 @@ private struct ProfilePreviewContainer: View {
         ProfileView()
             .environment(\.authenticationService, authService)
             .task {
-                await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+                await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
             }
     }
 }

@@ -170,7 +170,7 @@ struct SessionTeardownTests {
         )
 
         // Login first
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true, "Precondition: must be authenticated before teardown")
 
         // Use a fresh SessionManager as the teardown driver
@@ -234,7 +234,7 @@ struct SessionTeardownTests {
             sessionManager: innerSessionManager
         )
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
 
         let teardownManager = await makeSUT()
         await teardownManager.register(authService)
@@ -265,7 +265,7 @@ struct SessionTeardownTests {
             sessionManager: innerSessionManager
         )
 
-        await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+        await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         let authenticated = await authService.isAuthenticated
         #expect(authenticated == true, "Precondition: must be authenticated")
 
@@ -277,7 +277,7 @@ struct SessionTeardownTests {
         #expect(afterAuth == false, "AuthenticationService must be signed out even when a preceding clearable throws")
     }
 
-    // MARK: - Test 11: Production clearable set contains expected clearables (R2)
+    // MARK: - Test 11: Production clearable set contains expected clearables (R2 → updated for I2b-1 Story 2)
 
     @Test("Production clearable set contains expected clearables")
     @MainActor
@@ -286,21 +286,25 @@ struct SessionTeardownTests {
         let itemDataStore = ItemDataStore()
         let listService = ListService(repository: MockListRepository(), dataStore: listDataStore)
         let itemService = ItemService(repository: MockItemRepository(), dataStore: itemDataStore)
+        let lockController = InactivityLockController(policy: LockPolicy())
 
         let clearables = makeProductionClearables(
             listDataStore: listDataStore,
             itemDataStore: itemDataStore,
             listService: listService,
             itemService: itemService,
-            networkCache: NetworkCache.shared
+            networkCache: NetworkCache.shared,
+            lockController: lockController
         )
 
-        #expect(clearables.count == 5, "Factory must return exactly 5 clearables")
+        // Updated from 5 → 6 for I2b-1 Story 2 (InactivityLockController added as clearable)
+        #expect(clearables.count == 6, "Factory must return exactly 6 clearables")
         #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
         #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
         #expect(clearables[2] is ListService, "clearables[2] must be ListService")
         #expect(clearables[3] is ItemService, "clearables[3] must be ItemService")
         #expect(clearables[4] is NetworkCache, "clearables[4] must be NetworkCache")
+        #expect(clearables[5] is InactivityLockController, "clearables[5] must be InactivityLockController")
     }
 
     // MARK: - Test 10: Device-level UserDefaults survive teardown

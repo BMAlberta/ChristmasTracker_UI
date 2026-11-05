@@ -47,7 +47,7 @@ private struct ContentViewAuthenticatedPreview: View {
             .environment(\.authenticationService, authService)
             .environment(\.apiClient, apiClient)
             .task {
-                await authService.login(email: "test@example.com", password: "password", rememberMe: false)
+                await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
             }
     }
 }

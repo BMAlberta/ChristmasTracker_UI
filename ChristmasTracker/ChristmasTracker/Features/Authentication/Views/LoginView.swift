@@ -6,16 +6,28 @@
 //
 
 import SwiftUI
+
+internal nonisolated func loginInitialState(remembered: String?) -> (email: String, rememberEmail: Bool) {
+    (email: remembered ?? "", rememberEmail: remembered != nil)
+}
+
 struct LoginView: View {
     // MARK: - Environment
     @Environment(\.authenticationService) private var authService
     
     // MARK: - State
-    @State private var email: String = ""
+    @State private var email: String
     @State private var password: String = ""
-    @State private var rememberMe: Bool = false
+    @State private var rememberEmail: Bool
     @State private var showPassword: Bool = false
     @State private var showForgotPassword: Bool = false
+    @State private var showError: Bool = false
+
+    init() {
+        let initial = loginInitialState(remembered: RememberedEmailStore().rememberedEmail)
+        _email = State(wrappedValue: initial.email)
+        _rememberEmail = State(wrappedValue: initial.rememberEmail)
+    }
     // MARK: - Body
     var body: some View {
         NavigationStack {
@@ -26,15 +38,12 @@ struct LoginView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Welcome Back")
             .navigationBarTitleDisplayMode(.large)
-            .alert("Error", isPresented: .constant(authService.error != nil)) {
-                Button("OK") {
-                    // Error dismissed in service
-                }
+            .alert("Error", isPresented: $showError) {
+                Button("OK") { authService.clearError() }
             } message: {
-                if let error = authService.error {
-                    Text(error.localizedDescription)
-                }
+                Text(authService.error?.localizedDescription ?? "")
             }
+            .onChange(of: authService.error) { _, e in showError = e != nil }
             .sheet(isPresented: $showForgotPassword) {
                 ForgotPasswordView()
             }
@@ -47,7 +56,7 @@ struct LoginView: View {
             LoginFormView(
                 email: $email,
                 password: $password,
-                rememberMe: $rememberMe,
+                rememberEmail: $rememberEmail,
                 showPassword: $showPassword,
                 onForgotPassword: { showForgotPassword = true }
             )
@@ -56,13 +65,6 @@ struct LoginView: View {
                 isFormValid: isFormValid,
                 onLogin: handleLogin
             )
-            if authService.isBiometricAvailable {
-                BiometricOptionView(
-                    biometricType: authService.biometricType,
-                    isLoading: authService.isLoading,
-                    onBiometricLogin: handleBiometricLogin
-                )
-            }
             SignUpRow()
         }
     }
@@ -72,14 +74,8 @@ struct LoginView: View {
             await authService.login(
                 email: email,
                 password: password,
-                rememberMe: rememberMe
+                rememberEmail: rememberEmail
             )
-        }
-    }
-
-    private func handleBiometricLogin() {
-        Task {
-            await authService.loginWithBiometric()
         }
     }
     // MARK: - Validation
@@ -105,7 +101,7 @@ private struct LoginHeaderView: View {
 private struct LoginFormView: View {
     @Binding var email: String
     @Binding var password: String
-    @Binding var rememberMe: Bool
+    @Binding var rememberEmail: Bool
     @Binding var showPassword: Bool
     let onForgotPassword: () -> Void
 
@@ -117,7 +113,7 @@ private struct LoginFormView: View {
                 showPassword: $showPassword
             )
             RememberForgotRow(
-                rememberMe: $rememberMe,
+                rememberEmail: $rememberEmail,
                 onForgotPassword: onForgotPassword
             )
         }
@@ -169,12 +165,12 @@ private struct PasswordFieldView: View {
     }
 }
 private struct RememberForgotRow: View {
-    @Binding var rememberMe: Bool
+    @Binding var rememberEmail: Bool
     let onForgotPassword: () -> Void
 
     var body: some View {
         HStack {
-            Toggle("Remember me", isOn: $rememberMe)
+            Toggle("Remember email", isOn: $rememberEmail)
                 .font(.appBody)
                 .foregroundStyle(Color.textPrimaryColor)
                 .tint(Color.primaryColor)
