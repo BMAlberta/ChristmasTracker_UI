@@ -49,6 +49,7 @@ internal final class ProfileBiometricToggleModel {
 
         if !newValue {
             try? authService.revokeEnrollment()
+            authService.clearPreviouslyEnrolledUserId()
             isEnabled = false
             return
         }

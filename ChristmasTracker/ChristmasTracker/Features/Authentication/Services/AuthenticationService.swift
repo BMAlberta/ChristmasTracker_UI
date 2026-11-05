@@ -20,6 +20,7 @@ final class AuthenticationService {
     private var emailStore: any RememberedEmailStoring
     private let legacyCleanup: any LegacyTokenCleaning
     private let credentialStore: any BiometricCredentialStoring
+    private let enrollmentHistory: any EnrollmentHistoryStoring
 
     // MARK: - Published State (Observable)
     private(set) var currentUser: User?
@@ -36,9 +37,14 @@ final class AuthenticationService {
     // Biometric sign-in state machine; .idle means no active hint/error.
     private(set) var biometricSignInState: BiometricSignInState = .idle
 
+    // The offer action computed during the last successful login.
+    private(set) var biometricOfferAction: BiometricOfferAction = .none
+
     // Pending biometric enablement: set by pendBiometricEnablementRequest(),
     // consumed and surfaced as shouldShowBiometricEnablementAfterLogin after a successful login.
-    private(set) var shouldShowBiometricEnablementAfterLogin: Bool = false
+    var shouldShowBiometricEnablementAfterLogin: Bool {
+        biometricOfferAction == .showEnablementScreen
+    }
     private var pendingBiometricEnablement: Bool = false
 
     // MARK: - Private State
@@ -61,7 +67,8 @@ final class AuthenticationService {
         biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService(),
         emailStore: any RememberedEmailStoring = RememberedEmailStore(),
         legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup(),
-        credentialStore: any BiometricCredentialStoring = KeychainBiometricCredentialStore()
+        credentialStore: any BiometricCredentialStoring = KeychainBiometricCredentialStore(),
+        enrollmentHistory: any EnrollmentHistoryStoring = UserDefaultsEnrollmentHistory()
     ) {
         self.authRepository = repository
         self.sessionManager = sessionManager
@@ -69,6 +76,7 @@ final class AuthenticationService {
         self.emailStore = emailStore
         self.legacyCleanup = legacyCleanup
         self.credentialStore = credentialStore
+        self.enrollmentHistory = enrollmentHistory
 
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
@@ -98,6 +106,8 @@ final class AuthenticationService {
             let firstName = user.name.components(separatedBy: " ").first ?? ""
             try credentialStore.enroll(refreshToken: tokens.refreshToken, userId: user.id, firstName: firstName)
             refreshBiometricState()
+            // Enrollment completed: clear the offer action so the UI knows enrollment is done.
+            biometricOfferAction = .none
         default:
             throw AuthenticationError.biometricFailed
         }
@@ -120,8 +130,22 @@ final class AuthenticationService {
         biometricSignInState = .idle
     }
 
+    /// Clears the biometric offer action back to .none (call after sheet dismissal).
+    func clearBiometricOfferAction() {
+        biometricOfferAction = .none
+    }
+
+    /// Clears the previously-enrolled user ID from enrollment history
+    /// (called by ProfileBiometricToggleModel when revoking enrollment).
+    func clearPreviouslyEnrolledUserId() {
+        enrollmentHistory.setPreviouslyEnrolledUserId(nil)
+    }
+
     /// Login
+    // @MainActor-isolated async — manual SentrySDK span instead of @Instrumented
     func login(email: String, password: String, rememberEmail: Bool = false) async {
+        let span = SentrySDK.startTransaction(name: "AuthenticationService.login", operation: "auth")
+        defer { span.finish() }
         isLoading = true
         defer { isLoading = false }
         error = nil
@@ -131,23 +155,44 @@ final class AuthenticationService {
                                                           password: password,
                                                           rememberMe: true)
 
+            // Compute the offer action before handleAuthSuccess so we have the pre-login
+            // enrolled snapshot. refreshBiometricState() inside handleAuthSuccess will
+            // update the snapshot after any silent enroll, but we evaluate against the
+            // snapshot that existed at the time login completed.
+            let readiness = biometricAuthenticator.readiness
+            let offerAction = computeOfferAction(
+                readiness: readiness,
+                signedInUserId: authData.user.id,
+                pendingRequest: pendingBiometricEnablement
+            )
+
+            // Execute silent actions
+            if offerAction == .silentlyReplaceToken {
+                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
+                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
+                refreshBiometricState()
+            } else if offerAction == .silentlyReenroll {
+                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
+                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
+                refreshBiometricState()
+            }
+
+            // Always consume the pending flag
+            pendingBiometricEnablement = false
+            // Set the observable action
+            self.biometricOfferAction = offerAction
+            // If we are going to show the offer, mark it as shown now so a subsequent
+            // login (without a pending request) does not repeat the offer.
+            if offerAction == .showEnablementScreen {
+                enrollmentHistory.markOfferShown(for: authData.user.id)
+            }
+
             await handleAuthSuccess(authData: authData)
 
             if rememberEmail {
                 emailStore.rememberedEmail = email
             } else {
                 emailStore.rememberedEmail = nil
-            }
-
-            // Consume pending biometric enablement request on successful login.
-            // Only offer if the pending flag is set AND the enrolled user does not already
-            // match this session (i.e., this is a new user, not an already-enrolled returning user).
-            if pendingBiometricEnablement && !enrolledUserMatchesSession {
-                pendingBiometricEnablement = false
-                shouldShowBiometricEnablementAfterLogin = true
-            } else {
-                pendingBiometricEnablement = false
-                shouldShowBiometricEnablementAfterLogin = false
             }
 
             LogInfo("User logged in", category: .auth)
@@ -345,6 +390,23 @@ final class AuthenticationService {
     
     // MARK: - Private Helpers
 
+    /// Wrapper that delegates to the free function `biometricOfferAction(...)`, avoiding
+    /// a naming ambiguity with the stored property `biometricOfferAction: BiometricOfferAction`.
+    private func computeOfferAction(
+        readiness: BiometricReadiness,
+        signedInUserId: String,
+        pendingRequest: Bool
+    ) -> BiometricOfferAction {
+        _computeBiometricOfferAction(
+            readiness: readiness,
+            enrolledUserId: enrolledUserSnapshot?.userId,
+            signedInUserId: signedInUserId,
+            previouslyEnrolledUserId: enrollmentHistory.previouslyEnrolledUserId,
+            offerShownForUser: enrollmentHistory.hasSeenOffer(for: signedInUserId),
+            pendingRequest: pendingRequest
+        )
+    }
+
     /// Single-flight refresh: concurrent callers with the same refresh token await
     /// the same in-flight repository call. The task is removed after it completes or fails.
     private func singleFlightRefresh(token: String) async throws -> AuthData {
@@ -431,6 +493,27 @@ final class AuthenticationService {
     internal func refreshBiometricAvailability() {
         refreshBiometricState()
     }
+}
+
+// MARK: - Module-level shim (avoids naming conflict with the BiometricOfferAction stored property)
+
+/// Thin forwarder so AuthenticationService can call the free function without ambiguity.
+private nonisolated func _computeBiometricOfferAction(
+    readiness: BiometricReadiness,
+    enrolledUserId: String?,
+    signedInUserId: String,
+    previouslyEnrolledUserId: String?,
+    offerShownForUser: Bool,
+    pendingRequest: Bool
+) -> BiometricOfferAction {
+    biometricOfferAction(
+        readiness: readiness,
+        enrolledUserId: enrolledUserId,
+        signedInUserId: signedInUserId,
+        previouslyEnrolledUserId: previouslyEnrolledUserId,
+        offerShownForUser: offerShownForUser,
+        pendingRequest: pendingRequest
+    )
 }
 
 // MARK: - SessionClearable
