@@ -3,7 +3,7 @@
 **Branch:** feat/i2b2a-face-id-sign-in (not yet merged to master — Brian pushes and merges)
 **Commits (original):** 7a07c44 → 4775f59 → b56c40e → 6468c5a → 54b63f9 → 84b169c
 **Commits (rework):** 46ce117 (Gate 1 spec) → e24cd34 (R1) → 59d2bcf (R2) → 72848e7 (R3)
-**Commits (fix pass):** 8885d1c (Gate 1 spec) → f693b59 (F1) → cf7b7fa (F2) → ca3b686 (F3) → (F4 this commit)
+**Commits (fix pass):** 8885d1c (Gate 1 spec) → f693b59 (F1) → cf7b7fa (F2) → ca3b686 (F3) → 933d02c (F4)
 **Verify:** 486 passed, 0 failed, build green
 
 ---
@@ -50,7 +50,7 @@ Nothing blocking for this package.
 
 Background (for awareness):
 - I2b-2b (next iOS package) will replace the hand-written `AuthenticationError` mapping with the generated client's error codes. The specific codes that map to credential failures (`REFRESH_TOKEN_EXPIRED`, `REFRESH_TOKEN_INVALID`, `INVALID_CREDENTIALS`) will drive `isCredentialFailure(_:)`. No server changes are needed; this is a client-side mapping update.
-- The dead `biometricLogin` method on `AuthenticationRepository` (server endpoint that iOS no longer calls) remains in the protocol per the CLAUDE.md safety constraint. The API team can retire that endpoint at any time.
+- The `biometricLogin` method on the iOS `AuthenticationRepository` protocol is dead code. The endpoint it called does not exist in the spec or the server, so there is nothing for the API team to retire. I2b-2b removes the method from the iOS protocol. No API action is needed.
 
 ---
 
@@ -69,7 +69,29 @@ The following risks were identified during the rework and are unresolved or acce
 
 2. **`LoginBiometricModel.hasAutoAttempted` is a process-level static flag**: It is consumed on the FIRST appearance of the login screen regardless of biometric state (E6 fix). It is never reset by logout, re-login, or the lock screen. A user who arrives at the login screen with `.hidden` or `.showNotEnrolled` state will consume the flag on that first appearance; a later appearance in the same process (e.g. after logout + re-login) will NOT auto-prompt even if the state becomes `.showEnrolled`. This is intentional (avoid annoying repeat prompts) but means biometric auto-prompt fires at most once per process regardless of session changes.
 
-3. **`EnrollmentHistoryStoring` defaults to `.standard` UserDefaults**: If the app is reinstalled, enrollment history is cleared but the Keychain item may survive (Keychain is not wiped on reinstall by default). A user may be enrolled with a live credential but `hasSeenOffer` returns false, causing the offer to show again. This is benign — the offer will simply re-appear, and accepting it will silently replace the token.
+3. **Reinstall removes the enrollment:** the first-launch wipe deletes the Keychain item class-wide on a fresh install or reinstall, so a reinstall removes the Face ID enrollment. The per-user offer markers (UserDefaults) return to unset, so the enablement offer appears again. This is benign. The production app passes `UserDefaultsEnrollmentHistory()` explicitly; the service's default is the in-memory `EphemeralEnrollmentHistory` so that tests do not contaminate each other.
+
+4. **Manual verification status:** Brian reported on 2026-11-05 that the simulator checklist (items a to g and i) passes after the fix pass. Item h (real device) has NOT been performed. The reports for the fix pass stories F1 to F3 were not written, and no Gate 2 verdicts for the fix pass are on disk; the orchestrator reverted one implementer change (an extra pre-evaluation that would have prompted twice), and the chat-side code review is the only independent check.
+
+5. **Simulator limitation:** the iOS Simulator does not enforce biometric Keychain access control, so the one-prompt behavior comes from the explicit `evaluatePolicy` call in `readRefreshToken`, which then passes the same `LAContext` to the Keychain query. This must be confirmed on a real device (exactly ONE prompt per sign-in).
+
+6. **The privacy cover may flash behind the Face ID dialog** on a real device (the system dialog makes the scene inactive).
+
+7. **Presence, not identity:** Face ID and Touch ID prove that a biometric enrolled on the device is present, not which person. Anyone with a face or finger enrolled on the phone can sign in as the enrolled user.
+
+8. **Server session after logout:** after an iOS logout the server session stays live until 7 days idle or the 90-day cap, because iOS sends no cookie and no body to `POST /auth/logout`. An admin reset (`npm run user:reset-password`) revokes every chain for a user; that is the lost-phone procedure.
+
+9. **Long absence:** Face ID sign-in after more than 7 days idle fails with a 401 and falls back to the password screen with no error text.
+
+10. **Real API prerequisites (I1):** the refresh response returns the body token only when `X-Client-Platform: ios` is sent, and the hand-written client does not send it. I1 must add the four headers in middleware and must disable cookie handling (`httpShouldSetCookies` false, no cookie storage, accept policy never) with unit tests, because a cookie sent with logout would revoke the stored token chain.
+
+11. **Error mapping:** the hand-written `AuthenticationError` mapping does not recognize `REFRESH_TOKEN_EXPIRED` and `REFRESH_TOKEN_INVALID`; it turns a 401 into `invalidCredentials`. I2b-2b replaces it with the generated client's codes. The registration code and the generated-client auth mapping are also I2b-2b.
+
+12. **Known gaps carried into I2b-2b:** (a) dismissing the enablement sheet by swiping down does not clear `biometricOfferAction`, so a later identical offer may not re-trigger the sheet; (b) `readRefreshToken` maps only user-cancel and lockout, so `authenticationFailed`, `systemCancel`, and `appCancel` become `.other` and show the neutral error instead of the retry hint or no message; (c) the evaluate-then-read ordering in `KeychainBiometricCredentialStore` has no test seam; (d) the cold-launch auto-prompt does not check whether the app is active, and `register()` duplicates `login()`'s offer logic instead of sharing it.
+
+13. **Scope deviations:** `MockAuthenticationRepository` became an `@unchecked Sendable` class, and `AuthTypes.swift` and `User.swift` gained `nonisolated`, outside the original scope.
+
+14. **Not implemented:** remote lock-timeout configuration (only the UserDefaults override slot exists), and the dedicated server-issued biometric credential (decision A9), which is a post-build-1 candidate.
 
 ---
 
