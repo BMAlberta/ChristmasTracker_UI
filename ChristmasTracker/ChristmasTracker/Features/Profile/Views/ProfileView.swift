@@ -13,13 +13,7 @@ struct ProfileView: View {
     @Environment(\.authenticationService) private var authService
 
     @State private var showLogoutConfirmation = false
-    @State private var toggleModel = ProfileBiometricToggleModel(
-        preference: BiometricUnlockPreference(),
-        enablementModel: BiometricEnablementModel(
-            authenticator: LocalAuthenticationService(),
-            preference: BiometricUnlockPreference()
-        )
-    )
+    @State private var toggleModel: ProfileBiometricToggleModel?
 
     var body: some View {
         NavigationStack {
@@ -29,19 +23,21 @@ struct ProfileView: View {
                         UserInfoCardView(user: user)
                     }
 
-                    SettingsSectionView(
-                        isBiometricAvailable: authService.isBiometricAvailable,
-                        biometricType: authService.biometricType,
-                        toggleModel: toggleModel,
-                        onEditProfile: {
-                            // TODO: Phase 8 - Navigate to edit profile
-                            print("Edit profile tapped")
-                        },
-                        onNotifications: {
-                            // TODO: Phase 10 - Navigate to notifications
-                            print("Notifications tapped")
-                        }
-                    )
+                    if let model = toggleModel {
+                        SettingsSectionView(
+                            isBiometricAvailable: authService.isBiometricAvailable,
+                            biometricType: authService.biometricType,
+                            toggleModel: model,
+                            onEditProfile: {
+                                // TODO: Phase 8 - Navigate to edit profile
+                                print("Edit profile tapped")
+                            },
+                            onNotifications: {
+                                // TODO: Phase 10 - Navigate to notifications
+                                print("Notifications tapped")
+                            }
+                        )
+                    }
 
                     AboutSectionView(
                         appVersion: appVersion,
@@ -65,17 +61,20 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .task {
                 authService.refreshBiometricAvailability()
+                if toggleModel == nil {
+                    toggleModel = ProfileBiometricToggleModel(authService: authService)
+                }
             }
             .alert(
                 "Biometric Setup Failed",
                 isPresented: Binding(
-                    get: { toggleModel.errorMessage != nil },
-                    set: { if !$0 { toggleModel.errorMessage = nil } }
+                    get: { toggleModel?.errorMessage != nil },
+                    set: { if !$0 { toggleModel?.errorMessage = nil } }
                 )
             ) {
-                Button("OK") { toggleModel.errorMessage = nil }
+                Button("OK") { toggleModel?.errorMessage = nil }
             } message: {
-                Text(toggleModel.errorMessage ?? "")
+                Text(toggleModel?.errorMessage ?? "")
             }
             .confirmationDialog(
                 "Are you sure you want to logout?",
@@ -175,9 +174,18 @@ private struct SettingsSectionView: View {
                                 set: { newValue in Task { await toggleModel.toggle(to: newValue) } }
                             )
                         )
+                        .disabled(toggleModel.isDisabledForOtherUser)
                         .font(.appBody)
                         .foregroundStyle(Color.textPrimaryColor)
                         .padding(AppSpacing.md)
+
+                        if let message = toggleModel.disabledMessage {
+                            Text(message)
+                                .font(.appCaption1)
+                                .foregroundStyle(Color.textMutedColor)
+                                .padding(.horizontal, AppSpacing.md)
+                                .padding(.bottom, AppSpacing.md)
+                        }
                     }
                 }
             }

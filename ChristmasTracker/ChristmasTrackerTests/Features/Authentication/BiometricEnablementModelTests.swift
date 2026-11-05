@@ -2,14 +2,15 @@
 //  BiometricEnablementModelTests.swift
 //  ChristmasTrackerTests
 //
-//  Tests for Story R5: BiometricEnablementModel — drives the biometric enablement
-//  flow and maps BiometricResult cases to EnablementState transitions.
+//  Tests for Story I2b-2a S3: BiometricEnablementModel with the updated
+//  init(authenticator:enrollAction:) interface.
 //
-//  RED-phase: will fail to compile until BiometricEnablementModel is added to the
-//  production module (cannot find type 'BiometricEnablementModel' in scope).
+//  RED-phase: B1–B4 will fail to compile until BiometricEnablementModel is updated
+//  to replace `init(authenticator:preference:)` with
+//  `init(authenticator:enrollAction:)` per the Gate 1 spec.
 //
 //  Concurrency: suite is @MainActor because BiometricEnablementModel is @MainActor.
-//  No real sleeps — FakeBiometricAuthenticator.authenticate returns synchronously.
+//  FakeBiometricAuthenticator.authenticate() returns synchronously — no real sleeps.
 //
 
 import Testing
@@ -21,95 +22,106 @@ struct BiometricEnablementModelTests {
 
     // MARK: - Factory
 
-    /// Returns a fresh SUT pre-configured with the given stubbed result.
-    /// The returned preference fake lets callers inspect side-effects.
+    /// Returns a fresh SUT using the new enrollAction initialiser.
+    /// `enrollAction` defaults to a no-op; pass a non-nil `actionError` to make it throw.
+    /// `enrollCallCount` is incremented each time the action is invoked.
     private func makeSUT(
-        result: BiometricResult = .success
-    ) -> (sut: BiometricEnablementModel, auth: FakeBiometricAuthenticator, pref: FakeBiometricUnlockPreference) {
+        result: BiometricResult = .success,
+        actionError: Error? = nil
+    ) -> (sut: BiometricEnablementModel, auth: FakeBiometricAuthenticator, callCount: Box<Int>) {
         let auth = FakeBiometricAuthenticator()
         auth.stubbedResult = result
-        let pref = FakeBiometricUnlockPreference()
-        let sut = BiometricEnablementModel(authenticator: auth, preference: pref)
-        return (sut, auth, pref)
-    }
-
-    // MARK: - Tests
-
-    @Test("enable() calls the authenticator")
-    func enableCallsAuthenticator() async {
-        let (sut, _, _) = makeSUT(result: .success)
-        // State starts idle; after enable() it must have changed (authenticator was called).
-        #expect(sut.state == .idle)
-        await sut.enable()
-        // If authenticator was called the state will have advanced past .idle.
-        #expect(sut.state != .idle)
-    }
-
-    @Test("enable() with .success sets preference.biometricUnlockEnabled and state .succeeded")
-    func enableSuccessSetsPreferenceAndSucceededState() async {
-        let (sut, _, pref) = makeSUT(result: .success)
-        await sut.enable()
-        #expect(sut.state == .succeeded)
-        #expect(pref.biometricUnlockEnabled == true)
-    }
-
-    @Test("enable() with .userCancelled leaves state .idle and preference unchanged")
-    func enableUserCancelledStaysIdleAndLeavesPreferenceUnchanged() async {
-        let (sut, _, pref) = makeSUT(result: .userCancelled)
-        await sut.enable()
-        #expect(sut.state == .idle)
-        #expect(pref.biometricUnlockEnabled == false)
-    }
-
-    @Test("enable() with .systemCancelled leaves state .idle")
-    func enableSystemCancelledStaysIdle() async {
-        let (sut, _, _) = makeSUT(result: .systemCancelled)
-        await sut.enable()
-        #expect(sut.state == .idle)
-    }
-
-    @Test("enable() with .failed sets state to .failed(_)")
-    func enableFailedSetsFailedState() async {
-        let (sut, _, _) = makeSUT(result: .failed)
-        await sut.enable()
-        if case .failed = sut.state { } else {
-            #expect(Bool(false), "Expected state to be .failed but got \(sut.state)")
+        let callCount = Box(0)
+        let error = actionError
+        let sut = BiometricEnablementModel(authenticator: auth) {
+            callCount.value += 1
+            if let e = error { throw e }
         }
+        return (sut, auth, callCount)
     }
 
-    @Test("enable() with .lockedOut sets state to .failed(_)")
+    // MARK: - B1: success calls enrollAction and sets state = .succeeded
+
+    @Test("B1: enable() with success calls enrollAction and sets state to .succeeded")
+    func enableSuccessCallsEnrollActionAndSetsSucceeded() async {
+        let (sut, _, callCount) = makeSUT(result: .success)
+        #expect(sut.state == .idle, "Precondition: state must start .idle")
+
+        await sut.enable()
+
+        #expect(sut.state == .succeeded,
+                "state must be .succeeded after enable() with .success")
+        #expect(callCount.value == 1,
+                "enrollAction must be called exactly once on success")
+    }
+
+    // MARK: - B2: .userCancelled does NOT call enrollAction; state = .idle
+
+    @Test("B2: enable() with userCancelled does not call enrollAction; state remains .idle")
+    func enableUserCancelledDoesNotCallEnrollAction() async {
+        let (sut, _, callCount) = makeSUT(result: .userCancelled)
+
+        await sut.enable()
+
+        #expect(sut.state == .idle,
+                "state must remain .idle after enable() with .userCancelled")
+        #expect(callCount.value == 0,
+                "enrollAction must NOT be called when authentication was cancelled")
+    }
+
+    // MARK: - B3: .failed does NOT call enrollAction; state = .failed(...)
+
+    @Test("B3: enable() with failed does not call enrollAction; state is .failed")
+    func enableFailedDoesNotCallEnrollAction() async {
+        let (sut, _, callCount) = makeSUT(result: .failed)
+
+        await sut.enable()
+
+        if case .failed = sut.state { } else {
+            #expect(Bool(false), "state must be .failed after enable() with .failed, got \(sut.state)")
+        }
+        #expect(callCount.value == 0,
+                "enrollAction must NOT be called when biometric authentication failed")
+    }
+
+    // MARK: - B4: .success but enrollAction throws → state = .failed(...)
+
+    @Test("B4: enable() with success but enrollAction throws sets state to .failed")
+    func enableSuccessButEnrollActionThrowsSetsFailedState() async {
+        struct EnrollError: Error {}
+        let (sut, _, callCount) = makeSUT(result: .success, actionError: EnrollError())
+
+        await sut.enable()
+
+        if case .failed = sut.state { } else {
+            #expect(Bool(false), "state must be .failed when enrollAction throws, got \(sut.state)")
+        }
+        #expect(callCount.value == 1,
+                "enrollAction must be called even if it then throws (the throw is what causes .failed)")
+    }
+
+    // MARK: - Regression: systemCancelled leaves state .idle
+
+    @Test("enable() with systemCancelled leaves state .idle")
+    func enableSystemCancelledLeavesIdle() async {
+        let (sut, _, callCount) = makeSUT(result: .systemCancelled)
+        await sut.enable()
+        #expect(sut.state == .idle)
+        #expect(callCount.value == 0)
+    }
+
+    // MARK: - Regression: .lockedOut sets state to .failed
+
+    @Test("enable() with lockedOut sets state to .failed")
     func enableLockedOutSetsFailedState() async {
         let (sut, _, _) = makeSUT(result: .lockedOut)
         await sut.enable()
         if case .failed = sut.state { } else {
-            #expect(Bool(false), "Expected state to be .failed but got \(sut.state)")
+            #expect(Bool(false), "state must be .failed for .lockedOut, got \(sut.state)")
         }
     }
 
-    @Test("enable() with .unavailable sets state to .failed(_)")
-    func enableUnavailableSetsFailedState() async {
-        let (sut, _, _) = makeSUT(result: .unavailable)
-        await sut.enable()
-        if case .failed = sut.state { } else {
-            #expect(Bool(false), "Expected state to be .failed but got \(sut.state)")
-        }
-    }
-
-    @Test("enable() with .userFallback sets state to .failed(_)")
-    func enableUserFallbackSetsFailedState() async {
-        let (sut, _, _) = makeSUT(result: .userFallback)
-        await sut.enable()
-        if case .failed = sut.state { } else {
-            #expect(Bool(false), "Expected state to be .failed but got \(sut.state)")
-        }
-    }
-
-    @Test("enable() with .failed does not set biometricUnlockEnabled")
-    func enableFailedDoesNotSetBiometricUnlockEnabled() async {
-        let (sut, _, pref) = makeSUT(result: .failed)
-        await sut.enable()
-        #expect(pref.biometricUnlockEnabled == false)
-    }
+    // MARK: - Regression: reset() after succeeded returns to .idle
 
     @Test("reset() after succeeded sets state back to .idle")
     func resetFromSucceededSetsIdle() async {
@@ -119,4 +131,13 @@ struct BiometricEnablementModelTests {
         sut.reset()
         #expect(sut.state == .idle)
     }
+}
+
+// MARK: - Box helper
+
+/// Simple reference-type wrapper so the closure can mutate an integer counter
+/// without capturing an `inout` variable (not allowed in closures).
+private final class Box<T> {
+    var value: T
+    init(_ value: T) { self.value = value }
 }

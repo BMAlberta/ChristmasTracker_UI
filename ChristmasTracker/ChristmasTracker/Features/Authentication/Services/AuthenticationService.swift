@@ -77,6 +77,38 @@ final class AuthenticationService {
         pendingBiometricEnablement = true
     }
 
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
+    func enrollCurrentSession() async throws {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.enrollCurrentSession",
+            operation: "service.authentication.enrollCurrentSession"
+        )
+        defer { transaction.finish() }
+        guard let tokens = self.tokens, let user = self.currentUser else { return }
+        let result = await biometricAuthenticator.authenticate(reason: "Enable Face ID for Christmas Tracker")
+        switch result {
+        case .success:
+            let firstName = user.name.components(separatedBy: " ").first ?? ""
+            try credentialStore.enroll(refreshToken: tokens.refreshToken, userId: user.id, firstName: firstName)
+        default:
+            throw AuthenticationError.biometricFailed
+        }
+    }
+
+    func revokeEnrollment() throws {
+        try credentialStore.delete()
+    }
+
+    var enrolledUser: (userId: String, firstName: String)? {
+        credentialStore.enrolledUser()
+    }
+
+    var enrolledUserMatchesSession: Bool {
+        guard let enrolled = credentialStore.enrolledUser(), let user = currentUser else { return false }
+        return enrolled.userId == user.id
+    }
+
     /// Login
     func login(email: String, password: String, rememberEmail: Bool = false) async {
         isLoading = true
@@ -97,10 +129,13 @@ final class AuthenticationService {
             }
 
             // Consume pending biometric enablement request on successful login.
-            if pendingBiometricEnablement {
+            // Only offer if the pending flag is set AND the enrolled user does not already
+            // match this session (i.e., this is a new user, not an already-enrolled returning user).
+            if pendingBiometricEnablement && !enrolledUserMatchesSession {
                 pendingBiometricEnablement = false
                 shouldShowBiometricEnablementAfterLogin = true
             } else {
+                pendingBiometricEnablement = false
                 shouldShowBiometricEnablementAfterLogin = false
             }
 
@@ -330,6 +365,11 @@ final class AuthenticationService {
             expiresAt: Date().addingTimeInterval(TimeInterval(authData.expiresIn))
         )
         tokens = newTokens
+        // Silent token rotation: if the enrolled user matches the new session user,
+        // update the stored refresh token without prompting.
+        if credentialStore.enrolledUser()?.userId == authData.user.id {
+            try? credentialStore.updateRefreshToken(authData.refreshToken)
+        }
         // Set session ID in cache
         await NetworkCache.shared.setSessionId(authData.user.id)
         // Start session keep-alive

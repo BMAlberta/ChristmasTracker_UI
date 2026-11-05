@@ -92,7 +92,6 @@ struct ChristmasTrackerApp: App {
     private let lockController: InactivityLockController
     private let lockCoordinator: LockCoordinator
     private let sharedLocalAuth: LocalAuthenticationService
-    @State private var preference = BiometricUnlockPreference()
 
     // nonisolated(unsafe): written exactly once during init on MainActor;
     // read in deinit where the app is exclusively owned — no concurrent access.
@@ -147,7 +146,6 @@ struct ChristmasTrackerApp: App {
         sharedLocalAuth = localAuth
         let lockPolicy = LockPolicy()
         let lc = InactivityLockController(policy: lockPolicy)
-        lc.preference = BiometricUnlockPreference()
         lockController = lc
         let lkCoord = LockCoordinator(
             lockController: lc,
@@ -245,8 +243,11 @@ struct ChristmasTrackerApp: App {
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         lockController.authService = authService
+                        lockController.biometricEligibility = { [weak authService] in
+                            authService?.enrolledUserMatchesSession ?? false
+                        }
                         lockController.start()
-                        if !preference.biometricSetupOfferShown && authService.isBiometricAvailable {
+                        if authService.shouldShowBiometricEnablementAfterLogin && authService.isBiometricAvailable {
                             showBiometricSetup = true
                         }
                     } else {
@@ -257,12 +258,12 @@ struct ChristmasTrackerApp: App {
                     BiometricSetupView(
                         model: BiometricEnablementModel(
                             authenticator: sharedLocalAuth,
-                            preference: preference
+                            enrollAction: { [weak authService] in
+                                try await authService?.enrollCurrentSession()
+                            }
                         ),
-                        onComplete: { enabled in
-                            preference.biometricSetupOfferShown = true
-                            preference.biometricUnlockEnabled = enabled
-                            lockController.preference = preference
+                        onComplete: { _ in
+                            showBiometricSetup = false
                         }
                     )
                     .environment(\.authenticationService, authService)

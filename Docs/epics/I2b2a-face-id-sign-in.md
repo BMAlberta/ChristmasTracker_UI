@@ -224,7 +224,49 @@ No network or API model changes. `AuthenticationService` changes only (new metho
 
 ## Gate 1: Story S3 — Enrollment Rules, Profile Toggle, and Lock Eligibility
 
-*(to be written before S3 work begins)*
+### Contract slice
+No network or API model changes. `AuthenticationService` gains enrollment methods. `BiometricEnablementModel`, `ProfileBiometricToggleModel`, `InactivityLockController`, and `LockView` are updated for credential-store-based eligibility. `ChristmasTrackerApp` offer logic is simplified.
+
+### New interfaces introduced
+- `AuthenticationService.enrollCurrentSession() async throws` — calls `biometricAuthenticator.authenticate(reason:)`, then on success calls `credentialStore.enroll(refreshToken:userId:firstName:)` with the current session token and user. Actor-isolated; manual SentrySDK span required.
+- `AuthenticationService.revokeEnrollment() throws` — calls `credentialStore.delete()`. (Explicit method so the toggle and tests can call it cleanly.)
+- `AuthenticationService.enrolledUser: (userId: String, firstName: String)?` — computed, forwarded from `credentialStore.enrolledUser()`. Nonisolated; no prompt. `@MainActor` read is safe.
+- `AuthenticationService.enrolledUserMatchesSession: Bool` — computed: `enrolledUser?.userId == currentUser?.id`.
+- `InactivityLockController` — replace `var preference: (any BiometricUnlockPreferring)?` with `var biometricEligibility: (() -> Bool)?`; `LockView` reads this closure instead of the preference. `ChristmasTrackerApp` wires it as `{ authService.enrolledUserMatchesSession }`.
+- `BiometricEnablementModel.enable()` — updated signature: inject `enrollAction: () async throws -> Void` (called after LA succeeds) so the model stays testable without a real `AuthenticationService`. The existing LAContext authentication call (`authenticator.authenticate`) moves to `AuthenticationService.enrollCurrentSession` (it already has the authenticator); the model's `enable()` becomes: guard enrolled ≠ self, then call `enrollAction()`. Alternatively simpler: inject `authService: AuthenticationService` directly and call `authService.enrollCurrentSession()` after the existing authenticate step — pick the simpler approach that keeps the model testable with fakes.
+
+### Acceptance criteria
+1. `enrollCurrentSession()` calls `biometricAuthenticator.authenticate(reason:)` before storing the token; throws if authentication fails.
+2. `enrollCurrentSession()` stores the current `tokens.refreshToken` with `credentialStore.enroll(refreshToken:userId:firstName:)` where `firstName` is `currentUser?.name.components(separatedBy:" ").first ?? ""`.
+3. `enrollCurrentSession()` does nothing (no-op, no throw) when `tokens` is nil or `currentUser` is nil.
+4. `revokeEnrollment()` calls `credentialStore.delete()`.
+5. `enrolledUser` returns nil when no enrollment; returns the credential store pair when enrolled.
+6. `enrolledUserMatchesSession` returns `true` when enrolled userId == `currentUser?.id`, `false` otherwise, and `false` when either is nil.
+7. After a successful password login where the enrolled user matches the session user, `updateRefreshToken` is called with the new token (silent rotation — no offer shown to that user, `shouldShowBiometricEnablementAfterLogin` stays false for a session where enrollment already exists).
+8. After a password login by a user who is NOT enrolled and no pending enablement request was set, `shouldShowBiometricEnablementAfterLogin` stays false.
+9. `InactivityLockController.biometricEligibility` closure drives the lock screen biometric option: LockView shows the biometric button only when the closure returns `true`.
+10. `ProfileBiometricToggleModel` reads `enrolledUserMatchesSession` from `AuthenticationService` (not from `BiometricUnlockPreference`) to set initial `isEnabled` state; the model is not stale after the first-login offer sheet closes.
+11. When `enrolledUser != nil` and `enrolledUser?.userId != currentUser?.id`, the Profile toggle is disabled and shows "Face ID is set up for another account on this device."
+12. `BiometricEnablementModel.enable()` calls `enrollCurrentSession()` (or the injected `enrollAction`) after user confirmation; on success sets `isComplete = true`; on failure sets the error.
+13. First-login offer in `ChristmasTrackerApp` uses `authService.shouldShowBiometricEnablementAfterLogin` as the trigger; the `preference.biometricSetupOfferShown` flag is removed from this guard.
+14. All tests pass with fakes; no real Keychain, no real LAContext.
+
+### Scoped file and folder list
+**New:**
+- `ChristmasTrackerTests/Features/Authentication/EnrollCurrentSessionTests.swift`
+- `ChristmasTrackerTests/Features/Authentication/LockEligibilityTests.swift`
+- `ChristmasTrackerTests/Features/Authentication/ProfileToggleEnrollmentTests.swift`
+
+**Modified:**
+- `ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift` — add `enrollCurrentSession()`, `revokeEnrollment()`, `enrolledUser`, `enrolledUserMatchesSession`; fix `handleAuthSuccess` for silent token rotation when enrolled user matches
+- `ChristmasTracker/Features/Authentication/Services/BiometricEnablementModel.swift` — call `enrollCurrentSession()` (or injected action) after LA success; remove preference write
+- `ChristmasTracker/Features/Authentication/ViewModels/ProfileBiometricToggleModel.swift` — read enrollment state from `AuthenticationService`; fix stale initial state
+- `ChristmasTracker/Features/Authentication/Views/ProfileView.swift` — pass `authService` to `ProfileBiometricToggleModel` (or observe it); fix stale `@State` init
+- `ChristmasTracker/Features/Lock/InactivityLockController.swift` — replace `preference` with `biometricEligibility: (() -> Bool)?`
+- `ChristmasTracker/Features/Lock/LockView.swift` — replace `controller.preference?.biometricUnlockEnabled` with `controller.biometricEligibility?() ?? false`
+- `ChristmasTracker/ChristmasTrackerApp.swift` — wire `biometricEligibility` closure; use `authService.shouldShowBiometricEnablementAfterLogin` for the offer guard; remove `preference.biometricSetupOfferShown` from the offer condition
+
+**New interface: Yes** → full pipeline (touches biometrics, auth, UI eligibility)
 
 ---
 

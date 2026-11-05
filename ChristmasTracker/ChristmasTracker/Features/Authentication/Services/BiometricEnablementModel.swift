@@ -20,11 +20,11 @@ internal final class BiometricEnablementModel {
     private(set) var state: EnablementState = .idle
 
     private let authenticator: any BiometricAuthenticating
-    private var preference: any BiometricUnlockPreferring
+    private let enrollAction: () async throws -> Void
 
-    init(authenticator: any BiometricAuthenticating, preference: any BiometricUnlockPreferring) {
+    init(authenticator: any BiometricAuthenticating, enrollAction: @escaping () async throws -> Void) {
         self.authenticator = authenticator
-        self.preference = preference
+        self.enrollAction = enrollAction
     }
 
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
@@ -39,8 +39,12 @@ internal final class BiometricEnablementModel {
         let result = await authenticator.authenticate(reason: "Enable biometric unlock for Christmas Tracker.")
         switch result {
         case .success:
-            preference.biometricUnlockEnabled = true
-            state = .succeeded
+            do {
+                try await enrollAction()
+                state = .succeeded
+            } catch {
+                state = .failed("\(authenticator.biometryTypeName) enrollment failed. Try again or use your password.")
+            }
         case .userCancelled, .systemCancelled:
             state = .idle
         case .failed:

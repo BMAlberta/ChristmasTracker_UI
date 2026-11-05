@@ -109,8 +109,7 @@ private struct BiometricActionSection: View {
 }
 #Preview {
     let auth = FakeBiometricAuthenticator()
-    let pref = BiometricUnlockPreference()
-    BiometricSetupView(model: BiometricEnablementModel(authenticator: auth, preference: pref))
+    BiometricSetupView(model: BiometricEnablementModel(authenticator: auth, enrollAction: {}))
         .environment(\.authenticationService, AuthenticationService(
             repository: MockAuthenticationRepository(),
             sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
