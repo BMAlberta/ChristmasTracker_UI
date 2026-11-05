@@ -68,35 +68,36 @@ struct EnrollCurrentSessionTests {
                 "enrolledUser.userId must equal the stable mock id for u1@example.com")
     }
 
-    // MARK: - E2: enrollCurrentSession with .userCancelled does NOT enroll
+    // MARK: - E2: enrollCurrentSession always enrolls (auth stub is irrelevant — E4 moved auth to caller)
 
-    @Test("E2: enrollCurrentSession with userCancelled does not enroll")
-    func enrollCurrentSessionUserCancelledDoesNotEnroll() async throws {
-        let (service, _, store, _) = makeSUT(authenticatorResult: .userCancelled)
+    @Test("E2: enrollCurrentSession always enrolls regardless of auth stub (authentication is caller's responsibility)")
+    func enrollCurrentSessionAlwaysEnrollsRegardlessOfAuthStub() async throws {
+        let (service, _, _, _) = makeSUT(authenticatorResult: .userCancelled)
         await service.login(email: "u1@example.com", password: "password", rememberEmail: false)
         try #require(service.isAuthenticated, "Precondition: must be logged in")
 
-        // The spec says this throws on authentication failure — userCancelled IS a failure path.
-        // We catch and ignore so the assertion below is the meaningful check.
-        try? await service.enrollCurrentSession()
+        // After the E4 fix, enrollCurrentSession() no longer calls biometricAuthenticator.
+        // It always enrolls when a session exists — authentication is the caller's responsibility.
+        try await service.enrollCurrentSession()
 
-        #expect(service.enrolledUser == nil,
-                "enrolledUser must remain nil when authentication was cancelled")
+        #expect(service.enrolledUser != nil,
+                "enrollCurrentSession() must enroll regardless of auth stub — authentication was moved to the caller (toggle model)")
     }
 
-    // MARK: - E3: enrollCurrentSession with .failed does NOT enroll
+    // MARK: - E3: enrollCurrentSession always enrolls (auth stub is irrelevant — E4 moved auth to caller)
 
-    @Test("E3: enrollCurrentSession with failed does not enroll")
-    func enrollCurrentSessionFailedDoesNotEnroll() async throws {
+    @Test("E3: enrollCurrentSession always enrolls with .failed stub (authentication is caller's responsibility)")
+    func enrollCurrentSessionAlwaysEnrollsWithFailedStub() async throws {
         let (service, _, _, _) = makeSUT(authenticatorResult: .failed)
         await service.login(email: "u1@example.com", password: "password", rememberEmail: false)
         try #require(service.isAuthenticated, "Precondition: must be logged in")
 
-        // Expected to throw — ignore the error; test the side-effect.
-        try? await service.enrollCurrentSession()
+        // After the E4 fix, authentication is the caller's responsibility.
+        // enrollCurrentSession() no longer calls authenticate — it always enrolls.
+        try await service.enrollCurrentSession()
 
-        #expect(service.enrolledUser == nil,
-                "enrolledUser must remain nil when biometric authentication failed")
+        #expect(service.enrolledUser != nil,
+                "enrollCurrentSession() must enroll regardless of auth stub — authentication was moved to the caller (toggle model)")
     }
 
     // MARK: - E4: enrollCurrentSession before login is a no-op

@@ -68,7 +68,7 @@ final class AuthenticationService {
         emailStore: any RememberedEmailStoring = RememberedEmailStore(),
         legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup(),
         credentialStore: any BiometricCredentialStoring = KeychainBiometricCredentialStore(),
-        enrollmentHistory: any EnrollmentHistoryStoring = UserDefaultsEnrollmentHistory()
+        enrollmentHistory: any EnrollmentHistoryStoring = EphemeralEnrollmentHistory()
     ) {
         self.authRepository = repository
         self.sessionManager = sessionManager
@@ -100,17 +100,12 @@ final class AuthenticationService {
         )
         defer { transaction.finish() }
         guard let tokens = self.tokens, let user = self.currentUser else { return }
-        let result = await biometricAuthenticator.authenticate(reason: "Enable Face ID for Christmas Tracker")
-        switch result {
-        case .success:
-            let firstName = user.name.components(separatedBy: " ").first ?? ""
-            try credentialStore.enroll(refreshToken: tokens.refreshToken, userId: user.id, firstName: firstName)
-            refreshBiometricState()
-            // Enrollment completed: clear the offer action so the UI knows enrollment is done.
-            biometricOfferAction = .none
-        default:
-            throw AuthenticationError.biometricFailed
-        }
+        let firstName = user.name.components(separatedBy: " ").first ?? ""
+        try credentialStore.enroll(refreshToken: tokens.refreshToken, userId: user.id, firstName: firstName)
+        enrollmentHistory.setPreviouslyEnrolledUserId(user.id)
+        refreshBiometricState()
+        // Enrollment completed: clear the offer action so the UI knows enrollment is done.
+        biometricOfferAction = .none
     }
 
     func revokeEnrollment() throws {
@@ -170,10 +165,12 @@ final class AuthenticationService {
             if offerAction == .silentlyReplaceToken {
                 let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
                 try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
+                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
                 refreshBiometricState()
             } else if offerAction == .silentlyReenroll {
                 let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
                 try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
+                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
                 refreshBiometricState()
             }
 
@@ -280,6 +277,31 @@ final class AuthenticationService {
             let authData = try await authRepository.register(email: email,
                                                    password: password,
                                                    name: name)
+
+            let offerAction = computeOfferAction(
+                readiness: biometricAuthenticator.readiness,
+                signedInUserId: authData.user.id,
+                pendingRequest: pendingBiometricEnablement
+            )
+
+            if offerAction == .silentlyReplaceToken {
+                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
+                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
+                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
+                refreshBiometricState()
+            } else if offerAction == .silentlyReenroll {
+                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
+                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
+                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
+                refreshBiometricState()
+            }
+
+            self.biometricOfferAction = offerAction
+            pendingBiometricEnablement = false
+
+            if offerAction == .showEnablementScreen {
+                enrollmentHistory.markOfferShown(for: authData.user.id)
+            }
 
             await handleAuthSuccess(authData: authData)
 

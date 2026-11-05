@@ -186,9 +186,14 @@ struct ChristmasTrackerApp: App {
         sessionManager = sm
 
         // Create services
+        // Pass UserDefaultsEnrollmentHistory explicitly for persistence across app launches.
+        // AuthenticationService's default enrollmentHistory is EphemeralEnrollmentHistory
+        // (non-persistent) so that tests creating instances without an explicit history
+        // get per-instance isolation and do not contaminate each other via UserDefaults.
         let auth = AuthenticationService(
             repository: dependencies.authRepository,
-            sessionManager: sm
+            sessionManager: sm,
+            enrollmentHistory: UserDefaultsEnrollmentHistory()
         )
         authService = auth
 

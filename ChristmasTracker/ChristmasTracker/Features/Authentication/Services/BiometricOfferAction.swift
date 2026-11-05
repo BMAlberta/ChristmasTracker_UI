@@ -101,3 +101,36 @@ internal struct UserDefaultsEnrollmentHistory: EnrollmentHistoryStoring {
         defaults.set(true, forKey: "enrollment.offerShown.\(userId)")
     }
 }
+
+// MARK: - EphemeralEnrollmentHistory
+
+/// A non-persistent, in-memory EnrollmentHistoryStoring.
+///
+/// Used as the **default** in `AuthenticationService.init()` so that every test instance that
+/// does not explicitly supply an `enrollmentHistory` gets a fresh, isolated store. This prevents
+/// cross-test UserDefaults contamination.
+///
+/// Production code (`ChristmasTrackerApp`) must pass `UserDefaultsEnrollmentHistory()` explicitly
+/// so that enrollment history is persisted across app launches.
+internal final class EphemeralEnrollmentHistory: EnrollmentHistoryStoring, @unchecked Sendable {
+
+    nonisolated(unsafe) private var _previouslyEnrolledUserId: String? // protected by lock
+    nonisolated(unsafe) private var offerShownSet: Set<String> = [] // protected by lock
+    private let lock = NSLock()
+
+    nonisolated var previouslyEnrolledUserId: String? {
+        lock.withLock { _previouslyEnrolledUserId }
+    }
+
+    nonisolated func setPreviouslyEnrolledUserId(_ userId: String?) {
+        lock.withLock { _previouslyEnrolledUserId = userId }
+    }
+
+    nonisolated func hasSeenOffer(for userId: String) -> Bool {
+        lock.withLock { offerShownSet.contains(userId) }
+    }
+
+    nonisolated func markOfferShown(for userId: String) {
+        lock.withLock { offerShownSet.insert(userId) }
+    }
+}

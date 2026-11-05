@@ -54,6 +54,15 @@ internal final class ProfileBiometricToggleModel {
             return
         }
 
+        let authResult = await authService.biometricAuthenticator.authenticate(
+            reason: "Enable Face ID for Christmas Tracker"
+        )
+        guard authResult == .success else {
+            isEnabled = false
+            errorMessage = "Biometric authentication failed. Try again or use your password."
+            return
+        }
+
         do {
             try await authService.enrollCurrentSession()
             isEnabled = true

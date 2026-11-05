@@ -57,16 +57,20 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
             throw AuthenticationError.emailAlreadyExists
         }
 
-        let newUser = User(id: UUID().uuidString,
+        // Use a stable userId derived from the email so that offer-action logic
+        // (which keys on userId) behaves predictably in multi-step test scenarios.
+        let userId = stableUserId(for: email)
+        let newUser = User(id: userId,
                            email: email,
                            name: name,
                            role: .user,
                            createdAt: Date(),
                            updatedAt: Date())
+        let refreshToken = makeRefreshToken(userId: userId)
 
         return AuthData(user: newUser,
                         accessToken: mockAccessToken,
-                        refreshToken: mockRefreshToken,
+                        refreshToken: refreshToken,
                         expiresIn: 900)
     }
 
