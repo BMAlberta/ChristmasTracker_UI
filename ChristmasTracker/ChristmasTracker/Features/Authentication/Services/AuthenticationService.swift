@@ -12,23 +12,29 @@ import TrackerInstrumentation
 @MainActor
 @Observable
 final class AuthenticationService {
-    
+
     // MARK: - Dependencies
     private let authRepository: AuthenticationRepository
     private let sessionManager: SessionManager
     internal let biometricAuthenticator: any BiometricAuthenticating
     private var emailStore: any RememberedEmailStoring
     private let legacyCleanup: any LegacyTokenCleaning
-    
+    private let credentialStore: any BiometricCredentialStoring
+
     // MARK: - Published State (Observable)
     private(set) var currentUser: User?
     private(set) var isAuthenticated: Bool = false
     private(set) var isLoading: Bool = false
     private(set) var error: AuthenticationError?
-    
+
     private(set) var isBiometricAvailable: Bool = false
     private(set) var biometricType: BiometricType = .none
-    
+
+    // Pending biometric enablement: set by pendBiometricEnablementRequest(),
+    // consumed and surfaced as shouldShowBiometricEnablementAfterLogin after a successful login.
+    private(set) var shouldShowBiometricEnablementAfterLogin: Bool = false
+    private var pendingBiometricEnablement: Bool = false
+
     // MARK: - Private State
     private var tokens: AuthTokens?
     private let deviceFingerprint: String
@@ -37,21 +43,26 @@ final class AuthenticationService {
     private static let keychainReasonMessage = "Authenticate to access your Christmas Tracker account"
     private static let keychainAuthTokensKey = "auth.tokens"
     private static let keychainAuthRefreshTokenKey = "auth.refresh_token"
-    
+
+    // Single-flight refresh: keyed by refresh token so concurrent callers share one repo call.
+    private var inflightRefreshTasks: [String: Task<AuthData, Error>] = [:]
+
     // MARK: - Initialization
-    
+
     init(
         repository: AuthenticationRepository,
         sessionManager: SessionManager,
         biometricAuthenticator: any BiometricAuthenticating = LocalAuthenticationService(),
         emailStore: any RememberedEmailStoring = RememberedEmailStore(),
-        legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup()
+        legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup(),
+        credentialStore: any BiometricCredentialStoring = KeychainBiometricCredentialStore()
     ) {
         self.authRepository = repository
         self.sessionManager = sessionManager
         self.biometricAuthenticator = biometricAuthenticator
         self.emailStore = emailStore
         self.legacyCleanup = legacyCleanup
+        self.credentialStore = credentialStore
 
         self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
@@ -60,6 +71,12 @@ final class AuthenticationService {
     }
 
     // MARK: - Public Methods
+
+    /// Request that the biometric-enrolment sheet be shown after the next successful login.
+    func pendBiometricEnablementRequest() {
+        pendingBiometricEnablement = true
+    }
+
     /// Login
     func login(email: String, password: String, rememberEmail: Bool = false) async {
         isLoading = true
@@ -79,6 +96,14 @@ final class AuthenticationService {
                 emailStore.rememberedEmail = nil
             }
 
+            // Consume pending biometric enablement request on successful login.
+            if pendingBiometricEnablement {
+                pendingBiometricEnablement = false
+                shouldShowBiometricEnablementAfterLogin = true
+            } else {
+                shouldShowBiometricEnablementAfterLogin = false
+            }
+
             LogInfo("User logged in", category: .auth)
         } catch let authError as AuthenticationError {
             error = authError
@@ -86,6 +111,64 @@ final class AuthenticationService {
         } catch {
             self.error = .networkError
             LogError("Login failed: \(error)", category: .auth)
+        }
+    }
+
+    /// Sign in using the biometric-protected refresh token from the credential store.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
+    func signInWithBiometric() async {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.signInWithBiometric",
+            operation: "service.authentication.signInWithBiometric"
+        )
+        defer { transaction.finish() }
+        isLoading = true
+        defer { isLoading = false }
+
+        // Read the refresh token — this triggers the biometric prompt.
+        let refreshToken: String
+        do {
+            refreshToken = try await credentialStore.readRefreshToken(
+                reason: "Sign in to Christmas Tracker"
+            )
+        } catch BiometricCredentialError.userCancelled {
+            // Stay on screen, no error message.
+            return
+        } catch BiometricCredentialError.biometricFailed {
+            LogError("Biometric sign-in: biometric failed", category: .auth)
+            return
+        } catch BiometricCredentialError.lockedOut {
+            LogError("Biometric sign-in: locked out", category: .auth)
+            return
+        } catch BiometricCredentialError.itemNotFound {
+            LogError("Biometric sign-in: item not found", category: .auth)
+            return
+        } catch BiometricCredentialError.itemInvalidated {
+            LogError("Biometric sign-in: item invalidated", category: .auth)
+            return
+        } catch {
+            LogError("Biometric sign-in: credential store error: \(error)", category: .auth)
+            return
+        }
+
+        // Perform single-flight token refresh.
+        do {
+            let authData = try await singleFlightRefresh(token: refreshToken)
+            // Rotate the stored refresh token before surfacing authenticated state.
+            try? credentialStore.updateRefreshToken(authData.refreshToken)
+            await handleAuthSuccess(authData: authData)
+            LogInfo("Biometric sign-in succeeded", category: .auth)
+        } catch let authError as AuthenticationError {
+            if isCredentialFailure(authError) {
+                // Stale credential — delete enrollment silently (A7: no error text).
+                try? credentialStore.delete()
+                LogError("Biometric sign-in: credential failure, enrollment deleted", category: .auth)
+            } else {
+                LogError("Biometric sign-in: auth error: \(authError)", category: .auth)
+            }
+        } catch {
+            LogError("Biometric sign-in: network or unknown error: \(error)", category: .auth)
         }
     }
 
@@ -120,45 +203,72 @@ final class AuthenticationService {
     
     /// Logout current user
     func logout(reason: TeardownReason = .userLogout) async {
-        isLoading = true
-        defer { isLoading = false }
+        // Capture repo reference before clearing state.
+        let repo = authRepository
 
-        if let refreshToken = tokens?.refreshToken {
-            do {
-                try await authRepository.logout(refreshToken: refreshToken)
-            } catch {
-                LogError("Logout API failed: \(error)", category: .auth)
-            }
-        }
-
-        // Route through teardown — clears all registered clearables
+        // Local teardown FIRST — the user is signed out immediately regardless of network.
+        // SessionClearable path clears all registered clearables.
         await sessionManager.teardown(reason: reason)
         // AuthenticationService is not a registered clearable: SessionManager must exist before
         // AuthenticationService can be constructed (circular dependency), so it clears its own state here.
         clearAuthState()
         clearStoredTokens()
+        isLoading = false
+
+        // Best-effort non-awaited server logout — enrollment is never touched here.
+        Task {
+            do {
+                try await repo.logout(refreshToken: "")
+            } catch {
+                LogError("Logout API failed (best-effort): \(error)", category: .auth)
+            }
+        }
     }
     
     /// Refresh access token
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
     func refreshTokenIfNeeded() async {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.refreshTokenIfNeeded",
+            operation: "service.authentication.refreshTokenIfNeeded"
+        )
+        defer { transaction.finish() }
         guard let tokens = self.tokens, tokens.needsRefresh else {
             return
         }
-        
-        LogDebug("Refreshing access token", category: .auth)
-        
-        do {
-            let authData = try await authRepository.refreshToken(tokens.refreshToken)
-            await updateTokens(authData: authData)
-            
-            LogInfo("Token refreshed successfully", category: .auth)
-            
-        } catch {
-            LogError("Token refresh failed: \(error)", category: .auth)
-            
-            await logout(reason: .sessionExpired)
-        }
 
+        LogDebug("Refreshing access token", category: .auth)
+
+        do {
+            let authData = try await singleFlightRefresh(token: tokens.refreshToken)
+            await updateTokens(authData: authData)
+
+            // Rotate the stored credential token only if the enrolled user matches the session user.
+            if let enrolled = credentialStore.enrolledUser(),
+               enrolled.userId == currentUser?.id {
+                try? credentialStore.updateRefreshToken(authData.refreshToken)
+            }
+
+            LogInfo("Token refreshed successfully", category: .auth)
+
+        } catch let authError as AuthenticationError {
+            if isCredentialFailure(authError) {
+                // Delete enrollment only when it belongs to the current session user.
+                if let enrolled = credentialStore.enrolledUser(),
+                   enrolled.userId == currentUser?.id {
+                    try? credentialStore.delete()
+                }
+                LogError("Token refresh credential failure — session ended", category: .auth)
+                await logout(reason: .sessionExpired)
+            } else {
+                // Non-credential failure (network, etc.) — keep session and enrollment alive.
+                LogError("Token refresh failed (non-credential): \(authError)", category: .auth)
+            }
+        } catch {
+            // Unknown failure — keep session and enrollment alive.
+            LogError("Token refresh failed: \(error)", category: .auth)
+        }
     }
 
     /// Forgot password flow
@@ -187,6 +297,26 @@ final class AuthenticationService {
     }
     
     // MARK: - Private Helpers
+
+    /// Single-flight refresh: concurrent callers with the same refresh token await
+    /// the same in-flight repository call. The task is removed after it completes or fails.
+    private func singleFlightRefresh(token: String) async throws -> AuthData {
+        if let existing = inflightRefreshTasks[token] {
+            return try await existing.value
+        }
+        let task = Task<AuthData, Error> { [authRepository] in
+            try await authRepository.refreshToken(token)
+        }
+        inflightRefreshTasks[token] = task
+        do {
+            let result = try await task.value
+            inflightRefreshTasks.removeValue(forKey: token)
+            return result
+        } catch {
+            inflightRefreshTasks.removeValue(forKey: token)
+            throw error
+        }
+    }
 
     private func handleAuthSuccess(authData: AuthData) async {
         refreshBiometricAvailability()

@@ -11,6 +11,55 @@ internal nonisolated func loginInitialState(remembered: String?) -> (email: Stri
     (email: remembered ?? "", rememberEmail: remembered != nil)
 }
 
+// MARK: - Biometric Button State
+
+internal enum LoginBiometricButtonState: Equatable {
+    case hidden
+    case showNotEnrolled
+    case showNeedsSetup(message: String, opensSettings: Bool)
+    case showEnrolled(firstName: String)
+}
+
+internal nonisolated func loginBiometricButtonState(
+    readiness: BiometricReadiness,
+    enrolledUser: (userId: String, firstName: String)?,
+    biometryTypeName: String
+) -> LoginBiometricButtonState {
+    switch readiness {
+    case .noHardware:
+        return .hidden
+    case .needsSetup:
+        let msg = biometricReadinessMessage(for: readiness, biometryTypeName: biometryTypeName)
+        return .showNeedsSetup(message: msg.message, opensSettings: msg.opensSettings)
+    case .ready:
+        if let enrolled = enrolledUser {
+            return .showEnrolled(firstName: enrolled.firstName)
+        }
+        return .showNotEnrolled
+    }
+}
+
+internal nonisolated func shouldAutoAttemptBiometricLogin(
+    readiness: BiometricReadiness,
+    hasEnrolledUser: Bool,
+    alreadyAttemptedThisLaunch: Bool,
+    appIsActive: Bool
+) -> Bool {
+    guard case .ready = readiness else { return false }
+    return hasEnrolledUser && !alreadyAttemptedThisLaunch && appIsActive
+}
+
+// MARK: - isCredentialFailure
+
+internal nonisolated func isCredentialFailure(_ error: AuthenticationError) -> Bool {
+    switch error {
+    case .invalidRefreshToken, .sessionExpired, .invalidCredentials:
+        return true
+    default:
+        return false
+    }
+}
+
 struct LoginView: View {
     // MARK: - Environment
     @Environment(\.authenticationService) private var authService

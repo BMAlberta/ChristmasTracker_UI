@@ -116,11 +116,7 @@ actor NetworkAuthenticationRepository: AuthenticationRepository {
     
     func logout(refreshToken: String) async throws {
         LogDebug("Logout attempt", category: .auth)
-        
-        struct LogoutRequest: Codable {
-            let refreshToken: String
-        }
-        
+
         do {
             struct EmptyResponse: Codable {}
             let _ : EmptyResponse = try await apiClient.request(.post,
