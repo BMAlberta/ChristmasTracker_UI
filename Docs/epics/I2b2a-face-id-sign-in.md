@@ -273,3 +273,238 @@ No network or API model changes. `AuthenticationService` gains enrollment method
 ## Gate 1: Story S4 — Report and Handoff
 
 *(docs only; no Gate 1 spec needed)*
+
+---
+
+## Rework Gate 1: Story R1 — Observable Enrollment State, Store Hardening, and Sign-in Outcomes
+
+### Contract slice
+No network or API model changes. Changes are entirely within `AuthenticationService`, `BiometricCredentialStoring.swift`, and the sign-in test suite. `LoginView.swift` loses the misplaced `isCredentialFailure` free function (moved to services).
+
+### New interfaces introduced
+
+**`BiometricSignInState` enum** (new file `Authentication/Services/BiometricSignInState.swift`):
+```swift
+internal enum BiometricSignInState: Equatable {
+    case idle
+    case retryHint(String)
+    case passwordOnly(String)
+    case passwordRequired
+    case neutralError(String)
+}
+```
+
+**`biometricSignInOutcome(for:biometryTypeName:)` pure nonisolated function** (same file):
+Maps a `BiometricCredentialError` to `(state: BiometricSignInState, deleteEnrollment: Bool, refreshSnapshot: Bool)`.
+Maps an `AuthenticationError` to the same tuple (via `isCredentialFailure`).
+Two separate overloads, or one with an enum discriminant — pick what tests naturally.
+
+Mapping table:
+- `BiometricCredentialError.userCancelled` → `.idle`, delete=false, refresh=false
+- `BiometricCredentialError.biometricFailed` → `.retryHint("{biometryTypeName} didn't recognize you. Try again or use your password.")`, delete=false, refresh=false
+- `BiometricCredentialError.lockedOut` → `.passwordOnly("Biometrics are locked. Use your password to continue.")`, delete=false, refresh=false
+- `BiometricCredentialError.itemNotFound` or `.itemInvalidated` → `.idle`, delete=true, refresh=true
+- `BiometricCredentialError.other` → `.neutralError("Couldn't sign in. Try again or use your password.")`, delete=false, refresh=false
+- `AuthenticationError` with `isCredentialFailure == true` → `.passwordRequired`, delete=true, refresh=true
+- `AuthenticationError` with `isCredentialFailure == false` → `.neutralError("Couldn't sign in. Try again or use your password.")`, delete=false, refresh=false
+
+**`isCredentialFailure` moved** from `LoginView.swift` to `Authentication/Services/` (same file as `BiometricSignInState` or standalone). Declaration stays `internal nonisolated func isCredentialFailure`.
+
+**`AuthenticationService` additions**:
+- `private(set) var enrolledUserSnapshot: (userId: String, firstName: String)?` — stored observable (SwiftUI can observe changes).
+- `func refreshBiometricState()` — replaces `refreshBiometricAvailability()` body: also sets `enrolledUserSnapshot = credentialStore.enrolledUser()`. Keep `refreshBiometricAvailability()` as a thin alias that calls `refreshBiometricState()` (for all existing call sites — no rename cascade needed).
+- `private(set) var biometricSignInState: BiometricSignInState = .idle`
+- `func clearBiometricSignInState()` — sets `biometricSignInState = .idle`
+- `enrolledUser` computed property: returns `enrolledUserSnapshot` (observable read; justification: snapshot is refreshed immediately after every mutation, so views are never stale and no Keychain hit is needed in the view path).
+- `enrolledUserMatchesSession` computed property: compares `enrolledUserSnapshot?.userId == currentUser?.id` (snapshot is reliable here because `refreshBiometricState()` is called at the top of `handleAuthSuccess` before `currentUser` is set, so both are updated atomically within the same `@MainActor` turn).
+
+**`signInWithBiometric()` rewrite** (same file):
+- Clear `biometricSignInState` at the start of each attempt.
+- Apply the mapping to every error case; execute the side effects (delete, refresh) in the service.
+- Set `biometricSignInState` on every failure path.
+- After success: `biometricSignInState` stays `.idle`.
+- `isLoading` defer unchanged.
+
+**Store hardening** (`KeychainBiometricCredentialStore.enrolledUser()`):
+- Create a local `LAContext`, set `context.interactionNotAllowed = true`, pass as `kSecUseAuthenticationContext`.
+- Treat `errSecInteractionNotAllowed` as "not enrolled" for this call (return `nil`); do NOT delete the item.
+- Verified by reading code only (Keychain behavior cannot be verified in a unit test without a real device).
+
+### Acceptance criteria
+1. `biometricSignInOutcome` mapping covers all `BiometricCredentialError` cases and both `AuthenticationError` credential/non-credential paths — pure, tested without a service instance.
+2. `itemNotFound` and `itemInvalidated` produce `.idle`, `deleteEnrollment=true`, `refreshSnapshot=true`.
+3. A credential `AuthenticationError` produces `.passwordRequired`, `deleteEnrollment=true`, `refreshSnapshot=true`, with no error message in the state.
+4. A network `AuthenticationError` produces `.neutralError(...)`, `deleteEnrollment=false`, `refreshSnapshot=false`.
+5. `userCancelled` produces `.idle` with no delete and no snapshot refresh.
+6. `biometricFailed` produces `.retryHint(...)` containing the biometry type name.
+7. `enrolledUserSnapshot` updates after `enrollCurrentSession`, `revokeEnrollment`, stale-item cleanup, and token rotation — without recreating the service instance.
+8. `refreshBiometricAvailability()` still exists and behaves identically to before (alias).
+9. `isCredentialFailure` is gone from `LoginView.swift` and present in the services folder.
+10. `KeychainBiometricCredentialStore.enrolledUser()` query includes an `LAContext` with `interactionNotAllowed = true` — verified by reading code.
+11. `enrolledUser` on `AuthenticationService` returns the snapshot value, not a fresh Keychain read.
+12. All 388 existing tests continue to pass.
+
+### Scoped file and folder list
+**New:**
+- `ChristmasTracker/Features/Authentication/Services/BiometricSignInState.swift` — enum, mapping, `isCredentialFailure`
+- `ChristmasTrackerTests/Features/Authentication/BiometricSignInStateTests.swift`
+- `ChristmasTrackerTests/Features/Authentication/ObservableSnapshotTests.swift`
+
+**Modified:**
+- `ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift` — snapshot, `refreshBiometricState`, `biometricSignInState`, rewritten `signInWithBiometric`
+- `ChristmasTracker/Features/Authentication/Services/BiometricCredentialStoring.swift` — hardened `enrolledUser()`
+- `ChristmasTracker/Features/Authentication/Views/LoginView.swift` — delete `isCredentialFailure`
+
+**New interface: Yes** → full pipeline
+
+---
+
+## Rework Gate 1: Story R2 — Enrollment Offer Rules
+
+### Contract slice
+No network or API model changes. `AuthenticationService` gains offer logic. `EnrollmentHistoryStoring` protocol + `UserDefaultsEnrollmentHistory` added. `ProfileBiometricToggleModel` clears previously-enrolled user on revoke. `ChristmasTrackerApp` observes `biometricOfferAction`. `BiometricUnlockPreference` and `BiometricUnlockPreferring` deleted.
+
+### New interfaces introduced
+
+**`BiometricOfferAction` enum** (new file `Authentication/Services/BiometricOfferAction.swift`):
+```swift
+internal enum BiometricOfferAction: Equatable {
+    case none
+    case silentlyReplaceToken
+    case silentlyReenroll
+    case showEnablementScreen
+}
+```
+
+**`biometricOfferAction(readiness:enrolledUserId:signedInUserId:previouslyEnrolledUserId:offerShownForUser:pendingRequest:)` pure nonisolated function** (same file):
+Mapping (in order of precedence):
+1. `readiness != .ready` → `.none`
+2. `enrolledUserId == signedInUserId` (same user is enrolled) → `.silentlyReplaceToken`
+3. `enrolledUserId != nil && enrolledUserId != signedInUserId` (another user enrolled) → `.none`
+4. No enrollment, `pendingRequest == true` → `.showEnablementScreen`
+5. No enrollment, `previouslyEnrolledUserId == signedInUserId` → `.silentlyReenroll`
+6. No enrollment, `offerShownForUser == false` → `.showEnablementScreen`
+7. Otherwise → `.none`
+
+**`EnrollmentHistoryStoring` protocol** (same file or companion):
+```swift
+internal protocol EnrollmentHistoryStoring: Sendable {
+    var previouslyEnrolledUserId: String? { get }
+    func setPreviouslyEnrolledUserId(_ userId: String?)
+    func hasSeenOffer(for userId: String) -> Bool
+    func markOfferShown(for userId: String)
+}
+```
+
+**`UserDefaultsEnrollmentHistory`** — struct, backed by injected `UserDefaults` suite. Keys: `"enrollment.previousUserId"` and `"enrollment.offerShown.<userId>"`. Thread-safe by value semantics + main-actor callers.
+
+**`AuthenticationService` additions**:
+- Dependency: `enrollmentHistory: any EnrollmentHistoryStoring` (default: `UserDefaultsEnrollmentHistory(defaults: .standard)`)
+- `private(set) var biometricOfferAction: BiometricOfferAction = .none` — observable
+- In `login()` and `register()`: before calling `handleAuthSuccess`, compute the action with `biometricOfferAction(...)` using the new user from `authData` and current readiness/snapshot; set `self.biometricOfferAction`; execute silent actions immediately; always consume `pendingBiometricEnablement`. After `handleAuthSuccess` sets `isAuthenticated = true`, the action is already published.
+- Remove `shouldShowBiometricEnablementAfterLogin` (or keep as `var shouldShowBiometricEnablementAfterLogin: Bool { biometricOfferAction == .showEnablementScreen }` derived property — avoids breaking ChristmasTrackerApp if it still reads it; remove usages in ChristmasTrackerApp).
+- Silent re-enroll uses current `tokens.refreshToken` and `authData.user.name.components(separatedBy:" ").first`.
+
+**`ProfileBiometricToggleModel.toggle(to: false)`**: after `revokeEnrollment()`, call `enrollmentHistory.setPreviouslyEnrolledUserId(nil)` to clear the previously-enrolled marker. The `ProfileBiometricToggleModel` needs access to `enrollmentHistory`; inject via `authService` (add `enrollmentHistoryForTesting` or expose through the service) or pass separately.
+
+**`BiometricEnablementModel.onComplete(enabled: true)`** / success path: call `enrollmentHistory.markOfferShown(for: userId)` and `enrollmentHistory.setPreviouslyEnrolledUserId(userId)`. Pass `enrollmentHistory` to the enablement model or handle in the `onComplete` closure in `ChristmasTrackerApp`.
+
+**`ChristmasTrackerApp`**: replace `.onChange(of: authService.isAuthenticated)` offer guard with `.onChange(of: authService.biometricOfferAction)` → `{ if newValue == .showEnablementScreen { showBiometricSetup = true } }`; in `onComplete` closure, mark offer shown and set previously enrolled user. Clear `biometricOfferAction` to `.none` after dismissal (add `clearBiometricOfferAction()` or directly set via a method).
+
+**Delete**: `BiometricUnlockPreference.swift`, `BiometricUnlockPreferring` protocol, and `BiometricUnlockPreferenceTests.swift` (5 tests: list by name in report).
+
+### Acceptance criteria
+1. `biometricOfferAction` truth table: all 7 input combinations (R1=not ready, R2=same user enrolled, R3=other user enrolled, R4=no enroll+pending, R5=no enroll+prev user, R6=no enroll+no offer shown, R7=no enroll+offer shown+no pending) produce the right action — parameterized test.
+2. Silent replace updates `credentialStore` token (no `enrollCurrentSession` prompt).
+3. Silent re-enroll uses the previously-enrolled user id; a user whose credential failed is re-enrolled at next login (via the `previouslyEnrolledUserId` marker NOT being cleared by credential deletion).
+4. Turning Face ID off in Profile (via `revokeEnrollment`) clears `previouslyEnrolledUserId`; that user is NOT silently re-enrolled at next login.
+5. Another user's login leaves the enrollment untouched and returns `.none`.
+6. The action is published BEFORE `isAuthenticated` becomes `true` — tested with a suspending repository that records publication order.
+7. Offer markers survive creating a new `AuthenticationService` instance (UserDefaults persistence).
+8. `showEnablementScreen` shown once per user; second login returns `.none`; a pending request overrides to `showEnablementScreen` regardless.
+9. All `BiometricUnlockPreference` tests removed; `BiometricUnlockPreference.swift` deleted.
+10. All 388 (minus 5 preference tests + any new tests) pass.
+
+### Scoped file and folder list
+**New:**
+- `ChristmasTracker/Features/Authentication/Services/BiometricOfferAction.swift` — enum, pure function, `EnrollmentHistoryStoring`, `UserDefaultsEnrollmentHistory`
+- `ChristmasTrackerTests/Features/Authentication/BiometricOfferActionTests.swift`
+- `ChristmasTrackerTests/Features/Authentication/EnrollmentHistoryTests.swift`
+
+**Modified:**
+- `AuthenticationService.swift` — offer logic, `biometricOfferAction`, enrollment history dependency
+- `ProfileBiometricToggleModel.swift` — clear previously-enrolled marker on revoke
+- `BiometricEnablementModel.swift` — mark offer shown + set previously-enrolled in `enrollAction` closure or on success
+- `ChristmasTrackerApp.swift` — observe `biometricOfferAction`, not `isAuthenticated` for offer sheet
+
+**Deleted:**
+- `BiometricUnlockPreference.swift`
+- `BiometricUnlockPreferenceTests.swift`
+
+**New interface: Yes** → full pipeline
+
+---
+
+## Rework Gate 1: Story R3 — The Login Screen
+
+### Contract slice
+No network or API model changes. `LoginView.swift` gains `LoginBiometricModel` view model and the biometric button, alerts, and auto-prompt. `BiometricOptionView` deleted.
+
+### New interfaces introduced
+
+**`LoginBiometricModel`** — `@MainActor @Observable final class` (new file or at top of `LoginView.swift`):
+```swift
+@MainActor @Observable internal final class LoginBiometricModel {
+    // Reads from authService
+    var buttonState: LoginBiometricButtonState  // derived from readiness + snapshot
+    var biometricSignInState: BiometricSignInState  // from authService
+    var isLoading: Bool  // from authService
+
+    // Per-process once flag (nonisolated(unsafe) static var or a nonisolated singleton)
+    // Set on first autoAttemptIfNeeded call regardless of whether the attempt runs.
+    func autoAttemptIfNeeded() async  // triggers signInWithBiometric if conditions met
+    func tap()  // executes action for current buttonState; records pending request if not enrolled
+    // Convenience: pendingSetupMessage and opensSettings for showNeedsSetup
+    var setupMessage: String?
+    var setupOpensSettings: Bool
+    var showSetupAlert: Bool
+    var showNotEnrolledAlert: Bool
+}
+```
+
+The process-once flag is `nonisolated(unsafe) private static var hasAutoAttempted: Bool = false` or a dedicated `LoginBiometricModel.shared` — pick the approach that lets the auto-attempt test reset it cleanly. Per the prompt: "not reset by logout, the lock, or teardown".
+
+**`LoginBiometricTapAction`** (private or internal):
+No separate enum needed if `tap()` directly manipulates `showSetupAlert`/`showNotEnrolledAlert` state on the model.
+
+**`LoginView.body`** (modified):
+- Below `LoginActionSection`: `BiometricButtonSection` or inline view that reads from a `@State private var biometricModel: LoginBiometricModel`.
+- Biometric button: SF Symbol (`faceid` or `touchid`), text "Sign in with Face ID/Touch ID", DesignSystem tokens, min 44pt height, accessibility label and hint, hidden when `buttonState == .hidden`.
+- Caption "Signs in <first name>" when `.showEnrolled(firstName:)`.
+- `.disabled(authService.isLoading)`.
+- Two `.alert` modifiers for setup (with "Open Settings" / "Cancel") and not-enrolled (with "OK").
+- Outcome text: show `retryHint`/`passwordOnly`/`neutralError` message near the button; `passwordRequired` shows nothing.
+- `.task { ... }` for appear: re-reads readiness + snapshot via `authService.refreshBiometricState()`, then calls `biometricModel.autoAttemptIfNeeded()`.
+- `.onReceive` or `.onChange` on scene activation: re-reads readiness + snapshot.
+- Delete `BiometricOptionView` and `DividerRow` (if DividerRow is only used by BiometricOptionView).
+
+### Acceptance criteria
+1. `LoginBiometricModel.tap()` for `.hidden` → no-op.
+2. For `.showNeedsSetup(message:opensSettings:)` → sets `showSetupAlert = true`, correct message.
+3. For `.showNotEnrolled` → sets `showNotEnrolledAlert = true`, calls `authService.pendBiometricEnablementRequest()`.
+4. For `.showEnrolled(firstName:)` → calls `authService.signInWithBiometric()`.
+5. After tapping when not enrolled + login succeeds → `biometricOfferAction == .showEnablementScreen` (end-to-end with fakes).
+6. `autoAttemptIfNeeded` triggers `signInWithBiometric` exactly once per process when conditions met.
+7. `autoAttemptIfNeeded` does NOT trigger when `readiness != .ready`, no enrolled user, already attempted, or inactive.
+8. `biometricSignInState` changes from service are observable in the model.
+9. `buttonState` updates when `enrolledUserSnapshot` changes without recreating the model.
+10. `BiometricOptionView` is deleted from `LoginView.swift`.
+
+### Scoped file and folder list
+**New:**
+- (Possibly) `ChristmasTrackerTests/Features/Authentication/LoginBiometricModelTests.swift`
+
+**Modified:**
+- `ChristmasTracker/Features/Authentication/Views/LoginView.swift` — `LoginBiometricModel`, body changes, delete `BiometricOptionView`
+
+**New interface: Yes** → full pipeline
