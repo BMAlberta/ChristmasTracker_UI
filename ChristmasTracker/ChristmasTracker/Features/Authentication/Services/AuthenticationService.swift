@@ -30,6 +30,12 @@ final class AuthenticationService {
     private(set) var isBiometricAvailable: Bool = false
     private(set) var biometricType: BiometricType = .none
 
+    // Snapshot of the enrolled user; avoids live Keychain reads from view path.
+    private(set) var enrolledUserSnapshot: (userId: String, firstName: String)? = nil
+
+    // Biometric sign-in state machine; .idle means no active hint/error.
+    private(set) var biometricSignInState: BiometricSignInState = .idle
+
     // Pending biometric enablement: set by pendBiometricEnablementRequest(),
     // consumed and surfaced as shouldShowBiometricEnablementAfterLogin after a successful login.
     private(set) var shouldShowBiometricEnablementAfterLogin: Bool = false
@@ -91,6 +97,7 @@ final class AuthenticationService {
         case .success:
             let firstName = user.name.components(separatedBy: " ").first ?? ""
             try credentialStore.enroll(refreshToken: tokens.refreshToken, userId: user.id, firstName: firstName)
+            refreshBiometricState()
         default:
             throw AuthenticationError.biometricFailed
         }
@@ -98,15 +105,19 @@ final class AuthenticationService {
 
     func revokeEnrollment() throws {
         try credentialStore.delete()
+        refreshBiometricState()
     }
 
-    var enrolledUser: (userId: String, firstName: String)? {
-        credentialStore.enrolledUser()
-    }
+    var enrolledUser: (userId: String, firstName: String)? { enrolledUserSnapshot }
 
     var enrolledUserMatchesSession: Bool {
-        guard let enrolled = credentialStore.enrolledUser(), let user = currentUser else { return false }
+        guard let enrolled = enrolledUserSnapshot, let user = currentUser else { return false }
         return enrolled.userId == user.id
+    }
+
+    /// Clears the biometricSignInState back to .idle.
+    func clearBiometricSignInState() {
+        biometricSignInState = .idle
     }
 
     /// Login
@@ -160,6 +171,9 @@ final class AuthenticationService {
         defer { transaction.finish() }
         isLoading = true
         defer { isLoading = false }
+        biometricSignInState = .idle
+
+        let typeName = biometricType.displayName
 
         // Read the refresh token — this triggers the biometric prompt.
         let refreshToken: String
@@ -167,20 +181,16 @@ final class AuthenticationService {
             refreshToken = try await credentialStore.readRefreshToken(
                 reason: "Sign in to Christmas Tracker"
             )
-        } catch BiometricCredentialError.userCancelled {
-            // Stay on screen, no error message.
-            return
-        } catch BiometricCredentialError.biometricFailed {
-            LogError("Biometric sign-in: biometric failed", category: .auth)
-            return
-        } catch BiometricCredentialError.lockedOut {
-            LogError("Biometric sign-in: locked out", category: .auth)
-            return
-        } catch BiometricCredentialError.itemNotFound {
-            LogError("Biometric sign-in: item not found", category: .auth)
-            return
-        } catch BiometricCredentialError.itemInvalidated {
-            LogError("Biometric sign-in: item invalidated", category: .auth)
+        } catch let credError as BiometricCredentialError {
+            let outcome = biometricSignInOutcome(for: credError, biometryTypeName: typeName)
+            if outcome.deleteEnrollment {
+                try? credentialStore.delete()
+            }
+            if outcome.refreshSnapshot {
+                refreshBiometricState()
+            }
+            biometricSignInState = outcome.state
+            LogError("Biometric sign-in: credential error: \(credError)", category: .auth)
             return
         } catch {
             LogError("Biometric sign-in: credential store error: \(error)", category: .auth)
@@ -195,13 +205,15 @@ final class AuthenticationService {
             await handleAuthSuccess(authData: authData)
             LogInfo("Biometric sign-in succeeded", category: .auth)
         } catch let authError as AuthenticationError {
-            if isCredentialFailure(authError) {
-                // Stale credential — delete enrollment silently (A7: no error text).
+            let outcome = biometricSignInOutcome(for: authError, biometryTypeName: typeName)
+            if outcome.deleteEnrollment {
                 try? credentialStore.delete()
-                LogError("Biometric sign-in: credential failure, enrollment deleted", category: .auth)
-            } else {
-                LogError("Biometric sign-in: auth error: \(authError)", category: .auth)
             }
+            if outcome.refreshSnapshot {
+                refreshBiometricState()
+            }
+            biometricSignInState = outcome.state
+            LogError("Biometric sign-in: auth error: \(authError)", category: .auth)
         } catch {
             LogError("Biometric sign-in: network or unknown error: \(error)", category: .auth)
         }
@@ -354,7 +366,6 @@ final class AuthenticationService {
     }
 
     private func handleAuthSuccess(authData: AuthData) async {
-        refreshBiometricAvailability()
         // Update user
         currentUser = authData.user
         isAuthenticated = true
@@ -370,6 +381,8 @@ final class AuthenticationService {
         if credentialStore.enrolledUser()?.userId == authData.user.id {
             try? credentialStore.updateRefreshToken(authData.refreshToken)
         }
+        // Refresh biometric state (availability, type, and enrolled user snapshot).
+        refreshBiometricState()
         // Set session ID in cache
         await NetworkCache.shared.setSessionId(authData.user.id)
         // Start session keep-alive
@@ -401,7 +414,8 @@ final class AuthenticationService {
         }
     }
     
-    internal func refreshBiometricAvailability() {
+    /// Full biometric state refresh: availability, type, and enrolled user snapshot.
+    func refreshBiometricState() {
         isBiometricAvailable = biometricAuthenticator.isAvailable
         switch biometricAuthenticator.biometryType {
         case .faceID:
@@ -411,6 +425,11 @@ final class AuthenticationService {
         case .none:
             biometricType = .none
         }
+        enrolledUserSnapshot = credentialStore.enrolledUser()
+    }
+
+    internal func refreshBiometricAvailability() {
+        refreshBiometricState()
     }
 }
 

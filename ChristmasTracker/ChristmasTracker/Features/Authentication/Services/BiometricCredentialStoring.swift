@@ -44,14 +44,23 @@ internal final class KeychainBiometricCredentialStore: BiometricCredentialStorin
     private static let key = "biometric.credential.v1"
 
     func enrolledUser() -> (userId: String, firstName: String)? {
+        // Use interactionNotAllowed so this read never triggers a biometric prompt.
+        // errSecInteractionNotAllowed means the item exists but requires interaction;
+        // treat it as "not enrolled" for this call without deleting the item.
+        let context = LAContext()
+        context.interactionNotAllowed = true
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrAccount: Self.key,
             kSecReturnAttributes: true,
             kSecReturnData: false,
+            kSecUseAuthenticationContext: context,
         ]
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecInteractionNotAllowed {
+            return nil
+        }
         guard status == errSecSuccess,
               let attrs = result as? [CFString: Any],
               let userId = attrs[kSecAttrService] as? String,
@@ -162,13 +171,13 @@ internal final class InMemoryBiometricCredentialStore: BiometricCredentialStorin
 
     // MARK: - Private storage (protected by a lock for thread safety)
 
-    nonisolated(unsafe) private var stored: (refreshToken: String, userId: String, firstName: String)?
+    nonisolated(unsafe) private var stored: (refreshToken: String, userId: String, firstName: String)? // protected by lock
     private let lock = NSLock()
 
     // MARK: - Test configuration
 
     /// Set to a non-nil value to have `readRefreshToken` throw this error instead of returning the token.
-    nonisolated(unsafe) var stubbedReadError: BiometricCredentialError?
+    nonisolated(unsafe) var stubbedReadError: BiometricCredentialError? // protected by lock
 
     // MARK: - BiometricCredentialStoring
 

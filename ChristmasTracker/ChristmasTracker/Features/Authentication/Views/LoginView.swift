@@ -49,16 +49,6 @@ internal nonisolated func shouldAutoAttemptBiometricLogin(
     return hasEnrolledUser && !alreadyAttemptedThisLaunch && appIsActive
 }
 
-// MARK: - isCredentialFailure
-
-internal nonisolated func isCredentialFailure(_ error: AuthenticationError) -> Bool {
-    switch error {
-    case .invalidRefreshToken, .sessionExpired, .invalidCredentials:
-        return true
-    default:
-        return false
-    }
-}
 
 struct LoginView: View {
     // MARK: - Environment
