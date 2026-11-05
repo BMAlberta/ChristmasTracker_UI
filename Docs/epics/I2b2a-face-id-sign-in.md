@@ -177,7 +177,48 @@ No network or API model changes. Keychain operations only (new key, new protocol
 
 ## Gate 1: Story S2 — Sign-In Flow, Single-Flight Refresh, and Logout Order
 
-*(to be written before S2 work begins)*
+### Contract slice
+No network or API model changes. `AuthenticationService` changes only (new methods, modified logout and refresh). `NetworkAuthenticationRepository` dead-struct deletion. `LoginView` new biometric button (UI only, not unit-tested). `LockView` unchanged.
+
+### New interfaces introduced
+- `AuthenticationService.signInWithBiometric() async` — new async method
+- `AuthenticationService` gains `BiometricCredentialStoring` dependency (injected, default `KeychainBiometricCredentialStore()`)
+- Internal coalescing function for single-flight refresh (private to `AuthenticationService`)
+- `LoginView` biometric button: pure function `loginBiometricButtonState(readiness:enrolledUser:) -> LoginBiometricButtonState` (nonisolated) where `LoginBiometricButtonState` is an enum (`hidden`, `showNotEnrolled`, `showNeedsSetup(message:opensSettings:)`, `showEnrolled(firstName:)`)
+- `LoginView` auto-prompt: pure function `shouldAutoAttemptBiometricLogin(readiness:hasEnrolledUser:alreadyAttemptedThisLaunch:appIsActive:) -> Bool` (nonisolated)
+- Credential failure classification: `isCredentialFailure(_ error: AuthenticationError) -> Bool` (nonisolated free function)
+- Pending enablement request flag: stored on `AuthenticationService` (in-memory, consumed by next successful login)
+
+### Acceptance criteria
+1. `signInWithBiometric()` reads the token with `readRefreshToken`, calls the single-flight refresh, runs `handleAuthSuccess`, and immediately calls `updateRefreshToken` with the new token before returning.
+2. Each failure outcome (success, userCancelled, biometricFailed, lockedOut, itemNotFound/invalidated, credentialFailure, networkError) is mapped to the correct UI state; `isLoading` resets on every path.
+3. A credential failure during biometric sign-in deletes the enrollment and shows the password screen with no error text.
+4. Network errors, 429, 5xx, and 426-style errors keep both the enrollment and the session.
+5. `logout(reason:)` performs local teardown FIRST (clears state, calls `sessionManager.teardown`) before starting a non-awaited Task for the repository logout call.
+6. The logout request carries no body — a test using a spy `APIClient` pins this.
+7. `refreshToken` sends only the `refreshToken` field in the body — same spy test.
+8. After a successful refresh for the enrolled user, `updateRefreshToken` is called before the tokens are used.
+9. A credential failure in `refreshTokenIfNeeded` for the enrolled user ends the session and deletes only that user's enrollment.
+10. Network failures in `refreshTokenIfNeeded` leave the session and enrollment in place.
+11. Single-flight: two concurrent callers with the same refresh token share one repository call.
+12. `isCredentialFailure` returns true for `invalidRefreshToken`, `sessionExpired`, `invalidCredentials`; false for all others.
+13. The button-state function covers all readiness + enrolled combinations.
+14. The auto-prompt truth table (all combinations of readiness, hasEnrolledUser, alreadyAttempted, appIsActive).
+15. A pending enablement request is consumed by the next successful password login.
+
+### Scoped file and folder list
+**New:**
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/SignInWithBiometricTests.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/NetworkAuthRepositoryRequestTests.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/LoginBiometricButtonTests.swift`
+
+**Modified:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Services/AuthenticationService.swift` — `signInWithBiometric`, single-flight coalescing, `logout` order fix, `refreshTokenIfNeeded` enrollment sync, inject `BiometricCredentialStoring`
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Views/LoginView.swift` — biometric button, auto-prompt, pending enablement
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Repositories/NetworkAuthenticationRepository.swift` — delete dead `LogoutRequest` struct only
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/AuthenticationServiceTests.swift` — update logout test for new order
+
+**New interface: Yes** → full pipeline
 
 ---
 
