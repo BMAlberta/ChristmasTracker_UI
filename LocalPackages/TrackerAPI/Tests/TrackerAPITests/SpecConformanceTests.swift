@@ -200,4 +200,54 @@ struct SpecConformanceTests {
 
         #expect(transformCount == 5, "Expected exactly 5 anyOf-null / pure-null transformations; got \(transformCount)")
     }
+
+    // MARK: - Test 3: publicOperationIDsMatchSpec
+
+    @Test("publicOperationIDs matches operations in derived spec with no security requirement")
+    func publicOperationIDsMatchSpec() async throws {
+        let root = repoRoot()
+        let derivedURL = root.appendingPathComponent(
+            "LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.json"
+        )
+        let data = try #require(
+            try? Data(contentsOf: derivedURL),
+            "openapi.json must exist"
+        )
+        let spec = try #require(
+            try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            "openapi.json must be valid JSON object"
+        )
+
+        // Find all operationIds where the operation has no security requirement
+        // (either missing security key or security is an empty array)
+        var specPublicOps: Set<String> = []
+        if let paths = spec["paths"] as? [String: Any] {
+            for (_, pathItem) in paths {
+                guard let pathObj = pathItem as? [String: Any] else { continue }
+                for method in ["get", "post", "put", "patch", "delete", "head"] {
+                    guard let operation = pathObj[method] as? [String: Any] else { continue }
+                    guard let operationId = operation["operationId"] as? String else { continue }
+                    // "public" = no security requirement OR security is an empty array
+                    let security = operation["security"] as? [[String: Any]]
+                    if security == nil || security!.isEmpty {
+                        specPublicOps.insert(operationId)
+                    }
+                }
+            }
+        }
+
+        #expect(!specPublicOps.isEmpty, "Expected to find at least one public operation in spec")
+
+        // publicOperationIDs is defined in PublicOperations.swift (implementer creates it)
+        // This line causes a compile error until PublicOperations.swift is created:
+        #expect(
+            publicOperationIDs == specPublicOps,
+            "publicOperationIDs does not match spec. Spec has: \(specPublicOps.sorted()), constant has: \(publicOperationIDs.sorted())"
+        )
+
+        // Also verify the expected four operations are there
+        for op in ["checkAppVersion", "register", "login", "refreshToken"] {
+            #expect(specPublicOps.contains(op), "Expected \(op) to be a public operation in spec")
+        }
+    }
 }

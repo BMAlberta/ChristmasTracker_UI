@@ -6,10 +6,6 @@ import Foundation
 import HTTPTypes
 import OpenAPIRuntime
 
-private let publicOperationIDs: Set<String> = [
-    "checkAppVersion", "register", "login", "refreshToken"
-]
-
 // NSLock protects refreshTask; both are accessed only under the lock.
 // @unchecked Sendable is required because NSLock and Task<Void, Error>? are not
 // Sendable by themselves, but all mutation is protected by the lock.
@@ -66,17 +62,22 @@ public final class RefreshOn401Middleware: ClientMiddleware, @unchecked Sendable
         do {
             try await task.value
         } catch let refreshError as SessionRefreshError {
+            // Clear the failed task so the next 401 triggers a fresh attempt
             lock.withLock { refreshTask = nil }
             if case .credentialFailure = refreshError {
                 throw TrackerAPIError.unauthorized
             }
             throw refreshError
         } catch {
+            // Clear the failed task so the next 401 triggers a fresh attempt
             lock.withLock { refreshTask = nil }
             throw error
         }
 
-        lock.withLock { refreshTask = nil }
+        // Do NOT clear refreshTask on success — concurrent requests that also received a
+        // 401 must be able to find and reuse the same completed task rather than triggering
+        // a redundant second refresh. The completed task's result is cached by Swift; any
+        // subsequent `await task.value` returns immediately.
 
         // Replay with new token (bearer middleware will pick up fresh token)
         let (replayResponse, replayBody) = try await next(request, body, baseURL)

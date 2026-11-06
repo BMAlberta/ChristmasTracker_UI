@@ -6,10 +6,6 @@ import Foundation
 import HTTPTypes
 import OpenAPIRuntime
 
-private let publicOperationIDs: Set<String> = [
-    "checkAppVersion", "register", "login", "refreshToken"
-]
-
 public struct BearerAuthMiddleware: ClientMiddleware {
     private let tokenProvider: any AccessTokenProviding
 

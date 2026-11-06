@@ -7,6 +7,7 @@ import Foundation
 public enum TrackerAPIError: Error, Sendable {
     case unauthorized
     case forbidden
+    case invalidServerURL
     case notFound
     case conflict
     case validation(String)
