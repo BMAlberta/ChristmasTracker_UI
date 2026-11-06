@@ -3,6 +3,9 @@
 cd "$(dirname "$0")/.." || exit 1
 FAIL=0
 
+echo "=== verify: derived spec ==="
+scripts/make-client-spec.sh --check || { echo "=== verify: DERIVED SPEC OUT OF DATE — run scripts/make-client-spec.sh ==="; exit 1; }
+
 echo "=== verify: build ==="
 scripts/build.sh || { echo "=== verify: BUILD FAILED ==="; exit 1; }
 

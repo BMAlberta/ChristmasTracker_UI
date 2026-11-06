@@ -13,10 +13,12 @@
 // - `Error` schema → generated as `Components.Schemas._Error` (avoids shadowing Swift.Error)
 // - `ListSummary` allOf → nested: `value1` (base fields), `value2` (CapabilityFlags)
 // - `ListDetail` allOf → nested: `value1` (ListSummary), `value2.members`
-// - `coOwner` field (anyOf[PersonRef, null]) → DROPPED by generator (null schema unsupported)
-// - `expectedUnitPrice` field (anyOf[Money, null]) → DROPPED by generator (null schema unsupported)
+// - `coOwner` field → generated as `Components.Schemas.PersonRef?` (optional, via derived spec)
+// - `expectedUnitPrice` field → generated as `Components.Schemas.Money?` (optional, via derived spec)
+// - `totalBudget` on `YearStats` → generated as `Components.Schemas.Money?` (optional, via derived spec)
+// - `budget` on `StatsYearResponse` → generated as `Components.Schemas.BudgetStats?` (optional, via derived spec)
 // - UUID fields → generated as `Swift.String`
-// - Money fields (`type: number, multipleOf: 0.01`) → generated as `Swift.Double`
+// - Money fields (`type: number, multipleOf: 0.01`) → generated as `Swift.Double` (typealias Money)
 // - `ListRole.coOwner` → generated as `case coOwner = "co-owner"`
 
 import Testing
@@ -94,10 +96,6 @@ struct DecodingTests {
     }
 
     // MARK: - 5a. Nullable coOwner — null
-    // NOTE: The `coOwner` anyOf[PersonRef, null] field was dropped by the generator
-    // (null-type anyOf variant not supported in generator 1.14.2). JSON decodes
-    // successfully; the field is silently ignored. We verify the surrounding
-    // ListSummary fields decode correctly.
 
     @Test("Decode ListSummary with null coOwner decodes base fields correctly")
     func decodeListSummaryNullCoOwner() async throws {
@@ -132,14 +130,12 @@ struct DecodingTests {
         """
         let data = try #require(json.data(using: .utf8))
         let summary = try makeDecoder().decode(Components.Schemas.ListSummary.self, from: data)
-        // coOwner field is dropped by generator; verify surrounding fields decoded OK
         #expect(summary.value1.id == "00000000-0000-0000-0000-000000000002")
         #expect(summary.value1.memberCount == 1)
+        #expect(summary.value1.coOwner == nil)
     }
 
     // MARK: - 5b. Nullable coOwner — non-null
-    // NOTE: Same as 5a — `coOwner` is dropped by generator. JSON with a non-null
-    // coOwner object also decodes successfully (field silently ignored).
 
     @Test("Decode ListSummary with non-null coOwner decodes successfully")
     func decodeListSummaryNonNullCoOwner() async throws {
@@ -177,16 +173,14 @@ struct DecodingTests {
         """
         let data = try #require(json.data(using: .utf8))
         let summary = try makeDecoder().decode(Components.Schemas.ListSummary.self, from: data)
-        // coOwner field is dropped by generator; verify that decoding succeeded
-        // and the owner field (which IS present) decoded correctly.
         #expect(summary.value1.owner.id == "00000000-0000-0000-0000-000000000011")
         #expect(summary.value1.memberCount == 2)
+        let coOwner = try #require(summary.value1.coOwner)
+        #expect(coOwner.id == "00000000-0000-0000-0000-000000000012")
+        #expect(coOwner.displayName == "Carol")
     }
 
-    // MARK: - 6. Money value on Item
-    // NOTE: `expectedUnitPrice` anyOf[Money, null] was dropped by the generator
-    // (null-type anyOf variant not supported). JSON decodes successfully; the field
-    // is silently ignored. We verify the Item's required fields decode correctly.
+    // MARK: - 6. Money value on Item — non-null expectedUnitPrice
 
     @Test("Decode Item with money expectedUnitPrice of 349.99 decodes required fields correctly")
     func decodeItemMoneyField() async throws {
@@ -210,10 +204,153 @@ struct DecodingTests {
         """
         let data = try #require(json.data(using: .utf8))
         let item = try makeDecoder().decode(Components.Schemas.Item.self, from: data)
-        // expectedUnitPrice dropped by generator; verify required fields decoded OK
         #expect(item.id == "00000000-0000-0000-0000-000000000020")
         #expect(item.name == "Red Bicycle")
         #expect(item.priority == 5)
+        let price = try #require(item.expectedUnitPrice)
+        #expect(price == 349.99)
+    }
+
+    // MARK: - 6b. Null expectedUnitPrice on Item
+
+    @Test("Decode Item with null expectedUnitPrice decodes with nil expectedUnitPrice")
+    func decodeItemNullExpectedUnitPrice() async throws {
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000021",
+            "listId": "00000000-0000-0000-0000-000000000002",
+            "name": "Mystery Gift",
+            "description": "No price set yet",
+            "quantityRequested": 1,
+            "priority": 3,
+            "status": "AVAILABLE",
+            "offList": false,
+            "expectedUnitPrice": null,
+            "createdBy": {
+                "id": "00000000-0000-0000-0000-000000000011",
+                "displayName": "Bob"
+            },
+            "createdAt": "2026-11-02T00:00:00Z"
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let item = try makeDecoder().decode(Components.Schemas.Item.self, from: data)
+        #expect(item.expectedUnitPrice == nil)
+    }
+
+    // MARK: - 11. YearStats.totalBudget — null
+
+    @Test("Decode YearStats with null totalBudget yields nil totalBudget")
+    func decodeYearStatsTotalBudgetNull() async throws {
+        let json = """
+        {
+            "year": 2026,
+            "totalSpent": 125.50,
+            "itemsPurchased": 3,
+            "purchaseCount": 2,
+            "totalBudget": null
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let stats = try makeDecoder().decode(Components.Schemas.YearStats.self, from: data)
+        #expect(stats.year == 2026)
+        #expect(stats.totalSpent == 125.50)
+        #expect(stats.totalBudget == nil)
+    }
+
+    // MARK: - 12. YearStats.totalBudget — non-null
+
+    @Test("Decode YearStats with non-null totalBudget yields the correct value")
+    func decodeYearStatsTotalBudgetNonNull() async throws {
+        let json = """
+        {
+            "year": 2025,
+            "totalSpent": 480.00,
+            "itemsPurchased": 10,
+            "purchaseCount": 7,
+            "totalBudget": 500.00
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let stats = try makeDecoder().decode(Components.Schemas.YearStats.self, from: data)
+        let budget = try #require(stats.totalBudget)
+        #expect(budget == 500.0)
+    }
+
+    // MARK: - 13. StatsYearResponse.budget — null
+
+    @Test("Decode StatsYearResponse with null budget yields nil budget")
+    func decodeStatsYearResponseBudgetNull() async throws {
+        let json = """
+        {
+            "scope": "year",
+            "year": 2026,
+            "totalSpent": 50.00,
+            "itemsPurchased": 1,
+            "purchaseCount": 1,
+            "spendByRecipient": [],
+            "availableYears": [2026],
+            "budget": null
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let response = try makeDecoder().decode(Components.Schemas.StatsYearResponse.self, from: data)
+        #expect(response.year == 2026)
+        #expect(response.budget == nil)
+    }
+
+    // MARK: - 14. StatsYearResponse.budget — non-null
+
+    @Test("Decode StatsYearResponse with non-null budget yields a BudgetStats value")
+    func decodeStatsYearResponseBudgetNonNull() async throws {
+        let json = """
+        {
+            "scope": "year",
+            "year": 2025,
+            "totalSpent": 480.00,
+            "itemsPurchased": 10,
+            "purchaseCount": 7,
+            "spendByRecipient": [],
+            "availableYears": [2025, 2026],
+            "budget": {
+                "totalBudget": 500.00,
+                "totalSpent": 480.00,
+                "remaining": 20.00,
+                "recipients": []
+            }
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let response = try makeDecoder().decode(Components.Schemas.StatsYearResponse.self, from: data)
+        let budget = try #require(response.budget)
+        #expect(budget.totalBudget == 500.0)
+        #expect(budget.remaining == 20.0)
+    }
+
+    // MARK: - 15. PurchaseConfirmationRequiredData — no purchase field in JSON
+
+    @Test("Decode PurchaseConfirmationRequiredData without purchase field succeeds")
+    func decodePurchaseConfirmationRequiredDataNoPurchaseField() async throws {
+        // The contract had {type: null} for purchase — the transform removes it entirely.
+        // The generator already dropped it; this test verifies the struct never grew the field,
+        // and that decoding JSON without the purchase key succeeds.
+        let json = """
+        {
+            "status": "confirmation_required",
+            "requiresConfirmation": true
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let result = try makeDecoder().decode(
+            Components.Schemas.PurchaseConfirmationRequiredData.self,
+            from: data
+        )
+        #expect(result.status == .confirmationRequired)
+        #expect(result.requiresConfirmation == true)
+        // Verify the purchase field is absent from the type (contract says it must not be there)
+        let purchaseField = Mirror(reflecting: result).children
+            .first(where: { $0.label == "purchase" })
+        #expect(purchaseField == nil, "purchase field must not exist on PurchaseConfirmationRequiredData")
     }
 
     // MARK: - 7. ListSummary allOf
