@@ -211,3 +211,84 @@ None of these files are touched by I1-a. The app integration is I1-b.
 - Modify: `scripts/test.sh`
 - Create: `Docs/handoffs/2026-11-05-ios-to-brian-i1a.md`
 - Create: `Docs/reports/I1a-4-verify-and-handoff.md`
+
+---
+
+## Fix Pass Gate 1
+
+**Why:** Brian's review found defects H1–H7: the generator drops 5 nullable-field properties (ListSummary.coOwner, Item.expectedUnitPrice, YearStats.totalBudget, StatsYearResponse.budget, PurchaseConfirmationRequiredData.purchase); the factory omits the date transcoder; publicOperationIDs is duplicated and untested; doubleToDecimal manipulates private Decimal fields; isCredentialFailure omits 1013 and includes the unused 1007; RefreshOn401Middleware starts a second refresh for stale-token 401s; reports contain inaccuracies.
+
+---
+
+### Fix Pass Story G1: The Derived Client Spec
+
+**Interface introduced:** `scripts/make-client-spec.sh`, committed derived spec `LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.json` (replaces symlink), `SpecConformanceTests` suite.
+
+**Contract slice:** No app code. Script and spec file only. The generator now produces optional Swift properties for the five previously-dropped fields; decoding tests are updated to assert nil/value on each field.
+
+**Acceptance criteria:**
+1. `scripts/make-client-spec.sh` runs without error, prints the transform count (must equal 5), exits non-zero if count ≠ 5; `--check` mode regenerates to a temp file, compares, exits non-zero on difference.
+2. `scripts/verify.sh` gains a `make-client-spec.sh --check` step (placed before the app build).
+3. The derived `openapi.json` differs from `contract/openapi.json` only by: 4 anyOf-null properties replaced with the non-null schema (coOwner, expectedUnitPrice, totalBudget, budget) and the 1 bare-null property removed (purchase); each removed from its object's `required` array.
+4. The Swift package test `SpecConformanceTests` reads both files, applies the same transform in Swift, asserts the transformed-contract matches the derived file (via JSON re-serialization with sortedKeys), and asserts count == 5.
+5. Decoding tests prove: coOwner null → `nil`; coOwner present → `PersonRef`; expectedUnitPrice 349.99 → `Double`; expectedUnitPrice null → `nil`; PurchaseConfirmationRequiredData with absent purchase field decodes; YearStats.totalBudget null → `nil` and present → `Double`; StatsYearResponse.budget null → `nil` and present (a `BudgetStats` value). Print the generated Swift property types of all 5 fields in the report.
+6. After the transform the generator emits ONLY the refreshToken cookie-parameter warning (zero null-schema warnings).
+7. All 85 existing tests still pass.
+
+**Scoped files:**
+- Create: `scripts/make-client-spec.sh`
+- Create: `LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.json` (derived file)
+- Delete: `LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.yaml` (symlink)
+- Modify: `scripts/verify.sh` (add --check step before build)
+- Modify: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/DecodingTests.swift` (strengthen tests 5a, 5b, 6; add nullable-field tests for the other 3 fields)
+- Create: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/SpecConformanceTests.swift`
+- Create: `Docs/reports/I1a-5-derived-spec.md`
+
+---
+
+### Fix Pass Story G2: Factory, Date Transcoder, Spec Pins
+
+**Interface introduced:** `TrackerClientFactory.make` becomes `throws`; `publicOperationIDs` moves to a single shared constant in `Sources/TrackerAPI/PublicOperations.swift`; `TrackerClientFactoryTests` suite.
+
+**Contract slice:** No app code, no new endpoints. Factory and middleware only.
+
+**Acceptance criteria:**
+1. `TrackerClientFactory.make` throws `TrackerAPIError.invalidServerURL` when the URL has: a non-http/https scheme, an empty host, or a non-empty non-"/" path; accepts `http://localhost:3010` and `https://api.bmalberta.com` and `https://api.bmalberta.com/`; proven by factory tests.
+2. `TrackerClientFactory.make` passes `Configuration(dateTranscoder: TrackerDateTranscoder())` to `Client`; a factory-level test with a fake transport decodes a JSON body with ISO 8601 dates WITH fractional seconds and without; both pass.
+3. All four required headers (`X-Platform`, `X-Build`, `X-App-Version`, `X-Client-Platform`) and a UUID `X-Request-Id` are present on every request; proven by a factory-level test.
+4. Bearer token is on non-public requests and absent on public ones; proven by factory-level tests.
+5. `publicOperationIDs` is defined ONCE in `PublicOperations.swift`; `BearerAuthMiddleware` and `RefreshOn401Middleware` both import the same constant; a test reads the derived spec and asserts the set of operationIds with no `security` requirement equals `publicOperationIDs`, and that every string in `publicOperationIDs` appears as an operationId in the spec.
+
+**Scoped files:**
+- Create: `LocalPackages/TrackerAPI/Sources/TrackerAPI/PublicOperations.swift`
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/TrackerAPIError.swift` (add `invalidServerURL` case)
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/TrackerClientFactory.swift` (make throwing, pass date transcoder, add transport seam)
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/Middleware/BearerAuthMiddleware.swift` (use shared constant)
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/Middleware/RefreshOn401Middleware.swift` (use shared constant)
+- Create: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/TrackerClientFactoryTests.swift`
+- Modify: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/SpecConformanceTests.swift` (add public-ops pin test)
+- Create: `Docs/reports/I1a-6-factory-and-spec-pins.md`
+
+---
+
+### Fix Pass Story G3: Money, Error Codes, Single-Flight
+
+**Interface introduced:** rewritten `doubleToDecimal` (no private Decimal fields); `classifyErrorCode(errorCode:) -> ErrorCodeClassification`; updated `isCredentialFailure`; stale-token replay in `RefreshOn401Middleware`.
+
+**Contract slice:** No contract changes.
+
+**Acceptance criteria:**
+1. `doubleToDecimal` uses `String(format: "%.2f", value)` and `Decimal(string:locale:)` with `Locale(identifier: "en_US_POSIX")`; no private `_exponent`, `_length`, `_mantissa`, `_isNegative`, `_isCompact`, `_reserved` fields; `decimalToDouble` uses `NSDecimalNumberHandler` and `.doubleValue`.
+2. Money tests assert Decimal VALUE equality (not `.description` strings) and that `JSONEncoder` output for the Double contains the two-decimal representation; covers 0.1, 0.07, 19.99, 1234.5, 999999.99, 0, -5.25, 0.1+0.2→0.3; NaN and positive/negative infinity each return nil from `doubleToDecimal`.
+3. `isCredentialFailure(errorCode:)` returns true for 1005, 1006, 1013 and false for all others including 1007; every ACTIVE re-login code from `Docs/error-codes.md` is explicitly tested.
+4. `classifyErrorCode(errorCode:) -> ErrorCodeClassification` returns `.reLogin` for 1005/1006/1013, `.refreshAndReplay` for 1002/1003/1004, `.forceUpdate` for 1014, `.notFound` for 404-range active codes, `.backOff` for 429/503/500 active codes, `.showMessage` for all others and unknown codes; tested for every ACTIVE code in the table.
+5. `RefreshOn401Middleware` stores the bearer token of the failed request; when a 401 arrives and the current token from `AccessTokenProviding.accessToken()` DIFFERS from the failed-request token, it replays ONCE with the new token WITHOUT calling refresh (zero refresh calls); when they are equal (token not yet rotated by another caller), it proceeds with the existing single-flight refresh. Tests: stale-token 401 → zero refresh calls, one replay; concurrent fresh 401s → one refresh; both pass.
+
+**Scoped files:**
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/MoneyHelpers.swift`
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/TrackerAPIError.swift` (add `ErrorCodeClassification` enum and `classifyErrorCode`)
+- Modify: `LocalPackages/TrackerAPI/Sources/TrackerAPI/Middleware/RefreshOn401Middleware.swift`
+- Modify: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/MoneyHelpersTests.swift`
+- Modify: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/TrackerAPIErrorTests.swift`
+- Modify: `LocalPackages/TrackerAPI/Tests/TrackerAPITests/RefreshOn401MiddlewareTests.swift`
+- Create: `Docs/reports/I1a-7-money-codes-singleflight.md`
