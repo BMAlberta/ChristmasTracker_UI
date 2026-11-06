@@ -237,6 +237,36 @@ Replaces `AuthData` as the repository return type.
 
 ---
 
+## Fix Pass Gate 1: F1 — Strict Repository
+
+**Contract slice:** Delete all JSONSerialization fallback parsing from `GeneratedClientAuthenticationRepository.swift`; decode all responses only through generated types; replace `AuthenticationError.validationFailed` with `validation(message: String)` carrying the server's error.message; change `AuthenticationError.rateLimited` to `rateLimited(retryAfter: TimeInterval)` carrying the value from `TrackerAPIError.rateLimited`; rebuild all test fixtures from client guide examples (role "USER", full meta with fractional-seconds timestamp); withdraw contract-issues row 2.
+
+**New interface introduced:** yes
+- `AuthenticationError.validation(message: String)` — replaces `validationFailed`; `userMessage(for:)` returns the message directly
+- `AuthenticationError.rateLimited(retryAfter: TimeInterval)` — replaces `rateLimited`
+
+**Scoped files:**
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Repositories/GeneratedClientAuthenticationRepository.swift`
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/Repositories/MockAuthenticationRepository.swift` (update `AuthenticationError` enum only)
+- `ChristmasTracker/ChristmasTracker/Features/Authentication/AuthErrorMessages.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/GeneratedClientAuthRepositoryTests.swift`
+- `ChristmasTracker/ChristmasTrackerTests/Features/Authentication/AuthErrorMappingTests.swift`
+- `Docs/contract-issues.md`
+
+**Acceptance criteria:**
+1. No reference in production code to: `lenientDecodeAuthSession`, `extractErrorFields`, `lenientRoleMap`, `LenientDecodeResult`, `collectResponseBody`, `reclassifyOrFallbackLogin`, `reclassifyOrFallbackRegister`, `reclassifyOrFallbackRefresh`, `reclassifyLogoutError`, `mapNumericErrorCode`. Grep evidence in report.
+2. `AuthenticationError.validationFailed` is gone; `.validation(message: String)` exists. The `.badRequest` arm in login and register decodes `r.body.json.error.message` and throws `.validation(message:)`. `userMessage(for: .validation(message: "X"))` returns "X" directly.
+3. `AuthenticationError.rateLimited(retryAfter: TimeInterval)` replaces `rateLimited`. The outer catch in all four methods maps `TrackerAPIError.rateLimited(retryAfter: X)` to `.rateLimited(retryAfter: X)`; `ClientError` → `.invalidResponse`; `URLError` and anything else → `.networkError`.
+4. All success fixtures use `role: "USER"` and decode through the generated client without fallback. The `meta` field is present in all fixture bodies with a fractional-seconds timestamp (e.g., `"2026-11-02T00:00:00.000Z"`), `requestId`, and `sessionId`.
+5. All error body fixtures include the `meta` field.
+6. Tests deleted from `GeneratedClientAuthRepositoryTests.swift` are named in the report with reason "asserted fallback behavior: [description]".
+7. New tests cover: (a) guide-accurate success for login, register, and refresh; (b) login 400 → `validation(message:)` with the server's message string; (c) register 400 code 1011 PASSWORD_TOO_WEAK → `validation(message:)` with server's message; (d) register 400 code 1012 PASSWORD_MISMATCH → `validation(message:)`; (e) login transport failure (thrown `URLError`) → `.networkError`; (f) login 429 caught by `RateLimitMiddleware` → `.rateLimited(retryAfter: X)` where X > 0.
+8. `AuthErrorMappingTests.swift` A5 and A9 updated for new associated-value signatures; a new test confirms `userMessage(for: .validation(message: "Server says X"))` returns `"Server says X"`.
+9. `Docs/contract-issues.md` row 2 deleted; row 1 kept verbatim.
+10. `scripts/verify.sh` passes; all test count changes reconciled (deletes and adds accounted for).
+
+---
+
 ## Gate 1: Story C1 — The Generated Auth Repository, Models, and Service
 
 **Contract slice:** `AuthenticationRepository` protocol redefinition; `GeneratedClientAuthenticationRepository`; delete `NetworkAuthenticationRepository`, hand-written wire models (LoginRequest, RegisterRequest, BiometricLoginRequest, RefreshTokenRequest, ForgotPasswordRequest, AuthResponse, AuthData, ResponseMeta); update `AuthenticationService`; update `MockAuthenticationRepository`; update composition root.
