@@ -386,6 +386,25 @@ final class AuthenticationService {
         }
     }
 
+    /// Current access token — used by AccessTokenSeam production closure.
+    var currentAccessToken: String? { tokens?.accessToken }
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
+    // TODO(I2b-2b, 2026-11-05): the generated auth mapping replaces this refresh path.
+    func forceRefresh() async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.authentication.forceRefresh",
+            operation: "service.authentication.forceRefresh"
+        )
+        defer { span.finish() }
+        guard let currentToken = tokens?.refreshToken else {
+            throw AuthenticationError.invalidRefreshToken
+        }
+        let authData = try await singleFlightRefresh(token: currentToken)
+        await updateTokens(authData: authData)
+    }
+
     /// Forgot password flow
     func forgotPassword(email: String) async {
         isLoading = true

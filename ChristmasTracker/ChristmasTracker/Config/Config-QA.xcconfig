@@ -13,7 +13,7 @@
 #include "Config.xcconfig"
 
 // QA Overrides
-API_BASE_URL = https:/ /api-qa.christmastracker.com
+API_BASE_URL = http:/$()/localhost:3010
 
 // Shorter timeouts for QA testing
 CACHE_DURATION = 60         // 1 minute

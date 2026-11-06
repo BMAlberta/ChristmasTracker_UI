@@ -69,7 +69,7 @@ Nothing.
 ### Xcode setup (required before first build)
 
 1. In Xcode: File → Add Package Dependencies → Add Local → select `LocalPackages/TrackerAPI`
-2. Add `TrackerAPI` as a framework dependency on the `ChristmasTracker` app target
+2. Add `TrackerAPI` as a framework dependency on the `ChristmasTracker` **app target only** — do NOT add it to `ChristmasTrackerTests` or `ChristmasTrackerUITests`. Adding it to more than one target forces Xcode to build it as a dynamic framework, which removes OpenAPIRuntime symbols from the app binary and causes linker errors when calling generated operations (e.g. `Undefined symbol: nominal type descriptor for OpenAPIRuntime.AcceptHeaderContentType`). With only the app target linked, Xcode builds it statically and embeds all symbols.
 3. Build once (`Cmd+B`) — the generator plugin runs at build time and produces `Types.swift` and `Client.swift`; SourceKit may show "No such module 'TrackerAPI'" until after the first successful build
 4. If the build-tool plugin asks for trust, grant it
 

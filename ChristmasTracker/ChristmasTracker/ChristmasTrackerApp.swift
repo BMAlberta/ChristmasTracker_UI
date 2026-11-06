@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TrackerAPI
 @preconcurrency import UIKit
 
 // MARK: - LockCoordinator
@@ -77,6 +78,76 @@ private final class LockCoordinator: InactivityLockPresenting {
     }
 }
 
+// MARK: - AppDependencies
+
+/// Dependency container for the composition root.
+struct AppDependencies: Sendable {
+    let apiClient: APIClient
+    let authRepository: AuthenticationRepository
+    let listRepository: ListRepository
+    let itemRepository: ItemRepository
+    // Stored as the APIProtocol existential to avoid a linker dependency on
+    // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
+    // Client struct is only constructed in TrackerAPI-linked callers.
+    // nonisolated(unsafe): Sendable value written once at construction; safe to
+    // read from any isolation context since AppDependencies is Sendable.
+    nonisolated(unsafe) let trackerClient: (any APIProtocol)?
+
+    static func make() -> AppDependencies {
+        switch AppConfiguration.apiMode {
+        case .mock:
+            let apiClient = MockAPIClient.withMockData()
+            return AppDependencies(
+                apiClient: apiClient,
+                authRepository: MockAuthenticationRepository(),
+                listRepository: MockListRepository(),
+                itemRepository: MockItemRepository(),
+                trackerClient: nil
+            )
+        case .real:
+            let apiClient = NetworkAPIClient()
+            return AppDependencies(
+                apiClient: apiClient,
+                authRepository: NetworkAuthenticationRepository(apiClient: apiClient),
+                listRepository: NetworkListRepository(apiClient: apiClient),
+                itemRepository: NetworkItemRepository(apiClient: apiClient),
+                trackerClient: nil
+            )
+        }
+    }
+
+}
+
+// MARK: - buildGeneratedClient
+
+/// Builds the optional generated TrackerAPI client for a given mode and base URL.
+/// Returns nil in mock mode, when serverURL is nil, or when the factory throws (error is logged).
+/// Used by ChristmasTrackerApp.init() and the composition-root tests.
+nonisolated func buildGeneratedClient(
+    mode: APIMode,
+    serverURL: URL?,
+    info: AppClientInfo,
+    tokenProvider: some AccessTokenProviding,
+    sessionRefresher: some SessionRefreshing,
+    versionOutdatedHandler: some VersionOutdatedHandling,
+    requestIDObserver: (any RequestIDObserving)? = nil
+) -> (any APIProtocol)? {
+    guard mode == .real, let url = serverURL else { return nil }
+    do {
+        return try TrackerClientFactory.make(
+            serverURL: url,
+            info: info,
+            tokenProvider: tokenProvider,
+            sessionRefresher: sessionRefresher,
+            versionOutdatedHandler: versionOutdatedHandler,
+            requestIDObserver: requestIDObserver
+        )
+    } catch {
+        LogError("Failed to build TrackerAPI client: \(error)", category: .business)
+        return nil
+    }
+}
+
 // MARK: - ChristmasTrackerApp
 
 @main
@@ -87,6 +158,8 @@ struct ChristmasTrackerApp: App {
     @State private var listService: ListService
     @State private var itemService: ItemService
     @State private var showBiometricSetup = false
+    @State private var versionGate: VersionGate
+    @State private var versionService: VersionService
     private let sessionManager: SessionManager
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
     private let lockController: InactivityLockController
@@ -97,33 +170,12 @@ struct ChristmasTrackerApp: App {
     // read in deinit where the app is exclusively owned — no concurrent access.
     nonisolated(unsafe) private var lockObservers: [any NSObjectProtocol] = []
 
-    private struct AppDependencies {
-        let apiClient: APIClient
-        let authRepository: AuthenticationRepository
-        let listRepository: ListRepository
-        let itemRepository: ItemRepository
+    // nonisolated(unsafe): written exactly once during init on MainActor;
+    // accessed only after init completes — no concurrent mutation.
+    // Stored as the protocol existential to avoid OpenAPIRuntime.UniversalClient (@_spi)
+    // appearing in the app binary's link requirements.
+    nonisolated(unsafe) private var generatedClient: (any APIProtocol)?
 
-        static func make() -> AppDependencies {
-            switch AppConfiguration.apiMode {
-            case .mock:
-                let apiClient = MockAPIClient.withMockData()
-                return AppDependencies(
-                    apiClient: apiClient,
-                    authRepository: MockAuthenticationRepository(),
-                    listRepository: MockListRepository(),
-                    itemRepository: MockItemRepository()
-                )
-            case .real:
-                let apiClient = NetworkAPIClient()
-                return AppDependencies(
-                    apiClient: apiClient,
-                    authRepository: NetworkAuthenticationRepository(apiClient: apiClient),
-                    listRepository: NetworkListRepository(apiClient: apiClient),
-                    itemRepository: NetworkItemRepository(apiClient: apiClient)
-                )
-            }
-        }
-    }
 
     // MARK: - Initialization
     init() {
@@ -131,6 +183,10 @@ struct ChristmasTrackerApp: App {
         SentryBootstrap.startIfConfigured()
         // Wipe 4.4 legacy credentials/data on first launch — must run before store reads
         FirstLaunchWipe().performIfNeeded()
+
+        // Build versionGate before anything else so it can be passed into the client factory.
+        let vg = VersionGate()
+        _versionGate = State(initialValue: vg)
 
         // Start the privacy cover before any app data or session state is built.
         // The coordinator has no dependencies; it must be alive before the first scene event.
@@ -196,6 +252,50 @@ struct ChristmasTrackerApp: App {
             enrollmentHistory: UserDefaultsEnrollmentHistory()
         )
         authService = auth
+
+        let vs = VersionService(repository: MockAppVersionRepository())
+        _versionService = State(initialValue: vs)
+
+        // Wire the generated TrackerAPI client in real mode.
+        // In mock mode buildGeneratedClient returns nil immediately.
+        let tokenSeam = AccessTokenSeam(tokenGetter: { [weak auth] in
+            await auth?.currentAccessToken
+        })
+        let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak auth] in
+            guard let svc = auth else { throw AuthenticationError.invalidRefreshToken }
+            try await svc.forceRefresh()
+        })
+        let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
+        // AppConfiguration.apiBaseURL is only accessed in real mode (ternary short-circuits).
+        let resolvedBaseURL: URL? = AppConfiguration.apiMode == .real ? AppConfiguration.apiBaseURL : nil
+        generatedClient = buildGeneratedClient(
+            mode: AppConfiguration.apiMode,
+            serverURL: resolvedBaseURL,
+            info: makeClientInfo(from: Bundle.main.infoDictionary),
+            tokenProvider: tokenSeam,
+            sessionRefresher: refreshSeam,
+            versionOutdatedHandler: vg,
+            requestIDObserver: requestIDSeam
+        )
+
+        // In real mode, start the version-check launch task.
+        if AppConfiguration.apiMode == .real, let client = generatedClient {
+            let realRepo = GeneratedClientAppVersionRepository(
+                client: client,
+                info: makeClientInfo(from: Bundle.main.infoDictionary)
+            )
+            let realVS = VersionService(repository: realRepo)
+            _versionService = State(initialValue: realVS)
+            Task { @MainActor [weak realVS] in
+                await realVS?.check()
+                if let policy = realVS?.lastPolicy {
+                    LogInfo(
+                        "Version check: state=\(policy.state) minBuild=\(policy.minimumBuild) latestBuild=\(policy.latestBuild)",
+                        category: .business
+                    )
+                }
+            }
+        }
 
         // Wire the lock controller's authService reference.
         lc.authService = auth
