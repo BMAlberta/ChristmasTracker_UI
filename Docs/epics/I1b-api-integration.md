@@ -239,3 +239,89 @@ Operations.CheckAppVersion.Input(
 - `scripts/verify.sh`
 - `Docs/handoffs/<date>-ios-to-brian-i1b.md` (new)
 - `Docs/reports/I1b-4-verify-and-handoff.md` (new)
+
+---
+
+## Fix pass Gate 1
+
+Defects K1–K5 found in chat review after all four B stories were committed. Three corrective stories:
+
+---
+
+### Gate 1: Story F1 — Repository back in the app
+
+**Background:** The B3 implementer moved `VersionPolicy`, `AppVersionChecking`, and `GeneratedClientAppVersionRepository` into `LocalPackages/TrackerAPI/` to work around an `OpenAPIRuntime` linker error. Brian's commit `3e35e09` identified the real cause: the package was linked to multiple targets, forcing dynamic linking, which left the `OpenAPIRuntime` symbols out of the app binary. With the package now linked **only** to the `ChristmasTracker` app target it is built statically and the linker error disappears. These three types (and their tests) must move back to the app.
+
+**Contract slice:** Move `VersionPolicy`, `VersionPolicyState`, `AppVersionChecking`, and `GeneratedClientAppVersionRepository` from `LocalPackages/TrackerAPI/Sources/TrackerAPI/` to `ChristmasTracker/ChristmasTracker/Features/Version/`. Move `VersionCheckRepositoryTests.swift` from the package test target to `ChristmasTrackerTests/Features/Version/`. Remove the moved files from the package. Restore `@Instrumented` on `checkVersion()`.
+
+**Acceptance criteria:**
+1. `scripts/verify.sh` exits `OK`; `swift test --package-path "LocalPackages/TrackerAPI"` passes; total app test count is exactly `534 + 15 = 549`; total package test count is exactly `161 − 15 = 146`.
+2. `VersionPolicy`, `AppVersionChecking`, `GeneratedClientAppVersionRepository` are absent from `LocalPackages/TrackerAPI/Sources/TrackerAPI/` (delete, not comment out).
+3. `@Instrumented` is present on `checkVersion()` with no "not available" comment.
+4. `nonisolated(unsafe) var cachedPolicy` retains its justifying comment.
+5. All 15 moved test assertions are preserved verbatim; `@testable import ChristmasTracker` replaces `@testable import TrackerAPI`; a local `FakeTransport` stands in for the package's `FakeTransport` (the same interface); `import TrackerAPI` (non-testable) covers `TrackerClientFactory`, `AppClientInfo`, seam fakes.
+6. `(any APIProtocol)?` existential is preserved if still needed to avoid the `@_spi UniversalClient` issue.
+
+**New interface introduced:** no (moving existing types).
+
+**Scoped files:**
+- `ChristmasTracker/ChristmasTracker/Features/Version/VersionPolicy.swift` (new, moved from package)
+- `ChristmasTracker/ChristmasTracker/Features/Version/AppVersionChecking.swift` (new, moved from package)
+- `ChristmasTracker/ChristmasTracker/Features/Version/GeneratedClientAppVersionRepository.swift` (new, moved from package)
+- `ChristmasTracker/ChristmasTrackerTests/Features/Version/VersionCheckRepositoryTests.swift` (new, moved from package tests)
+- `LocalPackages/TrackerAPI/Sources/TrackerAPI/VersionPolicy.swift` (delete)
+- `LocalPackages/TrackerAPI/Sources/TrackerAPI/AppVersionChecking.swift` (delete)
+- `LocalPackages/TrackerAPI/Sources/TrackerAPI/GeneratedClientAppVersionRepository.swift` (delete)
+- `LocalPackages/TrackerAPI/Tests/TrackerAPITests/VersionCheckRepositoryTests.swift` (delete)
+
+---
+
+### Gate 1: Story F2 — Import audit guard
+
+**Background:** The `=== verify: TrackerAPI Xcode scheme ===` step added in B4 builds the TrackerAPI Xcode scheme. In the K2 mutation experiment (HTTPTypes removed from Package.swift) this step printed `BUILD SUCCEEDED`; only the pre-existing unit-test step detected the breakage. The report incorrectly credited the new step. A deterministic import-audit script that reads declared `Package.swift` dependencies and compares them against `import X` statements in source files catches this class of error directly and does not depend on cached build artifacts.
+
+**Contract slice:** Remove the xcodebuild `=== verify: TrackerAPI Xcode scheme ===` step from `scripts/verify.sh`. Write `scripts/check-package-imports.sh` that audits `import` statements in `LocalPackages/TrackerAPI/Sources/**/*.swift` and test sources against the dependencies declared in `Package.swift`. Add an `=== verify: TrackerAPI import audit ===` step in `scripts/verify.sh` that calls the new script.
+
+**Acceptance criteria:**
+1. `scripts/check-package-imports.sh` exits non-zero when `HTTPTypes` is removed from `Package.swift`; exits zero when it is present.
+2. The old `=== verify: TrackerAPI Xcode scheme ===` step is gone from `verify.sh`.
+3. The new `=== verify: TrackerAPI import audit ===` step is present and fails on the HTTPTypes mutation.
+4. The mutation proof (remove HTTPTypes, run verify, restore) is pasted in the report.
+5. All other existing verify steps and output format are unchanged.
+
+**New interface introduced:** yes — `scripts/check-package-imports.sh`.
+
+**Scoped files:**
+- `scripts/verify.sh`
+- `scripts/check-package-imports.sh` (new)
+- `Docs/reports/I1b-F2-import-audit.md` (new)
+
+---
+
+### Gate 1: Story F3 — Test stubs out of production, handoff accuracy
+
+**Background:** `AppDependencies.make(mode:baseURL:)` in the production file `ChristmasTrackerApp.swift` defines `TestAPIClient`, `TestListRepo`, `TestItemRepo`, and `NoopVersionHandler` inline and swallows client-build errors with `try?`. The handoff (K3) told Brian to run Release to test real mode (Release ignores the override), omitted the backend setup steps, and had an inaccurate architecture description. The I1-a handoff step 3 (K5) told Brian to link TrackerAPI to the test target too.
+
+**Contract slice:** Extract client-building from `make(mode:baseURL:)` into a small `internal` `nonisolated` function `buildGeneratedClient(mode:serverURL:info:tokenProvider:sessionRefresher:versionOutdatedHandler:requestIDObserver:) -> (any APIProtocol)?` that returns `nil` for mock mode or when the factory throws (logs the error; no `try?`). Remove `TestAPIClient`, `TestListRepo`, `TestItemRepo`, and `NoopVersionHandler` from production code; move the stub definitions to `SeamTests.swift` in the test target. Update `ChristmasTrackerApp.init()` to call `buildGeneratedClient`. Update the two composition-root tests to call `buildGeneratedClient` with no-op stubs defined in the test target. Rewrite `Docs/handoffs/2026-11-06-ios-to-brian-i1b.md`. Correct step 3 in `Docs/handoffs/2026-11-05-ios-to-brian.md`. Correct the deviations in `Docs/reports/I1b-3-version-check-slice.md` and the mutation-check claim in `Docs/reports/I1b-4-verify-and-handoff.md`.
+
+**Acceptance criteria:**
+1. No `TestAPIClient`, `TestListRepo`, `TestItemRepo`, or `NoopVersionHandler` symbol in `ChristmasTrackerApp.swift` or any other production file.
+2. `try?` is gone from client construction in `ChristmasTrackerApp.swift`; a `LogError` call logs the failure.
+3. `buildGeneratedClient` is `internal` and `nonisolated`; it is the only place the factory is called at composition time.
+4. The two composition-root tests (`trackerClient is nil in mock mode`; `trackerClient is non-nil in real mode with valid URL`) still pass using `buildGeneratedClient` with no-op stubs defined in the test target.
+5. `Docs/handoffs/2026-11-06-ios-to-brian-i1b.md` "Brian's Real-Mode Check" reads: start backend on `http://localhost:3010`, add `-apiModeOverride real` as a Debug launch argument, run Debug on a simulator, expect `[business] Version check:` log line, stop backend and relaunch to test failure case, remove argument to return to mock mode.
+6. `Docs/handoffs/2026-11-05-ios-to-brian.md` step 3 says: add TrackerAPI to the `ChristmasTracker` app target **only**, never to a test target, with the reason (static linking; adding to a second target makes it dynamic and breaks the OpenAPIRuntime link).
+7. `Docs/reports/I1b-3-version-check-slice.md` deviations section correctly states that the repository was moved to the package (not the app) and that the fix pass moves it back.
+8. `Docs/reports/I1b-4-verify-and-handoff.md` mutation-check section correctly states that the new xcodebuild step passed the mutation and was therefore ineffective; the step that caught it was the pre-existing unit-test step.
+9. `scripts/verify.sh` exits `OK`; app and package test counts are unchanged.
+
+**New interface introduced:** yes — `buildGeneratedClient` internal function.
+
+**Scoped files:**
+- `ChristmasTracker/ChristmasTracker/ChristmasTrackerApp.swift`
+- `ChristmasTrackerTests/Core/API/SeamTests.swift`
+- `Docs/handoffs/2026-11-06-ios-to-brian-i1b.md`
+- `Docs/handoffs/2026-11-05-ios-to-brian.md`
+- `Docs/reports/I1b-3-version-check-slice.md`
+- `Docs/reports/I1b-4-verify-and-handoff.md`
+- `Docs/reports/I1b-F3-stubs-and-handoff.md` (new)
