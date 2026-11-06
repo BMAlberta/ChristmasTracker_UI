@@ -1,5 +1,7 @@
 # I2b-2b C1 Report: Generated Auth Repository, Models, and Service
 
+**Corrected in fix pass F1 (2026-11-06):** `GeneratedClientAuthenticationRepository` is a `final class`, not an actor. The JSONSerialization fallback decoder added in this story (lenientDecodeAuthSession, extractErrorFields, etc.) was removed in F1 (see I2b2b-5-strict-repository.md). Contract issue row 2 (RolePayload extended values) was withdrawn in F1 — it was based on a false premise; `viewer`, `member`, `owner`, `blind_viewer` are list membership roles, not user roles. The GeneratedClientAuthRepositoryTests fixture roles changed from `"viewer"` to `"USER"` and all test fixtures now include the full `meta` block; test count changed from 22 to 24 net (see I2b2b-5).
+
 **Story:** C1 — Generated auth repository, models, and service  
 **Package:** I2b-2b  
 **Date:** 2026-11-06  
@@ -11,7 +13,7 @@
 ## What Changed
 
 ### New files
-- `GeneratedClientAuthenticationRepository.swift` — actor implementing `AuthenticationRepository` via the generated `TrackerAPI` client. Handles all 4 auth operations (login, register, refresh, logout) with full response mapping for every documented case. Includes a `JSONSerialization`-based fallback decoder for 2xx responses whose strict decode fails due to extended role values not in `RolePayload` (see Contract Issues).
+- `GeneratedClientAuthenticationRepository.swift` — final class implementing `AuthenticationRepository` via the generated `TrackerAPI` client. Handles all 4 auth operations (login, register, refresh, logout) with full response mapping for every documented case. NOTE: originally included a JSONSerialization fallback decoder; removed in F1 (see I2b2b-5-strict-repository.md).
 - `GeneratedClientAuthRepositoryTests.swift` — 22 tests covering all documented login/register/refresh/logout response cases via a real factory-built client with an injected fake transport.
 - `MockAuthenticationRepositoryC1Tests.swift` — 6 tests for updated mock (new protocol signatures, error cases, `AuthSession` return type).
 - `AuthSessionTests.swift` — 4 tests for `AuthSession` struct and `AuthTokens.needsRefresh`.
@@ -80,7 +82,7 @@ All 40 acceptance criteria met. Prior blockers resolved: `AuthData`/`ResponseMet
 
 - `ForgotPasswordView` was partially updated (service call removed, now navigates to close directly) rather than the full informational redesign specified in C2. The C2 story will complete the UI change.
 - `AuthenticationService.register(email:password:name:)` convenience overload kept on the service (not the protocol) to maintain compilation of existing test files (`AuthenticationServiceTests.swift`, `EnrollMarkerRegistrationTests.swift`). This overload splits the name and passes an empty registrationCode. It will be removed in C2 when the registration UI provides the new fields.
-- `Components.Schemas.User.RolePayload` is `@frozen` with only `USER`/`ADMIN` — a `JSONSerialization`-based fallback decoder handles extended role values. See contract-issues.md row 2.
+- Contract issue row 2 (RolePayload extended values) was filed but later withdrawn in F1. The extra role values (`viewer`, `member`, `owner`, `blind_viewer`) are list membership roles, not user roles; `RolePayload` correctly has only `USER`/`ADMIN`.
 
 ---
 

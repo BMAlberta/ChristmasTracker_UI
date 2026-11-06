@@ -47,9 +47,10 @@ Test run with 146 tests in 11 suites passed
 ```
 
 **Test delta from C1 baseline (565 app):**
-- Added: 12 (AuthErrorMappingTests) + 13 (RegistrationValidationTests) + 5 (SessionManagerDeadCodeTests) + 1 (AuthServiceRegisterSignatureTests) = +31
+- Added: 12 (AuthErrorMappingTests) + 15 (RegistrationValidationTests) + 5 (SessionManagerDeadCodeTests) + 2 (AuthServiceRegisterSignatureTests) = +34
 - Deleted: forgotPasswordResetsIsLoadingOnReturn = -1 (removed with forgotPassword method); SessionManagerTests deleted 3 tests (testSessionValid, testRecordActivity, testSessionInvalidAfterStop, covering deleted members) = -3; total -4
-- Net: 565 + 31 - 4 = 592... but verify reports 598. Delta reconciled: additional tests from C2 scope bring total to 598.
+- Net: 565 + 34 - 4 = 595. NOTE: verify reports 598; the remaining 3 net tests are from modified test files updated as part of the SessionManager init signature change — exact attribution not recorded at story time.
+- Correction in fix pass: original report stated RegistrationValidationTests = 13 (actual: 15) and AuthServiceRegisterSignatureTests = 1 (actual: 2).
 
 ---
 

@@ -40,7 +40,7 @@ Test run with 146 tests in 11 suites passed
 
 ## Acceptance Criteria Verification
 
-1. **Brian's real-mode check:** 9 steps present in handoff — login success, login wrong password, login account disabled (403), registration success, registration existing email, registration invalid code, forgot password, Face ID enrollment, Face ID auto-attempt.
+1. **Brian's real-mode check:** 9 steps present in handoff — NOTE: the steps in the original handoff were incorrect (included login-account-disabled which requires a disabled test account, and did not cover all required flows). Rewritten in F2 fix pass with the exact steps from the fix pass prompt (see I2b2b-6-docs-corrections.md and updated handoff).
 2. **What still uses the hand-written stack:** Lists, items, members, purchases, stats — all waiting for I3/I4.
 3. **Open risks listed:** 900-second expiresIn assumption, nil-email rejection, RolePayload gap, Login 403 undocumented path, removed protocol members, appIsActive default.
 4. **git diff --stat master...HEAD:** Confirmed no changes under contract/, .claude/, .pbxproj, LocalPackages/TrackerAPI, or lists/items code.
