@@ -20,7 +20,7 @@ private func makeSUT(
     credentialStore: InMemoryBiometricCredentialStore = InMemoryBiometricCredentialStore(),
     biometricAuthenticator: FakeBiometricAuthenticator = FakeBiometricAuthenticator()
 ) -> (model: LoginBiometricModel, service: AuthenticationService) {
-    let sessionManager = SessionManager(authRepository: repo)
+    let sessionManager = SessionManager(initialClearables: [])
     let service = AuthenticationService(
         repository: repo,
         sessionManager: sessionManager,

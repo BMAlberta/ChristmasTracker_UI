@@ -304,8 +304,7 @@ struct ChristmasTrackerApp: App {
             networkCache: NetworkCache.shared,
             lockController: lc
         )
-        let sm = SessionManager(authRepository: dependencies.authRepository,
-                                initialClearables: clearables)
+        let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
 
         // Create services

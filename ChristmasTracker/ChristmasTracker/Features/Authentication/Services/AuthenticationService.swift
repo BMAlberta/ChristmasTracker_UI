@@ -265,24 +265,32 @@ final class AuthenticationService {
         error = nil
     }
 
-    /// Register a user (legacy service-level signature; name is split into first/last).
-    func register(email: String, password: String, name: String) async {
+    /// Register a user.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
+    func register(
+        email: String,
+        password: String,
+        firstName: String,
+        lastName: String,
+        registrationCode: String
+    ) async {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.register",
+            operation: "service.authentication.register"
+        )
+        defer { transaction.finish() }
         isLoading = true
         defer { isLoading = false }
         error = nil
-
-        // Split name into first/last components for the new repository interface.
-        let parts = name.components(separatedBy: " ")
-        let firstName = parts.first ?? name
-        let lastName = parts.dropFirst().joined(separator: " ")
 
         do {
             let session = try await authRepository.register(
                 email: email,
                 password: password,
                 firstName: firstName,
-                lastName: lastName.isEmpty ? " " : lastName,
-                registrationCode: ""
+                lastName: lastName,
+                registrationCode: registrationCode
             )
 
             let offerAction = computeOfferAction(

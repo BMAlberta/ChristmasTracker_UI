@@ -57,7 +57,7 @@ struct SessionTeardownTests {
     @MainActor
     private func makeSUT() async -> SessionManager {
         let mockRepo = await MockAuthenticationRepository()
-        return SessionManager(authRepository: mockRepo)
+        return SessionManager(initialClearables: [])
     }
 
     // MARK: - Test 1: ListDataStore cleared after teardown
@@ -163,7 +163,7 @@ struct SessionTeardownTests {
     @MainActor
     func authServiceIsSignedOutAfterTeardown() async throws {
         let mockRepo = MockAuthenticationRepository()
-        let innerSessionManager = SessionManager(authRepository: mockRepo)
+        let innerSessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: mockRepo,
             sessionManager: innerSessionManager
@@ -228,7 +228,7 @@ struct SessionTeardownTests {
     @MainActor
     func teardownIsIdempotent() async throws {
         let mockRepo = MockAuthenticationRepository()
-        let innerSessionManager = SessionManager(authRepository: mockRepo)
+        let innerSessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: mockRepo,
             sessionManager: innerSessionManager
@@ -259,7 +259,7 @@ struct SessionTeardownTests {
         throwingClearable.configureToThrow(true)
 
         let mockRepo = await MockAuthenticationRepository()
-        let innerSessionManager = await SessionManager(authRepository: mockRepo)
+        let innerSessionManager = await SessionManager(initialClearables: [])
         let authService = await AuthenticationService(
             repository: mockRepo,
             sessionManager: innerSessionManager

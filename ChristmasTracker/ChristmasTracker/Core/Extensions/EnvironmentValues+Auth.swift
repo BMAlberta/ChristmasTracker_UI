@@ -10,7 +10,7 @@ import SwiftUI
 private struct AuthenticationServiceKey: EnvironmentKey {
     static let defaultValue: AuthenticationService = {
         let repository = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: repository)
+        let sessionManager = SessionManager(initialClearables: [])
         return AuthenticationService(
             repository: repository,
             sessionManager: sessionManager

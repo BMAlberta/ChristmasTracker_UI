@@ -239,7 +239,7 @@ private func makeSUT(
     credentialStore: InMemoryBiometricCredentialStore = InMemoryBiometricCredentialStore(),
     biometricAuthenticator: FakeBiometricAuthenticator = FakeBiometricAuthenticator()
 ) -> AuthenticationService {
-    let sessionManager = SessionManager(authRepository: repo)
+    let sessionManager = SessionManager(initialClearables: [])
     return AuthenticationService(
         repository: repo,
         sessionManager: sessionManager,
@@ -457,7 +457,7 @@ struct SignInWithBiometricTests {
     @Test("logout sets isAuthenticated false before repository logout call completes")
     func logoutSetsIsAuthenticatedFalseBeforeRepoLogoutCompletes() async throws {
         let suspendingRepo = SuspendingLogoutRepository()
-        let sessionManager = SessionManager(authRepository: suspendingRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let sut = AuthenticationService(
             repository: suspendingRepo,
             sessionManager: sessionManager,
@@ -497,7 +497,7 @@ struct SignInWithBiometricTests {
 
         let repo = MockAuthenticationRepository()
         // Build a service that is already authenticated and needs refresh.
-        let sessionManager = SessionManager(authRepository: repo)
+        let sessionManager = SessionManager(initialClearables: [])
         let sut = AuthenticationService(
             repository: repo,
             sessionManager: sessionManager,
@@ -514,7 +514,7 @@ struct SignInWithBiometricTests {
         // a token with expiresIn=0 so needsRefresh is immediately true.
         // For this test we drive it via a custom repo.
         let expiringRepo = ExpiringTokenRepository(enrolledUserId: "u1")
-        let sessionManager2 = SessionManager(authRepository: expiringRepo)
+        let sessionManager2 = SessionManager(initialClearables: [])
         let sut2 = AuthenticationService(
             repository: expiringRepo,
             sessionManager: sessionManager2,
@@ -540,7 +540,7 @@ struct SignInWithBiometricTests {
         try store.enroll(refreshToken: "tok", userId: "other-user", firstName: "Other")
 
         let expiringRepo = ExpiringTokenRepository(enrolledUserId: "u1") // u1, not other-user
-        let sessionManager = SessionManager(authRepository: expiringRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let sut = AuthenticationService(
             repository: expiringRepo,
             sessionManager: sessionManager,
@@ -563,7 +563,7 @@ struct SignInWithBiometricTests {
         try store.enroll(refreshToken: "tok", userId: "mock-u1", firstName: "Alice")
 
         let credFailRepo = CredentialFailureRepository(enrolledUserId: "u1")
-        let sessionManager = SessionManager(authRepository: credFailRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let sut = AuthenticationService(
             repository: credFailRepo,
             sessionManager: sessionManager,
@@ -586,7 +586,7 @@ struct SignInWithBiometricTests {
         try store.enroll(refreshToken: "tok", userId: "other-user", firstName: "Other")
 
         let credFailRepo = CredentialFailureRepository(enrolledUserId: "u1")
-        let sessionManager = SessionManager(authRepository: credFailRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let sut = AuthenticationService(
             repository: credFailRepo,
             sessionManager: sessionManager,
@@ -610,7 +610,7 @@ struct SignInWithBiometricTests {
 
         // Network failure repo: login succeeds with expiresIn=0, refresh throws .networkError.
         let netFailRepo = NetworkFailRefreshRepository()
-        let sessionManager = SessionManager(authRepository: netFailRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let sut = AuthenticationService(
             repository: netFailRepo,
             sessionManager: sessionManager,

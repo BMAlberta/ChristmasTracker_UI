@@ -9,12 +9,16 @@ import SwiftUI
 struct RegisterView: View {
     @Environment(\.authenticationService) private var authService
     @Environment(\.dismiss) private var dismiss
-    @State private var name: String = ""
+    @State private var firstName: String = ""
+    @State private var lastName: String = ""
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
+    @State private var registrationCode: String = ""
     @State private var showPassword: Bool = false
     @State private var showConfirmPassword: Bool = false
+    @State private var codeFieldError: String? = nil
+    @State private var emailFieldError: String? = nil
     var body: some View {
         ScrollView {
             contentView
@@ -24,10 +28,10 @@ struct RegisterView: View {
         .navigationTitle("Create Account")
         .navigationBarTitleDisplayMode(.large)
         .alert("Error", isPresented: .constant(authService.error != nil)) {
-            Button("OK") { }
+            Button("OK") { authService.clearError() }
         } message: {
             if let error = authService.error {
-                Text(error.localizedDescription)
+                Text(userMessage(for: error))
             }
         }
     }
@@ -35,12 +39,18 @@ struct RegisterView: View {
         VStack(spacing: AppSpacing.xl) {
             RegisterHeaderView()
             RegistrationFormView(
-                name: $name,
+                firstName: $firstName,
+                lastName: $lastName,
                 email: $email,
                 password: $password,
                 confirmPassword: $confirmPassword,
+                registrationCode: $registrationCode,
                 showPassword: $showPassword,
-                showConfirmPassword: $showConfirmPassword
+                showConfirmPassword: $showConfirmPassword,
+                codeFieldError: codeFieldError,
+                emailFieldError: emailFieldError,
+                onEmailChanged: { emailFieldError = nil },
+                onCodeChanged: { codeFieldError = nil }
             )
             RegistrationActionSection(
                 isLoading: authService.isLoading,
@@ -51,25 +61,42 @@ struct RegisterView: View {
     }
 
     private func handleRegister() {
+        codeFieldError = nil
+        emailFieldError = nil
         Task {
             await authService.register(
                 email: email,
                 password: password,
-                name: name
+                firstName: firstName,
+                lastName: lastName,
+                registrationCode: registrationCode
             )
             if authService.isAuthenticated {
                 dismiss()
+            } else if let error = authService.error {
+                switch error {
+                case .invalidRegistrationCode:
+                    codeFieldError = userMessage(for: .invalidRegistrationCode)
+                    authService.clearError()
+                case .emailAlreadyExists:
+                    emailFieldError = userMessage(for: .emailAlreadyExists)
+                    authService.clearError()
+                default:
+                    break
+                }
             }
         }
     }
 
     private var isFormValid: Bool {
-        !name.isEmpty &&
-        !email.isEmpty &&
-        email.contains("@") &&
-        password.count >= 8 &&
-        password.contains(where: \.isNumber) &&
-        password == confirmPassword
+        RegistrationFormValidator.isValid(
+            firstName: firstName,
+            lastName: lastName,
+            email: email,
+            password: password,
+            confirmPassword: confirmPassword,
+            registrationCode: registrationCode
+        )
     }
 }
 // MARK: - Header
@@ -77,7 +104,7 @@ private struct RegisterHeaderView: View {
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             Image(systemName: "person.crop.circle.badge.plus")
-                .font(.system(size: 64))
+                .font(.appIconHero)
                 .foregroundStyle(Color.primaryColor)
             Text("Join Christmas Tracker")
                 .font(.appTitle2)
@@ -87,17 +114,40 @@ private struct RegisterHeaderView: View {
 }
 // MARK: - Form
 private struct RegistrationFormView: View {
-    @Binding var name: String
+    @Binding var firstName: String
+    @Binding var lastName: String
     @Binding var email: String
     @Binding var password: String
     @Binding var confirmPassword: String
+    @Binding var registrationCode: String
     @Binding var showPassword: Bool
     @Binding var showConfirmPassword: Bool
+    let codeFieldError: String?
+    let emailFieldError: String?
+    let onEmailChanged: () -> Void
+    let onCodeChanged: () -> Void
 
     var body: some View {
         VStack(spacing: AppSpacing.lg) {
-            NameFieldView(name: $name)
-            EmailFieldView(email: $email)
+            SimpleTextFieldView(
+                label: "First Name",
+                placeholder: "First",
+                text: $firstName,
+                autocapitalization: .sentences,
+                autocorrection: false
+            )
+            SimpleTextFieldView(
+                label: "Last Name",
+                placeholder: "Last",
+                text: $lastName,
+                autocapitalization: .sentences,
+                autocorrection: false
+            )
+            EmailFieldView(
+                email: $email,
+                fieldError: emailFieldError,
+                onChanged: onEmailChanged
+            )
             PasswordFieldView(
                 title: "Password",
                 placeholder: "At least 8 characters",
@@ -110,6 +160,15 @@ private struct RegistrationFormView: View {
                 text: $confirmPassword,
                 showText: $showConfirmPassword
             )
+            SimpleTextFieldView(
+                label: "Registration Code",
+                placeholder: "Enter code",
+                text: $registrationCode,
+                autocapitalization: .never,
+                autocorrection: false,
+                fieldError: codeFieldError,
+                onChanged: onCodeChanged
+            )
             if !password.isEmpty {
                 PasswordRequirementsView(
                     password: password,
@@ -119,22 +178,39 @@ private struct RegistrationFormView: View {
         }
     }
 }
-private struct NameFieldView: View {
-    @Binding var name: String
+private struct SimpleTextFieldView: View {
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    let autocapitalization: TextInputAutocapitalization
+    let autocorrection: Bool
+    var fieldError: String? = nil
+    var onChanged: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text("Full Name")
+            Text(label)
                 .font(.appCaption1)
                 .foregroundStyle(Color.textMutedColor)
-            TextField("John Doe", text: $name)
-                .textContentType(.name)
+            TextField(placeholder, text: $text)
+                .textInputAutocapitalization(autocapitalization)
+                .autocorrectionDisabled(!autocorrection)
                 .textFieldStyle(CustomTextFieldStyle())
+                .onChange(of: text) {
+                    onChanged?()
+                }
+            if let error = fieldError {
+                Text(error)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.accentColor)
+            }
         }
     }
 }
 private struct EmailFieldView: View {
     @Binding var email: String
+    var fieldError: String? = nil
+    var onChanged: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
@@ -147,6 +223,14 @@ private struct EmailFieldView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textFieldStyle(CustomTextFieldStyle())
+                .onChange(of: email) {
+                    onChanged?()
+                }
+            if let error = fieldError {
+                Text(error)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.accentColor)
+            }
         }
     }
 }
@@ -230,13 +314,13 @@ private struct RegistrationActionSection: View {
         Button(action: onRegister) {
             if isLoading {
                 ProgressView()
-                    .tint(.white)
+                    .tint(Color.white)
             } else {
                 Text("Create Account")
             }
         }
         .font(.appHeadline)
-        .foregroundStyle(.white)
+        .foregroundStyle(Color.white)
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.md)
         .background(Color.primaryColor)
@@ -250,7 +334,7 @@ private struct RegistrationActionSection: View {
         RegisterView()
             .environment(\.authenticationService, AuthenticationService(
                 repository: MockAuthenticationRepository(),
-                sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+                sessionManager: SessionManager(initialClearables: [])
             ))
     }
 }

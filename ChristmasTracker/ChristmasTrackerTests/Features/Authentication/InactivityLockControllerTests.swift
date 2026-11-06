@@ -119,7 +119,7 @@ struct InactivityLockControllerTests {
     func usePasswordTeardownCallsAuthServiceLogout() async throws {
         let (controller, _) = makeSUT()
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager

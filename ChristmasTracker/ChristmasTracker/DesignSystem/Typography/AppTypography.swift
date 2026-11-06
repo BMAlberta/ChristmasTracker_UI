@@ -7,6 +7,8 @@
 
 import SwiftUI
 extension Font {
+    // MARK: - Icon sizes (SF Symbol hero headers)
+    static let appIconHero = Font.system(size: 64)
     // MARK: - System Fonts (Inter/SF Pro)
     static let appLargeTitle = Font.system(size: 34, weight: .bold, design: .default)
     static let appTitle1 = Font.system(size: 28, weight: .semibold, design: .default)

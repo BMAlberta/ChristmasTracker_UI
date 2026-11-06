@@ -70,7 +70,7 @@ private func makeSUT(
     history: InMemoryEnrollmentHistory
 ) {
     let repo = MockAuthenticationRepository()
-    let sessionManager = SessionManager(authRepository: repo)
+    let sessionManager = SessionManager(initialClearables: [])
     let store = InMemoryBiometricCredentialStore()
     let auth = FakeBiometricAuthenticator()
     auth.stubbedResult = authenticatorResult
@@ -181,7 +181,7 @@ struct EnrollMarkerRegistrationTests {
         )
         // No prior enrollment; offer not shown; no pendingBiometricEnablement flag.
 
-        await service.register(email: "bob@example.com", password: "pass", name: "Bob")
+        await service.register(email: "bob@example.com", password: "pass", firstName: "Bob", lastName: "User", registrationCode: "CODE-FAKE")
 
         #expect(service.isAuthenticated == true,
                 "Precondition: register must succeed")
@@ -204,7 +204,7 @@ struct EnrollMarkerRegistrationTests {
         // We will pend a request so it overrides the suppression.
         service.pendBiometricEnablementRequest()
 
-        await service.register(email: "carol@example.com", password: "pass", name: "Carol")
+        await service.register(email: "carol@example.com", password: "pass", firstName: "Carol", lastName: "User", registrationCode: "CODE-FAKE")
 
         #expect(service.isAuthenticated == true,
                 "Precondition: register must succeed")
@@ -222,7 +222,7 @@ struct EnrollMarkerRegistrationTests {
             enrollmentHistory: history
         )
 
-        await service.register(email: "dave@example.com", password: "pass", name: "Dave")
+        await service.register(email: "dave@example.com", password: "pass", firstName: "Dave", lastName: "User", registrationCode: "CODE-FAKE")
 
         #expect(service.isAuthenticated == true, "Precondition: register must succeed")
         #expect(service.biometricOfferAction != .showEnablementScreen,
@@ -242,7 +242,7 @@ struct EnrollMarkerRegistrationTests {
         )
 
         // First registration to discover userId.
-        await service.register(email: "erin@example.com", password: "pass", name: "Erin")
+        await service.register(email: "erin@example.com", password: "pass", firstName: "Erin", lastName: "User", registrationCode: "CODE-FAKE")
         let userId = try #require(service.currentUser?.id,
                                   "Precondition: currentUser must be set after register")
 
@@ -252,7 +252,7 @@ struct EnrollMarkerRegistrationTests {
         history.markOfferShown(for: userId)
 
         // Register again (second account creation is unusual but tests the logic path in isolation).
-        await service.register(email: "erin@example.com", password: "pass", name: "Erin")
+        await service.register(email: "erin@example.com", password: "pass", firstName: "Erin", lastName: "User", registrationCode: "CODE-FAKE")
 
         // The silentlyReenroll path must have fired — not the showEnablementScreen path.
         #expect(service.biometricOfferAction != .showEnablementScreen,

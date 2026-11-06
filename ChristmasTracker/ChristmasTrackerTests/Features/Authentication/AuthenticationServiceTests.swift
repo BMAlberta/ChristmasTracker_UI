@@ -32,7 +32,7 @@ struct AuthenticationServiceTests {
     @Test("Login with valid credentials succeeds")
     func testLoginSuccess() async {
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager
@@ -50,7 +50,7 @@ struct AuthenticationServiceTests {
     @Test("Login with invalid credentials fails")
     func testLoginFailure() async {
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager
@@ -67,7 +67,7 @@ struct AuthenticationServiceTests {
     @Test("Register with valid data succeeds")
     func testRegisterSuccess() async {
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager
@@ -75,7 +75,9 @@ struct AuthenticationServiceTests {
         await service.register(
             email: "new@example.com",
             password: "password123",
-            name: "New User"
+            firstName: "New",
+            lastName: "User",
+            registrationCode: "CODE-FAKE"
         )
         #expect(service.isAuthenticated == true)
         #expect(service.currentUser?.name == "New User")
@@ -84,7 +86,7 @@ struct AuthenticationServiceTests {
     @Test("Logout clears authentication state")
     func testLogout() async {
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager
@@ -109,7 +111,7 @@ struct AuthenticationServiceTests {
         let fakeAuth = FakeBiometricAuthenticator()
         fakeAuth.stubbedIsAvailable = false
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
@@ -124,7 +126,7 @@ struct AuthenticationServiceTests {
         let fakeAuth = FakeBiometricAuthenticator()
         fakeAuth.stubbedBiometryType = .touchID
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
@@ -139,7 +141,7 @@ struct AuthenticationServiceTests {
         let fakeAuth = FakeBiometricAuthenticator()
         fakeAuth.stubbedBiometryType = .faceID
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
@@ -154,7 +156,7 @@ struct AuthenticationServiceTests {
         let fakeAuth = FakeBiometricAuthenticator()
         fakeAuth.stubbedIsAvailable = false
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
@@ -170,7 +172,7 @@ struct AuthenticationServiceTests {
 
     private func makeSUT() -> (service: AuthenticationService, mockRepo: MockAuthenticationRepository) {
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
@@ -215,7 +217,7 @@ struct AuthenticationServiceTests {
         let emailStore = RememberedEmailStore(defaults: defaults)
         let cleanup = FakeLegacyTokenCleanup()
         let mockRepo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: mockRepo)
+        let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
@@ -260,7 +262,7 @@ struct AuthenticationServiceTests {
     @Test("register success does not store email in emailStore")
     func registerSuccessDoesNotStoreEmailInEmailStore() async {
         let (service, _, emailStore, _) = makeSUTWithEmailStore()
-        await service.register(email: "new@example.com", password: "password123", name: "New User")
+        await service.register(email: "new@example.com", password: "password123", firstName: "New", lastName: "User", registrationCode: "CODE-FAKE")
         #expect(emailStore.rememberedEmail == nil)
     }
 
@@ -269,7 +271,7 @@ struct AuthenticationServiceTests {
     func registerFailureDoesNotStoreEmailInEmailStore() async {
         let (service, mockRepo, emailStore, _) = makeSUTWithEmailStore()
         await mockRepo.setFail(true)
-        await service.register(email: "new@example.com", password: "password123", name: "New User")
+        await service.register(email: "new@example.com", password: "password123", firstName: "New", lastName: "User", registrationCode: "CODE-FAKE")
         #expect(emailStore.rememberedEmail == nil)
     }
 
@@ -333,7 +335,7 @@ struct AuthenticationServiceTests {
     func registerResetsIsLoadingOnFailure() async {
         let (service, mockRepo, _, _) = makeSUTWithEmailStore()
         await mockRepo.setFail(true)
-        await service.register(email: "new@example.com", password: "password123", name: "New User")
+        await service.register(email: "new@example.com", password: "password123", firstName: "New", lastName: "User", registrationCode: "CODE-FAKE")
         #expect(service.isLoading == false)
     }
 }

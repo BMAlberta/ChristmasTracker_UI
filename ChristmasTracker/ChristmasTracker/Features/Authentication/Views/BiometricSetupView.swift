@@ -112,6 +112,6 @@ private struct BiometricActionSection: View {
     BiometricSetupView(model: BiometricEnablementModel(authenticator: auth, enrollAction: {}))
         .environment(\.authenticationService, AuthenticationService(
             repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+            sessionManager: SessionManager(initialClearables: [])
         ))
 }
