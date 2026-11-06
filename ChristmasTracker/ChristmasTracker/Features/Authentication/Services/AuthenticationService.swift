@@ -148,39 +148,9 @@ final class AuthenticationService {
         do {
             let session = try await authRepository.login(email: email, password: password)
 
-            // Compute the offer action before handleAuthSuccess so we have the pre-login
-            // enrolled snapshot. refreshBiometricState() inside handleAuthSuccess will
-            // update the snapshot after any silent enroll, but we evaluate against the
-            // snapshot that existed at the time login completed.
-            let readiness = biometricAuthenticator.readiness
-            let offerAction = computeOfferAction(
-                readiness: readiness,
-                signedInUserId: session.user.id,
-                pendingRequest: pendingBiometricEnablement
-            )
-
-            // Execute silent actions
-            if offerAction == .silentlyReplaceToken {
-                let firstName = session.user.firstName
-                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: firstName)
-                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
-                refreshBiometricState()
-            } else if offerAction == .silentlyReenroll {
-                let firstName = session.user.firstName
-                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: firstName)
-                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
-                refreshBiometricState()
-            }
-
-            // Always consume the pending flag
-            pendingBiometricEnablement = false
-            // Set the observable action
-            self.biometricOfferAction = offerAction
-            // If we are going to show the offer, mark it as shown now so a subsequent
-            // login (without a pending request) does not repeat the offer.
-            if offerAction == .showEnablementScreen {
-                enrollmentHistory.markOfferShown(for: session.user.id)
-            }
+            // Compute and apply the biometric offer action before handleAuthSuccess so we
+            // evaluate against the enrolled snapshot that existed at the time login completed.
+            applyBiometricOffer(session: session)
 
             await handleAuthSuccess(session: session)
 
@@ -293,30 +263,7 @@ final class AuthenticationService {
                 registrationCode: registrationCode
             )
 
-            let offerAction = computeOfferAction(
-                readiness: biometricAuthenticator.readiness,
-                signedInUserId: session.user.id,
-                pendingRequest: pendingBiometricEnablement
-            )
-
-            if offerAction == .silentlyReplaceToken {
-                let fn = session.user.firstName
-                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: fn)
-                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
-                refreshBiometricState()
-            } else if offerAction == .silentlyReenroll {
-                let fn = session.user.firstName
-                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: fn)
-                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
-                refreshBiometricState()
-            }
-
-            self.biometricOfferAction = offerAction
-            pendingBiometricEnablement = false
-
-            if offerAction == .showEnablementScreen {
-                enrollmentHistory.markOfferShown(for: session.user.id)
-            }
+            applyBiometricOffer(session: session)
 
             await handleAuthSuccess(session: session)
 
@@ -426,6 +373,32 @@ final class AuthenticationService {
     }
 
     // MARK: - Private Helpers
+
+    /// Applies the biometric offer logic shared between login() and register().
+    /// Computes the offer action, executes any silent enrollment, and sets biometricOfferAction.
+    private func applyBiometricOffer(session: AuthSession) {
+        let offerAction = computeOfferAction(
+            readiness: biometricAuthenticator.readiness,
+            signedInUserId: session.user.id,
+            pendingRequest: pendingBiometricEnablement
+        )
+        if offerAction == .silentlyReplaceToken {
+            let firstName = session.user.firstName
+            try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: firstName)
+            enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
+            refreshBiometricState()
+        } else if offerAction == .silentlyReenroll {
+            let firstName = session.user.firstName
+            try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: firstName)
+            enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
+            refreshBiometricState()
+        }
+        pendingBiometricEnablement = false
+        self.biometricOfferAction = offerAction
+        if offerAction == .showEnablementScreen {
+            enrollmentHistory.markOfferShown(for: session.user.id)
+        }
+    }
 
     /// Wrapper that delegates to the free function `biometricOfferAction(...)`, avoiding
     /// a naming ambiguity with the stored property `biometricOfferAction: BiometricOfferAction`.

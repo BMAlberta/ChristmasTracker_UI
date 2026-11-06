@@ -87,8 +87,9 @@ import Foundation
         hasAutoAttempted = false
     }
 
-    func autoAttemptIfNeeded() async {
+    func autoAttemptIfNeeded(appIsActive: @escaping @Sendable () -> Bool = { true }) async {
         guard !LoginBiometricModel.hasAutoAttempted else { return }
+        guard appIsActive() else { return }   // return WITHOUT consuming the flag
         LoginBiometricModel.hasAutoAttempted = true
         syncFromService()
         guard case .showEnrolled = buttonState else { return }

@@ -406,7 +406,15 @@ struct ChristmasTrackerApp: App {
                         showBiometricSetup = true
                     }
                 }
-                .sheet(isPresented: $showBiometricSetup) {
+                .sheet(isPresented: Binding(
+                    get: { showBiometricSetup },
+                    set: { newValue in
+                        showBiometricSetup = newValue
+                        if !newValue {
+                            authService.clearBiometricOfferAction()
+                        }
+                    }
+                )) {
                     BiometricSetupView(
                         model: BiometricEnablementModel(
                             authenticator: sharedLocalAuth,
@@ -416,7 +424,7 @@ struct ChristmasTrackerApp: App {
                         ),
                         onComplete: { _ in
                             showBiometricSetup = false
-                            authService.clearBiometricOfferAction()
+                            // clearBiometricOfferAction() now handled by the binding setter
                         }
                     )
                     .environment(\.authenticationService, authService)
