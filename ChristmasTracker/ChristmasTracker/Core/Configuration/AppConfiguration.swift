@@ -6,10 +6,20 @@
 //
 
 import Foundation
+import TrackerAPI
 
-enum APIMode: Sendable {
+enum APIMode: Sendable, Equatable {
     case mock
     case real
+
+    // Explicit nonisolated == so this conformance is usable from nonisolated contexts
+    // even under SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor.
+    nonisolated static func == (lhs: APIMode, rhs: APIMode) -> Bool {
+        switch (lhs, rhs) {
+        case (.mock, .mock), (.real, .real): return true
+        default: return false
+        }
+    }
 
     /// Parses the API_MODE string from xcconfig/Info.plist.
     /// - "mock" (case-insensitive, trimmed) → .mock
@@ -39,6 +49,38 @@ enum BaseURLError: Error, Sendable {
     case queryPresent
 }
 
+/// Resolves the effective API mode from xcconfig, UserDefaults override, and environment.
+/// In production, the Info.plist value always wins. In non-production environments,
+/// a recognized UserDefaults override ("real"/"mock") takes precedence; unrecognized
+/// overrides and empty overrides fall back to the Info.plist value.
+/// No #if DEBUG — this is deterministic and xcconfig-driven.
+nonisolated func resolveAPIMode(
+    infoValue: String?,
+    override: String?,
+    environment: String
+) -> APIMode {
+    if environment.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "production" {
+        return APIMode.parse(infoValue)
+    }
+    let trimmed = override?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+    switch trimmed {
+    case "real": return .real
+    case "mock": return .mock
+    case "": return APIMode.parse(infoValue)
+    default:
+        LogWarning("Unrecognized apiModeOverride '\(trimmed)'; ignoring", category: .business)
+        return APIMode.parse(infoValue)
+    }
+}
+
+/// Builds an AppClientInfo from an Info.plist dictionary (or nil).
+/// Falls back to "0" for missing version and build strings.
+nonisolated func makeClientInfo(from info: [String: Any]?) -> AppClientInfo {
+    let version = info?["CFBundleShortVersionString"] as? String ?? "0"
+    let build = info?["CFBundleVersion"] as? String ?? "0"
+    return AppClientInfo(platform: "ios", clientPlatform: "ios", build: build, version: version)
+}
+
 /// Reads typed configuration values from an Info.plist dictionary.
 /// Pure and nonisolated — injectable for tests; never reads Bundle.main directly.
 nonisolated func readConfiguration(from info: [String: Any]?) -> (
@@ -63,7 +105,11 @@ nonisolated func readConfiguration(from info: [String: Any]?) -> (
         return try? AppConfiguration.validateBaseURL(raw).get()
     }()
     return (
-        apiMode: APIMode.parse(string("API_MODE")),
+        apiMode: resolveAPIMode(
+            infoValue: string("API_MODE"),
+            override: UserDefaults.standard.string(forKey: "apiModeOverride"),
+            environment: string("APP_ENVIRONMENT") ?? "production"
+        ),
         sentryDSN: rawDSN.isEmpty ? nil : rawDSN,
         appEnvironment: string("APP_ENVIRONMENT") ?? "production",
         apiBaseURL: baseURL,

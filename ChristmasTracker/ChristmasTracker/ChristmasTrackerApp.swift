@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TrackerAPI
 @preconcurrency import UIKit
 
 // MARK: - LockCoordinator
@@ -77,6 +78,115 @@ private final class LockCoordinator: InactivityLockPresenting {
     }
 }
 
+// MARK: - AppDependencies
+
+/// Dependency container for the composition root.
+/// Internal (not private) so the testable make(mode:baseURL:) overload is reachable
+/// from ChristmasTrackerTests via @testable import.
+struct AppDependencies: Sendable {
+    let apiClient: APIClient
+    let authRepository: AuthenticationRepository
+    let listRepository: ListRepository
+    let itemRepository: ItemRepository
+    // Stored as the APIProtocol existential to avoid a linker dependency on
+    // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
+    // Client struct is only constructed in TrackerAPI-linked callers.
+    // nonisolated(unsafe): Sendable value written once at construction; safe to
+    // read from any isolation context since AppDependencies is Sendable.
+    nonisolated(unsafe) let trackerClient: (any APIProtocol)?
+
+    static func make() -> AppDependencies {
+        switch AppConfiguration.apiMode {
+        case .mock:
+            let apiClient = MockAPIClient.withMockData()
+            return AppDependencies(
+                apiClient: apiClient,
+                authRepository: MockAuthenticationRepository(),
+                listRepository: MockListRepository(),
+                itemRepository: MockItemRepository(),
+                trackerClient: nil
+            )
+        case .real:
+            let apiClient = NetworkAPIClient()
+            return AppDependencies(
+                apiClient: apiClient,
+                authRepository: NetworkAuthenticationRepository(apiClient: apiClient),
+                listRepository: NetworkListRepository(apiClient: apiClient),
+                itemRepository: NetworkItemRepository(apiClient: apiClient),
+                trackerClient: nil
+            )
+        }
+    }
+
+    /// Testable overload: builds mock repos and optionally a real TrackerAPI Client.
+    /// nonisolated so tests can call it synchronously from any isolation domain.
+    nonisolated static func make(mode: APIMode, baseURL: URL?) -> AppDependencies {
+        // Local nonisolated stubs — the testable path only exercises `trackerClient`.
+        // All other repositories are non-functional placeholders.
+        struct TestAPIClient: APIClient {
+            nonisolated func request<T: Decodable & Sendable>(
+                _ method: HTTPMethod, path: String,
+                body: (any Encodable & Sendable)?,
+                forceRefresh: Bool, cacheScope: CacheScope
+            ) async throws -> T {
+                throw APIError.networkUnavailable
+            }
+        }
+        // nonisolated final classes: SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor applies
+        // to the class body, but each method is explicitly nonisolated to allow
+        // constructing from a nonisolated context in the testable factory path.
+        final class TestListRepo: ListRepository, @unchecked Sendable {
+            nonisolated func fetchLists() async throws -> [GiftList] { [] }
+            nonisolated func fetchListDetail(id: String) async throws -> ListDetail {
+                throw ListError.notFound
+            }
+            nonisolated func createList(_ request: CreateListRequest) async throws -> ListDetail {
+                throw ListError.createFailed
+            }
+            nonisolated func updateList(id: String, _ request: UpdateListRequest) async throws -> ListDetail {
+                throw ListError.updateFailed
+            }
+            nonisolated func deleteList(id: String) async throws { throw ListError.deleteFailed }
+        }
+        final class TestItemRepo: ItemRepository, @unchecked Sendable {
+            nonisolated func fetchItems(listId: String) async throws -> [GiftItem] { [] }
+            nonisolated func createItem(listId: String, _ r: CreateItemRequest) async throws -> GiftItem {
+                throw ItemError.createFailed
+            }
+            nonisolated func updateItem(id: String, _ r: UpdateItemRequest) async throws -> GiftItem {
+                throw ItemError.updateFailed
+            }
+            nonisolated func deleteItem(id: String) async throws { throw ItemError.deleteFailed }
+            nonisolated func fetchItemDetail(id: String) async throws -> GiftItem {
+                throw ItemError.notFound
+            }
+        }
+        var builtClient: (any APIProtocol)?
+        if mode == .real, let url = baseURL {
+            let token = AccessTokenSeam(tokenGetter: { nil })
+            let refresh = SessionRefreshSeam(forceRefresh: {})
+            struct NoopVersionHandler: VersionOutdatedHandling {
+                nonisolated func handleVersionOutdated(_ details: VersionOutdatedDetails) async {}
+            }
+            let versionHandler = NoopVersionHandler()
+            builtClient = try? TrackerClientFactory.make(
+                serverURL: url,
+                info: makeClientInfo(from: nil),
+                tokenProvider: token,
+                sessionRefresher: refresh,
+                versionOutdatedHandler: versionHandler
+            )
+        }
+        return AppDependencies(
+            apiClient: TestAPIClient(),
+            authRepository: MockAuthenticationRepository(),
+            listRepository: TestListRepo(),
+            itemRepository: TestItemRepo(),
+            trackerClient: builtClient
+        )
+    }
+}
+
 // MARK: - ChristmasTrackerApp
 
 @main
@@ -87,6 +197,7 @@ struct ChristmasTrackerApp: App {
     @State private var listService: ListService
     @State private var itemService: ItemService
     @State private var showBiometricSetup = false
+    @State private var versionGate: VersionGate
     private let sessionManager: SessionManager
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
     private let lockController: InactivityLockController
@@ -97,33 +208,12 @@ struct ChristmasTrackerApp: App {
     // read in deinit where the app is exclusively owned — no concurrent access.
     nonisolated(unsafe) private var lockObservers: [any NSObjectProtocol] = []
 
-    private struct AppDependencies {
-        let apiClient: APIClient
-        let authRepository: AuthenticationRepository
-        let listRepository: ListRepository
-        let itemRepository: ItemRepository
+    // nonisolated(unsafe): written exactly once during init on MainActor;
+    // accessed only after init completes — no concurrent mutation.
+    // Stored as the protocol existential to avoid OpenAPIRuntime.UniversalClient (@_spi)
+    // appearing in the app binary's link requirements.
+    nonisolated(unsafe) private var generatedClient: (any APIProtocol)?
 
-        static func make() -> AppDependencies {
-            switch AppConfiguration.apiMode {
-            case .mock:
-                let apiClient = MockAPIClient.withMockData()
-                return AppDependencies(
-                    apiClient: apiClient,
-                    authRepository: MockAuthenticationRepository(),
-                    listRepository: MockListRepository(),
-                    itemRepository: MockItemRepository()
-                )
-            case .real:
-                let apiClient = NetworkAPIClient()
-                return AppDependencies(
-                    apiClient: apiClient,
-                    authRepository: NetworkAuthenticationRepository(apiClient: apiClient),
-                    listRepository: NetworkListRepository(apiClient: apiClient),
-                    itemRepository: NetworkItemRepository(apiClient: apiClient)
-                )
-            }
-        }
-    }
 
     // MARK: - Initialization
     init() {
@@ -131,6 +221,10 @@ struct ChristmasTrackerApp: App {
         SentryBootstrap.startIfConfigured()
         // Wipe 4.4 legacy credentials/data on first launch — must run before store reads
         FirstLaunchWipe().performIfNeeded()
+
+        // Build versionGate before anything else so it can be passed into the client factory.
+        let vg = VersionGate()
+        _versionGate = State(initialValue: vg)
 
         // Start the privacy cover before any app data or session state is built.
         // The coordinator has no dependencies; it must be alive before the first scene event.
@@ -196,6 +290,30 @@ struct ChristmasTrackerApp: App {
             enrollmentHistory: UserDefaultsEnrollmentHistory()
         )
         authService = auth
+
+        // Wire the generated TrackerAPI client in real mode.
+        // In mock mode this block is skipped and generatedClient stays nil.
+        if AppConfiguration.apiMode == .real {
+            let tokenSeam = AccessTokenSeam(tokenGetter: { [weak auth] in
+                await auth?.currentAccessToken
+            })
+            let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak auth] in
+                guard let svc = auth else { throw AuthenticationError.invalidRefreshToken }
+                try await svc.forceRefresh()
+            })
+            let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
+            generatedClient = try? TrackerClientFactory.make(
+                serverURL: AppConfiguration.apiBaseURL,
+                info: makeClientInfo(from: Bundle.main.infoDictionary),
+                tokenProvider: tokenSeam,
+                sessionRefresher: refreshSeam,
+                versionOutdatedHandler: vg,
+                requestIDObserver: requestIDSeam
+            )
+            if generatedClient == nil {
+                LogError("Failed to build TrackerAPI client — version-check unavailable", category: .business)
+            }
+        }
 
         // Wire the lock controller's authService reference.
         lc.authService = auth
