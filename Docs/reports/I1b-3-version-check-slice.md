@@ -102,11 +102,11 @@ Test run with 161 tests in 12 suites passed after 0.016 seconds.
 
 ## Deviations from Spec
 
-1. **`VersionPolicy`, `AppVersionChecking`, `GeneratedClientAppVersionRepository` moved to TrackerAPI package** — the epic brief placed them in the app module under `Core/API/`. After implementation, linking failed: calling `client.checkAppVersion(input)` from the app binary causes the linker to reference `OpenAPIRuntime.AcceptHeaderContentType` (a type in the input's `Headers.accept` field), which is not in the app binary's link graph. The fix is architecturally correct: types that call generated operations belong in the package that links OpenAPIRuntime. This is the same constraint that required widening `Client?` to `(any APIProtocol)?` in B2.
+1. **`VersionPolicy`, `AppVersionChecking`, `GeneratedClientAppVersionRepository` placed in TrackerAPI package (not the app module)** — the epic brief placed them in the app module under `Core/API/`. After implementation, linking failed: calling `client.checkAppVersion(input)` from the app binary caused the linker to reference `OpenAPIRuntime.AcceptHeaderContentType`, which was not in the app binary because the package was dynamic (linked to multiple targets). The B3 workaround was to move these types into the package itself. **This was incorrect.** The root cause was dynamic vs. static linking, not package boundaries. Brian's commit `3e35e09` (after B4) fixed the root cause by linking TrackerAPI to the app target only; F1 fix pass then moved the three types and their 15 tests back to the app module under `Features/Version/`.
 
-2. **`@Instrumented` not applied to `GeneratedClientAppVersionRepository.checkVersion()`** — the TrackerAPI package does not carry `TrackerInstrumentation` or `Sentry` as a dependency. The comment at line 19 of `GeneratedClientAppVersionRepository.swift` documents the reason. The standard's `@Instrumented` requirement is effectively not satisfiable at the package layer; this is a standing constraint for all future repository types placed in TrackerAPI.
+2. **`@Instrumented` not applied to `GeneratedClientAppVersionRepository.checkVersion()`** — a consequence of deviation 1; the TrackerAPI package carries no `TrackerInstrumentation` dependency. Resolved in F1: the type now lives in the app module and `@Instrumented` has been restored.
 
-3. **Repository tests placed in package test target** — because `GeneratedClientAppVersionRepository` moved to TrackerAPI, its tests also moved to `TrackerAPITests/VersionCheckRepositoryTests.swift` to avoid re-importing `OpenAPIRuntime` from the app test target. The `VersionService` tests (which use only app-module types) remain in `ChristmasTrackerTests/`.
+3. **Repository tests placed in package test target** — a consequence of deviation 1. Resolved in F1: 15 tests moved to `ChristmasTrackerTests/Features/Version/VersionCheckRepositoryTests.swift`.
 
 ---
 

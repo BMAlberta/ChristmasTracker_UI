@@ -230,24 +230,58 @@ struct RequestIDSeamTests {
     }
 }
 
-// MARK: - AppDependencies Composition Root Tests
+// MARK: - buildGeneratedClient Composition Root Tests
 
-@Suite("AppDependencies APIMode Tests")
-struct AppDependenciesAPIModeTests {
+@Suite("buildGeneratedClient Tests")
+struct BuildGeneratedClientTests {
+
+    // MARK: - Stubs (no-op seam implementations, test-target only)
+
+    private struct NoopTokenProvider: AccessTokenProviding {
+        nonisolated func accessToken() async -> String? { nil }
+    }
+
+    private actor NoopSessionRefresher: SessionRefreshing {
+        func refresh() async throws {}
+    }
+
+    private actor NoopVersionHandler: VersionOutdatedHandling {
+        func handleVersionOutdated(_ details: VersionOutdatedDetails) async {}
+    }
+
+    private func makeStubs() -> (NoopTokenProvider, NoopSessionRefresher, NoopVersionHandler) {
+        (NoopTokenProvider(), NoopSessionRefresher(), NoopVersionHandler())
+    }
 
     // MARK: - Mock mode produces no client
 
     @Test("trackerClient is nil when effective mode is mock")
     func trackerClientIsNilInMockMode() {
-        let deps = AppDependencies.make(mode: .mock, baseURL: URL(string: "https://api.example.com"))
-        #expect(deps.trackerClient == nil)
+        let (token, refresh, version) = makeStubs()
+        let client = buildGeneratedClient(
+            mode: .mock,
+            serverURL: URL(string: "https://api.example.com"),
+            info: makeClientInfo(from: nil),
+            tokenProvider: token,
+            sessionRefresher: refresh,
+            versionOutdatedHandler: version
+        )
+        #expect(client == nil)
     }
 
     // MARK: - Real mode produces a client
 
     @Test("trackerClient is non-nil when effective mode is real and baseURL is provided")
     func trackerClientIsNonNilInRealMode() {
-        let deps = AppDependencies.make(mode: .real, baseURL: URL(string: "https://api.example.com"))
-        #expect(deps.trackerClient != nil)
+        let (token, refresh, version) = makeStubs()
+        let client = buildGeneratedClient(
+            mode: .real,
+            serverURL: URL(string: "https://api.example.com"),
+            info: makeClientInfo(from: nil),
+            tokenProvider: token,
+            sessionRefresher: refresh,
+            versionOutdatedHandler: version
+        )
+        #expect(client != nil)
     }
 }

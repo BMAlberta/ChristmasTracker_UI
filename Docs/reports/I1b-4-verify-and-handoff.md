@@ -66,7 +66,7 @@ Test run with 161 tests in 12 suites passed after 0.013 seconds.
 
 **Result:** verify exits non-zero. The failing step is `=== verify: unit tests ===` — `xcodebuild` exits with status 65 (test host failed to launch / test compilation failed) because the app test target imports `TrackerAPI` transitively through `import TrackerAPI`, and TrackerAPI cannot compile without `HTTPTypes`. Zero tests run. `Package.swift` was then restored and verify returns `=== verify: OK ===`.
 
-**Note:** `=== verify: TrackerAPI package tests ===` (swift test) passed even with the dependency removed — this is exactly the class of gap the new Xcode scheme step catches; `swift test` resolves packages independently and may use cached artifacts, while the app-side `xcodebuild` test run exposes the broken dependency.
+**Correction (F2 fix pass):** The `=== verify: TrackerAPI Xcode scheme ===` step printed `BUILD SUCCEEDED` during this same mutation run — it did NOT catch the broken dependency. The step that caught it was the pre-existing `=== verify: unit tests ===` step. The report's original Note above was incorrect: the new Xcode scheme step was ineffective, not effective. The F2 fix pass replaced it with `scripts/check-package-imports.sh`, which correctly exits non-zero when HTTPTypes is removed from Package.swift.
 
 ---
 

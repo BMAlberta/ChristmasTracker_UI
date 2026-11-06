@@ -81,8 +81,6 @@ private final class LockCoordinator: InactivityLockPresenting {
 // MARK: - AppDependencies
 
 /// Dependency container for the composition root.
-/// Internal (not private) so the testable make(mode:baseURL:) overload is reachable
-/// from ChristmasTrackerTests via @testable import.
 struct AppDependencies: Sendable {
     let apiClient: APIClient
     let authRepository: AuthenticationRepository
@@ -118,72 +116,35 @@ struct AppDependencies: Sendable {
         }
     }
 
-    /// Testable overload: builds mock repos and optionally a real TrackerAPI Client.
-    /// nonisolated so tests can call it synchronously from any isolation domain.
-    nonisolated static func make(mode: APIMode, baseURL: URL?) -> AppDependencies {
-        // Local nonisolated stubs — the testable path only exercises `trackerClient`.
-        // All other repositories are non-functional placeholders.
-        struct TestAPIClient: APIClient {
-            nonisolated func request<T: Decodable & Sendable>(
-                _ method: HTTPMethod, path: String,
-                body: (any Encodable & Sendable)?,
-                forceRefresh: Bool, cacheScope: CacheScope
-            ) async throws -> T {
-                throw APIError.networkUnavailable
-            }
-        }
-        // nonisolated final classes: SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor applies
-        // to the class body, but each method is explicitly nonisolated to allow
-        // constructing from a nonisolated context in the testable factory path.
-        final class TestListRepo: ListRepository, @unchecked Sendable {
-            nonisolated func fetchLists() async throws -> [GiftList] { [] }
-            nonisolated func fetchListDetail(id: String) async throws -> ListDetail {
-                throw ListError.notFound
-            }
-            nonisolated func createList(_ request: CreateListRequest) async throws -> ListDetail {
-                throw ListError.createFailed
-            }
-            nonisolated func updateList(id: String, _ request: UpdateListRequest) async throws -> ListDetail {
-                throw ListError.updateFailed
-            }
-            nonisolated func deleteList(id: String) async throws { throw ListError.deleteFailed }
-        }
-        final class TestItemRepo: ItemRepository, @unchecked Sendable {
-            nonisolated func fetchItems(listId: String) async throws -> [GiftItem] { [] }
-            nonisolated func createItem(listId: String, _ r: CreateItemRequest) async throws -> GiftItem {
-                throw ItemError.createFailed
-            }
-            nonisolated func updateItem(id: String, _ r: UpdateItemRequest) async throws -> GiftItem {
-                throw ItemError.updateFailed
-            }
-            nonisolated func deleteItem(id: String) async throws { throw ItemError.deleteFailed }
-            nonisolated func fetchItemDetail(id: String) async throws -> GiftItem {
-                throw ItemError.notFound
-            }
-        }
-        var builtClient: (any APIProtocol)?
-        if mode == .real, let url = baseURL {
-            let token = AccessTokenSeam(tokenGetter: { nil })
-            let refresh = SessionRefreshSeam(forceRefresh: {})
-            struct NoopVersionHandler: VersionOutdatedHandling {
-                nonisolated func handleVersionOutdated(_ details: VersionOutdatedDetails) async {}
-            }
-            let versionHandler = NoopVersionHandler()
-            builtClient = try? TrackerClientFactory.make(
-                serverURL: url,
-                info: makeClientInfo(from: nil),
-                tokenProvider: token,
-                sessionRefresher: refresh,
-                versionOutdatedHandler: versionHandler
-            )
-        }
-        return AppDependencies(
-            apiClient: TestAPIClient(),
-            authRepository: MockAuthenticationRepository(),
-            listRepository: TestListRepo(),
-            itemRepository: TestItemRepo(),
-            trackerClient: builtClient
+}
+
+// MARK: - buildGeneratedClient
+
+/// Builds the optional generated TrackerAPI client for a given mode and base URL.
+/// Returns nil in mock mode, when serverURL is nil, or when the factory throws (error is logged).
+/// Used by ChristmasTrackerApp.init() and the composition-root tests.
+nonisolated func buildGeneratedClient(
+    mode: APIMode,
+    serverURL: URL?,
+    info: AppClientInfo,
+    tokenProvider: some AccessTokenProviding,
+    sessionRefresher: some SessionRefreshing,
+    versionOutdatedHandler: some VersionOutdatedHandling,
+    requestIDObserver: (any RequestIDObserving)? = nil
+) -> (any APIProtocol)? {
+    guard mode == .real, let url = serverURL else { return nil }
+    do {
+        return try TrackerClientFactory.make(
+            serverURL: url,
+            info: info,
+            tokenProvider: tokenProvider,
+            sessionRefresher: sessionRefresher,
+            versionOutdatedHandler: versionOutdatedHandler,
+            requestIDObserver: requestIDObserver
         )
+    } catch {
+        LogError("Failed to build TrackerAPI client: \(error)", category: .business)
+        return nil
     }
 }
 
@@ -296,28 +257,26 @@ struct ChristmasTrackerApp: App {
         _versionService = State(initialValue: vs)
 
         // Wire the generated TrackerAPI client in real mode.
-        // In mock mode this block is skipped and generatedClient stays nil.
-        if AppConfiguration.apiMode == .real {
-            let tokenSeam = AccessTokenSeam(tokenGetter: { [weak auth] in
-                await auth?.currentAccessToken
-            })
-            let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak auth] in
-                guard let svc = auth else { throw AuthenticationError.invalidRefreshToken }
-                try await svc.forceRefresh()
-            })
-            let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
-            generatedClient = try? TrackerClientFactory.make(
-                serverURL: AppConfiguration.apiBaseURL,
-                info: makeClientInfo(from: Bundle.main.infoDictionary),
-                tokenProvider: tokenSeam,
-                sessionRefresher: refreshSeam,
-                versionOutdatedHandler: vg,
-                requestIDObserver: requestIDSeam
-            )
-            if generatedClient == nil {
-                LogError("Failed to build TrackerAPI client — version-check unavailable", category: .business)
-            }
-        }
+        // In mock mode buildGeneratedClient returns nil immediately.
+        let tokenSeam = AccessTokenSeam(tokenGetter: { [weak auth] in
+            await auth?.currentAccessToken
+        })
+        let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak auth] in
+            guard let svc = auth else { throw AuthenticationError.invalidRefreshToken }
+            try await svc.forceRefresh()
+        })
+        let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
+        // AppConfiguration.apiBaseURL is only accessed in real mode (ternary short-circuits).
+        let resolvedBaseURL: URL? = AppConfiguration.apiMode == .real ? AppConfiguration.apiBaseURL : nil
+        generatedClient = buildGeneratedClient(
+            mode: AppConfiguration.apiMode,
+            serverURL: resolvedBaseURL,
+            info: makeClientInfo(from: Bundle.main.infoDictionary),
+            tokenProvider: tokenSeam,
+            sessionRefresher: refreshSeam,
+            versionOutdatedHandler: vg,
+            requestIDObserver: requestIDSeam
+        )
 
         // In real mode, start the version-check launch task.
         if AppConfiguration.apiMode == .real, let client = generatedClient {
