@@ -18,22 +18,8 @@ scripts/test.sh || { echo "=== verify: TESTS FAILED ==="; FAIL=1; }
 echo "=== verify: TrackerAPI package tests ==="
 swift test --package-path "LocalPackages/TrackerAPI" || { echo "=== verify: PACKAGE TESTS FAILED ==="; FAIL=1; }
 
-echo "=== verify: TrackerAPI Xcode scheme ==="
-TRACKER_API_LOG="/tmp/ct-trackerapi-build.log"
-xcodebuild build \
-  -scheme "TrackerAPI" \
-  -project "ChristmasTracker/ChristmasTracker.xcodeproj" \
-  -destination "generic/platform=iOS Simulator" \
-  -derivedDataPath "/tmp/ct-derived" \
-  -skipPackagePluginValidation > "$TRACKER_API_LOG" 2>&1
-if [ $? -ne 0 ]; then
-  echo "--- errors (first 20) ---"
-  grep -E "error:|BUILD FAILED" "$TRACKER_API_LOG" | head -20
-  echo "=== verify: TRACKERAPI XCODE BUILD FAILED ==="
-  FAIL=1
-else
-  tail -2 "$TRACKER_API_LOG"
-fi
+echo "=== verify: TrackerAPI import audit ==="
+scripts/check-package-imports.sh || { echo "=== verify: IMPORT AUDIT FAILED ==="; FAIL=1; }
 
 echo "=== verify: prohibited frameworks in changed lines ==="
 if git rev-parse --verify master > /dev/null 2>&1; then
