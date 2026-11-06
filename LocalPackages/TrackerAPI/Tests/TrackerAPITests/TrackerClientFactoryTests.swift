@@ -206,6 +206,106 @@ struct TrackerClientFactoryTests {
         }
     }
 
+    @Test("Client decodes ISO 8601 dates with fractional seconds (transcoder wired up)")
+    func clientDecodesFractionalSecondISO8601Dates() async throws {
+        let fractionalJSON = """
+        {
+          "success": true,
+          "data": {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "firstName": "Alice",
+            "lastName": "Smith",
+            "displayName": "Alice Smith",
+            "role": "USER",
+            "isActive": true,
+            "createdAt": "2025-12-30T10:00:00.123Z",
+            "updatedAt": "2025-12-30T10:00:00.456Z"
+          },
+          "meta": {
+            "timestamp": "2025-12-30T10:00:00.789Z",
+            "requestId": "req-00000003",
+            "sessionId": "sess-00000003"
+          }
+        }
+        """
+
+        let fakeTransport = FakeTransport()
+        await fakeTransport.enqueue(
+            HTTPResponse(status: .ok),
+            body: jsonBody(fractionalJSON)
+        )
+
+        let client = try TrackerClientFactory.make(
+            serverURL: URL(string: "https://api.example.com")!,
+            info: makeInfo(),
+            tokenProvider: FakeAccessTokenProvider(),
+            sessionRefresher: FakeSessionRefresher(),
+            versionOutdatedHandler: FakeVersionOutdatedHandler(),
+            transport: fakeTransport
+        )
+
+        // If TrackerDateTranscoder does not handle fractional seconds, the generated
+        // decoder rejects the timestamp and this call throws — which is a test failure.
+        let response = try await client.getCurrentUser()
+        switch response {
+        case .ok(let ok):
+            let body = try ok.body.json
+            #expect(body.data.firstName == "Alice")
+        default:
+            Issue.record("Expected .ok response but got \(response)")
+        }
+    }
+
+    @Test("Client decodes ISO 8601 dates with zero fractional seconds (.000Z)")
+    func clientDecodesZeroFractionalSecondISO8601Dates() async throws {
+        let zeroFractionalJSON = """
+        {
+          "success": true,
+          "data": {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "firstName": "Alice",
+            "lastName": "Smith",
+            "displayName": "Alice Smith",
+            "role": "USER",
+            "isActive": true,
+            "createdAt": "2025-12-30T10:00:00.000Z",
+            "updatedAt": "2025-12-30T10:00:00.000Z"
+          },
+          "meta": {
+            "timestamp": "2025-12-30T10:00:00.000Z",
+            "requestId": "req-00000004",
+            "sessionId": "sess-00000004"
+          }
+        }
+        """
+
+        let fakeTransport = FakeTransport()
+        await fakeTransport.enqueue(
+            HTTPResponse(status: .ok),
+            body: jsonBody(zeroFractionalJSON)
+        )
+
+        let client = try TrackerClientFactory.make(
+            serverURL: URL(string: "https://api.example.com")!,
+            info: makeInfo(),
+            tokenProvider: FakeAccessTokenProvider(),
+            sessionRefresher: FakeSessionRefresher(),
+            versionOutdatedHandler: FakeVersionOutdatedHandler(),
+            transport: fakeTransport
+        )
+
+        // .000Z is a legal fractional-second timestamp. If TrackerDateTranscoder
+        // cannot handle it, this call throws — which is a test failure.
+        let response = try await client.getCurrentUser()
+        switch response {
+        case .ok(let ok):
+            let body = try ok.body.json
+            #expect(body.data.firstName == "Alice")
+        default:
+            Issue.record("Expected .ok response but got \(response)")
+        }
+    }
+
     // MARK: - Required headers: all 4 platform headers must be present on every request
 
     @Test("Client sends all required headers on every request")
