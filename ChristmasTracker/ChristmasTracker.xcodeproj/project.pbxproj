@@ -8,8 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D3BB8E43309A4A47003633BA /* TrackerInstrumentation in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB8E42309A4A47003633BA /* TrackerInstrumentation */; };
-		D3BB916D309D7CF5003633BA /* TrackerAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB916C309D7CF5003633BA /* TrackerAPI */; };
-		D3BB9170309D7D09003633BA /* TrackerAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB916F309D7D09003633BA /* TrackerAPI */; };
+		D3BB9491309E1B02003633BA /* TrackerAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB9490309E1B02003633BA /* TrackerAPI */; };
 		D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = D3C371D62F357C3000C09FB4 /* SentrySwiftUI */; };
 /* End PBXBuildFile section */
 
@@ -74,7 +73,7 @@
 			files = (
 				D3BB8E43309A4A47003633BA /* TrackerInstrumentation in Frameworks */,
 				D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */,
-				D3BB916D309D7CF5003633BA /* TrackerAPI in Frameworks */,
+				D3BB9491309E1B02003633BA /* TrackerAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,7 +81,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D3BB9170309D7D09003633BA /* TrackerAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,7 +153,7 @@
 			packageProductDependencies = (
 				D3C371D62F357C3000C09FB4 /* SentrySwiftUI */,
 				D3BB8E42309A4A47003633BA /* TrackerInstrumentation */,
-				D3BB916C309D7CF5003633BA /* TrackerAPI */,
+				D3BB9490309E1B02003633BA /* TrackerAPI */,
 			);
 			productName = ChristmasTracker;
 			productReference = D3C3714B2F32DFD100C09FB4 /* ChristmasTracker.app */;
@@ -179,7 +177,6 @@
 			);
 			name = ChristmasTrackerTests;
 			packageProductDependencies = (
-				D3BB916F309D7D09003633BA /* TrackerAPI */,
 			);
 			productName = ChristmasTrackerTests;
 			productReference = D3C371582F32DFD100C09FB4 /* ChristmasTrackerTests.xctest */;
@@ -243,7 +240,7 @@
 			packageReferences = (
 				D3C371D52F357C3000C09FB4 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				D3BB8E41309A4A47003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerInstrumentation" */,
-				D3BB916B309D7CF4003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */,
+				D3BB948F309E1B02003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D3C3714C2F32DFD100C09FB4 /* Products */;
@@ -796,7 +793,7 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../LocalPackages/TrackerInstrumentation;
 		};
-		D3BB916B309D7CF4003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */ = {
+		D3BB948F309E1B02003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../LocalPackages/TrackerAPI;
 		};
@@ -818,13 +815,8 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = TrackerInstrumentation;
 		};
-		D3BB916C309D7CF5003633BA /* TrackerAPI */ = {
+		D3BB9490309E1B02003633BA /* TrackerAPI */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = TrackerAPI;
-		};
-		D3BB916F309D7D09003633BA /* TrackerAPI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D3BB916B309D7CF4003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */;
 			productName = TrackerAPI;
 		};
 		D3C371D62F357C3000C09FB4 /* SentrySwiftUI */ = {

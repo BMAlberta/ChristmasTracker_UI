@@ -134,7 +134,9 @@ Not performed (no UI changes in this story).
 
 ## Gate 2 Verdict
 
-Pending.
+**Convention reviewer: APPROVED** — No hard blocks. Advisory: `validateBaseURL` doc comment spans 4 lines (not a standards violation; `coding-standards.md` has no one-line limit on doc comments).
+
+**Acceptance reviewer: APPROVED** — All 7 acceptance criteria satisfied with file+line evidence. Notes: (1) 13 tests added vs 11 in spec — 2 extra strengthen `readConfiguration` coverage, no action needed; (2) behavioral guarantee that mock service code never calls `AppConfiguration.apiBaseURL` is deferred to the DI wiring story (correct scope boundary); (3) no contract issues.
 
 ---
 
