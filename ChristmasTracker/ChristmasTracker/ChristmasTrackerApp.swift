@@ -198,6 +198,7 @@ struct ChristmasTrackerApp: App {
     @State private var itemService: ItemService
     @State private var showBiometricSetup = false
     @State private var versionGate: VersionGate
+    @State private var versionService: VersionService
     private let sessionManager: SessionManager
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
     private let lockController: InactivityLockController
@@ -291,6 +292,9 @@ struct ChristmasTrackerApp: App {
         )
         authService = auth
 
+        let vs = VersionService(repository: MockAppVersionRepository())
+        _versionService = State(initialValue: vs)
+
         // Wire the generated TrackerAPI client in real mode.
         // In mock mode this block is skipped and generatedClient stays nil.
         if AppConfiguration.apiMode == .real {
@@ -312,6 +316,25 @@ struct ChristmasTrackerApp: App {
             )
             if generatedClient == nil {
                 LogError("Failed to build TrackerAPI client — version-check unavailable", category: .business)
+            }
+        }
+
+        // In real mode, start the version-check launch task.
+        if AppConfiguration.apiMode == .real, let client = generatedClient {
+            let realRepo = GeneratedClientAppVersionRepository(
+                client: client,
+                info: makeClientInfo(from: Bundle.main.infoDictionary)
+            )
+            let realVS = VersionService(repository: realRepo)
+            _versionService = State(initialValue: realVS)
+            Task { @MainActor [weak realVS] in
+                await realVS?.check()
+                if let policy = realVS?.lastPolicy {
+                    LogInfo(
+                        "Version check: state=\(policy.state) minBuild=\(policy.minimumBuild) latestBuild=\(policy.latestBuild)",
+                        category: .business
+                    )
+                }
             }
         }
 
