@@ -3,21 +3,24 @@
 // Copyright © 2026 BMAlberta. All rights reserved.
 
 import Foundation
+import TrackerAPI
+import TrackerInstrumentation
 
-public final class GeneratedClientAppVersionRepository: AppVersionChecking {
+final class GeneratedClientAppVersionRepository: AppVersionChecking {
     private let client: any APIProtocol
     private let info: AppClientInfo
     // nonisolated(unsafe): written and read only within checkVersion(), which is called in
     // sequence by callers; no concurrent mutation in practice.
     nonisolated(unsafe) private var cachedPolicy: VersionPolicy?
 
-    public init(client: any APIProtocol, info: AppClientInfo) {
+    // nonisolated init: stores parameters only; no main-actor state touched.
+    nonisolated init(client: any APIProtocol, info: AppClientInfo) {
         self.client = client
         self.info = info
     }
 
-    // @Instrumented not available: TrackerAPI package has no Sentry or TrackerInstrumentation dependency.
-    public func checkVersion() async throws -> VersionPolicy {
+    @Instrumented
+    func checkVersion() async throws -> VersionPolicy {
         let input = Operations.CheckAppVersion.Input(
             query: .init(
                 platform: "ios",

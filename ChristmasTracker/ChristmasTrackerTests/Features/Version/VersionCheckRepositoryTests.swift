@@ -1,12 +1,16 @@
 // VersionCheckRepositoryTests.swift
-// Christmas Tracker
+// ChristmasTrackerTests
 // Copyright © 2026 BMAlberta. All rights reserved.
+//
+// Moved from LocalPackages/TrackerAPI/Tests/TrackerAPITests/ in F1 fix pass.
+// GeneratedClientAppVersionRepository now lives in the app module (static link).
 
 import Testing
 import Foundation
 import HTTPTypes
 import OpenAPIRuntime
-@testable import TrackerAPI
+import TrackerAPI
+@testable import ChristmasTracker
 
 // MARK: - JSON fixture helpers
 
@@ -16,14 +20,14 @@ private func makeInfo() -> AppClientInfo {
     AppClientInfo(platform: "ios", clientPlatform: "ios", build: "1", version: "1.0.0")
 }
 
-private func makeClientAndTransport() throws -> (GeneratedClientAppVersionRepository, FakeTransport) {
-    let transport = FakeTransport()
+private func makeClientAndTransport() throws -> (GeneratedClientAppVersionRepository, LocalFakeTransport) {
+    let transport = LocalFakeTransport()
     let client = try TrackerClientFactory.make(
         serverURL: baseURL,
         info: makeInfo(),
-        tokenProvider: FakeAccessTokenProvider(token: nil),
-        sessionRefresher: FakeSessionRefresher(),
-        versionOutdatedHandler: FakeVersionOutdatedHandler(),
+        tokenProvider: LocalFakeAccessTokenProvider(token: nil),
+        sessionRefresher: LocalFakeSessionRefresher(),
+        versionOutdatedHandler: LocalFakeVersionOutdatedHandler(),
         transport: transport
     )
     let repo = GeneratedClientAppVersionRepository(client: client, info: makeInfo())
@@ -267,9 +271,9 @@ struct VersionCheckRepositoryTests {
         let client = try TrackerClientFactory.make(
             serverURL: baseURL,
             info: makeInfo(),
-            tokenProvider: FakeAccessTokenProvider(token: nil),
-            sessionRefresher: FakeSessionRefresher(),
-            versionOutdatedHandler: FakeVersionOutdatedHandler(),
+            tokenProvider: LocalFakeAccessTokenProvider(token: nil),
+            sessionRefresher: LocalFakeSessionRefresher(),
+            versionOutdatedHandler: LocalFakeVersionOutdatedHandler(),
             transport: throwingTransport
         )
         let repo = GeneratedClientAppVersionRepository(client: client, info: makeInfo())
@@ -329,4 +333,68 @@ private actor AlwaysThrowingTransport: ClientTransport {
     ) async throws -> (HTTPResponse, HTTPBody?) {
         throw URLError(.notConnectedToInternet)
     }
+}
+
+// MARK: - LocalFakeTransport
+
+private actor LocalFakeTransport: ClientTransport {
+    struct RecordedRequest {
+        let request: HTTPRequest
+        let body: HTTPBody?
+        let baseURL: URL
+        let operationID: String
+    }
+
+    private var scriptedResponses: [(HTTPResponse, HTTPBody?)] = []
+    private(set) var recordedRequests: [RecordedRequest] = []
+
+    func enqueue(_ response: HTTPResponse, body: HTTPBody? = nil) {
+        scriptedResponses.append((response, body))
+    }
+
+    func enqueue(_ pairs: [(HTTPResponse, HTTPBody?)]) {
+        scriptedResponses.append(contentsOf: pairs)
+    }
+
+    func send(
+        _ request: HTTPRequest,
+        body: HTTPBody?,
+        baseURL: URL,
+        operationID: String
+    ) async throws -> (HTTPResponse, HTTPBody?) {
+        recordedRequests.append(
+            RecordedRequest(request: request, body: body, baseURL: baseURL, operationID: operationID)
+        )
+        if scriptedResponses.isEmpty {
+            return (HTTPResponse(status: .ok), nil)
+        }
+        return scriptedResponses.removeFirst()
+    }
+
+    func lastRequest() -> RecordedRequest? { recordedRequests.last }
+}
+
+// MARK: - Extension helpers
+
+private extension HTTPResponse {
+    static func ok() -> HTTPResponse { HTTPResponse(status: .ok) }
+    static func status(_ code: Int) -> HTTPResponse {
+        HTTPResponse(status: HTTPResponse.Status(code: code))
+    }
+}
+
+// MARK: - Local fakes for seam protocols
+
+private final class LocalFakeAccessTokenProvider: AccessTokenProviding, @unchecked Sendable {
+    private let token: String?
+    init(token: String?) { self.token = token }
+    func accessToken() async -> String? { token }
+}
+
+private actor LocalFakeSessionRefresher: SessionRefreshing {
+    func refresh() async throws {}
+}
+
+private actor LocalFakeVersionOutdatedHandler: VersionOutdatedHandling {
+    func handleVersionOutdated(_ details: VersionOutdatedDetails) async {}
 }

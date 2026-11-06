@@ -4,6 +4,6 @@
 
 import Foundation
 
-public protocol AppVersionChecking: Sendable {
+protocol AppVersionChecking: Sendable {
     func checkVersion() async throws -> VersionPolicy
 }

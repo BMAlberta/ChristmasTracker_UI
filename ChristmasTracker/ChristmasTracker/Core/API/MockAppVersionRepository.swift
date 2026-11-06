@@ -2,7 +2,6 @@
 // ChristmasTracker
 
 import Foundation
-import TrackerAPI
 
 @MainActor final class MockAppVersionRepository: AppVersionChecking {
     var stubbedResult: Result<VersionPolicy, Error> = .success(
