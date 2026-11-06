@@ -76,3 +76,53 @@ Nothing. This package is entirely client-side. No server changes required.
 ## Section 9 of PROGRAM.md (one line)
 
 > I1-a complete: `LocalPackages/TrackerAPI` package with generated client, 5 middleware types, error taxonomy, money helpers, and 85 passing tests; app layer wiring deferred to I1-b.
+
+---
+
+## ERRATA — Fix Pass G1–G3 (2026-11-05)
+
+The original I1-a package had defects H1–H7 found during review. A fix pass on the same branch corrected them. The following items in this handoff are **superseded**:
+
+### 1. Spec delivery (H1)
+
+~~"swift-openapi-generator build-tool plugin running on `contract/openapi.json` via a symlink"~~
+
+The generator now runs on a **committed derived spec** at `LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.json`. The derived spec is produced by `scripts/make-client-spec.sh`, which replaces 4 anyOf-null schemas and removes 1 bare-null property that the generator cannot handle. `scripts/verify.sh` checks this file is current before building. The symlink no longer exists.
+
+### 2. The 5 nullable fields (H1)
+
+The table in "Contract Issues Found" listing `ListSummary.coOwner`, `Item.expectedUnitPrice`, `PurchaseConfirmationRequiredData.purchase`, `YearStats.totalBudget`, `StatsYearResponse.budget` as "field dropped entirely" is **no longer accurate**. The derived spec causes the generator to emit these as optional Swift properties:
+- `ListSummary.value1.coOwner: Components.Schemas.PersonRef?`
+- `Item.expectedUnitPrice: Double?`
+- `StatsYearResponse.budget: Components.Schemas.BudgetStats?` (via `value1`)
+- `YearStats.totalBudget: Double?`
+- `PurchaseConfirmationRequiredData.purchase`: property removed from spec (was bare null)
+
+**Updated I1-b instruction** (replaces item 3 under "What Brian Must Do"):  
+Map the 4 optional fields to their domain model equivalents — nil when absent, the typed value when present. The `purchase` field is not in the generated schema; ignore it.
+
+### 3. `isCredentialFailure` (H4)
+
+~~"returns true for codes 1005, 1006, 1007"~~
+
+Now returns true for **1005, 1006, 1013** (`REFRESH_TOKEN_MISSING`). Code 1007 is UNUSED per `Docs/error-codes.md` and returns false.
+
+New: `classifyErrorCode(errorCode: Int) -> ErrorCodeClassification` added to `TrackerAPIError.swift` — maps every ACTIVE error code to one of `.reLogin`, `.refreshAndReplay`, `.forceUpdate`, `.notFound`, `.backOff`, `.showMessage`.
+
+### 4. `doubleToDecimal` implementation (H5)
+
+~~"MoneyHelpers uses internal Decimal fields (_exponent, _length, etc.)"~~
+
+Rewritten. Now uses `String(format: "%.2f", value)` + `Decimal(string:locale:)` only. Returns `Decimal?` (nil for NaN/Infinity). No private Decimal fields.
+
+### 5. Single-flight stale-token detection (H6/H7)
+
+`RefreshOn401Middleware` now captures the access token before each request. If a 401 arrives and the current token already differs from the request token (rotated by a concurrent caller), it replays once without a second refresh call.
+
+### 6. Test count
+
+~~"85 package tests"~~ → **141 package tests** after the fix pass.
+
+### Section 9 correction
+
+> I1-a + fix pass complete: `LocalPackages/TrackerAPI` package with generated client (derived spec), 5 middleware types, `classifyErrorCode`, stale-token replay, money helpers, and 141 passing tests; app layer wiring deferred to I1-b.

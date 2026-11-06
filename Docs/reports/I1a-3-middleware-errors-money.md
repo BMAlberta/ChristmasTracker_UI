@@ -95,6 +95,10 @@ Justification: The class holds `NSLock` and `Task<Void, Error>?`. Both are mutat
 
 ---
 
+## Amendment — Fix Pass G3 (2026-11-05)
+
+Deviation #4 above (MoneyHelpers uses internal Decimal fields) was resolved in fix pass story G3. `doubleToDecimal` was rewritten to use `String(format: "%.2f", value)` + `Decimal(string:locale:)` only; no private `_exponent/_length/_mantissa` fields remain. The function now returns `Decimal?` (nil for NaN/Infinity). `decimalToDouble` now uses `NSDecimalRound` → string → `Double`. `isCredentialFailure` was also corrected: 1013 added, 1007 removed. `classifyErrorCode(errorCode:)` added. See `Docs/reports/I1a-7-money-codes-singleflight.md`.
+
 ## Not Done or Partial
 
 None.
