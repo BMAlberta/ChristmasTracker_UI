@@ -36,10 +36,10 @@ struct AuthErrorMappingTests {
         #expect(userMessage(for: .emailAlreadyExists) == "An account with this email address already exists.")
     }
 
-    // A5
-    @Test("validationFailed maps to expected message")
-    func validationFailedMapsToExpectedMessage() {
-        #expect(userMessage(for: .validationFailed) == "Please check your entries and try again.")
+    // A5 (updated for fix pass: validation(message:) replaces validationFailed)
+    @Test("validation(message:) userMessage returns the server message directly")
+    func validationMessageReturnsServerMessage() {
+        #expect(userMessage(for: .validation(message: "Password does not meet requirements")) == "Password does not meet requirements")
     }
 
     // A6
@@ -60,10 +60,10 @@ struct AuthErrorMappingTests {
         #expect(userMessage(for: .updateRequired) == "A required update is available. Please update the app.")
     }
 
-    // A9
+    // A9 (updated for fix pass: rateLimited now carries retryAfter)
     @Test("rateLimited maps to expected message")
     func rateLimitedMapsToExpectedMessage() {
-        #expect(userMessage(for: .rateLimited) == "Too many attempts. Please wait a moment and try again.")
+        #expect(userMessage(for: .rateLimited(retryAfter: 60)) == "Too many attempts. Please wait a moment and try again.")
     }
 
     // A10

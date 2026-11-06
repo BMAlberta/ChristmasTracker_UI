@@ -168,7 +168,7 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
 
 // MARK: - Authentication Errors
 
-enum AuthenticationError: Error, LocalizedError {
+enum AuthenticationError: Error, LocalizedError, Equatable {
     case invalidCredentials
     case emailAlreadyExists
     case userNotFound
@@ -181,10 +181,10 @@ enum AuthenticationError: Error, LocalizedError {
     case invalidResponse         // nil email on user returned by login/register/refresh
     case accountDisabled         // 1008 ACCOUNT_DISABLED
     case updateRequired          // 426 VERSION_OUTDATED
-    case rateLimited             // 429 with optional retry-after
+    case rateLimited(retryAfter: TimeInterval) // 429 with optional retry-after
     case serverError             // 500 or other internal error
     case invalidRegistrationCode // 1017 REGISTRATION_CODE_INVALID
-    case validationFailed        // 400 validation
+    case validation(message: String) // 400 validation
     case credentialExpired       // 1005/1006 refresh token expired/invalid (token-rotation-specific)
 
     var errorDescription: String? {
@@ -217,8 +217,8 @@ enum AuthenticationError: Error, LocalizedError {
             return "A server error occurred. Please try again later"
         case .invalidRegistrationCode:
             return "The registration code is invalid or has expired"
-        case .validationFailed:
-            return "The information you provided is invalid"
+        case .validation(let message):
+            return message
         case .credentialExpired:
             return "Your session credentials have expired. Please login again"
         }

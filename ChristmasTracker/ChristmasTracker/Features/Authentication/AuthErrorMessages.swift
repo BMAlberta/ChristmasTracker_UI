@@ -17,8 +17,8 @@ nonisolated func userMessage(for error: AuthenticationError) -> String {
         return "The registration code is invalid."
     case .emailAlreadyExists:
         return "An account with this email address already exists."
-    case .validationFailed:
-        return "Please check your entries and try again."
+    case .validation(let message):
+        return message
     case .credentialExpired:
         return "Your session has expired. Please sign in again."
     case .invalidRefreshToken:
