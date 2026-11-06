@@ -30,6 +30,10 @@ let package = Package(
         .package(
             url: "https://github.com/apple/swift-openapi-urlsession.git",
             exact: "1.4.0"
+        ),
+        .package(
+            url: "https://github.com/apple/swift-http-types.git",
+            exact: "1.8.0"
         )
     ],
     targets: [
@@ -37,7 +41,8 @@ let package = Package(
             name: "TrackerAPI",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "HTTPTypes", package: "swift-http-types")
             ],
             swiftSettings: swiftSettings,
             plugins: [
@@ -46,7 +51,8 @@ let package = Package(
         ),
         .testTarget(
             name: "TrackerAPITests",
-            dependencies: ["TrackerAPI"],
+            dependencies: ["TrackerAPI",
+                           .product(name: "HTTPTypes", package: "swift-http-types")],
             swiftSettings: swiftSettings
         )
     ]
