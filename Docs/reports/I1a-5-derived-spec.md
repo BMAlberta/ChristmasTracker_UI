@@ -21,7 +21,9 @@
 
 ## Gate 2 verdicts
 
-Pending — Orchestrator will dispatch reviewers.
+**Convention reviewer:** PASS (no violations in derived-spec additions; explaining comment present for `@Instrumented` exception).
+
+**Acceptance reviewer:** PASS — all 10 new decoding tests pass; derived spec confirmed current; 486 app tests and 93 package tests pass; `contract/` unmodified. Commit: `eed4b93`.
 
 ---
 
