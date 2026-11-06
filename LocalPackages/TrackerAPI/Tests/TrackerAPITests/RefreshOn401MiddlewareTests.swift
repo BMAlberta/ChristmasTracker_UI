@@ -213,6 +213,38 @@ struct RefreshOn401MiddlewareTests {
         #expect(refreshCount == 0)
     }
 
+    // MARK: - 8. Stale-token 401 replays without calling refresh when token has already rotated
+
+    @Test("Stale-token 401 replays without calling refresh when token has already rotated")
+    func staleTokenReplaySkipsRefresh() async throws {
+        // tokenProvider: first call returns "T1" (the token used in the initial request),
+        //                second call returns "T2" (a new token, already rotated by another caller)
+        let tokenProvider = FakeAccessTokenProvider(tokens: ["T1", "T2"])
+        let transport = FakeTransport()
+        await transport.enqueue([
+            (HTTPResponse(status: .init(code: 401)), nil),
+            (HTTPResponse(status: .ok), nil)
+        ])
+        let refresher = FakeSessionRefresher()
+        let sut = RefreshOn401Middleware(refresher: refresher, tokenProvider: tokenProvider)
+
+        let (response, _) = try await sut.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/test"),
+            body: nil,
+            baseURL: makeBaseURL(),
+            operationID: "listLists",
+            next: { req, body, url in
+                try await transport.send(req, body: body, baseURL: url, operationID: "listLists")
+            }
+        )
+
+        #expect(response.status.code == 200)
+        let refreshCount = await refresher.refreshCallCount
+        #expect(refreshCount == 0, "No refresh should occur when token has already rotated")
+        let requestCount = await transport.requestCount
+        #expect(requestCount == 2, "One initial request + one replay")
+    }
+
     // MARK: - 7. 401 on a public operation (login) is not refreshed
 
     @Test("401 on login (public operation) does not trigger refresh and returns response as-is")

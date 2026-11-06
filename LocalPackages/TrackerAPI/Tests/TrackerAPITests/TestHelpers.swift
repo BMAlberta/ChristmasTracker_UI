@@ -55,12 +55,38 @@ actor FakeTransport: ClientTransport {
 
 // MARK: - FakeAccessTokenProvider
 
-final class FakeAccessTokenProvider: AccessTokenProviding {
-    private let token: String?
+final class FakeAccessTokenProvider: AccessTokenProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private let staticToken: String?
+    private var tokenSequence: [String]
+    private var sequenceIndex: Int = 0
+
+    /// Returns the same token on every call.
     init(token: String? = "test-access-token") {
-        self.token = token
+        self.staticToken = token
+        self.tokenSequence = []
     }
-    func accessToken() async -> String? { token }
+
+    /// Returns tokens in order; repeats the last token once the sequence is exhausted.
+    init(tokens: [String]) {
+        self.staticToken = nil
+        self.tokenSequence = tokens
+    }
+
+    func accessToken() async -> String? {
+        lock.withLock {
+            if !tokenSequence.isEmpty {
+                if sequenceIndex < tokenSequence.count {
+                    let t = tokenSequence[sequenceIndex]
+                    sequenceIndex += 1
+                    return t
+                } else {
+                    return tokenSequence.last
+                }
+            }
+            return staticToken
+        }
+    }
 }
 
 // MARK: - FakeSessionRefresher

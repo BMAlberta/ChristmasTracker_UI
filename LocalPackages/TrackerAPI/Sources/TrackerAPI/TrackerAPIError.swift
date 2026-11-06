@@ -25,10 +25,36 @@ public func isCredentialFailure(errorCode: Int) -> Bool {
     switch errorCode {
     case 1005, // REFRESH_TOKEN_EXPIRED
          1006, // REFRESH_TOKEN_INVALID
-         1007: // SESSION_EXPIRED
+         1013: // REFRESH_TOKEN_MISSING
         return true
     default:
         return false
+    }
+}
+
+public enum ErrorCodeClassification: Sendable, Equatable {
+    case reLogin
+    case refreshAndReplay
+    case forceUpdate
+    case notFound
+    case backOff
+    case showMessage
+}
+
+public func classifyErrorCode(errorCode: Int) -> ErrorCodeClassification {
+    switch errorCode {
+    case 1005, 1006, 1013:
+        return .reLogin
+    case 1002, 1003, 1004:
+        return .refreshAndReplay
+    case 1014:
+        return .forceUpdate
+    case 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4010:
+        return .notFound
+    case 8001, 8002, 9001, 9002:
+        return .backOff
+    default:
+        return .showMessage
     }
 }
 

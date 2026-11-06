@@ -20,6 +20,9 @@ public final class RefreshOn401Middleware: ClientMiddleware, @unchecked Sendable
         self.tokenProvider = tokenProvider
     }
 
+    // @Instrumented is not used: TrackerAPI is a Swift package with no Sentry dependency
+    // (see I1-a epic: "The package has no Sentry dependency"). The convention rule
+    // applies to app-layer service and repository types only.
     public func intercept(
         _ request: HTTPRequest,
         body: HTTPBody?,
@@ -41,13 +44,27 @@ public final class RefreshOn401Middleware: ClientMiddleware, @unchecked Sendable
             return (response, responseBody)
         }
 
+        // Capture the token used for this request so we can detect if it has already rotated
+        let requestToken = await tokenProvider.accessToken()
+
         // First attempt
         let (firstResponse, firstBody) = try await next(request, body, baseURL)
         guard firstResponse.status.code == 401 else {
             return (firstResponse, firstBody)
         }
 
-        // Got 401 — single-flight refresh using NSLock
+        // Got 401 — check if the token has already been rotated by a concurrent caller
+        let currentToken = await tokenProvider.accessToken()
+        if currentToken != requestToken {
+            // Token already rotated — replay once with no refresh
+            let (replayResponse, replayBody) = try await next(request, body, baseURL)
+            if replayResponse.status.code == 401 {
+                throw TrackerAPIError.unauthorized
+            }
+            return (replayResponse, replayBody)
+        }
+
+        // Token unchanged — proceed with single-flight refresh using NSLock
         let task: Task<Void, Error> = lock.withLock {
             if let existing = refreshTask {
                 return existing
