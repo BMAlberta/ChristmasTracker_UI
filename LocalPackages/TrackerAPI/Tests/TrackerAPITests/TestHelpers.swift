@@ -55,6 +55,7 @@ actor FakeTransport: ClientTransport {
 
 // MARK: - FakeAccessTokenProvider
 
+// NSLock protects all mutable state (lock, staticToken, tokenSequence, sequenceIndex).
 final class FakeAccessTokenProvider: AccessTokenProviding, @unchecked Sendable {
     private let lock = NSLock()
     private let staticToken: String?
@@ -107,6 +108,38 @@ actor FakeSessionRefresher: SessionRefreshing {
     }
 }
 
+// MARK: - FakeSuspendableRefresher
+
+/// A fake SessionRefreshing that suspends in `refresh()` until explicitly released.
+/// Use this for deterministic concurrency tests where you need to control exactly
+/// when the in-flight refresh completes.
+actor FakeSuspendableRefresher: SessionRefreshing {
+    private(set) var refreshCallCount = 0
+    private var pending: CheckedContinuation<Void, Error>?
+    private var calledContinuation: CheckedContinuation<Void, Never>?
+
+    func refresh() async throws {
+        refreshCallCount += 1
+        calledContinuation?.resume()
+        calledContinuation = nil
+        try await withCheckedThrowingContinuation { [self] cont in
+            self.pending = cont
+        }
+    }
+
+    func waitUntilRefreshCalled() async {
+        guard refreshCallCount == 0 else { return }
+        await withCheckedContinuation { cont in
+            calledContinuation = cont
+        }
+    }
+
+    func releaseSuccess() {
+        pending?.resume()
+        pending = nil
+    }
+}
+
 // MARK: - FakeVersionOutdatedHandler
 
 actor FakeVersionOutdatedHandler: VersionOutdatedHandling {
@@ -151,7 +184,10 @@ extension HTTPResponse {
 }
 
 func makeBaseURL() -> URL {
-    URL(string: "https://api.example.com")!
+    guard let url = URL(string: "https://api.example.com") else {
+        preconditionFailure("makeBaseURL: hard-coded URL must always be valid")
+    }
+    return url
 }
 
 // MARK: - JSON body helpers

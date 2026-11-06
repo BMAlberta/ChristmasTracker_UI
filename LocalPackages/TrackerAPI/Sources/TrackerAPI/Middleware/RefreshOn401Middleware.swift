@@ -6,14 +6,14 @@ import Foundation
 import HTTPTypes
 import OpenAPIRuntime
 
-// NSLock protects refreshTask; both are accessed only under the lock.
-// @unchecked Sendable is required because NSLock and Task<Void, Error>? are not
+// NSLock protects refreshEntry; both are accessed only under the lock.
+// @unchecked Sendable is required because NSLock and the tuple are not
 // Sendable by themselves, but all mutation is protected by the lock.
 public final class RefreshOn401Middleware: ClientMiddleware, @unchecked Sendable {
     private let refresher: any SessionRefreshing
     private let tokenProvider: any AccessTokenProviding
     private let lock = NSLock()
-    private var refreshTask: Task<Void, Error>?
+    private var refreshEntry: (id: UUID, task: Task<Void, Error>)?
 
     public init(refresher: any SessionRefreshing, tokenProvider: any AccessTokenProviding) {
         self.refresher = refresher
@@ -64,37 +64,40 @@ public final class RefreshOn401Middleware: ClientMiddleware, @unchecked Sendable
             return (replayResponse, replayBody)
         }
 
-        // Token unchanged — proceed with single-flight refresh using NSLock
+        // Token unchanged — proceed with single-flight refresh using NSLock.
+        // A nonce (UUID) is stored alongside the task. The defer block in the task body
+        // clears refreshEntry only if the nonce matches, so a completed task is always
+        // removed — allowing the next 401 in a future session to start a fresh refresh.
         let task: Task<Void, Error> = lock.withLock {
-            if let existing = refreshTask {
-                return existing
-            }
-            let newTask = Task { [refresher] in
+            if let existing = refreshEntry { return existing.task }
+            let id = UUID()
+            let newTask = Task { [self, refresher] in
+                defer {
+                    self.lock.withLock {
+                        if self.refreshEntry?.id == id {
+                            self.refreshEntry = nil
+                        }
+                    }
+                }
                 try await refresher.refresh()
             }
-            refreshTask = newTask
+            refreshEntry = (id: id, task: newTask)
             return newTask
         }
 
         do {
             try await task.value
         } catch let refreshError as SessionRefreshError {
-            // Clear the failed task so the next 401 triggers a fresh attempt
-            lock.withLock { refreshTask = nil }
             if case .credentialFailure = refreshError {
                 throw TrackerAPIError.unauthorized
             }
             throw refreshError
         } catch {
-            // Clear the failed task so the next 401 triggers a fresh attempt
-            lock.withLock { refreshTask = nil }
             throw error
         }
 
-        // Do NOT clear refreshTask on success — concurrent requests that also received a
-        // 401 must be able to find and reuse the same completed task rather than triggering
-        // a redundant second refresh. The completed task's result is cached by Swift; any
-        // subsequent `await task.value` returns immediately.
+        // refreshEntry is cleared by the task's defer block (success or failure),
+        // so the next 401 in a new token lifetime always triggers a fresh refresh.
 
         // Replay with new token (bearer middleware will pick up fresh token)
         let (replayResponse, replayBody) = try await next(request, body, baseURL)
