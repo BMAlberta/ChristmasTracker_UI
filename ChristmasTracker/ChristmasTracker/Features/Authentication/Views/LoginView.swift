@@ -385,6 +385,6 @@ struct CustomTextFieldStyle: TextFieldStyle {
     LoginView()
         .environment(\.authenticationService, AuthenticationService(
             repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+            sessionManager: SessionManager(initialClearables: [])
         ))
 }

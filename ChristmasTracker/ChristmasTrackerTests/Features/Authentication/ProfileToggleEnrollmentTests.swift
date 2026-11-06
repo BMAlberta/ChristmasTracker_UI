@@ -42,7 +42,7 @@ struct ProfileToggleEnrollmentTests {
                 store: InMemoryBiometricCredentialStore,
                 authenticator: FakeBiometricAuthenticator) {
         let repo = MockAuthenticationRepository()
-        let sessionManager = SessionManager(authRepository: repo)
+        let sessionManager = SessionManager(initialClearables: [])
         let store = InMemoryBiometricCredentialStore()
         let auth = FakeBiometricAuthenticator()
         auth.stubbedResult = authenticatorResult

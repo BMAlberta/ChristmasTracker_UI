@@ -43,6 +43,11 @@ internal final class KeychainBiometricCredentialStore: BiometricCredentialStorin
 
     private static let key = "biometric.credential.v1"
 
+    /// Injectable policy evaluator; non-nil only in tests.
+    /// Production path (nil) calls `context.evaluatePolicy` directly.
+    /// nonisolated(unsafe): written once per test instance before any async call; never mutated concurrently.
+    nonisolated(unsafe) var policyEvaluator: ((LAPolicy, String) async throws -> Void)? = nil
+
     func enrolledUser() -> (userId: String, firstName: String)? {
         // Use interactionNotAllowed so this read never triggers a biometric prompt.
         // errSecInteractionNotAllowed means the item exists but requires interaction;
@@ -112,12 +117,18 @@ internal final class KeychainBiometricCredentialStore: BiometricCredentialStorin
         context.localizedFallbackTitle = ""
 
         do {
-            try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+            if let evaluator = policyEvaluator {
+                try await evaluator(.deviceOwnerAuthenticationWithBiometrics, reason)
+            } else {
+                try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+            }
         } catch let laError as LAError {
             switch laError.code {
-            case .userCancel:
+            case .authenticationFailed:
+                throw BiometricCredentialError.biometricFailed
+            case .systemCancel, .appCancel:
                 throw BiometricCredentialError.userCancelled
-            case .biometryLockout:
+            case .userCancel, .biometryLockout:
                 throw BiometricCredentialError.lockedOut
             default:
                 throw BiometricCredentialError.other

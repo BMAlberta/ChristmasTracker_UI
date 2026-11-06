@@ -42,5 +42,5 @@ struct TabBarView: View {
 
 #Preview {
     TabBarView(apiClient: MockAPIClient.withMockData())
-        .environment(\.authenticationService, AuthenticationService(repository: MockAuthenticationRepository(), sessionManager:SessionManager(authRepository:MockAuthenticationRepository())))
+        .environment(\.authenticationService, AuthenticationService(repository: MockAuthenticationRepository(), sessionManager: SessionManager(initialClearables: [])))
 }

@@ -22,7 +22,7 @@ internal enum BiometricSignInState: Equatable {
 
 internal nonisolated func isCredentialFailure(_ error: AuthenticationError) -> Bool {
     switch error {
-    case .invalidRefreshToken, .sessionExpired, .invalidCredentials:
+    case .invalidRefreshToken, .sessionExpired, .invalidCredentials, .credentialExpired:
         return true
     default:
         return false

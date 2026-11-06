@@ -30,17 +30,17 @@ struct ContentView: View {
     ContentView()
         .environment(\.authenticationService, AuthenticationService(
             repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+            sessionManager: SessionManager(initialClearables: [])
         ))
 }
 private struct ContentViewAuthenticatedPreview: View {
 //    @State private var authService = AuthenticationService(
 //        repository: MockAuthenticationRepository(),
-//        sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+//        sessionManager: SessionManager(initialClearables: [])
 //    )
     
     @State private var apiClient = MockAPIClient.withMockData()
-    @State private var authService = AuthenticationService(repository: MockAuthenticationRepository(), sessionManager: SessionManager(authRepository: MockAuthenticationRepository()))
+    @State private var authService = AuthenticationService(repository: MockAuthenticationRepository(), sessionManager: SessionManager(initialClearables: []))
     
     var body: some View {
         ContentView()

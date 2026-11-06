@@ -58,7 +58,7 @@ private final class ErroringBiometricCredentialStore: BiometricCredentialStoring
 
 // MARK: - AuthenticationRepository that throws on biometric login/refresh
 
-/// Repository that throws a specified AuthenticationError on refreshToken.
+/// Repository that throws a specified AuthenticationError on refresh.
 /// Login succeeds so we can reach the refresh step in signInWithBiometric().
 private actor BiometricRefreshFailingRepository: AuthenticationRepository {
     let refreshError: AuthenticationError
@@ -73,27 +73,21 @@ private actor BiometricRefreshFailingRepository: AuthenticationRepository {
                     createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
     }
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
-        AuthData(user: makeUser(email: email), accessToken: "at",
-                 refreshToken: "mock_rt_mock-\(email.components(separatedBy: "@").first ?? "u")_\(UUID().uuidString)",
-                 expiresIn: 900)
+    func login(email: String, password: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(email: email), accessToken: "at",
+                    refreshToken: "mock_rt_mock-\(email.components(separatedBy: "@").first ?? "u")_\(UUID().uuidString)",
+                    expiresIn: 900)
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: makeUser(email: email), accessToken: "at", refreshToken: "rt", expiresIn: 900)
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(email: email), accessToken: "at", refreshToken: "rt", expiresIn: 900)
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: makeUser(email: "\(userId)@example.com"), accessToken: "at", refreshToken: "rt", expiresIn: 900)
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         throw refreshError
     }
 
-    func ping() async throws {}
-    func logout(refreshToken: String) async throws {}
-    func forgotPassword(email: String) async throws {}
+    func logout() async throws {}
 }
 
 // MARK: - Factory
@@ -104,7 +98,7 @@ private func makeSUT(
     credentialStore: any BiometricCredentialStoring = InMemoryBiometricCredentialStore(),
     biometricAuthenticator: FakeBiometricAuthenticator = FakeBiometricAuthenticator()
 ) -> AuthenticationService {
-    let sessionManager = SessionManager(authRepository: repo)
+    let sessionManager = SessionManager(initialClearables: [])
     return AuthenticationService(
         repository: repo,
         sessionManager: sessionManager,

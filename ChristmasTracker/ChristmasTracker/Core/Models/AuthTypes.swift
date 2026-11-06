@@ -6,56 +6,21 @@
 //
 
 import Foundation
-// MARK: - Request Types
-nonisolated struct LoginRequest: Codable, Sendable {
-    let email: String
-    let password: String
-    let rememberMe: Bool
-}
 
-nonisolated struct RegisterRequest: Codable, Sendable {
-    let email: String
-    let password: String
-    let name: String
-}
+// MARK: - Domain Session Type (C1)
 
-nonisolated struct BiometricLoginRequest: Codable, Sendable {
-    let userId: String
-    let biometricToken: String // Keychain-protected token
-}
-
-nonisolated struct RefreshTokenRequest: Codable, Sendable {
-    let refreshToken: String
-    struct ForgotPasswordRequest: Codable, Sendable {
-        let email: String
-    }
-}
-
-nonisolated struct ForgotPasswordRequest: Codable, Sendable {
-    let email: String
-}
-
-// MARK: - Response Types
-nonisolated struct AuthResponse: Codable, Sendable {
-    let success: Bool
-    let data: AuthData
-    let meta: ResponseMeta
-}
-
-nonisolated struct AuthData: Codable, Sendable {
+/// Returned by all AuthenticationRepository methods in the new generated-client path.
+nonisolated struct AuthSession: Sendable {
     let user: User
     let accessToken: String
     let refreshToken: String
-    let expiresIn: Int // seconds
-}
-
-nonisolated struct ResponseMeta: Codable, Sendable {
-    let timestamp: String
-    let requestId: String
-    let sessionId: String
+    /// Seconds until the access token expires. 900 for login/register (not in those responses);
+    /// taken from the body for refresh responses.
+    let expiresIn: Int
 }
 
 // MARK: - Token Storage
+
 nonisolated struct AuthTokens: Codable, Sendable {
     let accessToken: String
     let refreshToken: String

@@ -78,12 +78,25 @@ private final class LockCoordinator: InactivityLockPresenting {
     }
 }
 
+// MARK: - AuthServiceBox
+
+/// A reference container that lets the AccessTokenSeam and SessionRefreshSeam closures
+/// reach AuthenticationService after it is created, without creating a circular dependency.
+/// @unchecked Sendable: written exactly once during app init on MainActor; never mutated
+/// concurrently.
+private final class AuthServiceBox: @unchecked Sendable {
+    // nonisolated(unsafe): written exactly once during app init on MainActor;
+    // read from async closures only after init completes — no concurrent mutation.
+    nonisolated(unsafe) var value: AuthenticationService?
+    init() { value = nil }
+}
+
 // MARK: - AppDependencies
 
 /// Dependency container for the composition root.
 struct AppDependencies: Sendable {
     let apiClient: APIClient
-    let authRepository: AuthenticationRepository
+    let authRepository: any AuthenticationRepository
     let listRepository: ListRepository
     let itemRepository: ItemRepository
     // Stored as the APIProtocol existential to avoid a linker dependency on
@@ -93,29 +106,49 @@ struct AppDependencies: Sendable {
     // read from any isolation context since AppDependencies is Sendable.
     nonisolated(unsafe) let trackerClient: (any APIProtocol)?
 
+    /// Build mock dependencies (used in .mock mode and when generatedClient is unavailable).
+    static func makeMock() -> AppDependencies {
+        let apiClient = MockAPIClient.withMockData()
+        return AppDependencies(
+            apiClient: apiClient,
+            authRepository: MockAuthenticationRepository(),
+            listRepository: MockListRepository(),
+            itemRepository: MockItemRepository(),
+            trackerClient: nil
+        )
+    }
+
+    /// Build real dependencies using the already-constructed generated client for auth.
+    static func makeReal(generatedClient: any APIProtocol) -> AppDependencies {
+        let apiClient = NetworkAPIClient()
+        return AppDependencies(
+            apiClient: apiClient,
+            authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
+            listRepository: NetworkListRepository(apiClient: apiClient),
+            itemRepository: NetworkItemRepository(apiClient: apiClient),
+            trackerClient: generatedClient
+        )
+    }
+
+    /// Legacy entry-point retained for call-sites that have not been updated.
     static func make() -> AppDependencies {
         switch AppConfiguration.apiMode {
         case .mock:
-            let apiClient = MockAPIClient.withMockData()
-            return AppDependencies(
-                apiClient: apiClient,
-                authRepository: MockAuthenticationRepository(),
-                listRepository: MockListRepository(),
-                itemRepository: MockItemRepository(),
-                trackerClient: nil
-            )
+            return makeMock()
         case .real:
+            // Real mode requires generatedClient; fall back to mock if unavailable at this call-site.
+            // The composition root in ChristmasTrackerApp.init() builds the client first and calls
+            // makeReal(generatedClient:) directly; this fallback path is only hit by legacy callers.
             let apiClient = NetworkAPIClient()
             return AppDependencies(
                 apiClient: apiClient,
-                authRepository: NetworkAuthenticationRepository(apiClient: apiClient),
+                authRepository: MockAuthenticationRepository(),
                 listRepository: NetworkListRepository(apiClient: apiClient),
                 itemRepository: NetworkItemRepository(apiClient: apiClient),
                 trackerClient: nil
             )
         }
     }
-
 }
 
 // MARK: - buildGeneratedClient
@@ -210,7 +243,41 @@ struct ChristmasTrackerApp: App {
         lc.lockPresenter = lkCoord
         lockCoordinator = lkCoord
 
-        let dependencies = AppDependencies.make()
+        // Build the generated client FIRST so GeneratedClientAuthenticationRepository can be
+        // constructed before AuthenticationService. The seams use an AuthServiceBox (an
+        // @unchecked Sendable reference container) that is populated after auth is created.
+        //
+        // AuthServiceBox is nonisolated(unsafe): written exactly once during init on MainActor
+        // and read only from async closures that execute after init completes — no concurrent
+        // mutation occurs after the assignment in this init.
+        let authBox = AuthServiceBox()
+        let tokenSeam = AccessTokenSeam(tokenGetter: { [weak authBox] in
+            await authBox?.value?.currentAccessToken
+        })
+        let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak authBox] in
+            guard let svc = authBox?.value else { throw AuthenticationError.invalidRefreshToken }
+            try await svc.forceRefresh()
+        })
+        let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
+        let resolvedBaseURL: URL? = AppConfiguration.apiMode == .real ? AppConfiguration.apiBaseURL : nil
+        let builtClient = buildGeneratedClient(
+            mode: AppConfiguration.apiMode,
+            serverURL: resolvedBaseURL,
+            info: makeClientInfo(from: Bundle.main.infoDictionary),
+            tokenProvider: tokenSeam,
+            sessionRefresher: refreshSeam,
+            versionOutdatedHandler: vg,
+            requestIDObserver: requestIDSeam
+        )
+        generatedClient = builtClient
+
+        // Build AppDependencies — real mode uses GeneratedClientAuthenticationRepository.
+        let dependencies: AppDependencies
+        if AppConfiguration.apiMode == .real, let client = builtClient {
+            dependencies = AppDependencies.makeReal(generatedClient: client)
+        } else {
+            dependencies = AppDependencies.makeMock()
+        }
         apiClient = dependencies.apiClient
 
         // List Service
@@ -237,8 +304,7 @@ struct ChristmasTrackerApp: App {
             networkCache: NetworkCache.shared,
             lockController: lc
         )
-        let sm = SessionManager(authRepository: dependencies.authRepository,
-                                initialClearables: clearables)
+        let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
 
         // Create services
@@ -251,35 +317,14 @@ struct ChristmasTrackerApp: App {
             sessionManager: sm,
             enrollmentHistory: UserDefaultsEnrollmentHistory()
         )
+        authBox.value = auth  // seam closures can now reach auth
         authService = auth
 
         let vs = VersionService(repository: MockAppVersionRepository())
         _versionService = State(initialValue: vs)
 
-        // Wire the generated TrackerAPI client in real mode.
-        // In mock mode buildGeneratedClient returns nil immediately.
-        let tokenSeam = AccessTokenSeam(tokenGetter: { [weak auth] in
-            await auth?.currentAccessToken
-        })
-        let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak auth] in
-            guard let svc = auth else { throw AuthenticationError.invalidRefreshToken }
-            try await svc.forceRefresh()
-        })
-        let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
-        // AppConfiguration.apiBaseURL is only accessed in real mode (ternary short-circuits).
-        let resolvedBaseURL: URL? = AppConfiguration.apiMode == .real ? AppConfiguration.apiBaseURL : nil
-        generatedClient = buildGeneratedClient(
-            mode: AppConfiguration.apiMode,
-            serverURL: resolvedBaseURL,
-            info: makeClientInfo(from: Bundle.main.infoDictionary),
-            tokenProvider: tokenSeam,
-            sessionRefresher: refreshSeam,
-            versionOutdatedHandler: vg,
-            requestIDObserver: requestIDSeam
-        )
-
         // In real mode, start the version-check launch task.
-        if AppConfiguration.apiMode == .real, let client = generatedClient {
+        if AppConfiguration.apiMode == .real, let client = builtClient {
             let realRepo = GeneratedClientAppVersionRepository(
                 client: client,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)
@@ -361,7 +406,15 @@ struct ChristmasTrackerApp: App {
                         showBiometricSetup = true
                     }
                 }
-                .sheet(isPresented: $showBiometricSetup) {
+                .sheet(isPresented: Binding(
+                    get: { showBiometricSetup },
+                    set: { newValue in
+                        showBiometricSetup = newValue
+                        if !newValue {
+                            authService.clearBiometricOfferAction()
+                        }
+                    }
+                )) {
                     BiometricSetupView(
                         model: BiometricEnablementModel(
                             authenticator: sharedLocalAuth,
@@ -371,7 +424,7 @@ struct ChristmasTrackerApp: App {
                         ),
                         onComplete: { _ in
                             showBiometricSetup = false
-                            authService.clearBiometricOfferAction()
+                            // clearBiometricOfferAction() now handled by the binding setter
                         }
                     )
                     .environment(\.authenticationService, authService)

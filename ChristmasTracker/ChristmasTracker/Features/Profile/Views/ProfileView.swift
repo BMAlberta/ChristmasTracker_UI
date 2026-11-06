@@ -357,7 +357,7 @@ private struct ProfilePreviewContainer: View {
 
     @State private var authService = AuthenticationService(
         repository: MockAuthenticationRepository(),
-        sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
+        sessionManager: SessionManager(initialClearables: [])
     )
 
     var body: some View {

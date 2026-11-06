@@ -50,7 +50,7 @@ private func makeSUT(
     authenticator: FakeBiometricAuthenticator,
     history: InMemoryEnrollmentHistory
 ) {
-    let sessionManager = SessionManager(authRepository: repo)
+    let sessionManager = SessionManager(initialClearables: [])
     let sut = AuthenticationService(
         repository: repo,
         sessionManager: sessionManager,

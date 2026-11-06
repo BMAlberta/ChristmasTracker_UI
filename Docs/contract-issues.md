@@ -6,3 +6,4 @@ add a row and stop that item until the backend resolves it.
 
 | # | Filed | Endpoint | Contract says | Server did | Status |
 |---|---|---|---|---|---|
+| 1 | 2026-11-06 | POST /auth/login | `Operations.Login.Output` has no `.forbidden` case; spec does not document 403 | `Docs/error-codes.md` and `Docs/client-guide.md` document that 1008 ACCOUNT_DISABLED is returned as 403 on login; server sends 403 JSON error body. Arrives as `.undocumented(403,…)` in the generated client. iOS handles via undocumented path per client-guide. | Spec gap — docs authoritative; not blocking I2b-2b (epic brief accounts for it). Backend to add `403 ForbiddenError` to the login operation in openapi.json. Client: ios |

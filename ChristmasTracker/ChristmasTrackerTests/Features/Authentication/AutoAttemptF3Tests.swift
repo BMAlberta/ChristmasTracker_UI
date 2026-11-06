@@ -22,7 +22,7 @@ private func makeAutoAttemptSUT(
     credentialStore: InMemoryBiometricCredentialStore = InMemoryBiometricCredentialStore(),
     biometricAuthenticator: FakeBiometricAuthenticator = FakeBiometricAuthenticator()
 ) -> (model: LoginBiometricModel, service: AuthenticationService, authenticator: FakeBiometricAuthenticator) {
-    let sessionManager = SessionManager(authRepository: repo)
+    let sessionManager = SessionManager(initialClearables: [])
     let service = AuthenticationService(
         repository: repo,
         sessionManager: sessionManager,
