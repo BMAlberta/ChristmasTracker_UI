@@ -193,13 +193,6 @@ struct AuthenticationServiceTests {
         #expect(service.isLoading == false)
     }
 
-    @Test("isLoading is false after forgotPassword() returns")
-    func forgotPasswordResetsIsLoadingOnReturn() async {
-        let (service, _) = makeSUT()
-        await service.forgotPassword(email: "any@example.com")
-        #expect(service.isLoading == false)
-    }
-
     @Test("clearError sets service.error to nil")
     func clearErrorClearsServiceError() async {
         let (service, _) = makeSUT()

@@ -18,16 +18,21 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
     var mockUser: User = User(
         id: "mock-user-123",
         email: "test@example.com",
-        name: "Test User",
+        firstName: "Test",
+        lastName: "User",
+        displayName: "Test User",
         role: .user,
+        isActive: true,
         createdAt: Date(),
-        updatedAt: Date()
+        updatedAt: Date(),
+        lastLoginAt: nil
     )
     var mockAccessToken: String = "mock_access_token_\(UUID().uuidString)"
     var mockRefreshToken: String = "mock_refresh_token_\(UUID().uuidString)"
 
+    // MARK: - C1 Primary Interface
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
+    func login(email: String, password: String) async throws -> AuthSession {
         LogDebug("Mock login: \(email)", category: .auth)
 
         try await Task.sleep(for: .seconds(loginDelay))
@@ -36,19 +41,25 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
             throw AuthenticationError.invalidCredentials
         }
 
-        if email == "fail@example.com" {
+        if email == "fail@example.com" || email == "fail@test.invalid" {
             throw AuthenticationError.invalidCredentials
+        }
+
+        if email == "expired@test.invalid" {
+            throw AuthenticationError.credentialExpired
         }
 
         let user = stableUser(for: email)
         let refreshToken = makeRefreshToken(userId: user.id)
-        return AuthData(user: user,
-                        accessToken: "mock_at_\(UUID().uuidString)",
-                        refreshToken: refreshToken,
-                        expiresIn: 900)
+        return AuthSession(
+            user: user,
+            accessToken: "mock_at_\(UUID().uuidString)",
+            refreshToken: refreshToken,
+            expiresIn: 900
+        )
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
         LogDebug("Mock register: \(email)", category: .auth)
 
         try await Task.sleep(for: .seconds(loginDelay))
@@ -57,41 +68,35 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
             throw AuthenticationError.emailAlreadyExists
         }
 
-        // Use a stable userId derived from the email so that offer-action logic
-        // (which keys on userId) behaves predictably in multi-step test scenarios.
-        let userId = stableUserId(for: email)
-        let newUser = User(id: userId,
-                           email: email,
-                           name: name,
-                           role: .user,
-                           createdAt: Date(),
-                           updatedAt: Date())
-        let refreshToken = makeRefreshToken(userId: userId)
-
-        return AuthData(user: newUser,
-                        accessToken: mockAccessToken,
-                        refreshToken: refreshToken,
-                        expiresIn: 900)
-    }
-
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        LogDebug("Mock biometric login: \(userId)", category: .auth)
-
-        try await Task.sleep(for: .seconds(loginDelay))
-
-        if shouldFail {
-            throw AuthenticationError.biometricFailed
+        if registrationCode == "CODE-INVALID-FAKE" {
+            throw AuthenticationError.invalidRegistrationCode
         }
 
-        return AuthData(user: mockUser,
-                        accessToken: mockAccessToken,
-                        refreshToken: mockRefreshToken,
-                        expiresIn: 900)
-
+        let userId = stableUserId(for: email)
+        let displayName = "\(firstName) \(lastName)"
+        let newUser = User(
+            id: userId,
+            email: email,
+            firstName: firstName,
+            lastName: lastName,
+            displayName: displayName,
+            role: .user,
+            isActive: true,
+            createdAt: Date(),
+            updatedAt: Date(),
+            lastLoginAt: nil
+        )
+        let refreshToken = makeRefreshToken(userId: userId)
+        return AuthSession(
+            user: newUser,
+            accessToken: mockAccessToken,
+            refreshToken: refreshToken,
+            expiresIn: 900
+        )
     }
 
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
-        LogDebug("Mock token refresh", category: .auth)
+    func refresh(refreshToken: String) async throws -> AuthSession {
+        LogDebug("Mock token refresh (C1)", category: .auth)
 
         if shouldFail {
             throw AuthenticationError.invalidRefreshToken
@@ -102,40 +107,23 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
         }
 
         if userId == "mock-expired" {
-            throw AuthenticationError.invalidRefreshToken
+            throw AuthenticationError.credentialExpired
         }
 
-        // Reconstruct user from userId (strip "mock-" prefix to recover localPart)
         let localPart = userId.hasPrefix("mock-") ? String(userId.dropFirst(5)) : userId
         let email = "\(localPart)@example.com"
         let user = stableUser(for: email)
         let newRefreshToken = makeRefreshToken(userId: userId)
-        return AuthData(user: user,
-                        accessToken: "mock_at_\(UUID().uuidString)",
-                        refreshToken: newRefreshToken,
-                        expiresIn: 900)
+        return AuthSession(
+            user: user,
+            accessToken: "mock_at_\(UUID().uuidString)",
+            refreshToken: newRefreshToken,
+            expiresIn: 900
+        )
     }
 
-    func ping() async throws {
-        LogDebug("Mock ping", category: .auth)
-
-        if shouldFail {
-            throw AuthenticationError.sessionExpired
-        }
-    }
-
-    func logout(refreshToken: String) async throws {
-        LogDebug("Mock logout", category: .auth)
-    }
-
-    func forgotPassword(email: String) async throws {
-        LogDebug("Mock forgot password: \(email)", category: .auth)
-
-        try await Task.sleep(for: .seconds(loginDelay))
-
-        if shouldFail {
-            throw AuthenticationError.userNotFound
-        }
+    func logout() async throws {
+        LogDebug("Mock logout (C1)", category: .auth)
     }
 
     // MARK: - Private Helpers
@@ -148,14 +136,18 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
     private func stableUser(for email: String) -> User {
         let userId = stableUserId(for: email)
         let localPart = email.components(separatedBy: "@").first ?? email
-        let name = localPart.prefix(1).uppercased() + localPart.dropFirst()
+        let firstName = String(localPart.prefix(1).uppercased() + localPart.dropFirst())
         return User(
             id: userId,
             email: email,
-            name: String(name),
+            firstName: firstName,
+            lastName: String(firstName.first ?? "U"),
+            displayName: firstName,
             role: .user,
+            isActive: true,
             createdAt: Date(timeIntervalSince1970: 0),
-            updatedAt: Date(timeIntervalSince1970: 0)
+            updatedAt: Date(timeIntervalSince1970: 0),
+            lastLoginAt: nil
         )
     }
 
@@ -175,6 +167,7 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
 }
 
 // MARK: - Authentication Errors
+
 enum AuthenticationError: Error, LocalizedError {
     case invalidCredentials
     case emailAlreadyExists
@@ -184,6 +177,16 @@ enum AuthenticationError: Error, LocalizedError {
     case invalidRefreshToken
     case sessionExpired
     case networkError
+    // C1: new cases
+    case invalidResponse         // nil email on user returned by login/register/refresh
+    case accountDisabled         // 1008 ACCOUNT_DISABLED
+    case updateRequired          // 426 VERSION_OUTDATED
+    case rateLimited             // 429 with optional retry-after
+    case serverError             // 500 or other internal error
+    case invalidRegistrationCode // 1017 REGISTRATION_CODE_INVALID
+    case validationFailed        // 400 validation
+    case credentialExpired       // 1005/1006 refresh token expired/invalid (token-rotation-specific)
+
     var errorDescription: String? {
         switch self {
         case .invalidCredentials:
@@ -202,6 +205,22 @@ enum AuthenticationError: Error, LocalizedError {
             return "Your session has expired. Please login again"
         case .networkError:
             return "Network error. Please check your connection"
+        case .invalidResponse:
+            return "An unexpected response was received from the server"
+        case .accountDisabled:
+            return "Your account has been disabled. Please contact support"
+        case .updateRequired:
+            return "A newer version of the app is required. Please update"
+        case .rateLimited:
+            return "Too many requests. Please try again later"
+        case .serverError:
+            return "A server error occurred. Please try again later"
+        case .invalidRegistrationCode:
+            return "The registration code is invalid or has expired"
+        case .validationFailed:
+            return "The information you provided is invalid"
+        case .credentialExpired:
+            return "Your session credentials have expired. Please login again"
         }
     }
 }

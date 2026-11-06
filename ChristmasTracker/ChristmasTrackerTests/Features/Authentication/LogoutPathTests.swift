@@ -31,40 +31,36 @@ private actor ThrowingLogoutRepository: AuthenticationRepository {
     private let mockUser = User(
         id: "mock-user-123",
         email: "test@example.com",
-        name: "Test User",
+        firstName: "Test",
+        lastName: "User",
+        displayName: "Test User",
         role: .user,
+        isActive: true,
         createdAt: Date(),
-        updatedAt: Date()
+        updatedAt: Date(),
+        lastLoginAt: nil
     )
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
-        AuthData(user: mockUser, accessToken: "access", refreshToken: "refresh", expiresIn: loginExpiresIn)
+    func login(email: String, password: String) async throws -> AuthSession {
+        AuthSession(user: mockUser, accessToken: "access", refreshToken: "mock_rt_mock-user-123_\(UUID().uuidString)", expiresIn: loginExpiresIn)
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: mockUser, accessToken: "access", refreshToken: "refresh", expiresIn: 900)
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: mockUser, accessToken: "access", refreshToken: "mock_rt_mock-user-123_\(UUID().uuidString)", expiresIn: 900)
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: mockUser, accessToken: "access", refreshToken: "refresh", expiresIn: 900)
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         if shouldFailRefresh {
             throw AuthenticationError.invalidRefreshToken
         }
-        return AuthData(user: mockUser, accessToken: "access", refreshToken: "refresh", expiresIn: 900)
+        return AuthSession(user: mockUser, accessToken: "access", refreshToken: "mock_rt_mock-user-123_\(UUID().uuidString)", expiresIn: 900)
     }
 
-    func logout(refreshToken: String) async throws {
+    func logout() async throws {
         if shouldFailLogout {
             throw AuthenticationError.networkError
         }
     }
-
-    func ping() async throws {}
-
-    func forgotPassword(email: String) async throws {}
 
     func setFailLogout(_ value: Bool) { shouldFailLogout = value }
     func setFailRefresh(_ value: Bool) { shouldFailRefresh = value }

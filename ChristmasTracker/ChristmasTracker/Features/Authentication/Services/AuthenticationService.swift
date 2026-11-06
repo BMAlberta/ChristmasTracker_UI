@@ -57,7 +57,7 @@ final class AuthenticationService {
     private static let keychainAuthRefreshTokenKey = "auth.refresh_token"
 
     // Single-flight refresh: keyed by refresh token so concurrent callers share one repo call.
-    private var inflightRefreshTasks: [String: Task<AuthData, Error>] = [:]
+    private var inflightRefreshTasks: [String: Task<AuthSession, Error>] = [:]
 
     // MARK: - Initialization
 
@@ -100,7 +100,7 @@ final class AuthenticationService {
         )
         defer { transaction.finish() }
         guard let tokens = self.tokens, let user = self.currentUser else { return }
-        let firstName = user.name.components(separatedBy: " ").first ?? ""
+        let firstName = user.firstName
         try credentialStore.enroll(refreshToken: tokens.refreshToken, userId: user.id, firstName: firstName)
         enrollmentHistory.setPreviouslyEnrolledUserId(user.id)
         refreshBiometricState()
@@ -146,9 +146,7 @@ final class AuthenticationService {
         error = nil
 
         do {
-            let authData = try await authRepository.login(email: email,
-                                                          password: password,
-                                                          rememberMe: true)
+            let session = try await authRepository.login(email: email, password: password)
 
             // Compute the offer action before handleAuthSuccess so we have the pre-login
             // enrolled snapshot. refreshBiometricState() inside handleAuthSuccess will
@@ -157,20 +155,20 @@ final class AuthenticationService {
             let readiness = biometricAuthenticator.readiness
             let offerAction = computeOfferAction(
                 readiness: readiness,
-                signedInUserId: authData.user.id,
+                signedInUserId: session.user.id,
                 pendingRequest: pendingBiometricEnablement
             )
 
             // Execute silent actions
             if offerAction == .silentlyReplaceToken {
-                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
-                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
-                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
+                let firstName = session.user.firstName
+                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: firstName)
+                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
                 refreshBiometricState()
             } else if offerAction == .silentlyReenroll {
-                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
-                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
-                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
+                let firstName = session.user.firstName
+                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: firstName)
+                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
                 refreshBiometricState()
             }
 
@@ -181,10 +179,10 @@ final class AuthenticationService {
             // If we are going to show the offer, mark it as shown now so a subsequent
             // login (without a pending request) does not repeat the offer.
             if offerAction == .showEnablementScreen {
-                enrollmentHistory.markOfferShown(for: authData.user.id)
+                enrollmentHistory.markOfferShown(for: session.user.id)
             }
 
-            await handleAuthSuccess(authData: authData)
+            await handleAuthSuccess(session: session)
 
             if rememberEmail {
                 emailStore.rememberedEmail = email
@@ -242,10 +240,10 @@ final class AuthenticationService {
 
         // Perform single-flight token refresh.
         do {
-            let authData = try await singleFlightRefresh(token: refreshToken)
+            let session = try await singleFlightRefresh(token: refreshToken)
             // Rotate the stored refresh token before surfacing authenticated state.
-            try? credentialStore.updateRefreshToken(authData.refreshToken)
-            await handleAuthSuccess(authData: authData)
+            try? credentialStore.updateRefreshToken(session.refreshToken)
+            await handleAuthSuccess(session: session)
             LogInfo("Biometric sign-in succeeded", category: .auth)
         } catch let authError as AuthenticationError {
             let outcome = biometricSignInOutcome(for: authError, biometryTypeName: typeName)
@@ -266,34 +264,42 @@ final class AuthenticationService {
     func clearError() {
         error = nil
     }
-    
-    
-    /// Register a user
+
+    /// Register a user (legacy service-level signature; name is split into first/last).
     func register(email: String, password: String, name: String) async {
         isLoading = true
         defer { isLoading = false }
         error = nil
 
+        // Split name into first/last components for the new repository interface.
+        let parts = name.components(separatedBy: " ")
+        let firstName = parts.first ?? name
+        let lastName = parts.dropFirst().joined(separator: " ")
+
         do {
-            let authData = try await authRepository.register(email: email,
-                                                   password: password,
-                                                   name: name)
+            let session = try await authRepository.register(
+                email: email,
+                password: password,
+                firstName: firstName,
+                lastName: lastName.isEmpty ? " " : lastName,
+                registrationCode: ""
+            )
 
             let offerAction = computeOfferAction(
                 readiness: biometricAuthenticator.readiness,
-                signedInUserId: authData.user.id,
+                signedInUserId: session.user.id,
                 pendingRequest: pendingBiometricEnablement
             )
 
             if offerAction == .silentlyReplaceToken {
-                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
-                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
-                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
+                let fn = session.user.firstName
+                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: fn)
+                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
                 refreshBiometricState()
             } else if offerAction == .silentlyReenroll {
-                let firstName = authData.user.name.components(separatedBy: " ").first ?? authData.user.name
-                try? credentialStore.enroll(refreshToken: authData.refreshToken, userId: authData.user.id, firstName: firstName)
-                enrollmentHistory.setPreviouslyEnrolledUserId(authData.user.id)
+                let fn = session.user.firstName
+                try? credentialStore.enroll(refreshToken: session.refreshToken, userId: session.user.id, firstName: fn)
+                enrollmentHistory.setPreviouslyEnrolledUserId(session.user.id)
                 refreshBiometricState()
             }
 
@@ -301,10 +307,10 @@ final class AuthenticationService {
             pendingBiometricEnablement = false
 
             if offerAction == .showEnablementScreen {
-                enrollmentHistory.markOfferShown(for: authData.user.id)
+                enrollmentHistory.markOfferShown(for: session.user.id)
             }
 
-            await handleAuthSuccess(authData: authData)
+            await handleAuthSuccess(session: session)
 
             LogInfo("User registered", category: .auth)
         } catch let authError as AuthenticationError {
@@ -315,7 +321,7 @@ final class AuthenticationService {
             LogError("Registration failed: \(error)", category: .auth)
         }
     }
-    
+
     /// Logout current user
     func logout(reason: TeardownReason = .userLogout) async {
         // Capture repo reference before clearing state.
@@ -333,13 +339,13 @@ final class AuthenticationService {
         // Best-effort non-awaited server logout — enrollment is never touched here.
         Task {
             do {
-                try await repo.logout(refreshToken: "")
+                try await repo.logout()
             } catch {
                 LogError("Logout API failed (best-effort): \(error)", category: .auth)
             }
         }
     }
-    
+
     /// Refresh access token
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
     // using manual SentrySDK span per coding-standards.md.
@@ -356,13 +362,13 @@ final class AuthenticationService {
         LogDebug("Refreshing access token", category: .auth)
 
         do {
-            let authData = try await singleFlightRefresh(token: tokens.refreshToken)
-            await updateTokens(authData: authData)
+            let session = try await singleFlightRefresh(token: tokens.refreshToken)
+            await updateTokens(session: session)
 
             // Rotate the stored credential token only if the enrolled user matches the session user.
             if let enrolled = credentialStore.enrolledUser(),
                enrolled.userId == currentUser?.id {
-                try? credentialStore.updateRefreshToken(authData.refreshToken)
+                try? credentialStore.updateRefreshToken(session.refreshToken)
             }
 
             LogInfo("Token refreshed successfully", category: .auth)
@@ -391,7 +397,6 @@ final class AuthenticationService {
 
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
     // using manual SentrySDK span per coding-standards.md.
-    // TODO(I2b-2b, 2026-11-05): the generated auth mapping replaces this refresh path.
     func forceRefresh() async throws {
         let span = SentrySDK.startTransaction(
             name: "service.authentication.forceRefresh",
@@ -401,35 +406,17 @@ final class AuthenticationService {
         guard let currentToken = tokens?.refreshToken else {
             throw AuthenticationError.invalidRefreshToken
         }
-        let authData = try await singleFlightRefresh(token: currentToken)
-        await updateTokens(authData: authData)
+        let session = try await singleFlightRefresh(token: currentToken)
+        await updateTokens(session: session)
     }
 
-    /// Forgot password flow
-    func forgotPassword(email: String) async {
-        isLoading = true
-        defer { isLoading = false }
-        error = nil
-
-        do {
-            try await authRepository.forgotPassword(email: email)
-            LogInfo("Password reset email sent", category: .auth)
-        } catch let authError as AuthenticationError {
-            error = authError
-            LogError("Forgot password failed: \(authError)", category: .auth)
-        } catch {
-            self.error = .networkError
-            LogError("Forgot password failed: \(error)", category: .auth)
-        }
-    }
-    
     /// Record user activity (for session keep-alive)
     func recordActivity() {
         Task {
             await sessionManager.recordActivity()
         }
     }
-    
+
     // MARK: - Private Helpers
 
     /// Wrapper that delegates to the free function `biometricOfferAction(...)`, avoiding
@@ -451,12 +438,12 @@ final class AuthenticationService {
 
     /// Single-flight refresh: concurrent callers with the same refresh token await
     /// the same in-flight repository call. The task is removed after it completes or fails.
-    private func singleFlightRefresh(token: String) async throws -> AuthData {
+    private func singleFlightRefresh(token: String) async throws -> AuthSession {
         if let existing = inflightRefreshTasks[token] {
             return try await existing.value
         }
-        let task = Task<AuthData, Error> { [authRepository] in
-            try await authRepository.refreshToken(token)
+        let task = Task<AuthSession, Error> { [authRepository] in
+            try await authRepository.refresh(refreshToken: token)
         }
         inflightRefreshTasks[token] = task
         do {
@@ -469,39 +456,39 @@ final class AuthenticationService {
         }
     }
 
-    private func handleAuthSuccess(authData: AuthData) async {
+    private func handleAuthSuccess(session: AuthSession) async {
         // Update user
-        currentUser = authData.user
+        currentUser = session.user
         isAuthenticated = true
         // Store tokens
         let newTokens = AuthTokens(
-            accessToken: authData.accessToken,
-            refreshToken: authData.refreshToken,
-            expiresAt: Date().addingTimeInterval(TimeInterval(authData.expiresIn))
+            accessToken: session.accessToken,
+            refreshToken: session.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(session.expiresIn))
         )
         tokens = newTokens
         // Silent token rotation: if the enrolled user matches the new session user,
         // update the stored refresh token without prompting.
-        if credentialStore.enrolledUser()?.userId == authData.user.id {
-            try? credentialStore.updateRefreshToken(authData.refreshToken)
+        if credentialStore.enrolledUser()?.userId == session.user.id {
+            try? credentialStore.updateRefreshToken(session.refreshToken)
         }
         // Refresh biometric state (availability, type, and enrolled user snapshot).
         refreshBiometricState()
         // Set session ID in cache
-        await NetworkCache.shared.setSessionId(authData.user.id)
+        await NetworkCache.shared.setSessionId(session.user.id)
         // Start session keep-alive
         await sessionManager.startSession()
     }
-    
-    private func updateTokens(authData: AuthData) async {
+
+    private func updateTokens(session: AuthSession) async {
         let newTokens = AuthTokens(
-            accessToken: authData.accessToken,
-            refreshToken: authData.refreshToken,
-            expiresAt: Date().addingTimeInterval(TimeInterval(authData.expiresIn))
+            accessToken: session.accessToken,
+            refreshToken: session.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(session.expiresIn))
         )
         tokens = newTokens
     }
-    
+
     private func clearAuthState() {
         currentUser = nil
         isAuthenticated = false
@@ -517,7 +504,7 @@ final class AuthenticationService {
             LogError("Failed to clear tokens: \(error)", category: .auth)
         }
     }
-    
+
     /// Full biometric state refresh: availability, type, and enrolled user snapshot.
     func refreshBiometricState() {
         isBiometricAvailable = biometricAuthenticator.isAvailable
@@ -587,18 +574,3 @@ enum BiometricType {
         }
     }
 }
-//// MARK: - Environment Key
-//private struct AuthenticationServiceKey: EnvironmentKey {
-//    static let defaultValue: AuthenticationService = AuthenticationService(
-//        repository: MockAuthenticationRepository(),
-//        sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
-//    )
-//}
-//
-//extension EnvironmentValues {
-//    var authenticationService: AuthenticationService {
-//        get { self[AuthenticationServiceKey.self] }
-//        set { self[AuthenticationServiceKey.self] = newValue }
-//    }
-//}
-

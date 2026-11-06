@@ -32,22 +32,26 @@ private actor SuspendableRepository: AuthenticationRepository {
 
     // MARK: - Suspension control
 
-    /// When set, the next refreshToken call suspends until resume() is called.
+    /// When set, the next refresh call suspends until resumeRefresh() is called.
     private var refreshContinuation: CheckedContinuation<Void, Never>?
     /// When set, the next logout call suspends until resumeLogout() is called.
     private var logoutContinuation: CheckedContinuation<Void, Never>?
 
     // MARK: - Stubs
 
-    var refreshResult: Result<AuthData, AuthenticationError> = .success(
-        AuthData(
+    var refreshResult: Result<AuthSession, AuthenticationError> = .success(
+        AuthSession(
             user: User(
                 id: "mock-refresh-user",
                 email: "refresh@example.com",
-                name: "Refresh User",
+                firstName: "Refresh",
+                lastName: "User",
+                displayName: "Refresh User",
                 role: .user,
+                isActive: true,
                 createdAt: Date(timeIntervalSince1970: 0),
-                updatedAt: Date(timeIntervalSince1970: 0)
+                updatedAt: Date(timeIntervalSince1970: 0),
+                lastLoginAt: nil
             ),
             accessToken: "new-at",
             refreshToken: "new-rt",
@@ -57,7 +61,7 @@ private actor SuspendableRepository: AuthenticationRepository {
 
     // MARK: - Control methods (called from tests)
 
-    /// Suspend the next refreshToken call until resumeRefresh() is called.
+    /// Suspend the next refresh call until resumeRefresh() is called.
     func waitForRefreshSuspension() async {
         await withCheckedContinuation { continuation in
             refreshContinuation = continuation
@@ -76,31 +80,23 @@ private actor SuspendableRepository: AuthenticationRepository {
 
     // MARK: - AuthenticationRepository
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
-        AuthData(
+    func login(email: String, password: String) async throws -> AuthSession {
+        AuthSession(
             user: User(id: "u1", email: email, name: "Test", role: .user,
                        createdAt: Date(), updatedAt: Date()),
             accessToken: "at", refreshToken: "mock_rt_u1_\(UUID().uuidString)", expiresIn: 900
         )
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(
-            user: User(id: "u1", email: email, name: name, role: .user,
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(
+            user: User(id: "u1", email: email, name: "\(firstName) \(lastName)", role: .user,
                        createdAt: Date(), updatedAt: Date()),
             accessToken: "at", refreshToken: "mock_rt_u1_\(UUID().uuidString)", expiresIn: 900
         )
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(
-            user: User(id: userId, email: "bio@example.com", name: "Bio", role: .user,
-                       createdAt: Date(), updatedAt: Date()),
-            accessToken: "at", refreshToken: "new-rt", expiresIn: 900
-        )
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         refreshCallCount += 1
         // Suspend if a continuation is waiting
         if refreshContinuation != nil {
@@ -111,14 +107,12 @@ private actor SuspendableRepository: AuthenticationRepository {
             }
         }
         switch refreshResult {
-        case .success(let data): return data
+        case .success(let session): return session
         case .failure(let error): throw error
         }
     }
 
-    func ping() async throws {}
-
-    func logout(refreshToken: String) async throws {
+    func logout() async throws {
         logoutCallCount += 1
         if logoutContinuation != nil {
             await withCheckedContinuation { continuation in
@@ -127,18 +121,13 @@ private actor SuspendableRepository: AuthenticationRepository {
         }
     }
 
-    func forgotPassword(email: String) async throws {}
-
     // MARK: - Setters for use from @MainActor context
 
-    func setRefreshResult(_ result: Result<AuthData, AuthenticationError>) {
+    func setRefreshResult(_ result: Result<AuthSession, AuthenticationError>) {
         refreshResult = result
     }
 
     func installRefreshSuspension() {
-        // Create a dummy continuation placeholder so the first refreshToken call suspends.
-        // The actual continuation is captured inside refreshToken() itself.
-        // We use a flag instead: flip suspendNextRefresh.
         suspendNextRefresh = true
     }
 
@@ -159,14 +148,14 @@ private actor SuspendableRepository: AuthenticationRepository {
 // for the single-flight test that is cleaner.
 
 private actor BlockingRepository: AuthenticationRepository {
-    // Count of refreshToken calls received (even while blocked).
+    // Count of refresh calls received (even while blocked).
     private(set) var refreshCallCount: Int = 0
 
     // Continuation to unblock. Set by the test after observing the first call.
     private var blocker: CheckedContinuation<Void, Never>?
 
     // Result to return once unblocked.
-    var refreshResult: AuthData = AuthData(
+    var refreshResult: AuthSession = AuthSession(
         user: User(id: "block-user", email: "b@b.com", name: "Block",
                    role: .user, createdAt: Date(), updatedAt: Date()),
         accessToken: "new-at",
@@ -174,7 +163,7 @@ private actor BlockingRepository: AuthenticationRepository {
         expiresIn: 900
     )
 
-    /// Waits until at least one refreshToken call has been received.
+    /// Waits until at least one refresh call has been received.
     func waitUntilRefreshCalled() async {
         // poll — but as an actor this is safe
         while refreshCallCount == 0 {
@@ -187,11 +176,10 @@ private actor BlockingRepository: AuthenticationRepository {
         blocker = nil
     }
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData { refreshResult }
-    func register(email: String, password: String, name: String) async throws -> AuthData { refreshResult }
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData { refreshResult }
+    func login(email: String, password: String) async throws -> AuthSession { refreshResult }
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession { refreshResult }
 
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         refreshCallCount += 1
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             blocker = continuation
@@ -199,9 +187,7 @@ private actor BlockingRepository: AuthenticationRepository {
         return refreshResult
     }
 
-    func ping() async throws {}
-    func logout(refreshToken: String) async throws {}
-    func forgotPassword(email: String) async throws {}
+    func logout() async throws {}
 }
 
 // MARK: - SuspendingLogoutRepository
@@ -209,34 +195,35 @@ private actor BlockingRepository: AuthenticationRepository {
 private actor SuspendingLogoutRepository: AuthenticationRepository {
     var logoutContinuation: CheckedContinuation<Void, Never>?
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
-        AuthData(
+    func login(email: String, password: String) async throws -> AuthSession {
+        AuthSession(
             user: User(id: "lo-user", email: email, name: "LO", role: .user,
                        createdAt: Date(), updatedAt: Date()),
             accessToken: "at", refreshToken: "mock_rt_lo-user_\(UUID().uuidString)", expiresIn: 900
         )
     }
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: User(id: "u", email: email, name: name, role: .user, createdAt: Date(), updatedAt: Date()),
-                 accessToken: "at", refreshToken: "rt", expiresIn: 900)
-    }
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: User(id: userId, email: "b@b.com", name: "B", role: .user, createdAt: Date(), updatedAt: Date()),
-                 accessToken: "at", refreshToken: "rt", expiresIn: 900)
-    }
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
-        AuthData(user: User(id: "u", email: "t@t.com", name: "T", role: .user, createdAt: Date(), updatedAt: Date()),
-                 accessToken: "at", refreshToken: "rt", expiresIn: 900)
-    }
-    func ping() async throws {}
 
-    func logout(refreshToken: String) async throws {
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(
+            user: User(id: "u", email: email, name: "\(firstName) \(lastName)", role: .user,
+                       createdAt: Date(), updatedAt: Date()),
+            accessToken: "at", refreshToken: "rt", expiresIn: 900
+        )
+    }
+
+    func refresh(refreshToken: String) async throws -> AuthSession {
+        AuthSession(
+            user: User(id: "u", email: "t@t.com", name: "T", role: .user,
+                       createdAt: Date(), updatedAt: Date()),
+            accessToken: "at", refreshToken: "rt", expiresIn: 900
+        )
+    }
+
+    func logout() async throws {
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
             logoutContinuation = c
         }
     }
-
-    func forgotPassword(email: String) async throws {}
 
     func resumeLogout() {
         logoutContinuation?.resume()
@@ -698,40 +685,34 @@ private actor ExpiringTokenRepository: AuthenticationRepository {
              createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
     }
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
+    func login(email: String, password: String) async throws -> AuthSession {
         let localPart = email.components(separatedBy: "@").first ?? email
         let userId = "mock-\(localPart)"
-        return AuthData(user: makeUser(id: userId, email: email),
-                        accessToken: "at",
-                        refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
-                        expiresIn: 0) // immediately needs refresh
+        return AuthSession(user: makeUser(id: userId, email: email),
+                           accessToken: "at",
+                           refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
+                           expiresIn: 0) // immediately needs refresh
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: makeUser(id: "u", email: email), accessToken: "at", refreshToken: "rt", expiresIn: 0)
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(id: "u", email: email), accessToken: "at", refreshToken: "rt", expiresIn: 0)
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: makeUser(id: userId, email: "b@b.com"), accessToken: "at", refreshToken: "rt", expiresIn: 0)
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         // Parse the userId from the token to return the same user.
         let components = refreshToken.components(separatedBy: "_")
         let userId = components.count >= 3 ? components[2] : enrolledUserId
         let email = userId.hasPrefix("mock-") ? "\(userId.dropFirst(5))@example.com" : "\(userId)@example.com"
-        return AuthData(user: makeUser(id: userId, email: email),
-                        accessToken: "new-at",
-                        refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
-                        expiresIn: 900)
+        return AuthSession(user: makeUser(id: userId, email: email),
+                           accessToken: "new-at",
+                           refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
+                           expiresIn: 900)
     }
 
-    func ping() async throws {}
-    func logout(refreshToken: String) async throws {}
-    func forgotPassword(email: String) async throws {}
+    func logout() async throws {}
 }
 
-/// Repository where refreshToken throws .invalidRefreshToken (credential failure).
+/// Repository where refresh throws .invalidRefreshToken (credential failure).
 /// Login succeeds with expiresIn: 0.
 private actor CredentialFailureRepository: AuthenticationRepository {
     let enrolledUserId: String
@@ -745,33 +726,27 @@ private actor CredentialFailureRepository: AuthenticationRepository {
              createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
     }
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
+    func login(email: String, password: String) async throws -> AuthSession {
         let localPart = email.components(separatedBy: "@").first ?? email
         let userId = "mock-\(localPart)"
-        return AuthData(user: makeUser(id: userId, email: email),
-                        accessToken: "at",
-                        refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
-                        expiresIn: 0)
+        return AuthSession(user: makeUser(id: userId, email: email),
+                           accessToken: "at",
+                           refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
+                           expiresIn: 0)
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: makeUser(id: "u", email: email), accessToken: "at", refreshToken: "rt", expiresIn: 0)
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(id: "u", email: email), accessToken: "at", refreshToken: "rt", expiresIn: 0)
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: makeUser(id: userId, email: "b@b.com"), accessToken: "at", refreshToken: "rt", expiresIn: 0)
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         throw AuthenticationError.invalidRefreshToken
     }
 
-    func ping() async throws {}
-    func logout(refreshToken: String) async throws {}
-    func forgotPassword(email: String) async throws {}
+    func logout() async throws {}
 }
 
-/// Repository where refreshToken throws .networkError.
+/// Repository where refresh throws .networkError.
 private actor NetworkFailRefreshRepository: AuthenticationRepository {
 
     private func makeUser(id: String, email: String) -> User {
@@ -779,33 +754,27 @@ private actor NetworkFailRefreshRepository: AuthenticationRepository {
              createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
     }
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
+    func login(email: String, password: String) async throws -> AuthSession {
         let localPart = email.components(separatedBy: "@").first ?? email
         let userId = "mock-\(localPart)"
-        return AuthData(user: makeUser(id: userId, email: email),
-                        accessToken: "at",
-                        refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
-                        expiresIn: 0)
+        return AuthSession(user: makeUser(id: userId, email: email),
+                           accessToken: "at",
+                           refreshToken: "mock_rt_\(userId)_\(UUID().uuidString)",
+                           expiresIn: 0)
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: makeUser(id: "u", email: email), accessToken: "at", refreshToken: "rt", expiresIn: 0)
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(id: "u", email: email), accessToken: "at", refreshToken: "rt", expiresIn: 0)
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: makeUser(id: userId, email: "b@b.com"), accessToken: "at", refreshToken: "rt", expiresIn: 0)
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         throw AuthenticationError.networkError
     }
 
-    func ping() async throws {}
-    func logout(refreshToken: String) async throws {}
-    func forgotPassword(email: String) async throws {}
+    func logout() async throws {}
 }
 
-/// Repository that throws a specific error on refreshToken.
+/// Repository that throws a specific error on refresh.
 private actor FailingRefreshRepository: AuthenticationRepository {
     let error: AuthenticationError
 
@@ -818,26 +787,20 @@ private actor FailingRefreshRepository: AuthenticationRepository {
              createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
     }
 
-    func login(email: String, password: String, rememberMe: Bool) async throws -> AuthData {
-        AuthData(user: makeUser(), accessToken: "at",
-                 refreshToken: "mock_rt_u1_\(UUID().uuidString)", expiresIn: 900)
+    func login(email: String, password: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(), accessToken: "at",
+                    refreshToken: "mock_rt_u1_\(UUID().uuidString)", expiresIn: 900)
     }
 
-    func register(email: String, password: String, name: String) async throws -> AuthData {
-        AuthData(user: makeUser(), accessToken: "at", refreshToken: "rt", expiresIn: 900)
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(), accessToken: "at", refreshToken: "rt", expiresIn: 900)
     }
 
-    func biometricLogin(userId: String, biometricToken: String) async throws -> AuthData {
-        AuthData(user: makeUser(), accessToken: "at", refreshToken: "rt", expiresIn: 900)
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> AuthData {
+    func refresh(refreshToken: String) async throws -> AuthSession {
         throw error
     }
 
-    func ping() async throws {}
-    func logout(refreshToken: String) async throws {}
-    func forgotPassword(email: String) async throws {}
+    func logout() async throws {}
 }
 
 // MARK: - TrackingBiometricCredentialStore

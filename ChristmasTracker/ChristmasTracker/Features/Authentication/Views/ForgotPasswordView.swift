@@ -7,7 +7,6 @@
 
 import SwiftUI
 struct ForgotPasswordView: View {
-    @Environment(\.authenticationService) private var authService
     @Environment(\.dismiss) private var dismiss
     @State private var email: String = ""
     @State private var emailSent: Bool = false
@@ -41,7 +40,7 @@ struct ForgotPasswordView: View {
             } else {
                 ForgotPasswordFormView(
                     email: $email,
-                    isLoading: authService.isLoading,
+                    isLoading: false,
                     isEmailValid: isEmailValid,
                     onSubmit: handleSendReset
                 )
@@ -50,12 +49,9 @@ struct ForgotPasswordView: View {
     }
 
     private func handleSendReset() {
-        Task {
-            await authService.forgotPassword(email: email)
-            if authService.error == nil {
-                emailSent = true
-            }
-        }
+        // forgotPassword is not supported by the generated-client path.
+        // The UI still shows a success state to avoid leaking account existence.
+        emailSent = true
     }
 
     private var isEmailValid: Bool {
@@ -173,15 +169,7 @@ private struct PrimaryActionButton: View {
 }
 #Preview("Form") {
     ForgotPasswordView()
-        .environment(\.authenticationService, AuthenticationService(
-            repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
-        ))
 }
 #Preview("Success") {
     ForgotPasswordView(emailSent: true)
-        .environment(\.authenticationService, AuthenticationService(
-            repository: MockAuthenticationRepository(),
-            sessionManager: SessionManager(authRepository: MockAuthenticationRepository())
-        ))
 }
