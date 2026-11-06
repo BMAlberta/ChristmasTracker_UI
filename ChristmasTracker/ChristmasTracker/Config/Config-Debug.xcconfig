@@ -12,8 +12,7 @@
 // Includes production settings with debug overrides
 #include "Config.xcconfig"
 
-// Debug Overrides
-API_BASE_URL = https:/ /api-dev.christmastracker.com
+API_BASE_URL = http:/$()/localhost:3010
 
 // Debug Build Settings
 ENABLE_TESTABILITY = YES

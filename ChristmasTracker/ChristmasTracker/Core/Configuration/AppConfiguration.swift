@@ -29,6 +29,16 @@ enum APIMode: Sendable {
     }
 }
 
+/// Errors returned by `AppConfiguration.validateBaseURL(_:)`.
+enum BaseURLError: Error, Sendable {
+    case nilOrEmpty
+    case unparseable
+    case unsupportedScheme
+    case emptyHost
+    case nonRootPath
+    case queryPresent
+}
+
 /// Reads typed configuration values from an Info.plist dictionary.
 /// Pure and nonisolated — injectable for tests; never reads Bundle.main directly.
 nonisolated func readConfiguration(from info: [String: Any]?) -> (
@@ -48,11 +58,15 @@ nonisolated func readConfiguration(from info: [String: Any]?) -> (
     }
 
     let rawDSN = string("SENTRY_DSN")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let baseURL: URL? = {
+        guard let raw = string("API_BASE_URL") else { return nil }
+        return try? AppConfiguration.validateBaseURL(raw).get()
+    }()
     return (
         apiMode: APIMode.parse(string("API_MODE")),
         sentryDSN: rawDSN.isEmpty ? nil : rawDSN,
         appEnvironment: string("APP_ENVIRONMENT") ?? "production",
-        apiBaseURL: string("API_BASE_URL").flatMap { URL(string: $0) },
+        apiBaseURL: baseURL,
         cacheDuration: duration("CACHE_DURATION", default: 900),
         sessionTimeout: duration("SESSION_TIMEOUT", default: 7200),
         backgroundRefreshThreshold: duration("BACKGROUND_REFRESH", default: 900),
@@ -66,11 +80,31 @@ struct AppConfiguration {
     // access it without crossing an actor boundary.
     nonisolated private static let config = readConfiguration(from: Bundle.main.infoDictionary)
 
+    // MARK: - URL Validation
+
+    /// Validates a raw string as an API base URL.
+    /// - Returns `.success(url)` when the string is an http/https URL with a non-empty host,
+    ///   no non-root path, and no query string.
+    /// - Returns `.failure` for nil, empty, unparseable, wrong scheme, empty host,
+    ///   non-root path, or query string.
+    nonisolated static func validateBaseURL(_ raw: String?) -> Result<URL, BaseURLError> {
+        guard let raw, !raw.isEmpty else { return .failure(.nilOrEmpty) }
+        guard let url = URL(string: raw) else { return .failure(.unparseable) }
+        let scheme = url.scheme?.lowercased() ?? ""
+        guard scheme == "http" || scheme == "https" else { return .failure(.unsupportedScheme) }
+        guard let host = url.host, !host.isEmpty else { return .failure(.emptyHost) }
+        let path = url.path
+        guard path.isEmpty || path == "/" else { return .failure(.nonRootPath) }
+        guard url.query == nil else { return .failure(.queryPresent) }
+        return .success(url)
+    }
+
     // MARK: - API Configuration
+
     /// API base URL loaded from xcconfig.
-    /// Production: https://api.christmastracker.com (I1 will correct the xcconfig // escaping)
-    /// QA: https://api-qa.christmastracker.com
-    /// Debug: https://api-dev.christmastracker.com
+    /// Production: https://api.bmalberta.com
+    /// QA: http://localhost:3010
+    /// Debug: http://localhost:3010
     static let apiBaseURL: URL = {
         guard let url = config.apiBaseURL else {
             fatalError("API_BASE_URL not configured in xcconfig")
