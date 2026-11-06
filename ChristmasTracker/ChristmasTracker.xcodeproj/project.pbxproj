@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		D3BB8E43309A4A47003633BA /* TrackerInstrumentation in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB8E42309A4A47003633BA /* TrackerInstrumentation */; };
+		D3BB916D309D7CF5003633BA /* TrackerAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB916C309D7CF5003633BA /* TrackerAPI */; };
+		D3BB9170309D7D09003633BA /* TrackerAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D3BB916F309D7D09003633BA /* TrackerAPI */; };
 		D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = D3C371D62F357C3000C09FB4 /* SentrySwiftUI */; };
 /* End PBXBuildFile section */
 
@@ -72,6 +74,7 @@
 			files = (
 				D3BB8E43309A4A47003633BA /* TrackerInstrumentation in Frameworks */,
 				D3C371D72F357C3000C09FB4 /* SentrySwiftUI in Frameworks */,
+				D3BB916D309D7CF5003633BA /* TrackerAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -79,6 +82,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D3BB9170309D7D09003633BA /* TrackerAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +104,13 @@
 			path = ../Docs;
 			sourceTree = SOURCE_ROOT;
 		};
+		D3BB916E309D7D09003633BA /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		D3C371422F32DFD100C09FB4 = {
 			isa = PBXGroup;
 			children = (
@@ -108,6 +119,7 @@
 				D3C371652F32DFD100C09FB4 /* ChristmasTrackerUITests */,
 				D3C3714C2F32DFD100C09FB4 /* Products */,
 				D303C0662F450B6A00BFF60A /* Docs */,
+				D3BB916E309D7D09003633BA /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -143,6 +155,7 @@
 			packageProductDependencies = (
 				D3C371D62F357C3000C09FB4 /* SentrySwiftUI */,
 				D3BB8E42309A4A47003633BA /* TrackerInstrumentation */,
+				D3BB916C309D7CF5003633BA /* TrackerAPI */,
 			);
 			productName = ChristmasTracker;
 			productReference = D3C3714B2F32DFD100C09FB4 /* ChristmasTracker.app */;
@@ -166,6 +179,7 @@
 			);
 			name = ChristmasTrackerTests;
 			packageProductDependencies = (
+				D3BB916F309D7D09003633BA /* TrackerAPI */,
 			);
 			productName = ChristmasTrackerTests;
 			productReference = D3C371582F32DFD100C09FB4 /* ChristmasTrackerTests.xctest */;
@@ -229,6 +243,7 @@
 			packageReferences = (
 				D3C371D52F357C3000C09FB4 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				D3BB8E41309A4A47003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerInstrumentation" */,
+				D3BB916B309D7CF4003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D3C3714C2F32DFD100C09FB4 /* Products */;
@@ -781,6 +796,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../LocalPackages/TrackerInstrumentation;
 		};
+		D3BB916B309D7CF4003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../LocalPackages/TrackerAPI;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -798,6 +817,15 @@
 		D3BB8E42309A4A47003633BA /* TrackerInstrumentation */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TrackerInstrumentation;
+		};
+		D3BB916C309D7CF5003633BA /* TrackerAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TrackerAPI;
+		};
+		D3BB916F309D7D09003633BA /* TrackerAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BB916B309D7CF4003633BA /* XCLocalSwiftPackageReference "../LocalPackages/TrackerAPI" */;
+			productName = TrackerAPI;
 		};
 		D3C371D62F357C3000C09FB4 /* SentrySwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -19,6 +19,7 @@ xcodebuild test \
   -derivedDataPath "/tmp/ct-derived" \
   -resultBundlePath "$RESULT" \
   -parallel-testing-enabled NO \
+  -skipPackagePluginValidation \
   "${ONLY[@]}" > "$LOG" 2>&1
 STATUS=$?
 
