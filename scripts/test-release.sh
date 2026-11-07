@@ -198,11 +198,16 @@ make_info_plist() {
     local api_mode="${6:-real}"
     local app_env="${7:-production}"
     local allow_arbitrary="${8:-false}"
+    local sentry_dsn="${9:-https://test@sentry.io/123}"
 
     local plist="${dir}/Info.plist"
     local ats_block=""
     if [ "$allow_arbitrary" = "true" ]; then
         ats_block="<key>NSAllowsArbitraryLoads</key><true/>"
+    fi
+    local sentry_block=""
+    if [ -n "$sentry_dsn" ]; then
+        sentry_block="<key>SENTRY_DSN</key><string>${sentry_dsn}</string>"
     fi
 
     cat > "$plist" <<EOF
@@ -222,6 +227,7 @@ make_info_plist() {
     <string>${api_mode}</string>
     <key>APP_ENVIRONMENT</key>
     <string>${app_env}</string>
+    ${sentry_block}
     <key>NSFaceIDUsageDescription</key>
     <string>Use Face ID to unlock Christmas Tracker.</string>
     <key>NSAppTransportSecurity</key>
@@ -243,14 +249,16 @@ make_ipa() {
     local profile="$3"       # path to mobileprovision fixture
     local ipa_name="${4:-ChristmasTracker-5.0-500.ipa}"
     local team="${5:-TESTTEAM99}"
+    local app_bundle_name="${6:-ChristmasTracker.app}"
 
-    local app_dir="${dir}/Payload/ChristmasTracker.app"
+    local app_dir="${dir}/Payload/${app_bundle_name}"
     mkdir -p "$app_dir"
     cp "$info_plist" "${app_dir}/Info.plist"
     cp "$profile" "${app_dir}/embedded.mobileprovision"
 
     # Fake binary and codesign metadata
-    echo "FAKE_BINARY" > "${app_dir}/ChristmasTracker"
+    local binary_name="${app_bundle_name%.app}"
+    echo "FAKE_BINARY" > "${app_dir}/${binary_name}"
     mkdir -p "${app_dir}/_CodeSignature"
     echo "fake" > "${app_dir}/_CodeSignature/CodeResources"
 
@@ -279,12 +287,21 @@ write_stubs() {
 echo "STUB_CALL: xcodebuild $*" >> "${STUB_LOG:-/dev/null}"
 # If called with -showBuildSettings, print fake build settings
 if [[ "$*" == *"-showBuildSettings"* ]]; then
-    echo "    MARKETING_VERSION = 5.0"
-    echo "    CURRENT_PROJECT_VERSION = 500"
+    echo "Build settings for action build and target ChristmasTracker:"
+    echo "    CODE_SIGN_STYLE = Manual"
+    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
+    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
+    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
     echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
-    echo "    API_BASE_URL = https://api.bmalberta.com"
-    echo "    API_MODE = real"
-    echo "    APP_ENVIRONMENT = production"
+    echo "    MARKETING_VERSION = 5.0"
+    echo "    PRODUCT_NAME = ChristmasTracker"
+    echo ""
+    echo "Build settings for action build and target ChristmasTrackerTests:"
+    echo "    CODE_SIGN_STYLE = Automatic"
+    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
+    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests"
+    echo "    MARKETING_VERSION = 5.0"
+    echo "    PRODUCT_NAME = ChristmasTrackerTests"
     exit 0
 fi
 # For archive: create a fake xcarchive directory at -archivePath
@@ -1343,6 +1360,625 @@ STUB
         test_pass
     else
         test_fail "build/ should be gitignored"
+    fi
+
+    echo ""
+    echo "--- project signing check ---"
+
+    # Helper: build a preflight-compatible HOME with a valid ad hoc profile
+    # and a custom xcodebuild stub with given settings output.
+    # Usage: signing_test_home <tmpdir> <settings_text>
+    # Sets fake_home, bindir, envdir in caller scope.
+    _make_signing_env() {
+        local td="$1"
+        local settings_text="$2"
+        local bd="${td}/bin"
+        mkdir -p "$bd"
+        # Write all tool stubs using write_stubs (provides git, security, codesign, aws, etc.)
+        write_stubs "$bd" "" "TESTTEAM99"
+        # Override xcodebuild with custom settings
+        printf '#!/bin/bash\nif [[ "$*" == *"-showBuildSettings"* ]]; then\ncat <<'"'"'SETTINGS'"'"'\n%s\nSETTINGS\n  exit 0\nfi\n# archive: create xcarchive dir\nwhile [[ $# -gt 0 ]]; do\n  if [[ "$1" == "-archivePath" ]]; then mkdir -p "$2"; fi\n  shift\ndone\nexit 0\n' "$settings_text" > "${bd}/xcodebuild"
+        chmod +x "${bd}/xcodebuild"
+        # Write env
+        local ed="${td}/envdir"
+        mkdir -p "$ed"
+        write_env "$ed"
+        # Set up HOME with the profile
+        local fh="${td}/home"
+        mkdir -p "${fh}/Library/MobileDevice/Provisioning Profiles"
+        local profile_tmp="${td}/ptmp"
+        mkdir -p "$profile_tmp"
+        make_ad_hoc_profile "$profile_tmp" "TestAdHocProfile" "TESTTEAM99" "com.alberta.ChristmasTracker" 30 > /dev/null
+        cp "${profile_tmp}/TestAdHocProfile.mobileprovision" "${fh}/Library/MobileDevice/Provisioning Profiles/TestAdHocProfile.mobileprovision"
+        echo "$bd|$ed|$fh"
+    }
+
+    # Test 1: all five settings correct — signing check passes (no signing errors in output)
+    test_start "project signing: all five settings correct → passes"
+    local ts1; ts1="${tmpbase}/t-sign1"; mkdir -p "$ts1"
+    local settings_ok
+    settings_ok="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local sign_info1
+    sign_info1="$(_make_signing_env "$ts1" "$settings_ok")"
+    local bd1 ed1 fh1
+    bd1="$(echo "$sign_info1" | cut -d'|' -f1)"
+    ed1="$(echo "$sign_info1" | cut -d'|' -f2)"
+    fh1="$(echo "$sign_info1" | cut -d'|' -f3)"
+    local out1
+    out1="$(capture_failing HOME="$fh1" ENV_FILE="${ed1}/release.env" \
+        RELEASE_XCODEBUILD="${bd1}/xcodebuild" RELEASE_SECURITY="${bd1}/security" \
+        RELEASE_GIT="${bd1}/git" RELEASE_AWS="${bd1}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out1" | grep -qE "CODE_SIGN_STYLE|DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER|CODE_SIGN_IDENTITY|PRODUCT_BUNDLE_IDENTIFIER" && echo "$out1" | grep -q "ERROR"; then
+        test_fail "all-correct signing settings should not produce signing errors; got: $out1"
+    else
+        test_pass
+    fi
+
+    # Test 2: CODE_SIGN_STYLE wrong → error names CODE_SIGN_STYLE
+    test_start "project signing: CODE_SIGN_STYLE wrong → error names CODE_SIGN_STYLE"
+    local ts2; ts2="${tmpbase}/t-sign2"; mkdir -p "$ts2"
+    local settings_bad_style
+    settings_bad_style="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Automatic\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local sign_info2
+    sign_info2="$(_make_signing_env "$ts2" "$settings_bad_style")"
+    local bd2 ed2 fh2
+    bd2="$(echo "$sign_info2" | cut -d'|' -f1)"
+    ed2="$(echo "$sign_info2" | cut -d'|' -f2)"
+    fh2="$(echo "$sign_info2" | cut -d'|' -f3)"
+    local out2
+    out2="$(capture_failing HOME="$fh2" ENV_FILE="${ed2}/release.env" \
+        RELEASE_XCODEBUILD="${bd2}/xcodebuild" RELEASE_SECURITY="${bd2}/security" \
+        RELEASE_GIT="${bd2}/git" RELEASE_AWS="${bd2}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out2" | grep -q "CODE_SIGN_STYLE"; then
+        test_pass
+    else
+        test_fail "wrong CODE_SIGN_STYLE should produce error naming CODE_SIGN_STYLE; got: $out2"
+    fi
+
+    # Test 3: DEVELOPMENT_TEAM wrong → error without actual value
+    test_start "project signing: DEVELOPMENT_TEAM wrong → error without actual value"
+    local ts3; ts3="${tmpbase}/t-sign3"; mkdir -p "$ts3"
+    local settings_bad_team
+    settings_bad_team="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = WRONGTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local sign_info3
+    sign_info3="$(_make_signing_env "$ts3" "$settings_bad_team")"
+    local bd3 ed3 fh3
+    bd3="$(echo "$sign_info3" | cut -d'|' -f1)"
+    ed3="$(echo "$sign_info3" | cut -d'|' -f2)"
+    fh3="$(echo "$sign_info3" | cut -d'|' -f3)"
+    local out3
+    out3="$(capture_failing HOME="$fh3" ENV_FILE="${ed3}/release.env" \
+        RELEASE_XCODEBUILD="${bd3}/xcodebuild" RELEASE_SECURITY="${bd3}/security" \
+        RELEASE_GIT="${bd3}/git" RELEASE_AWS="${bd3}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out3" | grep -q "DEVELOPMENT_TEAM" && ! echo "$out3" | grep -q "WRONGTEAM99"; then
+        test_pass
+    else
+        test_fail "DEVELOPMENT_TEAM error must name DEVELOPMENT_TEAM but not print the value; got: $out3"
+    fi
+
+    # Test 4: PROVISIONING_PROFILE_SPECIFIER wrong → error without actual value
+    test_start "project signing: PROVISIONING_PROFILE_SPECIFIER wrong → error without actual value"
+    local ts4; ts4="${tmpbase}/t-sign4"; mkdir -p "$ts4"
+    local settings_bad_prof
+    settings_bad_prof="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = WrongProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local sign_info4
+    sign_info4="$(_make_signing_env "$ts4" "$settings_bad_prof")"
+    local bd4 ed4 fh4
+    bd4="$(echo "$sign_info4" | cut -d'|' -f1)"
+    ed4="$(echo "$sign_info4" | cut -d'|' -f2)"
+    fh4="$(echo "$sign_info4" | cut -d'|' -f3)"
+    local out4
+    out4="$(capture_failing HOME="$fh4" ENV_FILE="${ed4}/release.env" \
+        RELEASE_XCODEBUILD="${bd4}/xcodebuild" RELEASE_SECURITY="${bd4}/security" \
+        RELEASE_GIT="${bd4}/git" RELEASE_AWS="${bd4}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out4" | grep -q "PROVISIONING_PROFILE_SPECIFIER" && ! echo "$out4" | grep -q "WrongProfile"; then
+        test_pass
+    else
+        test_fail "PROVISIONING_PROFILE_SPECIFIER error must name key but not print value; got: $out4"
+    fi
+
+    # Test 5: CODE_SIGN_IDENTITY wrong → error names CODE_SIGN_IDENTITY
+    test_start "project signing: CODE_SIGN_IDENTITY wrong → error names CODE_SIGN_IDENTITY"
+    local ts5; ts5="${tmpbase}/t-sign5"; mkdir -p "$ts5"
+    local settings_bad_id
+    settings_bad_id="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = iPhone Developer\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local sign_info5
+    sign_info5="$(_make_signing_env "$ts5" "$settings_bad_id")"
+    local bd5 ed5 fh5
+    bd5="$(echo "$sign_info5" | cut -d'|' -f1)"
+    ed5="$(echo "$sign_info5" | cut -d'|' -f2)"
+    fh5="$(echo "$sign_info5" | cut -d'|' -f3)"
+    local out5
+    out5="$(capture_failing HOME="$fh5" ENV_FILE="${ed5}/release.env" \
+        RELEASE_XCODEBUILD="${bd5}/xcodebuild" RELEASE_SECURITY="${bd5}/security" \
+        RELEASE_GIT="${bd5}/git" RELEASE_AWS="${bd5}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out5" | grep -q "CODE_SIGN_IDENTITY"; then
+        test_pass
+    else
+        test_fail "wrong CODE_SIGN_IDENTITY should produce error naming CODE_SIGN_IDENTITY; got: $out5"
+    fi
+
+    # Test 6: PRODUCT_BUNDLE_IDENTIFIER wrong → error names PRODUCT_BUNDLE_IDENTIFIER
+    test_start "project signing: PRODUCT_BUNDLE_IDENTIFIER wrong → error names PRODUCT_BUNDLE_IDENTIFIER"
+    local ts6; ts6="${tmpbase}/t-sign6"; mkdir -p "$ts6"
+    local settings_bad_bundle
+    settings_bad_bundle="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.wrong.Bundle\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local sign_info6
+    sign_info6="$(_make_signing_env "$ts6" "$settings_bad_bundle")"
+    local bd6 ed6 fh6
+    bd6="$(echo "$sign_info6" | cut -d'|' -f1)"
+    ed6="$(echo "$sign_info6" | cut -d'|' -f2)"
+    fh6="$(echo "$sign_info6" | cut -d'|' -f3)"
+    local out6
+    out6="$(capture_failing HOME="$fh6" ENV_FILE="${ed6}/release.env" \
+        RELEASE_XCODEBUILD="${bd6}/xcodebuild" RELEASE_SECURITY="${bd6}/security" \
+        RELEASE_GIT="${bd6}/git" RELEASE_AWS="${bd6}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out6" | grep -q "PRODUCT_BUNDLE_IDENTIFIER"; then
+        test_pass
+    else
+        test_fail "wrong PRODUCT_BUNDLE_IDENTIFIER should produce error naming PRODUCT_BUNDLE_IDENTIFIER; got: $out6"
+    fi
+
+    # Test 7: multi-target output — only ChristmasTracker block used (Tests block has wrong CODE_SIGN_STYLE)
+    test_start "project signing: multi-target output uses only ChristmasTracker block"
+    local ts7; ts7="${tmpbase}/t-sign7"; mkdir -p "$ts7"
+    local settings_multi
+    settings_multi="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n\nBuild settings for action build and target ChristmasTrackerTests:\n    CODE_SIGN_STYLE = Automatic\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTrackerTests\n')"
+    local sign_info7
+    sign_info7="$(_make_signing_env "$ts7" "$settings_multi")"
+    local bd7 ed7 fh7
+    bd7="$(echo "$sign_info7" | cut -d'|' -f1)"
+    ed7="$(echo "$sign_info7" | cut -d'|' -f2)"
+    fh7="$(echo "$sign_info7" | cut -d'|' -f3)"
+    local out7
+    out7="$(capture_failing HOME="$fh7" ENV_FILE="${ed7}/release.env" \
+        RELEASE_XCODEBUILD="${bd7}/xcodebuild" RELEASE_SECURITY="${bd7}/security" \
+        RELEASE_GIT="${bd7}/git" RELEASE_AWS="${bd7}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    # Should NOT fail on CODE_SIGN_STYLE from the Tests target (which is Automatic)
+    if echo "$out7" | grep -q "CODE_SIGN_STYLE.*wrong\|CODE_SIGN_STYLE is wrong"; then
+        test_fail "multi-target: signing check should use only ChristmasTracker block; got: $out7"
+    else
+        test_pass
+    fi
+
+    echo ""
+    echo "--- archive signing mode ---"
+
+    # Helper: build a minimal archive xcodebuild stub that logs its args
+    _make_archive_stub() {
+        local bd="$1"
+        local stub_log="$2"
+        local settings_text="$3"
+        cat > "${bd}/xcodebuild" <<ARCSTUB
+#!/bin/bash
+echo "STUB_CALL: xcodebuild \$*" >> "${stub_log}"
+printf '%s\n' "\$*" >> "${stub_log}"
+if [[ "\$*" == *"-showBuildSettings"* ]]; then
+    printf '%s\n' "${settings_text}"
+    exit 0
+fi
+# archive: create xcarchive dir
+while [[ \$# -gt 0 ]]; do
+    if [[ "\$1" == "-archivePath" ]]; then mkdir -p "\$2"; fi
+    shift
+done
+exit 0
+ARCSTUB
+        chmod +x "${bd}/xcodebuild"
+    }
+
+    local settings_archive
+    settings_archive="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+
+    # Test 8: archive default mode — no signing args, CURRENT_PROJECT_VERSION present
+    test_start "archive default: CURRENT_PROJECT_VERSION present, no signing args"
+    local ta8; ta8="${tmpbase}/t-arc8"; mkdir -p "$ta8"
+    local bd8="${ta8}/bin"; mkdir -p "$bd8"
+    local stub_log8="${ta8}/xcodebuild_args.log"
+    write_stubs "$bd8" "" "TESTTEAM99"
+    _make_archive_stub "$bd8" "$stub_log8" "$settings_archive"
+    local ed8="${ta8}/envdir"; mkdir -p "$ed8"
+    write_env "$ed8"
+    STUB_LOG="$stub_log8" \
+        ENV_FILE="${ed8}/release.env" \
+        RELEASE_XCODEBUILD="${bd8}/xcodebuild" \
+        RELEASE_GIT="${bd8}/git" \
+        RELEASE_BUILD_ROOT="${ta8}/build/release" \
+        LEDGER_FILE="${ta8}/.release-ledger" \
+        bash "${RELEASE_SCRIPT}" archive --build 500 > /dev/null 2>&1 || true
+    if [ -f "$stub_log8" ] && grep -q "CURRENT_PROJECT_VERSION=500" "$stub_log8" \
+            && ! grep -q "CODE_SIGN_STYLE" "$stub_log8" \
+            && ! grep -q "DEVELOPMENT_TEAM=" "$stub_log8"; then
+        test_pass
+    else
+        local log8_content=""
+        [ -f "$stub_log8" ] && log8_content="$(cat "$stub_log8")"
+        test_fail "archive default: expected CURRENT_PROJECT_VERSION=500 and no signing args; log: $log8_content"
+    fi
+
+    # Test 9: archive cli mode — all signing args present
+    test_start "archive cli mode: all signing args present"
+    local ta9; ta9="${tmpbase}/t-arc9"; mkdir -p "$ta9"
+    local bd9="${ta9}/bin"; mkdir -p "$bd9"
+    local stub_log9="${ta9}/xcodebuild_args.log"
+    write_stubs "$bd9" "" "TESTTEAM99"
+    _make_archive_stub "$bd9" "$stub_log9" "$settings_archive"
+    local ed9="${ta9}/envdir"; mkdir -p "$ed9"
+    write_env "$ed9"
+    STUB_LOG="$stub_log9" \
+        ENV_FILE="${ed9}/release.env" \
+        RELEASE_XCODEBUILD="${bd9}/xcodebuild" \
+        RELEASE_GIT="${bd9}/git" \
+        RELEASE_BUILD_ROOT="${ta9}/build/release" \
+        LEDGER_FILE="${ta9}/.release-ledger" \
+        RELEASE_ARCHIVE_SIGNING=cli \
+        bash "${RELEASE_SCRIPT}" archive --build 500 > /dev/null 2>&1 || true
+    if [ -f "$stub_log9" ] && grep -q "CODE_SIGN_STYLE=Manual" "$stub_log9" \
+            && grep -q "DEVELOPMENT_TEAM" "$stub_log9" \
+            && grep -q "PROVISIONING_PROFILE_SPECIFIER" "$stub_log9"; then
+        test_pass
+    else
+        local log9_content=""
+        [ -f "$stub_log9" ] && log9_content="$(cat "$stub_log9")"
+        test_fail "archive cli mode: expected signing args in xcodebuild call; log: $log9_content"
+    fi
+
+    echo ""
+    echo "--- device count ---"
+
+    # Helper: build a preflight environment with a custom profile
+    _make_preflight_env_with_profile() {
+        local td="$1"
+        local profile_mp="$2"  # path to .mobileprovision fixture
+        local bd="${td}/bin"; mkdir -p "$bd"
+        write_stubs "$bd" "" "TESTTEAM99"
+        # Override xcodebuild with correct signing settings
+        cat > "${bd}/xcodebuild" <<'DCSTUB'
+#!/bin/bash
+if [[ "$*" == *"-showBuildSettings"* ]]; then
+    echo "Build settings for action build and target ChristmasTracker:"
+    echo "    CODE_SIGN_STYLE = Manual"
+    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
+    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
+    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
+    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
+    echo "    MARKETING_VERSION = 5.0"
+    echo "    PRODUCT_NAME = ChristmasTracker"
+    exit 0
+fi
+exit 0
+DCSTUB
+        chmod +x "${bd}/xcodebuild"
+        local ed="${td}/envdir"; mkdir -p "$ed"
+        write_env "$ed"
+        local fh="${td}/home"
+        mkdir -p "${fh}/Library/MobileDevice/Provisioning Profiles"
+        cp "$profile_mp" "${fh}/Library/MobileDevice/Provisioning Profiles/TestAdHocProfile.mobileprovision"
+        echo "$bd|$ed|$fh"
+    }
+
+    # Test 10: 2-device profile reports "2"
+    test_start "device count: 2-device profile reports '2'"
+    local tdc10; tdc10="${tmpbase}/t-dc10"; mkdir -p "$tdc10"
+    # make_ad_hoc_profile creates 2 devices (DEVICE0001, DEVICE0002)
+    local dc10_pdir="${tdc10}/pdir"; mkdir -p "$dc10_pdir"
+    make_ad_hoc_profile "$dc10_pdir" "TestAdHocProfile" "TESTTEAM99" "com.alberta.ChristmasTracker" 30 > /dev/null
+    local dc10_info
+    dc10_info="$(_make_preflight_env_with_profile "$tdc10" "${dc10_pdir}/TestAdHocProfile.mobileprovision")"
+    local bd10 ed10 fh10
+    bd10="$(echo "$dc10_info" | cut -d'|' -f1)"
+    ed10="$(echo "$dc10_info" | cut -d'|' -f2)"
+    fh10="$(echo "$dc10_info" | cut -d'|' -f3)"
+    local out10
+    out10="$(capture_failing HOME="$fh10" ENV_FILE="${ed10}/release.env" \
+        RELEASE_XCODEBUILD="${bd10}/xcodebuild" RELEASE_SECURITY="${bd10}/security" \
+        RELEASE_GIT="${bd10}/git" RELEASE_AWS="${bd10}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out10" | grep -q "registered devices: 2"; then
+        test_pass
+    else
+        test_fail "2-device profile should report 'registered devices: 2'; got: $out10"
+    fi
+
+    # Test 10b: 1-device profile reports "1"
+    test_start "device count: 1-device profile reports '1'"
+    local tdc10b; tdc10b="${tmpbase}/t-dc10b"; mkdir -p "$tdc10b"
+    local dc10b_pdir="${tdc10b}/pdir"; mkdir -p "$dc10b_pdir"
+    local expiry_dc10b
+    expiry_dc10b="$(date -u -v "+30d" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
+              || date -u -d "+30 days" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
+              || echo "2099-01-01T00:00:00Z")"
+    # Build a profile with exactly 1 device UDID
+    cat > "${dc10b_pdir}/TestAdHocProfile.mobileprovision" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Name</key>
+    <string>TestAdHocProfile</string>
+    <key>TeamIdentifier</key>
+    <array><string>TESTTEAM99</string></array>
+    <key>ExpirationDate</key>
+    <date>${expiry_dc10b}</date>
+    <key>ProvisionedDevices</key>
+    <array>
+        <string>DEVICE0001</string>
+    </array>
+    <key>Entitlements</key>
+    <dict>
+        <key>application-identifier</key>
+        <string>TESTTEAM99.com.alberta.ChristmasTracker</string>
+        <key>get-task-allow</key>
+        <false/>
+    </dict>
+</dict>
+</plist>
+EOF
+    local dc10b_info
+    dc10b_info="$(_make_preflight_env_with_profile "$tdc10b" "${dc10b_pdir}/TestAdHocProfile.mobileprovision")"
+    local bd10b ed10b fh10b
+    bd10b="$(echo "$dc10b_info" | cut -d'|' -f1)"
+    ed10b="$(echo "$dc10b_info" | cut -d'|' -f2)"
+    fh10b="$(echo "$dc10b_info" | cut -d'|' -f3)"
+    local out10b
+    out10b="$(capture_failing HOME="$fh10b" ENV_FILE="${ed10b}/release.env" \
+        RELEASE_XCODEBUILD="${bd10b}/xcodebuild" RELEASE_SECURITY="${bd10b}/security" \
+        RELEASE_GIT="${bd10b}/git" RELEASE_AWS="${bd10b}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out10b" | grep -q "registered devices: 1"; then
+        test_pass
+    else
+        test_fail "1-device profile should report 'registered devices: 1'; got: $out10b"
+    fi
+
+    # Test 11: 0-device profile fails
+    test_start "device count: 0-device profile fails"
+    local tdc11; tdc11="${tmpbase}/t-dc11"; mkdir -p "$tdc11"
+    local expiry_dc11
+    expiry_dc11="$(date -u -v "+30d" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
+              || date -u -d "+30 days" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
+              || echo "2099-01-01T00:00:00Z")"
+    local dc11_pdir="${tdc11}/pdir"; mkdir -p "$dc11_pdir"
+    # Build a profile with empty ProvisionedDevices array
+    cat > "${dc11_pdir}/TestAdHocProfile.mobileprovision" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Name</key>
+    <string>TestAdHocProfile</string>
+    <key>TeamIdentifier</key>
+    <array><string>TESTTEAM99</string></array>
+    <key>ExpirationDate</key>
+    <date>${expiry_dc11}</date>
+    <key>ProvisionedDevices</key>
+    <array/>
+    <key>Entitlements</key>
+    <dict>
+        <key>application-identifier</key>
+        <string>TESTTEAM99.com.alberta.ChristmasTracker</string>
+        <key>get-task-allow</key>
+        <false/>
+    </dict>
+</dict>
+</plist>
+EOF
+    local dc11_info
+    dc11_info="$(_make_preflight_env_with_profile "$tdc11" "${dc11_pdir}/TestAdHocProfile.mobileprovision")"
+    local bd11 ed11 fh11
+    bd11="$(echo "$dc11_info" | cut -d'|' -f1)"
+    ed11="$(echo "$dc11_info" | cut -d'|' -f2)"
+    fh11="$(echo "$dc11_info" | cut -d'|' -f3)"
+    local out11
+    out11="$(capture_failing HOME="$fh11" ENV_FILE="${ed11}/release.env" \
+        RELEASE_XCODEBUILD="${bd11}/xcodebuild" RELEASE_SECURITY="${bd11}/security" \
+        RELEASE_GIT="${bd11}/git" RELEASE_AWS="${bd11}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out11" | grep -qi "no registered devices\|0.*device"; then
+        test_pass
+    else
+        test_fail "0-device profile should fail with 'no registered devices'; got: $out11"
+    fi
+
+    echo ""
+    echo "--- SENTRY_DSN enforcement ---"
+
+    local tv_sd2; tv_sd2="${tmpbase}/t-sentry2"; mkdir -p "$tv_sd2"
+    write_env "$tv_sd2"
+    local profile_sentry_dir="${tv_sd2}/profiles"; mkdir -p "$profile_sentry_dir"
+    make_ad_hoc_profile "$profile_sentry_dir" "TestAdHocProfile" "TESTTEAM99" "com.alberta.ChristmasTracker" 30 > /dev/null
+    local bindir_sentry="${tv_sd2}/bin"
+    write_stubs "$bindir_sentry" "$profile_sentry_dir" "TESTTEAM99"
+    local profile_sentry="${profile_sentry_dir}/TestAdHocProfile.mobileprovision"
+
+    # Test 13: missing SENTRY_DSN fails (sentry_dsn="" → no key in plist)
+    test_start "verify-ipa: missing SENTRY_DSN fails"
+    local ts13; ts13="${tmpbase}/t-sd13"; mkdir -p "$ts13"
+    write_env "$ts13"
+    # Pass empty string as 9th arg → make_info_plist omits the key
+    local info_sd13
+    info_sd13="$(make_info_plist "$ts13" "com.alberta.ChristmasTracker" "500" "5.0" \
+        "https://api.bmalberta.com" "real" "production" "false" "")"
+    local ipa_sd13
+    ipa_sd13="$(make_ipa "$ts13" "$info_sd13" "$profile_sentry" "no-sentry.ipa" "TESTTEAM99")"
+    local out_sd13
+    out_sd13="$(capture_failing ENV_FILE="${tv_sd2}/release.env" \
+        RELEASE_XCODEBUILD="${bindir_sentry}/xcodebuild" \
+        RELEASE_SECURITY="${bindir_sentry}/security" \
+        RELEASE_CODESIGN="${bindir_sentry}/codesign" \
+        bash "${RELEASE_SCRIPT}" verify-ipa --ipa "$ipa_sd13")"
+    if echo "$out_sd13" | grep -q "SENTRY_DSN"; then
+        test_pass
+    else
+        test_fail "missing SENTRY_DSN should produce SENTRY_DSN failure; got: $out_sd13"
+    fi
+
+    # Test 14: empty string SENTRY_DSN fails
+    test_start "verify-ipa: empty string SENTRY_DSN fails"
+    local ts14; ts14="${tmpbase}/t-sd14"; mkdir -p "$ts14"
+    write_env "$ts14"
+    # Manually write a plist with SENTRY_DSN = "" (empty string)
+    local info_sd14="${ts14}/Info.plist"
+    cat > "$info_sd14" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>com.alberta.ChristmasTracker</string>
+    <key>CFBundleVersion</key><string>500</string>
+    <key>CFBundleShortVersionString</key><string>5.0</string>
+    <key>API_BASE_URL</key><string>https://api.bmalberta.com</string>
+    <key>API_MODE</key><string>real</string>
+    <key>APP_ENVIRONMENT</key><string>production</string>
+    <key>SENTRY_DSN</key><string></string>
+    <key>NSFaceIDUsageDescription</key><string>Use Face ID to unlock Christmas Tracker.</string>
+    <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+</dict>
+</plist>
+EOF
+    local ipa_sd14
+    ipa_sd14="$(make_ipa "$ts14" "$info_sd14" "$profile_sentry" "empty-sentry.ipa" "TESTTEAM99")"
+    local out_sd14
+    out_sd14="$(capture_failing ENV_FILE="${tv_sd2}/release.env" \
+        RELEASE_XCODEBUILD="${bindir_sentry}/xcodebuild" \
+        RELEASE_SECURITY="${bindir_sentry}/security" \
+        RELEASE_CODESIGN="${bindir_sentry}/codesign" \
+        bash "${RELEASE_SCRIPT}" verify-ipa --ipa "$ipa_sd14")"
+    if echo "$out_sd14" | grep -q "SENTRY_DSN"; then
+        test_pass
+    else
+        test_fail "empty SENTRY_DSN should produce SENTRY_DSN failure; got: $out_sd14"
+    fi
+
+    echo ""
+    echo "--- PRODUCT_NAME payload path ---"
+
+    local tv_pn; tv_pn="${tmpbase}/t-pname"; mkdir -p "$tv_pn"
+    write_env "$tv_pn"
+    local profile_pn_dir="${tv_pn}/profiles"; mkdir -p "$profile_pn_dir"
+    make_ad_hoc_profile "$profile_pn_dir" "TestAdHocProfile" "TESTTEAM99" "com.alberta.ChristmasTracker" 30 > /dev/null
+    local profile_pn="${profile_pn_dir}/TestAdHocProfile.mobileprovision"
+    local bindir_pn="${tv_pn}/bin"
+    write_stubs "$bindir_pn" "$profile_pn_dir" "TESTTEAM99"
+
+    # Test 16: single Payload/*.app fallback when PRODUCT_NAME empty
+    test_start "verify-ipa: single Payload/*.app fallback when PRODUCT_NAME empty"
+    local ts16; ts16="${tmpbase}/t-pn16"; mkdir -p "$ts16"
+    write_env "$ts16"
+    # Create xcodebuild stub that returns no PRODUCT_NAME (empty line)
+    local bd16="${ts16}/bin"; mkdir -p "$bd16"
+    write_stubs "$bd16" "$profile_pn_dir" "TESTTEAM99"
+    cat > "${bd16}/xcodebuild" <<'STUB16'
+#!/bin/bash
+if [[ "$*" == *"-showBuildSettings"* ]]; then
+    echo "Build settings for action build and target ChristmasTracker:"
+    echo "    CODE_SIGN_STYLE = Manual"
+    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
+    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
+    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
+    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
+    echo "    MARKETING_VERSION = 5.0"
+    exit 0
+fi
+exit 0
+STUB16
+    chmod +x "${bd16}/xcodebuild"
+    local info_pn16
+    info_pn16="$(make_info_plist "$ts16" "com.alberta.ChristmasTracker" "500" "5.0" \
+        "https://api.bmalberta.com" "real" "production" "false")"
+    # Build IPA with FallbackApp.app bundle name
+    local ipa_pn16
+    ipa_pn16="$(make_ipa "$ts16" "$info_pn16" "$profile_pn" "fallback.ipa" "TESTTEAM99" "FallbackApp.app")"
+    local out_pn16
+    out_pn16="$(capture_failing ENV_FILE="${ts16}/release.env" \
+        RELEASE_XCODEBUILD="${bd16}/xcodebuild" \
+        RELEASE_SECURITY="${bd16}/security" \
+        RELEASE_CODESIGN="${bd16}/codesign" \
+        bash "${RELEASE_SCRIPT}" verify-ipa --ipa "$ipa_pn16")"
+    if echo "$out_pn16" | grep -q "all assertions passed"; then
+        test_pass
+    else
+        test_fail "verify-ipa with fallback scan should find FallbackApp.app and pass; got: $out_pn16"
+    fi
+
+    # Test 17: fails when two app bundles in Payload
+    test_start "verify-ipa: fails when two app bundles in Payload"
+    local ts17; ts17="${tmpbase}/t-pn17"; mkdir -p "$ts17"
+    write_env "$ts17"
+    local bd17="${ts17}/bin"; mkdir -p "$bd17"
+    write_stubs "$bd17" "$profile_pn_dir" "TESTTEAM99"
+    # Same stub with no PRODUCT_NAME
+    cat > "${bd17}/xcodebuild" <<'STUB17'
+#!/bin/bash
+if [[ "$*" == *"-showBuildSettings"* ]]; then
+    echo "Build settings for action build and target ChristmasTracker:"
+    echo "    CODE_SIGN_STYLE = Manual"
+    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
+    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
+    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
+    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
+    echo "    MARKETING_VERSION = 5.0"
+    exit 0
+fi
+exit 0
+STUB17
+    chmod +x "${bd17}/xcodebuild"
+    # Build a base IPA first, then add a second .app bundle to it
+    local info_pn17
+    info_pn17="$(make_info_plist "$ts17" "com.alberta.ChristmasTracker" "500" "5.0" \
+        "https://api.bmalberta.com" "real" "production" "false")"
+    local ipa_pn17_base
+    ipa_pn17_base="$(make_ipa "$ts17" "$info_pn17" "$profile_pn" "two-apps.ipa" "TESTTEAM99" "FirstApp.app")"
+    # Add a second app bundle to the IPA
+    local extra_app_dir="${ts17}/Payload/SecondApp.app"
+    mkdir -p "$extra_app_dir"
+    echo "FAKE" > "${extra_app_dir}/SecondApp"
+    (cd "$ts17" && zip -qr "two-apps.ipa" "Payload/SecondApp.app/")
+    local out_pn17
+    out_pn17="$(capture_failing ENV_FILE="${ts17}/release.env" \
+        RELEASE_XCODEBUILD="${bd17}/xcodebuild" \
+        RELEASE_SECURITY="${bd17}/security" \
+        RELEASE_CODESIGN="${bd17}/codesign" \
+        bash "${RELEASE_SCRIPT}" verify-ipa --ipa "$ipa_pn17_base")"
+    if echo "$out_pn17" | grep -qi "2.*app\|bundle.*count\|cannot determine\|bundles in Payload"; then
+        test_pass
+    else
+        test_fail "verify-ipa with two app bundles should fail with bundle count error; got: $out_pn17"
+    fi
+
+    echo ""
+    echo "--- install-info npm removal ---"
+
+    # Test 18: install-info: no npm run command in output
+    test_start "install-info: no npm run command in output"
+    local ti18; ti18="${tmpbase}/t-ii18"; mkdir -p "$ti18"
+    write_env "$ti18"
+    local bd18="${ti18}/bin"; mkdir -p "$bd18"
+    cat > "${bd18}/xcodebuild" <<'STUB18'
+#!/bin/bash
+if [[ "$*" == *"-showBuildSettings"* ]]; then
+    echo "Build settings for action build and target ChristmasTracker:"
+    echo "    MARKETING_VERSION = 5.0"
+    echo "    PRODUCT_NAME = ChristmasTracker"
+    exit 0
+fi
+exit 0
+STUB18
+    chmod +x "${bd18}/xcodebuild"
+    local iinfo18_out
+    iinfo18_out="$(ENV_FILE="${ti18}/release.env" RELEASE_XCODEBUILD="${bd18}/xcodebuild" \
+        bash "${RELEASE_SCRIPT}" install-info --build 500 2>&1)"
+    if echo "$iinfo18_out" | grep -q "npm run"; then
+        test_fail "install-info output must not contain 'npm run'; got: $iinfo18_out"
+    else
+        test_pass
     fi
 }
 

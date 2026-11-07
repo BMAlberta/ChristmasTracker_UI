@@ -25,6 +25,8 @@ RELEASE_UNZIP="${RELEASE_UNZIP:-unzip}"
 RELEASE_SHASUM="${RELEASE_SHASUM:-shasum}"
 RELEASE_GIT="${RELEASE_GIT:-git}"
 
+RELEASE_ARCHIVE_SIGNING="${RELEASE_ARCHIVE_SIGNING:-project}"
+
 # ---------------------------------------------------------------------------
 # Defaults for optional env vars (overridden by release.env or environment)
 # ---------------------------------------------------------------------------
@@ -236,16 +238,70 @@ manifest_path() {
 }
 
 # ---------------------------------------------------------------------------
-# Read marketing version from project (read-only xcodebuild)
+# Read build settings from the app target (read-only xcodebuild)
 # ---------------------------------------------------------------------------
-get_marketing_version() {
-    "${RELEASE_XCODEBUILD}" -showBuildSettings \
+get_app_build_settings() {
+    local raw
+    raw="$("${RELEASE_XCODEBUILD}" -showBuildSettings \
         -project "${REPO_ROOT}/ChristmasTracker/ChristmasTracker.xcodeproj" \
         -scheme "ChristmasTracker" \
-        -configuration "Release" 2>/dev/null \
-        | grep "^\s*MARKETING_VERSION\s*=" \
-        | sed 's/.*= *//' \
-        | tr -d '[:space:]'
+        -configuration "Release" 2>/dev/null)"
+    local target_block
+    target_block="$(printf '%s\n' "$raw" | awk '/Build settings for action .* target ChristmasTracker:$/{in_block=1;next} /Build settings for action /{in_block=0} in_block{print}')"
+    if [ -n "$target_block" ]; then
+        printf '%s\n' "$target_block"
+    else
+        printf '%s\n' "$raw"
+    fi
+}
+
+get_product_name() {
+    get_app_build_settings | grep "PRODUCT_NAME" | head -1 | sed 's/.*= *//' | tr -d '[:space:]'
+}
+
+get_marketing_version() {
+    get_app_build_settings | grep "MARKETING_VERSION" | head -1 | sed 's/.*= *//' | tr -d '[:space:]'
+}
+
+# ---------------------------------------------------------------------------
+# Check project signing settings match release configuration
+# ---------------------------------------------------------------------------
+check_project_signing() {
+    info "Checking project signing settings..."
+    local settings
+    settings="$(get_app_build_settings)"
+    if [ -z "$settings" ]; then
+        die "Cannot read build settings from Xcode project. Ensure xcodebuild is installed."
+    fi
+
+    local fail=0
+    local xcode_path="ChristmasTracker/ChristmasTracker.xcodeproj — ChristmasTracker target, Signing and Capabilities, Release"
+    local code_sign_style dev_team prov_profile code_sign_id bundle_id
+
+    code_sign_style="$(printf '%s\n' "$settings" | grep "CODE_SIGN_STYLE" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
+    dev_team="$(printf '%s\n' "$settings" | grep "DEVELOPMENT_TEAM" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
+    prov_profile="$(printf '%s\n' "$settings" | grep "PROVISIONING_PROFILE_SPECIFIER" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
+    code_sign_id="$(printf '%s\n' "$settings" | grep "CODE_SIGN_IDENTITY" | head -1 | sed 's/.*= *//' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
+    bundle_id="$(printf '%s\n' "$settings" | grep "PRODUCT_BUNDLE_IDENTIFIER" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
+
+    if [ "$code_sign_style" != "Manual" ]; then
+        echo "[release] ERROR: CODE_SIGN_STYLE is wrong (got: '${code_sign_style}'). Fix in Xcode: ${xcode_path}: turn off Automatically manage signing." >&2; fail=1
+    fi
+    if [ "$dev_team" != "${RELEASE_TEAM_ID}" ]; then
+        echo "[release] ERROR: DEVELOPMENT_TEAM does not match RELEASE_TEAM_ID [set]. Fix in Xcode: ${xcode_path}: choose the correct team." >&2; fail=1
+    fi
+    if [ "$prov_profile" != "${RELEASE_PROFILE_NAME}" ]; then
+        echo "[release] ERROR: PROVISIONING_PROFILE_SPECIFIER does not match RELEASE_PROFILE_NAME [set]. Fix in Xcode: ${xcode_path}: select the ad hoc profile." >&2; fail=1
+    fi
+    if [[ "$code_sign_id" != Apple\ Distribution* ]] && [[ "$code_sign_id" != iPhone\ Distribution* ]]; then
+        echo "[release] ERROR: CODE_SIGN_IDENTITY is wrong (got: '${code_sign_id}'). Fix in Xcode: ${xcode_path}: set identity to 'Apple Distribution' or 'iPhone Distribution'." >&2; fail=1
+    fi
+    if [ "$bundle_id" != "${RELEASE_BUNDLE_ID}" ]; then
+        echo "[release] ERROR: PRODUCT_BUNDLE_IDENTIFIER is wrong (got: '${bundle_id}'). Fix in Xcode: ${xcode_path}: set bundle ID to match RELEASE_BUNDLE_ID." >&2; fail=1
+    fi
+
+    [ "$fail" -eq 1 ] && die "Project signing settings do not match release configuration. Fix the above settings in Xcode and re-run preflight."
+    info "Project signing settings OK."
 }
 
 # ---------------------------------------------------------------------------
@@ -318,7 +374,10 @@ cmd_preflight() {
         fi
     fi
 
-    # 5. Provisioning profile check
+    # 5. Project signing settings check
+    check_project_signing
+
+    # 6. Provisioning profile check
     info "Checking provisioning profile: ${RELEASE_PROFILE_NAME}..."
     local profile_path=""
     local profile_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
@@ -391,10 +450,16 @@ cmd_preflight() {
 
     # Device count
     local device_count
-    device_count="$(echo "$decoded" | "${RELEASE_PLUTIL}" -extract ProvisionedDevices raw - 2>/dev/null | wc -l | tr -d '[:space:]')" || device_count="unknown"
+    device_count="$(printf '%s\n' "$decoded" | "${RELEASE_PLUTIL}" -extract ProvisionedDevices raw - 2>/dev/null)" || device_count=""
+    if [ -z "$device_count" ] || ! [[ "$device_count" =~ ^[0-9]+$ ]]; then
+        device_count="unknown"
+    fi
     info "Profile registered devices: ${device_count}"
+    if [ "$device_count" = "0" ]; then
+        die "Profile has no registered devices. Add devices to the profile before releasing."
+    fi
 
-    # 6. Signing identity check (read-only: security find-identity)
+    # 7. Signing identity check (read-only: security find-identity)
     info "Checking signing identity..."
     local identity_line
     identity_line="$("${RELEASE_SECURITY}" find-identity -v -p codesigning 2>/dev/null | grep "Apple Distribution" | grep "${RELEASE_TEAM_ID}" | head -1)" || identity_line=""
@@ -408,7 +473,7 @@ cmd_preflight() {
     identity_name="${identity_name%\"*}"
     info "Signing identity: $identity_name"
 
-    # 7. scripts/verify.sh (skippable with --skip-verify)
+    # 8. scripts/verify.sh (skippable with --skip-verify)
     if [ "$SKIP_VERIFY" -eq 1 ]; then
         warn "--skip-verify was passed; skipping scripts/verify.sh. This is UNSAFE for a production release."
     else
@@ -442,6 +507,15 @@ cmd_archive() {
     info "archive: build=${BUILD_NUMBER} version=${marketing_version}"
     info "archive: output: ${arch}"
 
+    local signing_args=()
+    if [ "${RELEASE_ARCHIVE_SIGNING}" = "cli" ]; then
+        signing_args=(
+            "CODE_SIGN_STYLE=Manual"
+            "DEVELOPMENT_TEAM=${RELEASE_TEAM_ID}"
+            "PROVISIONING_PROFILE_SPECIFIER=${RELEASE_PROFILE_NAME}"
+        )
+    fi
+
     dry_run_cmd "archive" \
         "${RELEASE_XCODEBUILD}" archive \
         -project "${REPO_ROOT}/ChristmasTracker/ChristmasTracker.xcodeproj" \
@@ -450,9 +524,7 @@ cmd_archive() {
         -destination "generic/platform=iOS" \
         -archivePath "${arch}" \
         -derivedDataPath "${bdir}/derived" \
-        CODE_SIGN_STYLE=Manual \
-        DEVELOPMENT_TEAM="${RELEASE_TEAM_ID}" \
-        PROVISIONING_PROFILE_SPECIFIER="${RELEASE_PROFILE_NAME}" \
+        ${signing_args[@]+"${signing_args[@]}"} \
         CURRENT_PROJECT_VERSION="${BUILD_NUMBER}"
 
     if [ "$DRY_RUN" -eq 0 ]; then
@@ -541,7 +613,14 @@ PLIST
 
     if [ "$DRY_RUN" -eq 0 ]; then
         # xcodebuild places the IPA directly in the export path
-        local xc_ipa="${bdir}/ChristmasTracker.ipa"
+        local product_name
+        product_name="$(get_product_name)" || product_name=""
+        local xc_ipa
+        if [ -n "$product_name" ]; then
+            xc_ipa="${bdir}/${product_name}.ipa"
+        else
+            xc_ipa="${bdir}/ChristmasTracker.ipa"
+        fi
         if [ -f "$xc_ipa" ]; then
             mv "$xc_ipa" "$ipath"
         fi
@@ -588,7 +667,24 @@ cmd_verify_ipa() {
     local fail=0
 
     # Extract Info.plist and embedded.mobileprovision from IPA
-    local payload_prefix="Payload/ChristmasTracker.app"
+    local product_name
+    product_name="$(get_product_name)" || product_name=""
+    local app_bundle_name
+    if [ -n "$product_name" ]; then
+        app_bundle_name="${product_name}.app"
+    else
+        local app_count
+        app_count="$("${RELEASE_UNZIP}" -Z -1 "$ipath" 2>/dev/null | grep -cE "^Payload/[^/]+\.app/$")" || app_count="0"
+        if [ "$app_count" -eq 1 ]; then
+            local app_entry
+            app_entry="$("${RELEASE_UNZIP}" -Z -1 "$ipath" 2>/dev/null | grep -E "^Payload/[^/]+\.app/$" | head -1)"
+            app_bundle_name="${app_entry#Payload/}"
+            app_bundle_name="${app_bundle_name%/}"
+        else
+            die "verify-ipa: cannot determine app bundle name (PRODUCT_NAME unreadable, found ${app_count} .app bundles in Payload/)"
+        fi
+    fi
+    local payload_prefix="Payload/${app_bundle_name}"
     "${RELEASE_UNZIP}" -p "$ipath" "${payload_prefix}/Info.plist" > "${tmpdir}/Info.plist" 2>/dev/null \
         || die "Could not extract Info.plist from IPA — is this a valid IPA?"
 
@@ -682,15 +778,14 @@ cmd_verify_ipa() {
         info "verify-ipa: NSFaceIDUsageDescription present"
     fi
 
-    # SENTRY_DSN: check for presence only, never print value
-    local sentry_dsn_present=0
-    if "${RELEASE_PLUTIL}" -extract SENTRY_DSN raw "${tmpdir}/Info.plist" > /dev/null 2>&1; then
-        sentry_dsn_present=1
-    fi
-    if [ "$sentry_dsn_present" -eq 1 ]; then
-        info "verify-ipa: SENTRY_DSN key present (value not checked or printed)"
+    # SENTRY_DSN: must be present and non-empty
+    local sentry_dsn_val
+    sentry_dsn_val="$("${RELEASE_PLUTIL}" -extract SENTRY_DSN raw "${tmpdir}/Info.plist" 2>/dev/null)" || sentry_dsn_val=""
+    if [ -z "$sentry_dsn_val" ]; then
+        echo "[verify-ipa] FAIL SENTRY_DSN: key is missing or value is empty — production builds must include the DSN; ensure Config-Secrets.xcconfig is present on the release machine" >&2
+        fail=1
     else
-        info "verify-ipa: SENTRY_DSN key not present (may be empty in Release)"
+        info "verify-ipa: SENTRY_DSN present (value not printed)"
     fi
 
     # embedded.mobileprovision
@@ -1030,11 +1125,7 @@ cmd_install_info() {
    --ipa-url:         ${ipa_public_url}
    --min-build:       (choose: raising this forces an update on older builds; see runbook)
 
-   Example command:
-     npm run policy:set -- --platform ios \\
-       --latest-build ${build} --latest-version ${marketing_version} \\
-       --manifest-url '${manifest_public_url}' \\
-       --ipa-url '${ipa_public_url}'
+   Pass these to policy:set; the exact flag names are in the API chat's local quickstart (unconfirmed here).
 
 4. Device verification steps:
    a. Tap the install link on a registered device (must be in the provisioning profile).
