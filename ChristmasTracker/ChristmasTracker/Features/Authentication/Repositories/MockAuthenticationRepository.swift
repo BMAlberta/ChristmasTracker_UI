@@ -178,7 +178,7 @@ enum AuthenticationError: Error, LocalizedError, Equatable {
     case sessionExpired
     case networkError
     // C1: new cases
-    case invalidResponse         // nil email on user returned by login/register/refresh
+    case invalidResponse         // undecodable or malformed response
     case accountDisabled         // 1008 ACCOUNT_DISABLED
     case updateRequired          // 426 VERSION_OUTDATED
     case rateLimited(retryAfter: TimeInterval) // 429 with optional retry-after
@@ -208,7 +208,8 @@ enum AuthenticationError: Error, LocalizedError, Equatable {
         case .invalidResponse:
             return "An unexpected response was received from the server"
         case .accountDisabled:
-            return "Your account has been disabled. Please contact support"
+            // D-d: AuthErrorMessages.swift is the single source of the administrator text.
+            return userMessage(for: .accountDisabled)
         case .updateRequired:
             return "A newer version of the app is required. Please update"
         case .rateLimited:

@@ -99,6 +99,22 @@ struct SessionRefreshSeamTests {
         }
     }
 
+    // I2b-2c U3: a refresh 403 ACCOUNT_DISABLED is a refresh-context credential failure.
+    @Test("refresh throws credentialFailure when forceRefresh throws accountDisabled")
+    func throwsCredentialFailureForAccountDisabled() async throws {
+        let sut = makeSUT(refresher: {
+            throw AuthenticationError.accountDisabled
+        })
+        do {
+            try await sut.refresh()
+            Issue.record("Expected SessionRefreshError.credentialFailure but no error was thrown")
+        } catch SessionRefreshError.credentialFailure {
+            // Expected
+        } catch {
+            Issue.record("Expected SessionRefreshError.credentialFailure but got: \(error)")
+        }
+    }
+
     // MARK: - Non-credential failure
 
     @Test("refresh throws other when forceRefresh throws a non-credential error")

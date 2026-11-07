@@ -12,6 +12,14 @@
 //    - AuthenticationService.pendBiometricEnablementRequest()
 //    - AuthenticationService.shouldShowBiometricEnablementAfterLogin: Bool
 //
+//  I2b-2c U3 (D-b) ADDED: signInWithBiometricAccountDisabledDeletesEnrollmentSilently,
+//  refreshTokenIfNeededAccountDisabledDeletesEnrollmentAndEndsSession,
+//  forceRefreshCredentialFailureRethrowsDeletesEnrollmentAndEndsSession (accountDisabled,
+//  invalidRefreshToken), forceRefreshAccountDisabledForDifferentUserKeepsEnrollmentAndEndsSession,
+//  forceRefreshWithNoTokensThrowsWithoutTeardown, forceRefreshAfterLogoutDoesNotTearDownAgain,
+//  forceRefreshNetworkFailureRethrowsAndKeepsSession,
+//  concurrentRefreshesSharingAccountDisabledTearDownOnce.
+//
 
 import Testing
 import Foundation
@@ -627,6 +635,172 @@ struct SignInWithBiometricTests {
         #expect(store.enrolledUser() != nil, "Network failure must not delete enrollment")
     }
 
+    // MARK: - I2b-2c U3: Face ID sign-in with a refresh 403 (accountDisabled)
+
+    @Test("signInWithBiometric refresh 403 deletes enrollment, sets passwordRequired, shows no error text")
+    func signInWithBiometricAccountDisabledDeletesEnrollmentSilently() async throws {
+        let store = InMemoryBiometricCredentialStore()
+        try store.enroll(refreshToken: "mock_rt_u1_some-uuid", userId: "u1", firstName: "Alice")
+        let sut = makeSUT(repo: FailingRefreshRepository(error: .accountDisabled), credentialStore: store)
+
+        await sut.signInWithBiometric()
+
+        #expect(store.enrolledUser() == nil, "A refresh 403 must delete the stored Face ID token")
+        #expect(sut.enrolledUser == nil, "The enrolled-user snapshot must be refreshed")
+        #expect(sut.biometricSignInState == .passwordRequired)
+        #expect(sut.error == nil, "No error text for a refresh 403 on Face ID sign-in")
+        #expect(sut.isAuthenticated == false)
+        #expect(sut.currentUser == nil)
+        #expect(sut.isLoading == false)
+    }
+
+    // MARK: - I2b-2c U3 (D-b): refreshTokenIfNeeded with a refresh 403
+
+    @Test("refreshTokenIfNeeded refresh 403 for the enrolled user deletes enrollment and ends the session")
+    func refreshTokenIfNeededAccountDisabledDeletesEnrollmentAndEndsSession() async throws {
+        let fixture = try await makeSignedInFixture(refreshError: .accountDisabled, loginExpiresIn: 0)
+
+        await fixture.sut.refreshTokenIfNeeded()
+
+        #expect(fixture.sut.isAuthenticated == false)
+        #expect(fixture.sut.currentUser == nil)
+        #expect(fixture.store.enrolledUser() == nil, "Enrollment for the session user must be deleted")
+        #expect(fixture.sut.enrolledUserSnapshot == nil, "The enrolled-user snapshot must be refreshed after the deletion")
+        #expect(fixture.clearable.clearCallCount == 1, "The session must be torn down once")
+        #expect(await fixture.sessionManager.lastTeardownReason == .sessionExpired)
+    }
+
+    // MARK: - I2b-2c U3 (D-b): forceRefresh ends the session on a refresh credential failure
+
+    @Test(
+        "forceRefresh credential failure for the enrolled user rethrows, deletes enrollment, and ends the session",
+        arguments: [AuthenticationError.accountDisabled, AuthenticationError.invalidRefreshToken]
+    )
+    func forceRefreshCredentialFailureRethrowsDeletesEnrollmentAndEndsSession(error: AuthenticationError) async throws {
+        let fixture = try await makeSignedInFixture(refreshError: error)
+
+        await #expect(throws: error) {
+            try await fixture.sut.forceRefresh()
+        }
+
+        #expect(fixture.sut.isAuthenticated == false)
+        #expect(fixture.sut.currentUser == nil)
+        #expect(fixture.sut.currentAccessToken == nil)
+        #expect(fixture.store.enrolledUser() == nil, "Enrollment for the session user must be deleted")
+        #expect(fixture.sut.enrolledUserSnapshot == nil, "The enrolled-user snapshot must be refreshed after the deletion")
+        #expect(fixture.clearable.clearCallCount == 1, "The session must be torn down once")
+        #expect(await fixture.sessionManager.lastTeardownReason == .sessionExpired)
+    }
+
+    @Test("forceRefresh refresh 403 with another user's enrollment keeps that enrollment but ends the session")
+    func forceRefreshAccountDisabledForDifferentUserKeepsEnrollmentAndEndsSession() async throws {
+        let fixture = try await makeSignedInFixture(
+            refreshError: .accountDisabled,
+            enrollCurrentUser: false,
+            preEnrolledUserId: "other-user"
+        )
+
+        await #expect(throws: AuthenticationError.accountDisabled) {
+            try await fixture.sut.forceRefresh()
+        }
+
+        #expect(fixture.store.enrolledUser()?.userId == "other-user", "Another user's enrollment must not be deleted")
+        #expect(fixture.sut.enrolledUserSnapshot?.userId == "other-user", "The snapshot must still reflect the other user")
+        #expect(fixture.sut.isAuthenticated == false)
+        #expect(fixture.clearable.clearCallCount == 1)
+        #expect(await fixture.sessionManager.lastTeardownReason == .sessionExpired)
+    }
+
+    @Test("forceRefresh with no tokens throws invalidRefreshToken without a teardown or a deletion")
+    func forceRefreshWithNoTokensThrowsWithoutTeardown() async throws {
+        let store = InMemoryBiometricCredentialStore()
+        try store.enroll(refreshToken: "tok-enrolled-FAKE", userId: "u1", firstName: "Alice")
+        let clearable = MockSessionClearable()
+        let sessionManager = SessionManager(initialClearables: [clearable])
+        let repo = ScriptedRefreshRepository(refreshError: .accountDisabled)
+        let sut = AuthenticationService(
+            repository: repo,
+            sessionManager: sessionManager,
+            biometricAuthenticator: FakeBiometricAuthenticator(),
+            credentialStore: store
+        )
+
+        await #expect(throws: AuthenticationError.invalidRefreshToken) {
+            try await sut.forceRefresh()
+        }
+
+        #expect(clearable.clearCallCount == 0, "No session exists, so nothing may be torn down")
+        #expect(await sessionManager.lastTeardownReason == nil)
+        #expect(store.enrolledUser()?.userId == "u1", "The enrollment must not be deleted")
+        #expect(await repo.refreshCallCount == 0)
+    }
+
+    @Test("forceRefresh after logout (session already gone) does not run a second teardown")
+    func forceRefreshAfterLogoutDoesNotTearDownAgain() async throws {
+        let fixture = try await makeSignedInFixture(refreshError: .accountDisabled)
+        await fixture.sut.logout()
+        try #require(fixture.clearable.clearCallCount == 1, "Precondition: logout tore down once")
+
+        await #expect(throws: AuthenticationError.invalidRefreshToken) {
+            try await fixture.sut.forceRefresh()
+        }
+
+        #expect(fixture.clearable.clearCallCount == 1, "A session that is already gone must not be ended again")
+        #expect(await fixture.sessionManager.lastTeardownReason == .userLogout)
+        #expect(fixture.store.enrolledUser()?.userId == "u1", "Logout never touches the enrollment")
+    }
+
+    @Test("forceRefresh non-credential failure rethrows and keeps the session and enrollment")
+    func forceRefreshNetworkFailureRethrowsAndKeepsSession() async throws {
+        let fixture = try await makeSignedInFixture(refreshError: .networkError)
+
+        await #expect(throws: AuthenticationError.networkError) {
+            try await fixture.sut.forceRefresh()
+        }
+
+        #expect(fixture.sut.isAuthenticated == true)
+        #expect(fixture.store.enrolledUser()?.userId == "u1")
+        #expect(fixture.clearable.clearCallCount == 0)
+    }
+
+    // MARK: - I2b-2c U3: one failed single-flight refresh ends the session once
+
+    @Test("concurrent refreshTokenIfNeeded and forceRefresh sharing one failed refresh tear down exactly once")
+    func concurrentRefreshesSharingAccountDisabledTearDownOnce() async throws {
+        let fixture = try await makeSignedInFixture(
+            refreshError: .accountDisabled,
+            loginExpiresIn: 0,
+            blockFirstRefresh: true
+        )
+        let sut = fixture.sut
+
+        let ifNeededTask = Task { await sut.refreshTokenIfNeeded() }
+        let forceTask = Task { () -> AuthenticationError? in
+            do {
+                try await sut.forceRefresh()
+                return nil
+            } catch let authError as AuthenticationError {
+                return authError
+            } catch {
+                return nil
+            }
+        }
+
+        // Both callers join the single in-flight refresh before it is released.
+        await fixture.repo.waitUntilRefreshCalled()
+        for _ in 0..<20 { await Task.yield() }
+        await fixture.repo.unblock()
+
+        await ifNeededTask.value
+        let forceError = await forceTask.value
+
+        #expect(await fixture.repo.refreshCallCount == 1, "Both callers must share one refresh call")
+        #expect(forceError == .accountDisabled, "forceRefresh must rethrow the refresh error")
+        #expect(fixture.clearable.clearCallCount == 1, "The teardown must run exactly once")
+        #expect(sut.isAuthenticated == false)
+        #expect(fixture.store.enrolledUser() == nil)
+    }
+
     // MARK: - Pending biometric enablement
 
     @Test("shouldShowBiometricEnablementAfterLogin is false before any pending request")
@@ -801,6 +975,117 @@ private actor FailingRefreshRepository: AuthenticationRepository {
     }
 
     func logout() async throws {}
+}
+
+// MARK: - I2b-2c U3 fakes and fixture
+
+/// Login always succeeds for user "u1"; refresh always throws `refreshError`.
+/// With `blockFirstRefresh`, the first refresh call suspends until `unblock()` so concurrent
+/// callers can join the same single-flight refresh. Later calls throw immediately.
+private actor ScriptedRefreshRepository: AuthenticationRepository {
+    private let refreshError: AuthenticationError
+    private let loginExpiresIn: Int
+    private let blockFirstRefresh: Bool
+    private var blocker: CheckedContinuation<Void, Never>?
+    private(set) var refreshCallCount: Int = 0
+
+    init(refreshError: AuthenticationError, loginExpiresIn: Int = 900, blockFirstRefresh: Bool = false) {
+        self.refreshError = refreshError
+        self.loginExpiresIn = loginExpiresIn
+        self.blockFirstRefresh = blockFirstRefresh
+    }
+
+    private func makeUser() -> User {
+        User(id: "u1", email: "u1@test.invalid", name: "Alice", role: .user,
+             createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
+    }
+
+    func login(email: String, password: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(), accessToken: "tok-access-FAKE",
+                    refreshToken: "tok-refresh-u1-FAKE", expiresIn: loginExpiresIn)
+    }
+
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        AuthSession(user: makeUser(), accessToken: "tok-access-FAKE",
+                    refreshToken: "tok-refresh-u1-FAKE", expiresIn: loginExpiresIn)
+    }
+
+    func refresh(refreshToken: String) async throws -> AuthSession {
+        refreshCallCount += 1
+        if blockFirstRefresh && refreshCallCount == 1 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                blocker = continuation
+            }
+        }
+        throw refreshError
+    }
+
+    func logout() async throws {}
+
+    /// Waits until the first refresh call has arrived (and, when blocking, is suspended).
+    func waitUntilRefreshCalled() async {
+        while refreshCallCount == 0 {
+            await Task.yield()
+        }
+    }
+
+    func unblock() {
+        blocker?.resume()
+        blocker = nil
+    }
+}
+
+/// A signed-in AuthenticationService with a counting clearable registered for teardown.
+@MainActor
+private struct SignedInFixture {
+    let sut: AuthenticationService
+    let store: InMemoryBiometricCredentialStore
+    let clearable: MockSessionClearable
+    let sessionManager: SessionManager
+    let repo: ScriptedRefreshRepository
+}
+
+/// Signs in user "u1" and, by default, enrolls that user for Face ID.
+/// `preEnrolledUserId` enrolls a different user before the service is built.
+@MainActor
+private func makeSignedInFixture(
+    refreshError: AuthenticationError,
+    loginExpiresIn: Int = 900,
+    blockFirstRefresh: Bool = false,
+    enrollCurrentUser: Bool = true,
+    preEnrolledUserId: String? = nil
+) async throws -> SignedInFixture {
+    let store = InMemoryBiometricCredentialStore()
+    if let preEnrolledUserId {
+        try store.enroll(refreshToken: "tok-other-FAKE", userId: preEnrolledUserId, firstName: "Other")
+    }
+    let clearable = MockSessionClearable()
+    let sessionManager = SessionManager(initialClearables: [clearable])
+    let repo = ScriptedRefreshRepository(
+        refreshError: refreshError,
+        loginExpiresIn: loginExpiresIn,
+        blockFirstRefresh: blockFirstRefresh
+    )
+    let sut = AuthenticationService(
+        repository: repo,
+        sessionManager: sessionManager,
+        biometricAuthenticator: FakeBiometricAuthenticator(),
+        credentialStore: store
+    )
+    await sut.login(email: "u1@test.invalid", password: "password-FAKE", rememberEmail: false)
+    try #require(sut.isAuthenticated == true, "Precondition: signed in")
+    if enrollCurrentUser {
+        try await sut.enrollCurrentSession()
+        try #require(store.enrolledUser()?.userId == "u1", "Precondition: u1 enrolled")
+    }
+    try #require(clearable.clearCallCount == 0, "Precondition: no teardown yet")
+    return SignedInFixture(
+        sut: sut,
+        store: store,
+        clearable: clearable,
+        sessionManager: sessionManager,
+        repo: repo
+    )
 }
 
 // MARK: - TrackingBiometricCredentialStore

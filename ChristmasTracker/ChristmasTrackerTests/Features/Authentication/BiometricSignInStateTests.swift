@@ -10,6 +10,14 @@
 //      containing BiometricSignInState enum, biometricSignInOutcome overloads, and
 //      isCredentialFailure(_:) moved from LoginView.swift.
 //
+//  I2b-2c U3: isCredentialFailure(_:) is replaced by isCredentialFailure(_:context:).
+//  DELETED (subsumed by isCredentialFailureMatchesTruthTable, which covers every case in
+//  both contexts): isCredentialFailureTrueForInvalidCredentials,
+//  isCredentialFailureTrueForSessionExpired, isCredentialFailureTrueForInvalidRefreshToken,
+//  isCredentialFailureFalseForNetworkError.
+//  ADDED: accountDisabledAuthErrorMapsToPasswordRequired, isCredentialFailureMatchesTruthTable,
+//  truthTableCoversEveryCaseOnce.
+//
 
 import Testing
 import Foundation
@@ -121,25 +129,94 @@ struct BiometricSignInStateTests {
         }
     }
 
-    // MARK: - isCredentialFailure
+    // MARK: - biometricSignInOutcome: refresh 403 (I2b-2c U3)
 
-    @Test("isCredentialFailure returns true for invalidCredentials")
-    func isCredentialFailureTrueForInvalidCredentials() {
-        #expect(isCredentialFailure(AuthenticationError.invalidCredentials) == true)
+    @Test("AuthenticationError.accountDisabled (refresh 403) maps to passwordRequired, deletes enrollment, refreshes snapshot")
+    func accountDisabledAuthErrorMapsToPasswordRequired() {
+        let result = biometricSignInOutcome(for: AuthenticationError.accountDisabled, biometryTypeName: "Face ID")
+        #expect(result.state == .passwordRequired)
+        #expect(result.deleteEnrollment == true)
+        #expect(result.refreshSnapshot == true)
     }
 
-    @Test("isCredentialFailure returns true for sessionExpired")
-    func isCredentialFailureTrueForSessionExpired() {
-        #expect(isCredentialFailure(AuthenticationError.sessionExpired) == true)
+    // MARK: - isCredentialFailure(_:context:) truth table (I2b-2c U3)
+    //
+    // Replaces the one-argument isCredentialFailure tests that lived here and in
+    // LoginBiometricButtonTests.swift. Every AuthenticationError case is listed once in
+    // credentialFailureTruthTable; caseName(_:) is an exhaustive switch, so adding a case to
+    // AuthenticationError stops this file compiling until a row is added.
+
+    @Test(
+        "isCredentialFailure(_:context:) matches the U3 truth table for every case in both contexts",
+        arguments: credentialFailureTruthTable, [AuthErrorContext.login, AuthErrorContext.refresh]
+    )
+    func isCredentialFailureMatchesTruthTable(row: CredentialFailureRow, context: AuthErrorContext) {
+        let expected = context == .login ? row.login : row.refresh
+        #expect(
+            isCredentialFailure(row.error, context: context) == expected,
+            "\(row.name) in \(context) must be \(expected)"
+        )
     }
 
-    @Test("isCredentialFailure returns true for invalidRefreshToken")
-    func isCredentialFailureTrueForInvalidRefreshToken() {
-        #expect(isCredentialFailure(AuthenticationError.invalidRefreshToken) == true)
+    @Test("the truth table has exactly one row per AuthenticationError case")
+    func truthTableCoversEveryCaseOnce() {
+        let names = credentialFailureTruthTable.map { caseName($0.error) }
+        #expect(Set(names).count == names.count, "Each case must appear once")
+        #expect(names.count == 16, "AuthenticationError has 16 cases; update the table when one is added")
     }
+}
 
-    @Test("isCredentialFailure returns false for networkError")
-    func isCredentialFailureFalseForNetworkError() {
-        #expect(isCredentialFailure(AuthenticationError.networkError) == false)
+// MARK: - Truth table fixtures
+
+/// One row of the U3 classification truth table.
+struct CredentialFailureRow: Sendable, CustomTestStringConvertible {
+    let error: AuthenticationError
+    let login: Bool
+    let refresh: Bool
+
+    var name: String { caseName(error) }
+    var testDescription: String { name }
+}
+
+/// invalidRefreshToken, sessionExpired, invalidCredentials, credentialExpired: true in both.
+/// accountDisabled: true for .refresh, false for .login. Every other case: false in both.
+private let credentialFailureTruthTable: [CredentialFailureRow] = [
+    CredentialFailureRow(error: .invalidRefreshToken, login: true, refresh: true),
+    CredentialFailureRow(error: .sessionExpired, login: true, refresh: true),
+    CredentialFailureRow(error: .invalidCredentials, login: true, refresh: true),
+    CredentialFailureRow(error: .credentialExpired, login: true, refresh: true),
+    CredentialFailureRow(error: .accountDisabled, login: false, refresh: true),
+    CredentialFailureRow(error: .emailAlreadyExists, login: false, refresh: false),
+    CredentialFailureRow(error: .userNotFound, login: false, refresh: false),
+    CredentialFailureRow(error: .biometricFailed, login: false, refresh: false),
+    CredentialFailureRow(error: .biometricNotAvailable, login: false, refresh: false),
+    CredentialFailureRow(error: .networkError, login: false, refresh: false),
+    CredentialFailureRow(error: .invalidResponse, login: false, refresh: false),
+    CredentialFailureRow(error: .updateRequired, login: false, refresh: false),
+    CredentialFailureRow(error: .rateLimited(retryAfter: 30), login: false, refresh: false),
+    CredentialFailureRow(error: .serverError, login: false, refresh: false),
+    CredentialFailureRow(error: .invalidRegistrationCode, login: false, refresh: false),
+    CredentialFailureRow(error: .validation(message: "Validation error"), login: false, refresh: false),
+]
+
+/// Exhaustive (no default): a new AuthenticationError case is a compile error here.
+private func caseName(_ error: AuthenticationError) -> String {
+    switch error {
+    case .invalidCredentials: return "invalidCredentials"
+    case .emailAlreadyExists: return "emailAlreadyExists"
+    case .userNotFound: return "userNotFound"
+    case .biometricFailed: return "biometricFailed"
+    case .biometricNotAvailable: return "biometricNotAvailable"
+    case .invalidRefreshToken: return "invalidRefreshToken"
+    case .sessionExpired: return "sessionExpired"
+    case .networkError: return "networkError"
+    case .invalidResponse: return "invalidResponse"
+    case .accountDisabled: return "accountDisabled"
+    case .updateRequired: return "updateRequired"
+    case .rateLimited: return "rateLimited(retryAfter:)"
+    case .serverError: return "serverError"
+    case .invalidRegistrationCode: return "invalidRegistrationCode"
+    case .validation: return "validation(message:)"
+    case .credentialExpired: return "credentialExpired"
     }
 }

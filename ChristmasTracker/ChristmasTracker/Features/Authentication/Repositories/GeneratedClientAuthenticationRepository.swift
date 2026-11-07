@@ -41,7 +41,7 @@ final class GeneratedClientAuthenticationRepository: AuthenticationRepository, @
                     user: user,
                     accessToken: data.accessToken,
                     refreshToken: data.refreshToken ?? "",
-                    expiresIn: 900
+                    expiresIn: data.expiresIn
                 )
             case .badRequest(let r):
                 let body = try r.body.json
@@ -100,7 +100,7 @@ final class GeneratedClientAuthenticationRepository: AuthenticationRepository, @
                     user: user,
                     accessToken: data.accessToken,
                     refreshToken: data.refreshToken ?? "",
-                    expiresIn: 900
+                    expiresIn: data.expiresIn
                 )
             case .badRequest(let r):
                 let body = try r.body.json

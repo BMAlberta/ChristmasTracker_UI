@@ -14,8 +14,8 @@ nonisolated struct AuthSession: Sendable {
     let user: User
     let accessToken: String
     let refreshToken: String
-    /// Seconds until the access token expires. 900 for login/register (not in those responses);
-    /// taken from the body for refresh responses.
+    /// Seconds until the access token expires, taken from `data.expiresIn` in the login,
+    /// register, and refresh responses.
     let expiresIn: Int
 }
 

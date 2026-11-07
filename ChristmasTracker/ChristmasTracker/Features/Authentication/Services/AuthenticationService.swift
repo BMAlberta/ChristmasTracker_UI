@@ -59,6 +59,9 @@ final class AuthenticationService {
     // Single-flight refresh: keyed by refresh token so concurrent callers share one repo call.
     private var inflightRefreshTasks: [String: Task<AuthSession, Error>] = [:]
 
+    // Single-flight session end after a refresh credential failure (main-actor isolated).
+    private var isEndingSession: Bool = false
+
     // MARK: - Initialization
 
     init(
@@ -329,14 +332,9 @@ final class AuthenticationService {
             LogInfo("Token refreshed successfully", category: .auth)
 
         } catch let authError as AuthenticationError {
-            if isCredentialFailure(authError) {
-                // Delete enrollment only when it belongs to the current session user.
-                if let enrolled = credentialStore.enrolledUser(),
-                   enrolled.userId == currentUser?.id {
-                    try? credentialStore.delete()
-                }
+            if isCredentialFailure(authError, context: .refresh) {
                 LogError("Token refresh credential failure — session ended", category: .auth)
-                await logout(reason: .sessionExpired)
+                await endSessionAfterRefreshCredentialFailure()
             } else {
                 // Non-credential failure (network, etc.) — keep session and enrollment alive.
                 LogError("Token refresh failed (non-credential): \(authError)", category: .auth)
@@ -358,10 +356,21 @@ final class AuthenticationService {
             operation: "service.authentication.forceRefresh"
         )
         defer { span.finish() }
+        // No tokens means no session (for example, after logout): throw without ending anything.
         guard let currentToken = tokens?.refreshToken else {
             throw AuthenticationError.invalidRefreshToken
         }
-        let session = try await singleFlightRefresh(token: currentToken)
+        let session: AuthSession
+        do {
+            session = try await singleFlightRefresh(token: currentToken)
+        } catch let authError as AuthenticationError {
+            if isCredentialFailure(authError, context: .refresh) {
+                LogError("Forced refresh credential failure — session ended", category: .auth)
+                await endSessionAfterRefreshCredentialFailure()
+            }
+            // Rethrow the original error so the caller (SessionRefreshSeam) can classify it.
+            throw authError
+        }
         await updateTokens(session: session)
     }
 
@@ -373,6 +382,26 @@ final class AuthenticationService {
     }
 
     // MARK: - Private Helpers
+
+    /// Ends the session after a refresh-context credential failure (D-b): deletes the Face ID
+    /// enrollment when it belongs to the current user, then logs out with `.sessionExpired`.
+    /// No-op when nobody is signed in or another session end is already in progress, so a
+    /// concurrent refreshTokenIfNeeded and forceRefresh sharing one failed refresh, or a
+    /// forceRefresh that arrives during logout, tears down at most once.
+    private func endSessionAfterRefreshCredentialFailure() async {
+        // Check and set with no suspension between them; main-actor isolation serializes callers.
+        guard isAuthenticated, !isEndingSession else { return }
+        isEndingSession = true
+        defer { isEndingSession = false }
+
+        if credentialStore.enrolledUser()?.userId == currentUser?.id {
+            try? credentialStore.delete()
+            // Keep the enrolled-user snapshot in step with the store so the login screen
+            // does not offer Face ID for a deleted token.
+            refreshBiometricState()
+        }
+        await logout(reason: .sessionExpired)
+    }
 
     /// Applies the biometric offer logic shared between login() and register().
     /// Computes the offer action, executes any silent enrollment, and sets biometricOfferAction.

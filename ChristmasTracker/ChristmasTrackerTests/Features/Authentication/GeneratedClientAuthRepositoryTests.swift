@@ -23,6 +23,15 @@
 // (login403AccountDisabledThrows rewritten); added refresh 400/403/429 and logout
 // 403/404/429 mappings. The expiresIn == 900 assertions are unchanged here (U3).
 //
+// Package I2b-2c, story U3 (C16):
+//   REWRITTEN: loginSuccessDecodesThroughGeneratedClient and
+//     registerSuccessDecodesThroughGeneratedClient are parameterized over expiresIn
+//     (900 and 3600) so the value is proven to be read from data.expiresIn, not defaulted.
+//   DELETED: loginNilEmailThrowsInvalidResponse and its loginNilEmailBody fixture
+//     (C16 makes User.email non-null; the nil-email path is removed).
+//   ADDED: loginSuccessMapsGeneratedEmail, loginMalformedSuccessBodyThrowsInvalidResponse
+//     (invalidResponse stays for undecodable or malformed responses).
+//
 // These tests will not compile until the implementer renames:
 //   - AuthenticationError.validationFailed → AuthenticationError.validation(message: String)
 //   - AuthenticationError.rateLimited → AuthenticationError.rateLimited(retryAfter: TimeInterval)
@@ -48,7 +57,7 @@ private let metaJSON = """
 """
 
 /// Success body with role "USER" so the generated decoder accepts it.
-private func loginSuccessBody(email: String = "user@test.invalid") -> HTTPBody {
+private func loginSuccessBody(email: String = "user@test.invalid", expiresIn: Int = 900) -> HTTPBody {
     HTTPBody("""
     {
       "success": true,
@@ -67,21 +76,22 @@ private func loginSuccessBody(email: String = "user@test.invalid") -> HTTPBody {
         },
         "accessToken": "tok-access-FAKE",
         "refreshToken": "tok-refresh-FAKE",
-        "expiresIn": 900
+        "expiresIn": \(expiresIn)
       },
       "meta": \(metaJSON)
     }
     """)
 }
 
-private func loginNilEmailBody() -> HTTPBody {
+/// Login success body missing the required `accessToken`; the generated decoder rejects it.
+private func loginMissingAccessTokenBody() -> HTTPBody {
     HTTPBody("""
     {
       "success": true,
       "data": {
         "user": {
           "id": "u1",
-          "email": null,
+          "email": "user@test.invalid",
           "firstName": "Alice",
           "lastName": "Smith",
           "displayName": "Alice Smith",
@@ -91,7 +101,6 @@ private func loginNilEmailBody() -> HTTPBody {
           "updatedAt": "2026-11-02T00:00:00.000Z",
           "lastLoginAt": null
         },
-        "accessToken": "tok-access-FAKE",
         "refreshToken": "tok-refresh-FAKE",
         "expiresIn": 900
       },
@@ -100,7 +109,7 @@ private func loginNilEmailBody() -> HTTPBody {
     """)
 }
 
-private func registerSuccessBody() -> HTTPBody {
+private func registerSuccessBody(expiresIn: Int = 900) -> HTTPBody {
     HTTPBody("""
     {
       "success": true,
@@ -119,7 +128,7 @@ private func registerSuccessBody() -> HTTPBody {
         },
         "accessToken": "tok-access-FAKE",
         "refreshToken": "tok-refresh-FAKE",
-        "expiresIn": 900
+        "expiresIn": \(expiresIn)
       },
       "meta": \(metaJSON)
     }
@@ -226,25 +235,40 @@ struct GeneratedClientAuthRepositoryTests {
 
     // MARK: Login — AC1: success (generated-client path, role: "USER")
 
-    @Test("login success decodes through generated client; maps email, accessToken, refreshToken, expiresIn==900")
-    func loginSuccessDecodesThroughGeneratedClient() async throws {
+    @Test(
+        "login success decodes through generated client; maps email, accessToken, refreshToken, and expiresIn from data.expiresIn",
+        arguments: [900, 3600]
+    )
+    func loginSuccessDecodesThroughGeneratedClient(expiresIn: Int) async throws {
         let (repo, transport) = try makeClientAndTransport()
-        await transport.enqueue(.ok(), body: loginSuccessBody())
+        await transport.enqueue(.ok(), body: loginSuccessBody(expiresIn: expiresIn))
 
         let session = try await repo.login(email: "user@test.invalid", password: "password-FAKE")
 
         #expect(session.user.email == "user@test.invalid")
         #expect(session.accessToken == "tok-access-FAKE")
         #expect(session.refreshToken == "tok-refresh-FAKE")
-        #expect(session.expiresIn == 900)
+        #expect(session.expiresIn == expiresIn, "expiresIn must come from the response, not a default")
     }
 
-    // MARK: Login — AC2: nil email → invalidResponse
+    // MARK: Login — I2b-2c U3: mapped email is the generated (non-null) email
 
-    @Test("login with nil email in response body throws AuthenticationError.invalidResponse")
-    func loginNilEmailThrowsInvalidResponse() async throws {
+    @Test("login maps the user's email from the generated User.email (C16, non-null)")
+    func loginSuccessMapsGeneratedEmail() async throws {
         let (repo, transport) = try makeClientAndTransport()
-        await transport.enqueue(.ok(), body: loginNilEmailBody())
+        await transport.enqueue(.ok(), body: loginSuccessBody(email: "mapped.user@example.com"))
+
+        let session = try await repo.login(email: "user@test.invalid", password: "password-FAKE")
+
+        #expect(session.user.email == "mapped.user@example.com")
+    }
+
+    // MARK: Login — I2b-2c U3: malformed success body → invalidResponse
+
+    @Test("login success body missing the required accessToken throws AuthenticationError.invalidResponse")
+    func loginMalformedSuccessBodyThrowsInvalidResponse() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        await transport.enqueue(.ok(), body: loginMissingAccessTokenBody())
 
         await #expect(throws: AuthenticationError.invalidResponse) {
             _ = try await repo.login(email: "user@test.invalid", password: "password-FAKE")
@@ -402,10 +426,13 @@ struct GeneratedClientAuthRepositoryTests {
 
     // MARK: Register — AC12: success (generated-client path, role: "USER")
 
-    @Test("register success decodes through generated client; expiresIn==900, accessToken correct")
-    func registerSuccessDecodesThroughGeneratedClient() async throws {
+    @Test(
+        "register success decodes through generated client; expiresIn from data.expiresIn, accessToken correct",
+        arguments: [900, 3600]
+    )
+    func registerSuccessDecodesThroughGeneratedClient(expiresIn: Int) async throws {
         let (repo, transport) = try makeClientAndTransport()
-        await transport.enqueue(.status(201), body: registerSuccessBody())
+        await transport.enqueue(.status(201), body: registerSuccessBody(expiresIn: expiresIn))
 
         let session = try await repo.register(
             email: "user@test.invalid",
@@ -415,7 +442,7 @@ struct GeneratedClientAuthRepositoryTests {
             registrationCode: "CODE-FAKE"
         )
 
-        #expect(session.expiresIn == 900)
+        #expect(session.expiresIn == expiresIn, "expiresIn must come from the response, not a default")
         #expect(session.accessToken == "tok-access-FAKE")
     }
 
