@@ -284,4 +284,40 @@ struct BuildGeneratedClientTests {
         )
         #expect(client != nil)
     }
+
+    // MARK: - I2b-2c U2: defaulted sessionEndingHandler parameter
+
+    private actor NoopSessionEnding: SessionEnding {
+        func sessionEnded(reason: SessionEndReason) async {}
+    }
+
+    @Test("trackerClient is non-nil in real mode when a sessionEndingHandler is passed")
+    func trackerClientIsNonNilInRealModeWithSessionEndingHandler() {
+        let (token, refresh, version) = makeStubs()
+        let client = buildGeneratedClient(
+            mode: .real,
+            serverURL: URL(string: "https://api.example.com"),
+            info: makeClientInfo(from: nil),
+            tokenProvider: token,
+            sessionRefresher: refresh,
+            versionOutdatedHandler: version,
+            sessionEndingHandler: NoopSessionEnding()
+        )
+        #expect(client != nil)
+    }
+
+    @Test("trackerClient is nil in mock mode even when a sessionEndingHandler is passed")
+    func trackerClientIsNilInMockModeWithSessionEndingHandler() {
+        let (token, refresh, version) = makeStubs()
+        let client = buildGeneratedClient(
+            mode: .mock,
+            serverURL: URL(string: "https://api.example.com"),
+            info: makeClientInfo(from: nil),
+            tokenProvider: token,
+            sessionRefresher: refresh,
+            versionOutdatedHandler: version,
+            sessionEndingHandler: NoopSessionEnding()
+        )
+        #expect(client == nil)
+    }
 }
