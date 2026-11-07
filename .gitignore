@@ -22,3 +22,6 @@ LocalPackages/**/.build/
 LocalPackages/**/Package.resolved
 LocalPackages/**/.swiftpm/
 ChristmasTracker/Config-Secrets.xcconfig
+scripts/release.env
+scripts/.release-ledger
+build/
