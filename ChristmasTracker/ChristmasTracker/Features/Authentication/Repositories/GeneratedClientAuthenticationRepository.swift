@@ -52,17 +52,18 @@ final class GeneratedClientAuthenticationRepository: AuthenticationRepository, @
                     throw AuthenticationError.invalidCredentials
                 }
                 throw AuthenticationError.invalidCredentials
+            case .forbidden:
+                // 403 on login is ACCOUNT_DISABLED (client guide 3.2; documented since C15).
+                throw AuthenticationError.accountDisabled
             case .upgradeRequired:
                 throw AuthenticationError.updateRequired
             case .tooManyRequests:
+                // The generated RateLimitError exposes no typed Retry-After; RateLimitMiddleware
+                // normally throws first and its retryAfter flows through classifyClientError.
                 throw AuthenticationError.rateLimited(retryAfter: 0)
             case .internalServerError:
                 throw AuthenticationError.serverError
-            case .undocumented(let status, _):
-                // 403 on login means ACCOUNT_DISABLED per error-codes.md; no body decode needed.
-                if status == 403 {
-                    throw AuthenticationError.accountDisabled
-                }
+            case .undocumented:
                 throw AuthenticationError.serverError
             }
         } catch let error as AuthenticationError {
@@ -155,8 +156,18 @@ final class GeneratedClientAuthenticationRepository: AuthenticationRepository, @
                     throw AuthenticationError.credentialExpired
                 }
                 throw AuthenticationError.invalidRefreshToken
+            case .badRequest(let r):
+                let body = try r.body.json
+                throw AuthenticationError.validation(message: body.error.message ?? "The information you provided is invalid.")
+            case .forbidden:
+                // 403 on refresh is ACCOUNT_DISABLED (client guide 3.3; documented since C15).
+                throw AuthenticationError.accountDisabled
             case .upgradeRequired:
                 throw AuthenticationError.updateRequired
+            case .tooManyRequests:
+                // The generated RateLimitError exposes no typed Retry-After; RateLimitMiddleware
+                // normally throws first and its retryAfter flows through classifyClientError.
+                throw AuthenticationError.rateLimited(retryAfter: 0)
             case .internalServerError:
                 throw AuthenticationError.serverError
             case .undocumented:
@@ -183,6 +194,13 @@ final class GeneratedClientAuthenticationRepository: AuthenticationRepository, @
                 return
             case .unauthorized:
                 throw AuthenticationError.invalidRefreshToken
+            case .forbidden, .notFound:
+                // 403 ACCOUNT_DISABLED or 404 USER_NOT_FOUND: the session cannot continue.
+                throw AuthenticationError.sessionExpired
+            case .tooManyRequests:
+                // The generated RateLimitError exposes no typed Retry-After; RateLimitMiddleware
+                // normally throws first and its retryAfter flows through classifyClientError.
+                throw AuthenticationError.rateLimited(retryAfter: 0)
             case .internalServerError:
                 throw AuthenticationError.serverError
             case .undocumented:
@@ -201,14 +219,12 @@ final class GeneratedClientAuthenticationRepository: AuthenticationRepository, @
 // MARK: - User Mapping (strict, via generated schema)
 
 /// Maps the generated API User schema to the domain User model.
-/// Throws `AuthenticationError.invalidResponse` if the email field is nil.
+/// `email` is required and non-null in the contract (C16), so the mapping cannot fail today.
+/// The signature keeps `throws` to avoid churn at the call sites.
 private nonisolated func mapUser(_ schema: Components.Schemas.User) throws -> User {
-    guard let email = schema.email else {
-        throw AuthenticationError.invalidResponse
-    }
     return User(
         id: schema.id,
-        email: email,
+        email: schema.email,
         firstName: schema.firstName,
         lastName: schema.lastName,
         displayName: schema.displayName,

@@ -35,6 +35,7 @@ struct TrackerClientFactoryTests {
           "success": true,
           "data": {
             "id": "00000000-0000-0000-0000-000000000001",
+            "email": "alice@test.invalid",
             "firstName": "Alice",
             "lastName": "Smith",
             "displayName": "Alice Smith",
@@ -213,6 +214,7 @@ struct TrackerClientFactoryTests {
           "success": true,
           "data": {
             "id": "00000000-0000-0000-0000-000000000001",
+            "email": "alice@test.invalid",
             "firstName": "Alice",
             "lastName": "Smith",
             "displayName": "Alice Smith",
@@ -263,6 +265,7 @@ struct TrackerClientFactoryTests {
           "success": true,
           "data": {
             "id": "00000000-0000-0000-0000-000000000001",
+            "email": "alice@test.invalid",
             "firstName": "Alice",
             "lastName": "Smith",
             "displayName": "Alice Smith",

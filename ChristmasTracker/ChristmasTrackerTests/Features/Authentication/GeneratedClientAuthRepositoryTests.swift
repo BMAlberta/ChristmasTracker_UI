@@ -19,6 +19,10 @@
 //   - registerSuccessReturnsSessionWithExpiresIn900: asserted fallback behavior: fixture used
 //     role "viewer"; replaced by registerSuccessDecodesThroughGeneratedClient.
 //
+// Package I2b-2c, story U1 (C15): login 403 now arrives as the typed `.forbidden` case
+// (login403AccountDisabledThrows rewritten); added refresh 400/403/429 and logout
+// 403/404/429 mappings. The expiresIn == 900 assertions are unchanged here (U3).
+//
 // These tests will not compile until the implementer renames:
 //   - AuthenticationError.validationFailed → AuthenticationError.validation(message: String)
 //   - AuthenticationError.rateLimited → AuthenticationError.rateLimited(retryAfter: TimeInterval)
@@ -262,14 +266,14 @@ struct GeneratedClientAuthRepositoryTests {
         }
     }
 
-    // MARK: Login — AC4: undocumented 403 ACCOUNT_DISABLED
+    // MARK: Login — AC4: 403 ACCOUNT_DISABLED (typed .forbidden case, C15)
 
-    @Test("login undocumented 403 ACCOUNT_DISABLED throws AuthenticationError.accountDisabled")
+    @Test("login 403 ACCOUNT_DISABLED (typed .forbidden) throws AuthenticationError.accountDisabled")
     func login403AccountDisabledThrows() async throws {
         let (repo, transport) = try makeClientAndTransport()
         await transport.enqueue(
             .status(403),
-            body: errorBody(code: 1008, errorCode: "ACCOUNT_DISABLED", message: "Disabled")
+            body: errorBody(code: 1008, errorCode: "ACCOUNT_DISABLED", message: "This account has been disabled")
         )
 
         await #expect(throws: AuthenticationError.accountDisabled) {
@@ -587,6 +591,64 @@ struct GeneratedClientAuthRepositoryTests {
         }
     }
 
+    // MARK: Refresh — I2b-2c U1: 400 VALIDATION_ERROR (typed .badRequest)
+
+    @Test("refresh 400 VALIDATION_ERROR throws AuthenticationError.validation(message:) with server message")
+    func refresh400ValidationThrowsWithMessage() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        await transport.enqueue(
+            .status(400),
+            body: errorBody(code: 3001, errorCode: "VALIDATION_ERROR", message: "Validation error")
+        )
+
+        await #expect(throws: AuthenticationError.validation(message: "Validation error")) {
+            _ = try await repo.refresh(refreshToken: "tok-refresh-FAKE")
+        }
+    }
+
+    // MARK: Refresh — I2b-2c U1: 403 ACCOUNT_DISABLED (typed .forbidden)
+
+    @Test("refresh 403 ACCOUNT_DISABLED throws AuthenticationError.accountDisabled")
+    func refresh403AccountDisabledThrows() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        await transport.enqueue(
+            .status(403),
+            body: errorBody(code: 1008, errorCode: "ACCOUNT_DISABLED", message: "This account has been disabled")
+        )
+
+        await #expect(throws: AuthenticationError.accountDisabled) {
+            _ = try await repo.refresh(refreshToken: "tok-refresh-FAKE")
+        }
+    }
+
+    // MARK: Refresh — I2b-2c U1: 429 RATE_LIMIT_EXCEEDED
+
+    @Test("refresh 429 RATE_LIMIT_EXCEEDED throws AuthenticationError.rateLimited(retryAfter:) with retryAfter > 0")
+    func refresh429ThrowsRateLimitedWithRetryAfter() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        var fields = HTTPFields()
+        let retryAfterName = try #require(HTTPField.Name("Retry-After"))
+        fields[retryAfterName] = "60"
+        // Enqueue 3 times to mirror the login 429 test; a POST is not retried.
+        let r429 = HTTPResponse(status: .init(code: 429), headerFields: fields)
+        await transport.enqueue([
+            (r429, errorBody(code: 8001, errorCode: "RATE_LIMIT_EXCEEDED", message: "Rate limit exceeded")),
+            (r429, errorBody(code: 8001, errorCode: "RATE_LIMIT_EXCEEDED", message: "Rate limit exceeded")),
+            (r429, errorBody(code: 8001, errorCode: "RATE_LIMIT_EXCEEDED", message: "Rate limit exceeded"))
+        ])
+
+        do {
+            _ = try await repo.refresh(refreshToken: "tok-refresh-FAKE")
+            Issue.record("Expected AuthenticationError.rateLimited to be thrown")
+        } catch let error as AuthenticationError {
+            guard case let .rateLimited(retryAfter) = error else {
+                Issue.record("Expected .rateLimited(retryAfter:) but got \(error)")
+                return
+            }
+            #expect(retryAfter > 0)
+        }
+    }
+
     // MARK: Logout — AC22: success; no throw
 
     @Test("logout success does not throw")
@@ -640,6 +702,64 @@ struct GeneratedClientAuthRepositoryTests {
 
         await #expect(throws: (any Error).self) {
             try await repo.logout()
+        }
+    }
+
+    // MARK: Logout — I2b-2c U1: 403 ACCOUNT_DISABLED (typed .forbidden)
+
+    @Test("logout 403 ACCOUNT_DISABLED throws AuthenticationError.sessionExpired")
+    func logout403AccountDisabledThrowsSessionExpired() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        await transport.enqueue(
+            .status(403),
+            body: errorBody(code: 1008, errorCode: "ACCOUNT_DISABLED", message: "This account has been disabled")
+        )
+
+        await #expect(throws: AuthenticationError.sessionExpired) {
+            try await repo.logout()
+        }
+    }
+
+    // MARK: Logout — I2b-2c U1: 404 USER_NOT_FOUND (typed .notFound)
+
+    @Test("logout 404 USER_NOT_FOUND throws AuthenticationError.sessionExpired")
+    func logout404UserNotFoundThrowsSessionExpired() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        await transport.enqueue(
+            .status(404),
+            body: errorBody(code: 4002, errorCode: "USER_NOT_FOUND", message: "User not found")
+        )
+
+        await #expect(throws: AuthenticationError.sessionExpired) {
+            try await repo.logout()
+        }
+    }
+
+    // MARK: Logout — I2b-2c U1: 429 RATE_LIMIT_EXCEEDED
+
+    @Test("logout 429 RATE_LIMIT_EXCEEDED throws AuthenticationError.rateLimited(retryAfter:) with retryAfter > 0")
+    func logout429ThrowsRateLimitedWithRetryAfter() async throws {
+        let (repo, transport) = try makeClientAndTransport()
+        var fields = HTTPFields()
+        let retryAfterName = try #require(HTTPField.Name("Retry-After"))
+        fields[retryAfterName] = "60"
+        // Enqueue 3 times to mirror the login 429 test; a POST is not retried.
+        let r429 = HTTPResponse(status: .init(code: 429), headerFields: fields)
+        await transport.enqueue([
+            (r429, errorBody(code: 8001, errorCode: "RATE_LIMIT_EXCEEDED", message: "Rate limit exceeded")),
+            (r429, errorBody(code: 8001, errorCode: "RATE_LIMIT_EXCEEDED", message: "Rate limit exceeded")),
+            (r429, errorBody(code: 8001, errorCode: "RATE_LIMIT_EXCEEDED", message: "Rate limit exceeded"))
+        ])
+
+        do {
+            try await repo.logout()
+            Issue.record("Expected AuthenticationError.rateLimited to be thrown")
+        } catch let error as AuthenticationError {
+            guard case let .rateLimited(retryAfter) = error else {
+                Issue.record("Expected .rateLimited(retryAfter:) but got \(error)")
+                return
+            }
+            #expect(retryAfter > 0)
         }
     }
 }

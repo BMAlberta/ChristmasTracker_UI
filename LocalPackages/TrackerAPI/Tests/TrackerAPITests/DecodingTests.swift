@@ -81,6 +81,7 @@ struct DecodingTests {
         let json = """
         {
             "id": "00000000-0000-0000-0000-000000000001",
+            "email": "alice@test.invalid",
             "firstName": "Alice",
             "lastName": "Smith",
             "displayName": "Alice Smith",
@@ -93,6 +94,8 @@ struct DecodingTests {
         let data = try #require(json.data(using: .utf8))
         let user = try makeDecoder().decode(Components.Schemas.User.self, from: data)
         #expect(user.id == "00000000-0000-0000-0000-000000000001")
+        // C16: User.email is required and a plain (non-optional) String.
+        #expect(user.email == "alice@test.invalid")
     }
 
     // MARK: - 5a. Nullable coOwner — null
