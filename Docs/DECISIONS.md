@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 21 (2026-11-05)
+**Revision:** 24 (2026-11-06)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,19 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 24
+
+- **C16 (new)** [B W I]: the user object returned to its owner always carries a non-null email, and login, register and refresh return expiresIn (seconds, derived from JWT_EXPIRY).
+
+### Changes in revision 23
+
+- **C15 (new)** [B W I]: every operation documents the middleware statuses (429 and 500 everywhere; 401, 403 and 404 on authenticated operations; 400 on operations with a request body).
+
+### Changes in revision 22
+
+- **D7 (revised)**: Behind the Cloudflare Tunnel the client IP comes from the `CF-Connecting-IP` header (`CLIENT_IP_SOURCE=cf-connecting-ip`), trusted only when the connecting address is inside `TRUSTED_PROXY_CIDRS`; Express `trust proxy` is not used. The auth rate limiter keys on the client IP plus the normalized email, and the general limiter keys on the verified user id, otherwise on the client IP.
+- **D8 (new)**: v2 runs as a Docker Compose stack (the API and PostgreSQL 18) on the production host. The Cloudflare Tunnel connector reaches the API over a shared Docker network for the path `^/tracker/v2` of `api.bmalberta.com`, ahead of the existing v1 rule; the API publishes no host port and Traefik is not in the API path. Migrations run as an explicit deploy step, never at container start. Backups are nightly `pg_dump` files encrypted with `age` and stored in R2.
 
 ### Changes in revision 21
 
@@ -158,6 +171,8 @@
 | C12 | Every operation documents a 500 response using the shared Error envelope. | B, W, I |
 | C13 | Every purchase response includes item {id, name, listId}. | B, W, I |
 | C14 | List summaries (GET /lists) carry memberCount (the number of ACTIVE members, always present) and no members array. List detail carries members as an optional field. Gating detail members by L9 is deferred. | B, W, I |
+| C15 | Every operation documents the statuses that shared middleware can produce: 429 and 500 on every operation, and on every operation that requires authentication also 401, 403 (`ACCOUNT_DISABLED`) and 404 (`USER_NOT_FOUND`); operations with a request body also document 400. A static check enforces it. | B, W, I |
+| C16 | In responses about the authenticated user themselves (login, register, refresh, GET /auth/me, GET /users/me), `User.email` is required and never null. Login, register and refresh return `expiresIn`, the access token lifetime in seconds, derived from `JWT_EXPIRY` and equal to the token's `exp` minus `iat`. | B, W, I |
 
 ## 2. Auth and sessions
 
@@ -282,7 +297,8 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | D4 | Sentry covers iOS, web, and the API. iOS uploads dSYMs from the build step. Events carry the app version and build. A shared request id links one failure across layers. Auth headers, tokens, passwords, and request bodies are scrubbed. New Relic is removed from iOS. `/logs/batch` is deferred. | B, W, I |
 | D5 | Proposed staging: build 1 around Nov 15 (sessions, lists including managed lists, direct-add sharing on web, items, purchases, counts, `VersionManager`). Build 2 in early December (stats, budgets, history, iOS sharing sheet). | All |
 | D6 | The refresh cookie is `SameSite=Strict`, so web and API must share a registrable domain (for example `app.example.com` and `api.example.com`). Never run the seed script in production. | B, W |
-| D7 | Behind the tunnel, configure `trust proxy`. The auth rate limiter keys on IP plus email, and the register limit is raised for gatherings on one IP. Part of the deployment package. | B |
+| D7 | Behind the Cloudflare Tunnel the client IP comes from the `CF-Connecting-IP` header (`CLIENT_IP_SOURCE=cf-connecting-ip`), trusted only when the connecting address is inside `TRUSTED_PROXY_CIDRS`; Express `trust proxy` is not used. The auth rate limiter keys on the client IP plus the normalized email, so several people registering from one IP are not affected; the general limiter keys on the verified user id, otherwise on the client IP. | B |
+| D8 | v2 runs as a Docker Compose stack (the API and PostgreSQL 18) on the production host. The Cloudflare Tunnel connector reaches the API over a shared Docker network for the path `^/tracker/v2` of `api.bmalberta.com`, ahead of the existing v1 rule; the API publishes no host port and Traefik is not in the API path. Migrations run as an explicit deploy step, never at container start. Backups are nightly `pg_dump` files encrypted with `age` and stored in R2. | B |
 
 ## 9. Deferred
 

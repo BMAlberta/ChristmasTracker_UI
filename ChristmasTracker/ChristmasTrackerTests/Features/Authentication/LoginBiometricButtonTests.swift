@@ -3,7 +3,13 @@
 //  ChristmasTrackerTests
 //
 //  Tests for Story I2b-2a (S2):
-//    - isCredentialFailure(_:) free function
+//    - isCredentialFailure(_:) free function (I2b-2c U3: its eight tests are deleted;
+//      the function is replaced by isCredentialFailure(_:context:) and every case in both
+//      contexts is covered by BiometricSignInStateTests.isCredentialFailureMatchesTruthTable.
+//      Deleted: isCredentialFailureTrueForInvalidRefreshToken, isCredentialFailureTrueForSessionExpired,
+//      isCredentialFailureTrueForInvalidCredentials, isCredentialFailureFalseForBiometricFailed,
+//      isCredentialFailureFalseForBiometricNotAvailable, isCredentialFailureFalseForNetworkError,
+//      isCredentialFailureFalseForEmailAlreadyExists, isCredentialFailureFalseForUserNotFound.)
 //    - LoginBiometricButtonState enum
 //    - loginBiometricButtonState(readiness:enrolledUser:biometryTypeName:) free function
 //    - shouldAutoAttemptBiometricLogin(readiness:hasEnrolledUser:alreadyAttemptedThisLaunch:appIsActive:) free function
@@ -17,48 +23,6 @@ import Foundation
 
 @Suite("LoginBiometricButton Tests")
 struct LoginBiometricButtonTests {
-
-    // MARK: - isCredentialFailure(_:)
-
-    @Test("isCredentialFailure returns true for .invalidRefreshToken")
-    func isCredentialFailureTrueForInvalidRefreshToken() {
-        #expect(isCredentialFailure(.invalidRefreshToken) == true)
-    }
-
-    @Test("isCredentialFailure returns true for .sessionExpired")
-    func isCredentialFailureTrueForSessionExpired() {
-        #expect(isCredentialFailure(.sessionExpired) == true)
-    }
-
-    @Test("isCredentialFailure returns true for .invalidCredentials")
-    func isCredentialFailureTrueForInvalidCredentials() {
-        #expect(isCredentialFailure(.invalidCredentials) == true)
-    }
-
-    @Test("isCredentialFailure returns false for .biometricFailed")
-    func isCredentialFailureFalseForBiometricFailed() {
-        #expect(isCredentialFailure(.biometricFailed) == false)
-    }
-
-    @Test("isCredentialFailure returns false for .biometricNotAvailable")
-    func isCredentialFailureFalseForBiometricNotAvailable() {
-        #expect(isCredentialFailure(.biometricNotAvailable) == false)
-    }
-
-    @Test("isCredentialFailure returns false for .networkError")
-    func isCredentialFailureFalseForNetworkError() {
-        #expect(isCredentialFailure(.networkError) == false)
-    }
-
-    @Test("isCredentialFailure returns false for .emailAlreadyExists")
-    func isCredentialFailureFalseForEmailAlreadyExists() {
-        #expect(isCredentialFailure(.emailAlreadyExists) == false)
-    }
-
-    @Test("isCredentialFailure returns false for .userNotFound")
-    func isCredentialFailureFalseForUserNotFound() {
-        #expect(isCredentialFailure(.userNotFound) == false)
-    }
 
     // MARK: - loginBiometricButtonState: .noHardware
 

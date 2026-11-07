@@ -243,6 +243,7 @@
         "type": "object",
         "required": [
           "id",
+          "email",
           "firstName",
           "lastName",
           "displayName",
@@ -257,10 +258,7 @@
             "format": "uuid"
           },
           "email": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": "string",
             "format": "email"
           },
           "firstName": {
@@ -1874,7 +1872,8 @@
                       "type": "object",
                       "required": [
                         "user",
-                        "accessToken"
+                        "accessToken",
+                        "expiresIn"
                       ],
                       "properties": {
                         "user": {
@@ -1882,6 +1881,10 @@
                         },
                         "accessToken": {
                           "type": "string"
+                        },
+                        "expiresIn": {
+                          "type": "integer",
+                          "example": 900
                         },
                         "refreshToken": {
                           "type": "string",
@@ -1973,7 +1976,8 @@
                       "type": "object",
                       "required": [
                         "user",
-                        "accessToken"
+                        "accessToken",
+                        "expiresIn"
                       ],
                       "properties": {
                         "user": {
@@ -1981,6 +1985,10 @@
                         },
                         "accessToken": {
                           "type": "string"
+                        },
+                        "expiresIn": {
+                          "type": "integer",
+                          "example": 900
                         },
                         "refreshToken": {
                           "type": "string",
@@ -2001,6 +2009,9 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "426": {
             "$ref": "#/components/responses/UpgradeRequiredError"
@@ -2101,11 +2112,20 @@
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "426": {
             "$ref": "#/components/responses/UpgradeRequiredError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2156,6 +2176,15 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2214,6 +2243,15 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2315,8 +2353,17 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
           "409": {
             "$ref": "#/components/responses/ConflictError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2368,6 +2415,15 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2432,8 +2488,14 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2534,8 +2596,14 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2607,11 +2675,17 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
           "422": {
             "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2695,14 +2769,23 @@
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
             "$ref": "#/components/responses/ConflictError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2857,6 +2940,9 @@
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -2943,6 +3029,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -3048,6 +3137,9 @@
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -3123,6 +3215,9 @@
           },
           "422": {
             "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -3215,6 +3310,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -3338,6 +3436,9 @@
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -3433,6 +3534,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -3530,6 +3634,9 @@
           "409": {
             "$ref": "#/components/responses/ConflictError"
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -3597,6 +3704,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -3681,6 +3791,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -3794,6 +3907,9 @@
           "409": {
             "$ref": "#/components/responses/ConflictError"
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -3883,6 +3999,15 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -3949,6 +4074,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4038,6 +4166,9 @@
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
@@ -4046,6 +4177,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4119,6 +4253,9 @@
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -4180,8 +4317,14 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4268,8 +4411,14 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4392,6 +4541,15 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -4481,8 +4639,14 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4547,6 +4711,15 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -4596,6 +4769,15 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4683,8 +4865,17 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
           "409": {
             "$ref": "#/components/responses/ConflictError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4776,6 +4967,15 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -4852,6 +5052,15 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -4966,6 +5175,15 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
@@ -5037,11 +5255,17 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
           },
           "422": {
             "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -5115,8 +5339,14 @@
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
           },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"

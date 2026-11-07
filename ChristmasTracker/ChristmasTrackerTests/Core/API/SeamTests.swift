@@ -99,6 +99,22 @@ struct SessionRefreshSeamTests {
         }
     }
 
+    // I2b-2c U3: a refresh 403 ACCOUNT_DISABLED is a refresh-context credential failure.
+    @Test("refresh throws credentialFailure when forceRefresh throws accountDisabled")
+    func throwsCredentialFailureForAccountDisabled() async throws {
+        let sut = makeSUT(refresher: {
+            throw AuthenticationError.accountDisabled
+        })
+        do {
+            try await sut.refresh()
+            Issue.record("Expected SessionRefreshError.credentialFailure but no error was thrown")
+        } catch SessionRefreshError.credentialFailure {
+            // Expected
+        } catch {
+            Issue.record("Expected SessionRefreshError.credentialFailure but got: \(error)")
+        }
+    }
+
     // MARK: - Non-credential failure
 
     @Test("refresh throws other when forceRefresh throws a non-credential error")
@@ -283,5 +299,41 @@ struct BuildGeneratedClientTests {
             versionOutdatedHandler: version
         )
         #expect(client != nil)
+    }
+
+    // MARK: - I2b-2c U2: defaulted sessionEndingHandler parameter
+
+    private actor NoopSessionEnding: SessionEnding {
+        func sessionEnded(reason: SessionEndReason) async {}
+    }
+
+    @Test("trackerClient is non-nil in real mode when a sessionEndingHandler is passed")
+    func trackerClientIsNonNilInRealModeWithSessionEndingHandler() {
+        let (token, refresh, version) = makeStubs()
+        let client = buildGeneratedClient(
+            mode: .real,
+            serverURL: URL(string: "https://api.example.com"),
+            info: makeClientInfo(from: nil),
+            tokenProvider: token,
+            sessionRefresher: refresh,
+            versionOutdatedHandler: version,
+            sessionEndingHandler: NoopSessionEnding()
+        )
+        #expect(client != nil)
+    }
+
+    @Test("trackerClient is nil in mock mode even when a sessionEndingHandler is passed")
+    func trackerClientIsNilInMockModeWithSessionEndingHandler() {
+        let (token, refresh, version) = makeStubs()
+        let client = buildGeneratedClient(
+            mode: .mock,
+            serverURL: URL(string: "https://api.example.com"),
+            info: makeClientInfo(from: nil),
+            tokenProvider: token,
+            sessionRefresher: refresh,
+            versionOutdatedHandler: version,
+            sessionEndingHandler: NoopSessionEnding()
+        )
+        #expect(client == nil)
     }
 }

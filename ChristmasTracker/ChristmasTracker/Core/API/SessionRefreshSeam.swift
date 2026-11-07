@@ -15,7 +15,7 @@ final class SessionRefreshSeam: SessionRefreshing {
         do {
             try await forceRefresh()
         } catch let authError as AuthenticationError {
-            if isCredentialFailure(authError) {
+            if isCredentialFailure(authError, context: .refresh) {
                 throw SessionRefreshError.credentialFailure
             }
             throw SessionRefreshError.other(authError)

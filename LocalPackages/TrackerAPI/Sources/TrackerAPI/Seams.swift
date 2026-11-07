@@ -57,6 +57,20 @@ public protocol RequestIDObserving: Sendable {
     func observe(requestID: String) async
 }
 
+// MARK: - SessionEndReason
+/// Why the server ended the session on an authenticated (non-public) operation
+/// (client guide section 4: 403 ACCOUNT_DISABLED and 404 USER_NOT_FOUND mean "redirect to login").
+public enum SessionEndReason: Sendable, Equatable {
+    case accountDisabled
+    case userNotFound
+}
+
+// MARK: - SessionEnding
+/// Called by SessionEndingMiddleware when the server reports that the session can no longer continue.
+public protocol SessionEnding: Sendable {
+    func sessionEnded(reason: SessionEndReason) async
+}
+
 // MARK: - RateLimitSleeping
 public protocol RateLimitSleeping: Sendable {
     func sleep(seconds: TimeInterval) async

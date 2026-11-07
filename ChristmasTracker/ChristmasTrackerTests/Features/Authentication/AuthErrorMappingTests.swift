@@ -9,6 +9,9 @@ import Testing
 import Foundation
 @testable import ChristmasTracker
 
+/// The administrator-contact text for a disabled account (client guide 3.2).
+private let accountDisabledAdministratorMessage = "This account has been disabled. Contact your administrator."
+
 @Suite("AuthenticationError user message mapping")
 struct AuthErrorMappingTests {
 
@@ -21,7 +24,16 @@ struct AuthErrorMappingTests {
     // A2
     @Test("accountDisabled maps to expected message")
     func accountDisabledMapsToExpectedMessage() {
-        #expect(userMessage(for: .accountDisabled) == "This account has been disabled. Contact your administrator.")
+        #expect(userMessage(for: .accountDisabled) == accountDisabledAdministratorMessage)
+    }
+
+    // I2b-2c U3 (D-d): LoginView's error alert shows `error.localizedDescription`
+    // (LoginView.swift:85), so a login 403 must show the same administrator text.
+    @Test("accountDisabled localizedDescription (shown by LoginView) is the administrator message")
+    func accountDisabledLocalizedDescriptionIsAdministratorMessage() {
+        let shown = AuthenticationError.accountDisabled.localizedDescription
+        #expect(shown == userMessage(for: .accountDisabled))
+        #expect(shown == accountDisabledAdministratorMessage)
     }
 
     // A3

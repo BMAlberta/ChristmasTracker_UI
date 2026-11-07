@@ -78,19 +78,6 @@ private final class LockCoordinator: InactivityLockPresenting {
     }
 }
 
-// MARK: - AuthServiceBox
-
-/// A reference container that lets the AccessTokenSeam and SessionRefreshSeam closures
-/// reach AuthenticationService after it is created, without creating a circular dependency.
-/// @unchecked Sendable: written exactly once during app init on MainActor; never mutated
-/// concurrently.
-private final class AuthServiceBox: @unchecked Sendable {
-    // nonisolated(unsafe): written exactly once during app init on MainActor;
-    // read from async closures only after init completes — no concurrent mutation.
-    nonisolated(unsafe) var value: AuthenticationService?
-    init() { value = nil }
-}
-
 // MARK: - AppDependencies
 
 /// Dependency container for the composition root.
@@ -163,7 +150,8 @@ nonisolated func buildGeneratedClient(
     tokenProvider: some AccessTokenProviding,
     sessionRefresher: some SessionRefreshing,
     versionOutdatedHandler: some VersionOutdatedHandling,
-    requestIDObserver: (any RequestIDObserving)? = nil
+    requestIDObserver: (any RequestIDObserving)? = nil,
+    sessionEndingHandler: (any SessionEnding)? = nil
 ) -> (any APIProtocol)? {
     guard mode == .real, let url = serverURL else { return nil }
     do {
@@ -173,7 +161,8 @@ nonisolated func buildGeneratedClient(
             tokenProvider: tokenProvider,
             sessionRefresher: sessionRefresher,
             versionOutdatedHandler: versionOutdatedHandler,
-            requestIDObserver: requestIDObserver
+            requestIDObserver: requestIDObserver,
+            sessionEndingHandler: sessionEndingHandler
         )
     } catch {
         LogError("Failed to build TrackerAPI client: \(error)", category: .business)
@@ -244,30 +233,21 @@ struct ChristmasTrackerApp: App {
         lockCoordinator = lkCoord
 
         // Build the generated client FIRST so GeneratedClientAuthenticationRepository can be
-        // constructed before AuthenticationService. The seams use an AuthServiceBox (an
-        // @unchecked Sendable reference container) that is populated after auth is created.
-        //
-        // AuthServiceBox is nonisolated(unsafe): written exactly once during init on MainActor
-        // and read only from async closures that execute after init completes — no concurrent
-        // mutation occurs after the assignment in this init.
-        let authBox = AuthServiceBox()
-        let tokenSeam = AccessTokenSeam(tokenGetter: { [weak authBox] in
-            await authBox?.value?.currentAccessToken
-        })
-        let refreshSeam = SessionRefreshSeam(forceRefresh: { [weak authBox] in
-            guard let svc = authBox?.value else { throw AuthenticationError.invalidRefreshToken }
-            try await svc.forceRefresh()
-        })
+        // constructed before AuthenticationService. makeClientSeams() (Core/API/ClientSeams.swift)
+        // builds the seams around an AuthServiceBox that the seam closures hold strongly; the box
+        // holds the service weakly and is populated after auth is created.
+        let seams = makeClientSeams()
         let requestIDSeam = RequestIDSeam(isSentryEnabled: AppConfiguration.sentryDSN != nil)
         let resolvedBaseURL: URL? = AppConfiguration.apiMode == .real ? AppConfiguration.apiBaseURL : nil
         let builtClient = buildGeneratedClient(
             mode: AppConfiguration.apiMode,
             serverURL: resolvedBaseURL,
             info: makeClientInfo(from: Bundle.main.infoDictionary),
-            tokenProvider: tokenSeam,
-            sessionRefresher: refreshSeam,
+            tokenProvider: seams.tokenProvider,
+            sessionRefresher: seams.sessionRefresher,
             versionOutdatedHandler: vg,
-            requestIDObserver: requestIDSeam
+            requestIDObserver: requestIDSeam,
+            sessionEndingHandler: seams.sessionEnding
         )
         generatedClient = builtClient
 
@@ -317,7 +297,7 @@ struct ChristmasTrackerApp: App {
             sessionManager: sm,
             enrollmentHistory: UserDefaultsEnrollmentHistory()
         )
-        authBox.value = auth  // seam closures can now reach auth
+        seams.box.value = auth  // seam closures can now reach auth
         authService = auth
 
         let vs = VersionService(repository: MockAppVersionRepository())

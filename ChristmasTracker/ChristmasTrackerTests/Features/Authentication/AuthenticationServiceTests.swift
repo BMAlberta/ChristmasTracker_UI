@@ -26,6 +26,24 @@ extension MockAuthenticationRepository {
     func setFail(_ value: Bool) { shouldFail = value }
 }
 
+// MARK: - I2b-2c U3 test helper: login always fails with 403 ACCOUNT_DISABLED
+
+private actor AccountDisabledLoginRepository: AuthenticationRepository {
+    func login(email: String, password: String) async throws -> AuthSession {
+        throw AuthenticationError.accountDisabled
+    }
+
+    func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
+        throw AuthenticationError.accountDisabled
+    }
+
+    func refresh(refreshToken: String) async throws -> AuthSession {
+        throw AuthenticationError.accountDisabled
+    }
+
+    func logout() async throws {}
+}
+
 @Suite("AuthenticationService Tests")
 @MainActor
 struct AuthenticationServiceTests {
@@ -328,6 +346,28 @@ struct AuthenticationServiceTests {
         let (service, _, _, cleanup) = makeSUTWithEmailStore()
         await service.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(cleanup.cleanUpCallCount == 1)
+    }
+
+    // MARK: - I2b-2c U3 (D-c): login 403 shows the administrator message only
+
+    @Test("login 403 accountDisabled sets error, keeps the Face ID enrollment, and maps to the administrator message")
+    func login403AccountDisabledShowsAdministratorMessageAndKeepsEnrollment() async throws {
+        let store = InMemoryBiometricCredentialStore()
+        try store.enroll(refreshToken: "tok-enrolled-FAKE", userId: "u1", firstName: "Alice")
+        let service = AuthenticationService(
+            repository: AccountDisabledLoginRepository(),
+            sessionManager: SessionManager(initialClearables: []),
+            biometricAuthenticator: FakeBiometricAuthenticator(),
+            credentialStore: store
+        )
+
+        await service.login(email: "u1@test.invalid", password: "password-FAKE", rememberEmail: false)
+
+        #expect(service.error == .accountDisabled)
+        #expect(service.isAuthenticated == false)
+        #expect(store.enrolledUser()?.userId == "u1", "A login 403 must not delete the stored Face ID token (D-c)")
+        let error = try #require(service.error)
+        #expect(userMessage(for: error) == "This account has been disabled. Contact your administrator.")
     }
 
     // AC8: Failed registration leaves isLoading == false.
