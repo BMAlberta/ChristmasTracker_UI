@@ -347,3 +347,33 @@ Package tests (inventory only; package tests may change only for E1):
     - `Core/Security/KeychainServiceTests.swift`, for the comment only.
     - A new `Features/Authentication/LegacyTokenSeamTests.swift`, for the seam and guard tests.
   - No package change.
+
+### E4: version-check retry-after
+- Contract slice: checkAppVersion 429 is `$ref: #/components/responses/RateLimitError`. Its body is `Components.Schemas.Error`, and `error.details` is free-form. The contract documents no Retry-After header for this operation. Client guide section 5 says to back off on 429.
+- New interface: no. The repository's signature is unchanged. The full pipeline still runs because this is the generated-client repository layer.
+- Behaviour, in `GeneratedClientAppVersionRepository.checkVersion()` (D3):
+  - (a) Wrap the `client.checkAppVersion(input)` call so that a `ClientError` whose `underlyingError` is `TrackerAPIError.rateLimited(retryAfter:)` is rethrown as that `TrackerAPIError`. That makes `VersionService.check()` set `lastErrorCategory = .backOff`.
+    - Every other `ClientError` is rethrown unchanged, so its category does not change.
+    - No catch-all may convert or hide other errors.
+    - The output switch keeps every existing arm for every other status.
+  - (b) The typed `.tooManyRequests` arm reads `retryAfter` from `err.error.details`, the generated free-form container (`OpenAPIObjectContainer`). It accepts an integer or a floating-point JSON number. Anything else (missing, or not a number) falls back to the package default of 1 second, which is what `TrackerAPIError` and `RateLimitMiddleware` use (`TrackerAPIError.swift:83`, `RateLimitMiddleware.swift:69`). A comment names that source.
+    - The `TimeInterval(err.error.code)` mapping is removed.
+    - The typed arm does not apply a cap.
+  - Instrumentation: `checkVersion` is already `@Instrumented`. No new async or throws function is expected.
+- Acceptance (tests, with a fake transport and no real sleeps):
+  1. Through a generated `Client` built in the test with `Client(serverURL:configuration: Configuration(dateTranscoder: TrackerDateTranscoder()), transport:, middlewares: [RateLimitMiddleware(sleeper: <recording fake>)])`, sending three 429s:
+     - `Retry-After: 7` gives `TrackerAPIError.rateLimited(retryAfter: 7)`, thrown directly, not wrapped in `ClientError`.
+     - `details.retryAfter` 12 with no header gives 10. The test documents that the middleware caps a single wait at 10 seconds.
+     - Neither gives 1.
+     - The fake sleeper records the waits without sleeping.
+  2. Typed arm, through a generated `Client` with no middleware:
+     - A 429 with `details.retryAfter` 12 gives `.rateLimited(retryAfter: 12)`.
+     - A 429 with no details gives 1.
+     - A 429 whose code is 8001 never gives 8001.
+  3. Factory-built (`TrackerClientFactory.make`, as the file does today): `Retry-After: 0` ×3 gives `TrackerAPIError.rateLimited(retryAfter: 0)`, thrown directly. The existing test `tooManyRequestsExhaustedThrowsRateLimited` stays unchanged and still passes, because it already accepts either form.
+  4. VersionService: `VersionService(repository: GeneratedClientAppVersionRepository(<factory client with Retry-After 0 ×3>))`, then `check()`, gives `lastErrorCategory == .backOff`.
+  5. The existing 200, 304, 400, 500, 418 and transport-failure tests are unchanged and still pass.
+- Files:
+  - Production: `Features/Version/GeneratedClientAppVersionRepository.swift`.
+  - Tests: `Features/Version/VersionCheckRepositoryTests.swift`, and a new `Features/Version/VersionCheckRetryAfterTests.swift` if the existing file would grow past the size limits. For the VersionService test, either `Core/API/VersionCheckTests.swift` or the new file.
+  - No package change (D3(d)).
