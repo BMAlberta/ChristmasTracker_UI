@@ -143,3 +143,55 @@ Not yet ignored: `scripts/release.env`, `scripts/.release-ledger`, `build/`.
 **Scoped files:**
 - `Docs/release-runbook.md` (new)
 - `Docs/handoffs/2026-11-06-ios-to-brian-i6b1.md` (new)
+
+---
+
+## Fix pass Gate 1 — Story G1: Signing from the project, and the small fixes
+
+**Contract slice:** No server contract involved. All work is local tooling.
+
+**Interface introduced:** `RELEASE_ARCHIVE_SIGNING` env var (new; default `project`; set to `cli` to restore the previous CLI-override behaviour as a fallback).
+
+**Acceptance criteria:**
+1. `bash -n scripts/release.sh` exits 0.
+2. `shellcheck scripts/release.sh` exits 0 (or output recorded).
+3. `bash -n scripts/test-release.sh` exits 0.
+4. `scripts/test-release.sh` exits 0 with 0 failures; test arithmetic for every new test is documented in the report.
+5. `scripts/verify.sh` exits 0; app tests 612, package tests 146, counts unchanged.
+6. Default `archive` dry-run output contains `CURRENT_PROJECT_VERSION` and does NOT contain `CODE_SIGN_STYLE`, `DEVELOPMENT_TEAM`, or `PROVISIONING_PROFILE_SPECIFIER`.
+7. `archive` with `RELEASE_ARCHIVE_SIGNING=cli` dry-run output contains all four settings.
+8. `preflight` calls `check_project_signing`, which reads `CODE_SIGN_STYLE`, `DEVELOPMENT_TEAM`, `PROVISIONING_PROFILE_SPECIFIER`, `CODE_SIGN_IDENTITY`, and `PRODUCT_BUNDLE_IDENTIFIER` from the ChristmasTracker target block of `xcodebuild -showBuildSettings`; each wrong setting produces an error naming the setting and the Xcode fix path; no secret values (team ID, profile name) are printed in the error.
+9. Device count is the integer returned directly by `plutil -extract ProvisionedDevices raw`; it is validated as numeric (non-numeric → "unknown"); 0 devices fails preflight.
+10. `verify-ipa` fails when `SENTRY_DSN` is missing from Info.plist OR when present but empty; passes when non-empty; never prints the DSN value.
+11. `verify-ipa` and `export` derive the app bundle name from `PRODUCT_NAME` in build settings; if build settings cannot be read, `verify-ipa` falls back to the single `Payload/*.app` entry in the IPA and fails if there is not exactly one; the IPA file name (`ChristmasTracker-<version>-<build>.ipa`) does not change.
+12. `install-info` output contains no `npm run policy:set` command; it contains the values block and the note "Pass these to policy:set; the exact flag names are in the API chat's local quickstart (unconfirmed here)."
+13. No change under `.claude/`, `contract/`, `LocalPackages/`, app sources, project file, or synced Docs files.
+
+**Weight:** Solo (bash tooling, non-auth, no capability-flag UI, no generated client).
+
+**Scoped files:**
+- `scripts/release.sh` (modified)
+- `scripts/test-release.sh` (modified — new tests added, existing tests unchanged or explained)
+- `scripts/release.env.example` (modified — add RELEASE_ARCHIVE_SIGNING)
+
+---
+
+## Fix pass Gate 1 — Story G2: Runbook, handoff, and report accuracy
+
+**Contract slice:** No server contract. Documentation only.
+
+**Interface introduced:** None.
+
+**Acceptance criteria:**
+1. `Docs/release-runbook.md` updated: new prerequisite for configuring manual signing in Xcode; `RELEASE_ARCHIVE_SIGNING=cli` described as a fallback; Sentry DSN requirement noted; no text contradicts the new behaviour.
+2. `Docs/handoffs/2026-11-06-ios-to-brian-i6b1.md` updated: false statements corrected (no "app_dir glob", no PlistBuddy reference); archive flags paragraph reflects project-signing default; project-signing step in "Before the first release"; what was not run clearly listed; commit list accurate.
+3. `Docs/reports/I6b1-1-script-core.md` corrected: first line "Corrected in the I6b-1 fix pass."; Gate 2 verdicts present and real (both reviewers; if neither ran for R1, reviewers run now on the final script and verdicts recorded); "Not done or partial" lists what was not run.
+4. `scripts/verify.sh` exits 0; counts unchanged.
+5. No change outside the permitted Docs files.
+
+**Weight:** Solo (docs only).
+
+**Scoped files:**
+- `Docs/release-runbook.md` (modified)
+- `Docs/handoffs/2026-11-06-ios-to-brian-i6b1.md` (modified)
+- `Docs/reports/I6b1-1-script-core.md` (modified)
