@@ -11,13 +11,17 @@
 //   reach the service (the box must be held strongly by the seam closures).
 // - Composition test 2: with the service released, the seams fail safely with typed
 //   errors, and nothing retains the service (the box must hold it weakly).
+// - I2b-2d E1: the adapter ends the session only when the request token equals the
+//   service's current access token. A stale token, a nil token, or a token a refresh has
+//   since rotated is ignored while signed in; signed out is a no-op. The existing tests
+//   pass the current token so their meaning is unchanged.
 //
 // No real Keychain-backed credential store, no LocalAuthentication, no network: the
 // service uses MockAuthenticationRepository, FakeBiometricAuthenticator, an in-memory
 // credential store that counts deletes, and an in-memory remembered-email store.
 //
-// Fails to compile until the implementer adds Core/API/ClientSeams.swift
-// (AuthServiceBox, ClientSeams, makeClientSeams()) and Core/API/SessionEndingSeam.swift.
+// Fails to compile until the implementer changes SessionEnding to
+// sessionEnded(reason:requestToken:) (package Seams.swift, Core/API/SessionEndingSeam.swift).
 
 import Testing
 import Foundation
@@ -139,10 +143,11 @@ struct ClientSeamsTests {
         let dependencies = try makeDependencies()
         let service = makeService(dependencies: dependencies)
         try await signIn(service)
+        let currentToken = try #require(service.currentAccessToken)
         let seams = makeClientSeams()
         seams.box.value = service
 
-        await seams.sessionEnding.sessionEnded(reason: reason)
+        await seams.sessionEnding.sessionEnded(reason: reason, requestToken: currentToken)
 
         #expect(service.isAuthenticated == false)
         #expect(service.currentUser == nil)
@@ -160,7 +165,7 @@ struct ClientSeamsTests {
         seams.box.value = service
         #expect(service.isAuthenticated == false)
 
-        await seams.sessionEnding.sessionEnded(reason: .accountDisabled)
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: "T1")
 
         #expect(service.isAuthenticated == false)
         #expect(service.currentUser == nil)
@@ -174,11 +179,12 @@ struct ClientSeamsTests {
         let dependencies = try makeDependencies()
         let service = makeService(dependencies: dependencies)
         try await signIn(service)
+        let currentToken = try #require(service.currentAccessToken)
         let seams = makeClientSeams()
         seams.box.value = service
 
-        await seams.sessionEnding.sessionEnded(reason: .accountDisabled)
-        await seams.sessionEnding.sessionEnded(reason: .userNotFound)
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: currentToken)
+        await seams.sessionEnding.sessionEnded(reason: .userNotFound, requestToken: currentToken)
 
         #expect(service.isAuthenticated == false)
         #expect(service.currentUser == nil)
@@ -192,6 +198,7 @@ struct ClientSeamsTests {
         let dependencies = try makeDependencies()
         let service = makeService(dependencies: dependencies)
         try await signIn(service)
+        let currentToken = try #require(service.currentAccessToken)
         let seams = makeClientSeams()
         seams.box.value = service
         let sessionEnding = seams.sessionEnding
@@ -199,7 +206,7 @@ struct ClientSeamsTests {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<3 {
                 group.addTask { @MainActor in
-                    await sessionEnding.sessionEnded(reason: .accountDisabled)
+                    await sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: currentToken)
                 }
             }
             await group.waitForAll()
@@ -234,8 +241,8 @@ struct ClientSeamsTests {
         #expect(await tokenProvider.accessToken() == rotatedToken)
         #expect(service.isAuthenticated == true)
 
-        // Session-ending adapter reaches the service: it signs out.
-        await sessionEnding.sessionEnded(reason: .accountDisabled)
+        // Session-ending adapter reaches the service: with the current (rotated) token it signs out.
+        await sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: rotatedToken)
         #expect(service.isAuthenticated == false)
         #expect(service.currentUser == nil)
         #expect(await tokenProvider.accessToken() == nil)
@@ -273,8 +280,8 @@ struct ClientSeamsTests {
 
         // Session-ending adapter returns without crashing and touches nothing.
         let clearsBefore = dependencies.clearable.clearCallCount
-        await seams.sessionEnding.sessionEnded(reason: .accountDisabled)
-        await seams.sessionEnding.sessionEnded(reason: .userNotFound)
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: "T1")
+        await seams.sessionEnding.sessionEnded(reason: .userNotFound, requestToken: nil)
         #expect(dependencies.clearable.clearCallCount == clearsBefore)
         #expect(dependencies.store.deleteCallCount == 0)
         #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
@@ -287,6 +294,143 @@ struct ClientSeamsTests {
         #expect(seams.box.value == nil)
         #expect(await seams.tokenProvider.accessToken() == nil)
         await expectCredentialFailure(seams.sessionRefresher)
-        await seams.sessionEnding.sessionEnded(reason: .accountDisabled)
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: "T1")
+    }
+
+    // MARK: - I2b-2d E1: the request token must match the current access token
+
+    @Test(
+        "A stale request token is ignored: still signed in, no teardown, enrollment intact",
+        arguments: [SessionEndReason.accountDisabled, .userNotFound]
+    )
+    func staleTokenIsIgnored(reason: SessionEndReason) async throws {
+        let dependencies = try makeDependencies()
+        let service = makeService(dependencies: dependencies)
+        try await signIn(service)
+        let currentToken = try #require(service.currentAccessToken)
+        let seams = makeClientSeams()
+        seams.box.value = service
+        let staleToken = "stale-token-FAKE"
+        try #require(staleToken != currentToken)
+
+        await seams.sessionEnding.sessionEnded(reason: reason, requestToken: staleToken)
+
+        #expect(service.isAuthenticated == true)
+        #expect(service.currentUser?.id == Self.userId)
+        #expect(service.currentAccessToken == currentToken)
+        #expect(dependencies.clearable.clearCallCount == 0)
+        #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
+        #expect(dependencies.store.deleteCallCount == 0)
+    }
+
+    @Test(
+        "A nil request token while signed in is ignored: still signed in, no teardown, enrollment intact",
+        arguments: [SessionEndReason.accountDisabled, .userNotFound]
+    )
+    func nilTokenWhileSignedInIsIgnored(reason: SessionEndReason) async throws {
+        let dependencies = try makeDependencies()
+        let service = makeService(dependencies: dependencies)
+        try await signIn(service)
+        let currentToken = try #require(service.currentAccessToken)
+        let seams = makeClientSeams()
+        seams.box.value = service
+
+        await seams.sessionEnding.sessionEnded(reason: reason, requestToken: nil)
+
+        #expect(service.isAuthenticated == true)
+        #expect(service.currentUser?.id == Self.userId)
+        #expect(service.currentAccessToken == currentToken)
+        #expect(dependencies.clearable.clearCallCount == 0)
+        #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
+        #expect(dependencies.store.deleteCallCount == 0)
+    }
+
+    @Test("Signed out, a nil request token is a no-op: no teardown, enrollment intact")
+    func signedOutWithNilTokenIsNoOp() async throws {
+        let dependencies = try makeDependencies()
+        let service = makeService(dependencies: dependencies)
+        let seams = makeClientSeams()
+        seams.box.value = service
+        try #require(service.isAuthenticated == false)
+
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: nil)
+        await seams.sessionEnding.sessionEnded(reason: .userNotFound, requestToken: nil)
+
+        #expect(service.isAuthenticated == false)
+        #expect(dependencies.clearable.clearCallCount == 0)
+        #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
+        #expect(dependencies.store.deleteCallCount == 0)
+    }
+
+    @Test("A stale token does not block a later matching token: the matching call ends the session once")
+    func staleThenMatchingTokenEndsSessionOnce() async throws {
+        let dependencies = try makeDependencies()
+        let service = makeService(dependencies: dependencies)
+        try await signIn(service)
+        let currentToken = try #require(service.currentAccessToken)
+        let seams = makeClientSeams()
+        seams.box.value = service
+
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: "stale-token-FAKE")
+        #expect(service.isAuthenticated == true)
+        #expect(dependencies.clearable.clearCallCount == 0)
+
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: currentToken)
+
+        #expect(service.isAuthenticated == false)
+        #expect(service.currentUser == nil)
+        #expect(service.currentAccessToken == nil)
+        #expect(dependencies.clearable.clearCallCount == 1)
+        #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
+        #expect(dependencies.store.deleteCallCount == 0)
+    }
+
+    @Test("The token from a previous sign-in of the same user is ignored after signing in again")
+    func previousSignInTokenIsIgnored() async throws {
+        let dependencies = try makeDependencies()
+        let service = makeService(dependencies: dependencies)
+        try await signIn(service)
+        let firstToken = try #require(service.currentAccessToken)
+        await service.logout()
+        try await signIn(service)
+        let secondToken = try #require(service.currentAccessToken)
+        try #require(firstToken != secondToken, "Precondition: each mock login issues a new access token")
+        let clearsAfterSecondSignIn = dependencies.clearable.clearCallCount
+        let seams = makeClientSeams()
+        seams.box.value = service
+
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: firstToken)
+
+        #expect(service.isAuthenticated == true)
+        #expect(service.currentAccessToken == secondToken)
+        #expect(dependencies.clearable.clearCallCount == clearsAfterSecondSignIn)
+        #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
+        #expect(dependencies.store.deleteCallCount == 0)
+    }
+
+    @Test("Documented trade-off: a token a refresh has since rotated is ignored; the rotated token still ends the session")
+    func refreshRotatedTokenIsIgnored() async throws {
+        let dependencies = try makeDependencies()
+        let service = makeService(dependencies: dependencies)
+        try await signIn(service)
+        let preRefreshToken = try #require(service.currentAccessToken)
+        let seams = makeClientSeams()
+        seams.box.value = service
+        try await seams.sessionRefresher.refresh()
+        let rotatedToken = try #require(service.currentAccessToken)
+        try #require(rotatedToken != preRefreshToken, "Precondition: the mock refresh rotates the access token")
+
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: preRefreshToken)
+
+        #expect(service.isAuthenticated == true)
+        #expect(service.currentAccessToken == rotatedToken)
+        #expect(dependencies.clearable.clearCallCount == 0)
+
+        await seams.sessionEnding.sessionEnded(reason: .accountDisabled, requestToken: rotatedToken)
+
+        #expect(service.isAuthenticated == false)
+        #expect(dependencies.clearable.clearCallCount == 1)
+        #expect(dependencies.store.enrolledUser()?.userId == Self.userId)
+        #expect(dependencies.store.deleteCallCount == 0)
     }
 }

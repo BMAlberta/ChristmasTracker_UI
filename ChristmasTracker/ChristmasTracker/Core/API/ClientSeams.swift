@@ -61,15 +61,26 @@ func makeClientSeams() -> ClientSeams {
         try await service.forceRefresh()
     })
 
-    // Signs out only a signed-in session; never touches the biometric credential store.
+    // Signs out only a signed-in session, and only when the failing request carried the
+    // current access token; never touches the biometric credential store.
     // Single-flight: logout suspends in the session teardown before isAuthenticated becomes
     // false, so concurrent 403/404 responses would each pass the isAuthenticated check and
     // tear the session down more than once. The flag is checked and set on the main actor
     // with no suspension in between, so only the first caller signs out; later callers
     // return while it is in flight. It is cleared after logout returns, so a later,
     // separate session end still works.
-    let sessionEnding = SessionEndingSeam(onSessionEnded: { @MainActor [box] reason in
+    // Stale responses: a slow 403/404 to a request made by an earlier session (for example,
+    // user A's request answered after user B signed in) carries A's token, not the current
+    // one, so it is ignored. A nil request token is ignored too. Trade-off: a request that
+    // used a token a refresh has since rotated is also ignored; that is acceptable because
+    // the next request carries the new token and gets its own 403/404, which ends the session.
+    let sessionEnding = SessionEndingSeam(onSessionEnded: { @MainActor [box] reason, requestToken in
         guard !box.isEndingSession, let service = box.value, service.isAuthenticated else { return }
+        guard let requestToken, requestToken == service.currentAccessToken else {
+            // No token values in the log.
+            LogInfo("Session end ignored: ignored a stale session-end", category: .auth)
+            return
+        }
         box.isEndingSession = true
         defer { box.isEndingSession = false }
         LogInfo("Session ended by the server: \(reason)", category: .auth)

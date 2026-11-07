@@ -304,7 +304,7 @@ struct BuildGeneratedClientTests {
     // MARK: - I2b-2c U2: defaulted sessionEndingHandler parameter
 
     private actor NoopSessionEnding: SessionEnding {
-        func sessionEnded(reason: SessionEndReason) async {}
+        func sessionEnded(reason: SessionEndReason, requestToken: String?) async {}
     }
 
     @Test("trackerClient is non-nil in real mode when a sessionEndingHandler is passed")

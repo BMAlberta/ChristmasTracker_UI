@@ -14,8 +14,14 @@
 // Envelopes follow Docs/client-guide.md section 4 (full meta object); codes and
 // messages follow Docs/error-codes.md. No network, no sleeps.
 //
-// Fails to compile until the implementer adds SessionEndReason, SessionEnding,
-// SessionEndingMiddleware, and TrackerClientFactory.make(sessionEndingHandler:).
+// Package I2b-2d, story E1: the handler also receives the request's bearer token
+// (sessionEnded(reason:requestToken:)), read from the Authorization header of the request
+// the middleware received: the text after the exact prefix "Bearer ", or nil when the
+// header is absent, does not start with "Bearer ", or has nothing after the prefix. Through
+// the factory (D1 order: SessionEnding inside BearerAuth) that is the token BearerAuth set.
+//
+// Fails to compile until the implementer changes SessionEnding to
+// sessionEnded(reason:requestToken:).
 
 import Testing
 import Foundation
@@ -25,15 +31,22 @@ import OpenAPIRuntime
 
 // MARK: - RecordingSessionEndingHandler
 
-/// Records every reason it receives, in order.
+/// Records every call it receives (reason and request token), in order.
 private actor RecordingSessionEndingHandler: SessionEnding {
-    private(set) var reasons: [SessionEndReason] = []
-
-    func sessionEnded(reason: SessionEndReason) async {
-        reasons.append(reason)
+    struct Call: Equatable {
+        let reason: SessionEndReason
+        let requestToken: String?
     }
 
-    var callCount: Int { reasons.count }
+    private(set) var calls: [Call] = []
+
+    func sessionEnded(reason: SessionEndReason, requestToken: String?) async {
+        calls.append(Call(reason: reason, requestToken: requestToken))
+    }
+
+    var reasons: [SessionEndReason] { calls.map(\.reason) }
+    var requestTokens: [String?] { calls.map(\.requestToken) }
+    var callCount: Int { calls.count }
 }
 
 // MARK: - RotatingSession
@@ -70,12 +83,18 @@ struct SessionEndingMiddlewareTests {
         SessionEndingMiddleware(handler: handler)
     }
 
+    /// Sends one request through the middleware alone. `authorization`, when given, is set as
+    /// the request's Authorization header value (as BearerAuth would have set it).
     private func callMiddleware(
         _ middleware: any ClientMiddleware,
         transport: FakeTransport,
-        operationID: String = "getCurrentUser"
+        operationID: String = "getCurrentUser",
+        authorization: String? = nil
     ) async throws -> (HTTPResponse, HTTPBody?) {
-        let request = HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/test")
+        var request = HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/test")
+        if let authorization {
+            request.headerFields[.authorization] = authorization
+        }
         return try await middleware.intercept(
             request,
             body: nil,
@@ -416,6 +435,94 @@ struct SessionEndingMiddlewareTests {
         #expect(await handler.reasons.allSatisfy { $0 == .accountDisabled })
     }
 
+    // MARK: - 8. The request's bearer token reaches the handler (I2b-2d E1)
+
+    @Test("403 ACCOUNT_DISABLED with Authorization: Bearer T1 passes requestToken T1 once, with .accountDisabled")
+    func accountDisabledPassesBearerToken() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+        let sut = makeSUT(handler: handler)
+
+        let (response, _) = try await callMiddleware(sut, transport: transport, authorization: "Bearer T1")
+
+        #expect(response.status.code == 403)
+        #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: "T1")])
+    }
+
+    @Test("404 USER_NOT_FOUND with Authorization: Bearer T1 passes requestToken T1 once, with .userNotFound")
+    func userNotFoundPassesBearerToken() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(404), body: HTTPBody(userNotFound))
+        let sut = makeSUT(handler: handler)
+
+        let (response, _) = try await callMiddleware(sut, transport: transport, authorization: "Bearer T1")
+
+        #expect(response.status.code == 404)
+        #expect(await handler.calls == [.init(reason: .userNotFound, requestToken: "T1")])
+    }
+
+    @Test("The bearer token is read from the request the middleware received and forwarded to next")
+    func bearerTokenMatchesForwardedRequest() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+        let sut = makeSUT(handler: handler)
+
+        _ = try await callMiddleware(sut, transport: transport, authorization: "Bearer T1")
+
+        let forwarded = try #require(await transport.lastRequest())
+        #expect(forwarded.request.headerFields[.authorization] == "Bearer T1")
+        #expect(await handler.requestTokens == ["T1"])
+    }
+
+    @Test(
+        "403 ACCOUNT_DISABLED and 404 USER_NOT_FOUND with no Authorization header pass a nil requestToken",
+        arguments: [403, 404]
+    )
+    func missingAuthorizationPassesNilToken(statusCode: Int) async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        let body = statusCode == 403 ? accountDisabled : userNotFound
+        await transport.enqueue(.status(statusCode), body: HTTPBody(body))
+        let sut = makeSUT(handler: handler)
+
+        _ = try await callMiddleware(sut, transport: transport)
+
+        #expect(await handler.callCount == 1)
+        #expect(await handler.requestTokens == [nil])
+    }
+
+    @Test(
+        "An Authorization value without the exact \"Bearer \" prefix, or with nothing after it, passes a nil requestToken",
+        arguments: ["Basic abc", "Bearer ", "Bearer", "bearer T1", "BearerT1", "Token T1"]
+    )
+    func nonBearerAuthorizationPassesNilToken(authorization: String) async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+        let sut = makeSUT(handler: handler)
+
+        _ = try await callMiddleware(sut, transport: transport, authorization: authorization)
+
+        // The session-end decision itself is unchanged: the handler is still called once.
+        #expect(await handler.reasons == [.accountDisabled])
+        #expect(await handler.requestTokens == [nil])
+    }
+
+    @Test("A bearer token is not passed for codes that do not end the session (handler not called)")
+    func bearerTokenWithForbiddenDoesNotCallHandler() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(403), body: HTTPBody(forbidden))
+        let sut = makeSUT(handler: handler)
+
+        _ = try await callMiddleware(sut, transport: transport, operationID: "getList", authorization: "Bearer T1")
+
+        #expect(await handler.callCount == 0)
+    }
+
     // MARK: - 7. Through the real TrackerClientFactory.make
 
     private func makeFactoryClient(
@@ -546,5 +653,81 @@ struct SessionEndingMiddlewareTests {
             Issue.record("Expected .forbidden but got \(output)")
             return
         }
+    }
+
+    // MARK: - 9. Factory-built: the token BearerAuth set reaches the handler (I2b-2d E1, D1)
+
+    @Test("Factory client: getCurrentUser 403 ACCOUNT_DISABLED passes the token provider's token (set by BearerAuth) to the handler")
+    func factoryGetCurrentUser403PassesProviderToken() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+
+        let output = try await client.getCurrentUser()
+
+        guard case .forbidden = output else {
+            Issue.record("Expected .forbidden but got \(output)")
+            return
+        }
+        let sent = try #require(await transport.lastRequest())
+        #expect(sent.request.headerFields[.authorization] == "Bearer T1")
+        #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: "T1")])
+    }
+
+    @Test("Factory client: getCurrentUser 404 USER_NOT_FOUND passes the token provider's token to the handler")
+    func factoryGetCurrentUser404PassesProviderToken() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue(.status(404), body: HTTPBody(userNotFound))
+
+        let output = try await client.getCurrentUser()
+
+        guard case .notFound = output else {
+            Issue.record("Expected .notFound but got \(output)")
+            return
+        }
+        #expect(await handler.calls == [.init(reason: .userNotFound, requestToken: "T1")])
+    }
+
+    @Test("Factory client: with no token from the provider, a 403 ACCOUNT_DISABLED passes a nil requestToken")
+    func factoryGetCurrentUser403WithNoTokenPassesNil() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: nil)
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+
+        _ = try await client.getCurrentUser()
+
+        #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: nil)])
+    }
+
+    @Test("Factory client: 401, refresh, replay 403 ACCOUNT_DISABLED passes the rotated token T2, once")
+    func factoryRefreshThenAccountDisabledPassesRotatedToken() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let session = RotatingSession()
+        let transport = FakeTransport()
+        let client = try TrackerClientFactory.make(
+            serverURL: makeBaseURL(),
+            info: AppClientInfo(platform: "ios", clientPlatform: "ios", build: "1", version: "1.0.0"),
+            tokenProvider: session,
+            sessionRefresher: session,
+            versionOutdatedHandler: FakeVersionOutdatedHandler(),
+            requestIDObserver: nil,
+            sessionEndingHandler: handler,
+            transport: transport
+        )
+        await transport.enqueue([
+            (.status(401), HTTPBody(envelopeString(code: 1002, errorCode: "TOKEN_EXPIRED", message: "Your session has expired. Please log in again"))),
+            (.status(403), HTTPBody(accountDisabled))
+        ])
+
+        let output = try await client.getCurrentUser()
+
+        guard case .forbidden = output else {
+            Issue.record("Expected .forbidden but got \(output)")
+            return
+        }
+        #expect(session.refreshCallCount == 1)
+        #expect(await transport.recordedRequests.first?.request.headerFields[.authorization] == "Bearer T1")
+        #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: "T2")])
     }
 }

@@ -13,6 +13,8 @@ import OpenAPIRuntime
 /// and the response is returned with a rebuilt body of the same bytes, so the generated client
 /// still decodes the typed `.forbidden` or `.notFound` output. The handler is called at most
 /// once per response. Public operations (`publicOperationIDs`) pass through untouched.
+/// The handler receives the bearer token of the request this middleware forwarded, so it must
+/// sit inside BearerAuthMiddleware (see TrackerClientFactory).
 public struct SessionEndingMiddleware: ClientMiddleware {
     private let handler: any SessionEnding
 
@@ -47,11 +49,23 @@ public struct SessionEndingMiddleware: ClientMiddleware {
         }
 
         if let reason = Self.reason(statusCode: statusCode, data: bufferedData) {
-            await handler.sessionEnded(reason: reason)
+            await handler.sessionEnded(reason: reason, requestToken: Self.bearerToken(in: request))
         }
 
         // Return the response with a rebuilt readable body of the same bytes
         return (response, HTTPBody(bufferedData))
+    }
+
+    /// The bearer token of the request this middleware forwarded: the text after the exact
+    /// prefix `"Bearer "` in its Authorization header. Nil when the header is absent, does not
+    /// start with that prefix, or has nothing after it. The value is never logged.
+    private static func bearerToken(in request: HTTPRequest) -> String? {
+        let prefix = "Bearer "
+        guard let value = request.headerFields[.authorization], value.hasPrefix(prefix) else {
+            return nil
+        }
+        let token = String(value.dropFirst(prefix.count))
+        return token.isEmpty ? nil : token
     }
 
     private static func reason(statusCode: Int, data: Data) -> SessionEndReason? {

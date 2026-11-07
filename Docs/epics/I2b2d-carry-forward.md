@@ -160,3 +160,50 @@ Package tests (inventory only; package tests may change only for E1):
 
 ## Gate 1 specs
 (Added before each story.)
+
+### E1: a stale 403 or 404 cannot sign out the next user
+- Contract slice: client guide section 4. A 403 ACCOUNT_DISABLED or 404 USER_NOT_FOUND on a bearerAuth operation means "redirect to login". The contract does not change.
+- New interface: yes. The signatures below are fixed at Gate 1.
+  - Package `Seams.swift`: `public protocol SessionEnding: Sendable { func sessionEnded(reason: SessionEndReason, requestToken: String?) async }`. This REPLACES `sessionEnded(reason:)`; there is no overload and no default. `SessionEndReason` is unchanged.
+  - Package `Middleware/SessionEndingMiddleware.swift`:
+    - `init(handler:)` is unchanged.
+    - When it calls the handler, it passes `requestToken`, read from the `Authorization` header of the `request` it received (the request it forwards to `next`). The value is the text after the exact prefix `"Bearer "`. It is nil when the header is absent, does not start with `"Bearer "`, or has nothing after the prefix.
+    - Unchanged: non-public operations only; only the 403/ACCOUNT_DISABLED and 404/USER_NOT_FOUND pairs; the body is returned byte-identical; the handler is awaited at most once per response.
+  - Package `TrackerClientFactory.swift` (D1): one new `internal static func makeMiddlewares(info: AppClientInfo, tokenProvider: any AccessTokenProviding, sessionRefresher: any SessionRefreshing, versionOutdatedHandler: any VersionOutdatedHandling, requestIDObserver: (any RequestIDObserving)?, sessionEndingHandler: (any SessionEnding)?) -> [any ClientMiddleware]`.
+    - It returns, outermost first: HeadersMiddleware, RefreshOn401Middleware, RateLimitMiddleware, VersionOutdatedMiddleware, BearerAuthMiddleware, then SessionEndingMiddleware only when a handler is given.
+    - `make(...)` keeps its public signature and uses this function.
+    - The order comment says why SessionEnding is inside BearerAuth: it must see the Authorization header BearerAuth sets.
+    - Nothing else in the file changes.
+  - App `Core/API/SessionEndingSeam.swift`:
+    - `init(onSessionEnded: @escaping @Sendable (SessionEndReason, String?) async -> Void)`.
+    - `sessionEnded(reason:requestToken:)` awaits the closure with both values.
+  - App `Core/API/ClientSeams.swift`: the session-ending closure keeps its existing guards (flag, box value, `isAuthenticated`).
+    - It then ends the session ONLY when `requestToken` is non-nil and equals `service.currentAccessToken`.
+    - On a mismatch, or a nil request token, while signed in, it does nothing except `LogInfo("Session end ignored: ignored a stale session-end", category: .auth)`, with no token values in the log.
+    - A code comment documents the trade-off: a request that used a token a refresh has since rotated gets ignored, because the next request carries the new token and gets its own 403.
+    - The E2 refactor of the guard comes later. E1 does not touch the guards.
+- Acceptance (tests):
+  - Package, with a fake transport and the middleware alone:
+    - 403 ACCOUNT_DISABLED and 404 USER_NOT_FOUND with `Authorization: Bearer T1` give `requestToken == "T1"`.
+    - No Authorization header gives nil.
+    - A non-Bearer value gives nil.
+  - Package, factory-built:
+    - `makeMiddlewares` returns exactly the six types in order. Without a handler, it returns the first five in order.
+    - A 403 ACCOUNT_DISABLED on getCurrentUser passes the provider's token (the one BearerAuth set) to the handler.
+    - The 401, refresh, replay, 403 path passes the rotated token "T2", once.
+  - Existing package tests: the 426, 429, 401-replay and SessionEnding tests stay unchanged in meaning. Only the handler's signature changes in the test doubles.
+  - App adapter, with fakes and `makeClientSeams()`:
+    - A matching token ends the session once.
+    - A stale token is ignored: the user stays signed in, there is no teardown, and the enrollment stays intact.
+    - A nil token while signed in is ignored.
+    - Signed out is a no-op.
+    - Two users: A signs in, then A's request is held in a fake transport until released (a deterministic handshake: the transport signals that the request arrived, then waits for a release, with no sleeps). A signs out, B signs in, and the transport then releases a 403 ACCOUNT_DISABLED for A's request. B is still signed in, there is no teardown, and the enrollment is untouched.
+    - The Face ID enrollment is untouched in every case.
+  - App composition: the client built from `makeClientSeams()` seams through `TrackerClientFactory.make`, with a fake transport, gets a 403 ACCOUNT_DISABLED on getCurrentUser for the signed-in user's token, and the session ends once.
+  - The existing ClientSeamsTests, SessionEndingSeamTests and SeamTests stay unchanged in meaning (call sites gain the token).
+- Files:
+  - Package sources: `Seams.swift`, `Middleware/SessionEndingMiddleware.swift`, `TrackerClientFactory.swift` (D1 only).
+  - Package tests: `SessionEndingMiddlewareTests.swift`, `TrackerClientFactoryTests.swift` (the order test only).
+  - App sources: `Core/API/SessionEndingSeam.swift`, `Core/API/ClientSeams.swift`.
+  - App tests: `Core/API/ClientSeamsTests.swift`, `Core/API/SessionEndingSeamTests.swift`, `Core/API/SeamTests.swift` (the `NoopSessionEnding` signature only).
+  - A new app test file `Core/API/StaleSessionEndTests.swift` is allowed for the two-user and composition tests.
