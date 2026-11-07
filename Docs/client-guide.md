@@ -85,12 +85,15 @@ Response (201) — success envelope, `data` contains the auth payload:
       "lastLoginAt": null
     },
     "accessToken": "<jwt>",
+    "expiresIn": 900,
     "refreshToken": "<token>"
   },
   "meta": { "timestamp": "...", "requestId": "...", "sessionId": "..." }
 }
 ```
 
+`expiresIn` is the access token lifetime in seconds, always equal to the token's `exp` minus `iat`, derived from `JWT_EXPIRY` (default 15 minutes, 900).  
+`user.email` is always present and never null in the user object returned by register.  
 `refreshToken` in the body is **iOS only** — present only when `X-Client-Platform: ios` is sent. It is always set as an httpOnly cookie regardless of platform.  
 Source: `__tests__/integration/auth.test.ts` (register tests)
 
@@ -107,8 +110,15 @@ Optional: `rememberMe` (boolean, default `true`)
 The `rememberMe` choice is carried through every token rotation.  
 Source: `src/services/auth.service.ts:161`, `src/utils/refreshCookie.ts`
 
-Response (200): same envelope shape as register — `{ success, data: { user, accessToken, refreshToken }, meta }`. `refreshToken` body field is iOS only.  
+Response (200): same envelope shape as register — `{ success, data: { user, accessToken, expiresIn, refreshToken }, meta }`. `expiresIn` is the access token lifetime in seconds, always equal to the token's `exp` minus `iat`, derived from `JWT_EXPIRY` (default 15 minutes, 900). `user.email` is always present and never null. `refreshToken` body field is iOS only.  
 Source: `__tests__/integration/auth-remember-me.test.ts`
+
+**Error responses:**
+- `400 VALIDATION_ERROR` — malformed or oversized request body.
+- `401 UNAUTHORIZED` — wrong password or unknown email.
+- `403 ACCOUNT_DISABLED` — account exists but has been deactivated by an administrator. The client must redirect to the login screen and discard stored tokens; re-attempting will continue to fail until an administrator re-enables the account.
+- `426 UPGRADE_REQUIRED` — iOS only; build/version is below the enforced minimum (see §3.6).
+- `429 RATE_LIMIT_EXCEEDED` — too many login attempts; respect `Retry-After`.
 
 ### 3.3 Token Refresh
 
@@ -137,7 +147,8 @@ Response (200):
 ```
 
 `refreshToken` in the body is only present for `X-Client-Platform: ios`.  
-`expiresIn: 900` is the access token lifetime in seconds (15 minutes).  
+`expiresIn` is the access token lifetime in seconds, always equal to the token's `exp` minus `iat`, derived from `JWT_EXPIRY` (default 15 minutes, 900).  
+`user.email` is always present and never null in the user object returned by refresh and GET /auth/me.  
 Source: `src/routes/auth.routes.ts:277`
 
 The server always sets the new refresh token as an httpOnly cookie. The old token is marked rotated, not immediately deleted (see grace window below).
@@ -146,7 +157,7 @@ The server always sets the new refresh token as an httpOnly cookie. The old toke
 
 | Parameter | Default | Source |
 |-----------|---------|--------|
-| Access token (JWT) | 15 minutes | `JWT_EXPIRY` env — `src/config/env.ts:22` |
+| Access token (JWT) | 15 minutes | `JWT_EXPIRY` env — `src/config/env.ts:22`. This is also the source of `expiresIn` in login, register, and refresh responses. |
 | Refresh token | 7 days sliding | `REFRESH_TOKEN_EXPIRY` env — `src/config/env.ts:24` |
 | Grace window | 45 seconds | `REFRESH_GRACE_SECONDS` env — `src/services/auth.service.ts:200-208` |
 | Absolute session cap | 90 days from first login | `REFRESH_ABSOLUTE_MAX_DAYS` env — `src/services/auth.service.ts:221-226` |
@@ -157,11 +168,24 @@ Source: `src/services/auth.service.ts:199-210`, `__tests__/integration/auth.test
 **Absolute session cap:** After 90 days, the entire chain is revoked regardless of activity. The user must log in again.  
 Source: `__tests__/integration/auth-session-cap.test.ts`
 
+**Error responses:**
+- `400 VALIDATION_ERROR` — malformed or oversized request body.
+- `401` — expired, invalid, missing, or revoked refresh token (see §3.6 for specific codes).
+- `403 ACCOUNT_DISABLED` — the account associated with the refresh token has been deactivated. The client must redirect to the login screen and discard stored tokens.
+- `426 UPGRADE_REQUIRED` — iOS only; build/version is below the enforced minimum (see §3.6).
+- `429 RATE_LIMIT_EXCEEDED` — too many requests; respect `Retry-After`.
+
 ### 3.4 Token Storage Guidance
 
 **iOS:** Store the refresh token from the response body in the iOS Keychain, protected with biometric authentication (Face ID / Touch ID). Always send `X-Client-Platform: ios` to receive the body token. Make API calls with `URLSession` (not `WKWebView`). iOS must disable cookie handling: set `URLSessionConfiguration.httpShouldSetCookies = false` and supply no cookie storage — if cookies are enabled the server's httpOnly cookie takes precedence over the body token and the client loses the ability to provide the refresh token independently.
 
 **Web:** Do NOT store the refresh token in `localStorage` or `sessionStorage`. Use the httpOnly cookie (automatically managed by the browser). Keep the access token in memory only. Never write either token to persistent storage.
+
+**Web CORS configuration:** CORS is controlled by `CORS_ORIGIN` only — a comma-separated list of allowed origins. Each entry must be scheme, host and optional port with no trailing slash (e.g. `http://localhost:5173` or `https://tracker.bmalberta.com`); entries with a trailing slash, path, query string or fragment are rejected at startup. Origin matching is an exact string comparison. In production every origin must use https and localhost is not permitted. For a matching origin, the server echoes exactly that origin in `Access-Control-Allow-Origin` and never responds with `*`. Credentials (`credentials: "include"`) are always allowed. Allowed request headers are `Content-Type`, `Authorization`, `X-Request-Id`, `X-Session-Id`, `sentry-trace` and `baggage`. Allowed methods are `GET`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS`. Preflight results are cached for 600 seconds. Readable response headers (exposed to JavaScript via `access-control-expose-headers`) are `X-Request-Id`, `X-Session-Id`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and `Retry-After`.  
+Source: `src/app.ts` (CORS block), `src/config/env.ts` (CORS_ORIGIN rules)
+
+**Refresh cookie attributes (web):** The refresh token cookie is HttpOnly, SameSite=Strict, Secure only in production, host-only (no `Domain` attribute), with `Path=/tracker/v2/auth` so that both `/auth/refresh` and `/auth/logout` receive it automatically. When `rememberMe: true` the cookie has a 7-day Max-Age renewed on every rotation; when `rememberMe: false` the cookie is a session cookie with no Max-Age and the browser discards it on close.  
+Source: `src/utils/refreshCookie.ts`
 
 **Single-flight refresh:** If multiple requests receive a 401 simultaneously, only one should call `/auth/refresh`. Others should queue and resume once the new access token is available. The 45-second grace window is designed to absorb natural races between concurrent requests sharing the same token.
 
@@ -171,7 +195,7 @@ Source: `__tests__/integration/auth-session-cap.test.ts`
 
 The handler revokes the refresh-token chain for a refresh token sent in the `refreshToken` cookie or, when there is no cookie, in the JSON body field `refreshToken`, then clears the cookie. A logout that carries no refresh token revokes nothing and still returns 200.
 
-**Web clients** rely on the httpOnly cookie, which the server clears on a 200. No body is needed.
+**Web clients** rely on the httpOnly cookie. The cookie's `Path=/tracker/v2/auth` covers both `/auth/refresh` and `/auth/logout`, so the browser sends it to logout automatically. The server revokes the refresh-token chain through the cookie and clears the cookie on a 200. No body is needed.
 
 **iOS clients must NOT send the refresh token to logout** (no cookie, because cookie handling is disabled, and no `refreshToken` in the body). iOS keeps its biometric-protected Keychain refresh token across an explicit logout so Face ID can sign the user in again (decision A15). Sending the token would revoke the session and break Face ID sign-in after logout. The server session therefore lives until the 7-day sliding expiry or the 90-day absolute cap; an administrator can revoke every session of a user with `npm run user:reset-password`.
 
@@ -247,6 +271,19 @@ All errors use this shape:
 Source: `src/utils/response.ts:97-123`
 
 Every operation in the OpenAPI spec documents a `500` response using this same `Error` envelope (C12). Clients should handle 500 responses generically — they represent unexpected server errors.
+
+**Middleware statuses on authenticated endpoints (C15).** Every operation secured with `bearerAuth` can return any of the following from shared middleware before the handler runs:
+
+| Status | ErrorCode | Cause |
+|--------|-----------|-------|
+| 401 | see §3.6 | Missing, expired, or invalid access token |
+| 403 | `ACCOUNT_DISABLED` | Account is deactivated; redirect to login |
+| 404 | `USER_NOT_FOUND` | Valid token but account has since been deleted; redirect to login |
+| 429 | `RATE_LIMIT_EXCEEDED` | General rate limit exceeded; respect `Retry-After` |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
+| 400 (body ops) | `INVALID_INPUT` or `VALIDATION_ERROR` | Operations with a request body: 400 INVALID_INPUT or VALIDATION_ERROR, including an oversized or malformed body; the envelope carries requestId and sessionId like every other error |
+
+Clients must handle all five on every call to a `bearerAuth` endpoint. Public endpoints (register, login, refresh, version-check) can still return 429 and 500 from their own rate limiters and the global error handler.
 
 **426 (Upgrade Required) — `VersionOutdatedError` shape:** The 426 response uses a specialised envelope. `error.details` is a `VersionOutdatedDetails` object:
 

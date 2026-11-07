@@ -1,5 +1,5 @@
-backend_commit=35ff2bc6710a98cedd568663a39771a54b89605b
-decisions_revision=21
-spec_sha256=e2dab4f631fa16e8a39300b1f140316d5a96dd7f471c9b24f04a46c781fa8611
+backend_commit=5c86cc3d86d98c0bd864f0dc54f459a58fd1bf07
+decisions_revision=24
+spec_sha256=55f570342c697046f260634f89d4f773db9ffd66e0c7eb549426ee159dbaf86f
 status=CONFORMANT
-synced_at=2026-11-05T20:10:38Z
+synced_at=2026-11-07T02:01:38Z

@@ -2,6 +2,6 @@
 
 Status: CONFORMANT
 
-Synced from the backend at commit 35ff2bc6710a98cedd568663a39771a54b89605b (decisions revision 21, spec sha256 e2dab4f631fa) on 2026-11-05T20:10:38Z.
+Synced from the backend at commit 5c86cc3d86d98c0bd864f0dc54f459a58fd1bf07 (decisions revision 24, spec sha256 55f570342c69) on 2026-11-07T02:01:38Z.
 The spec is validated against real responses in the backend's test suite (decision C9).
 API models come from this spec. Do not hand-edit contract/openapi.json; rerun scripts/sync-contract.sh.
