@@ -22,6 +22,8 @@ You need three things in your **login keychain** before you can archive:
 
 Verify: `security find-identity -v -p codesigning | grep "Apple Distribution"` — you should see your certificate.
 
+**Configure signing in Xcode.** Open `ChristmasTracker.xcodeproj` → ChristmasTracker target → Signing and Capabilities → Release: turn off Automatically manage signing, choose your team, select the ad hoc provisioning profile. Run `bash scripts/release.sh preflight --build 500` to verify settings are correct before archiving.
+
 ### 2. Register test devices
 
 Each device must be registered in the Apple Developer portal before the
@@ -132,15 +134,23 @@ releasing (Developer portal → Profiles → regenerate, download, open).
 bash scripts/release.sh archive --build 500
 ```
 
+Signing comes from the Xcode project (which preflight verifies). The only
+build setting passed on the command line is `CURRENT_PROJECT_VERSION=<build>`.
 Runs `xcodebuild archive` with the `ChristmasTracker` scheme, `Release`
-configuration, `generic/platform=iOS` destination, manual signing, and
-`CURRENT_PROJECT_VERSION=500`. Produces:
+configuration, and `generic/platform=iOS` destination. Produces:
 
 ```
 build/release/500/ChristmasTracker.xcarchive
 ```
 
 This takes 2–5 minutes on a cold build.
+
+> **Fallback:** If your project's Xcode signing settings cannot be configured
+> (for example, SPM dependencies cause conflicts), set
+> `RELEASE_ARCHIVE_SIGNING=cli` in `scripts/release.env`. This passes
+> `CODE_SIGN_STYLE`, `DEVELOPMENT_TEAM`, and `PROVISIONING_PROFILE_SPECIFIER`
+> as CLI overrides — the original behaviour. Note that CLI overrides may fail
+> for SPM dependencies in some configurations.
 
 ### Step 3 — Export
 
@@ -171,6 +181,7 @@ Checks the IPA in place (without uploading). All of the following must pass:
 - No `NSAllowsArbitraryLoads` = true
 - `NSFaceIDUsageDescription` present
 - Embedded profile: ad hoc, not expired, `get-task-allow` = false
+- `SENTRY_DSN` present and non-empty (value never printed)
 - `codesign --verify --strict` passes, team ID matches
 - No debug entitlement in app binary
 - `Config-Secrets.xcconfig` not in the bundle
@@ -205,19 +216,14 @@ Omit `--yes` and add `--dry-run` to preview the commands without executing them.
 bash scripts/release.sh install-info --build 500
 ```
 
-Copy the `policy:set` block from the output and run it on the **API server** (not
-here — the script never runs `policy:set`):
+The command prints a values-only block (platform, build, version, URLs) labelled
+"Values for policy:set". Pass these to `policy:set` on the **API server** (not here —
+the script never runs `policy:set`). The exact flag names are in the API chat's local
+quickstart (unconfirmed here).
 
-```
-npm run policy:set -- --platform ios \
-  --latest-build 500 --latest-version 5.0 \
-  --manifest-url 'https://content.bmalberta.com/distribution/tracker/500/manifest.plist' \
-  --ipa-url 'https://content.bmalberta.com/distribution/tracker/500/ChristmasTracker-5.0-500.ipa'
-```
-
-Decide whether to raise `--min-build`. Raising it forces devices on older builds to
+Decide whether to raise the minimum build. Raising it forces devices on older builds to
 update before they can use the app. For the first release (500 replacing 4.4), there
-is no prior v2 build to force off, so you can leave `--min-build` at its default or
+is no prior v2 build to force off, so you can leave the minimum at its default or
 set it to 500 to block the 4.4 distribution channel entirely.
 
 ### Step 8 — Run all subcommands in one shot (alternative)
@@ -260,14 +266,13 @@ its own and you understand what each step does.
 **Never delete an uploaded build.** The itms-services link for any build that was
 ever distributed will continue to work as long as the objects exist on S3.
 
-To roll back to a previous build, point the version policy back at that build's URLs:
+To roll back to a previous build, run `policy:set` on the API server with the previous build's values (exact flag names are in the API chat's local quickstart — unconfirmed here):
 
-```bash
-npm run policy:set -- --platform ios \
-  --latest-build <prev-build> --latest-version <prev-version> \
-  --manifest-url 'https://content.bmalberta.com/distribution/tracker/<prev-build>/manifest.plist' \
-  --ipa-url 'https://content.bmalberta.com/distribution/tracker/<prev-build>/ChristmasTracker-<prev-version>-<prev-build>.ipa'
-```
+- `--platform ios`
+- `--latest-build <prev-build>`
+- `--latest-version <prev-version>`
+- `--manifest-url https://content.bmalberta.com/distribution/tracker/<prev-build>/manifest.plist`
+- `--ipa-url https://content.bmalberta.com/distribution/tracker/<prev-build>/ChristmasTracker-<prev-version>-<prev-build>.ipa`
 
 The first release (500) has nothing to roll back to. If 500 is broken and you need
 the app working immediately, re-sign a corrected build as 501.
@@ -285,6 +290,7 @@ the app working immediately, re-sign a corrected build as 501.
 | `Working tree is not clean` | Uncommitted or unstaged files | `git status` and stash or commit pending changes |
 | `HEAD does not match origin/master` | Local commit not pushed | Push first, or use `--allow-unpushed` (never for a production release) |
 | `Object already exists on S3` | Build number was previously uploaded | Increment the build number; never reuse a build number |
+| `CODE_SIGN_STYLE is wrong` | Signing set to Automatic in Xcode | Open project, ChristmasTracker target → Signing and Capabilities → Release → turn off Automatically manage signing |
 | `codesign --verify --strict failed` | Archive produced an invalid signature | Rebuild; ensure the correct Distribution certificate is active and the profile is re-downloaded |
 | Safari shows "Cannot connect to ...installer" | Public URL not reachable | Confirm the manifest and IPA are accessible: `curl -I 'https://content.bmalberta.com/distribution/tracker/500/manifest.plist'` |
 | Device not in provisioning profile | UDID not registered | Add the device UDID to the Developer portal, regenerate the profile, re-release |

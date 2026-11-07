@@ -17,8 +17,8 @@ None. This package has no server-contract dependency.
 
 | File | Description |
 |------|-------------|
-| `scripts/release.sh` | New ad hoc release script: preflight, archive, export, verify-ipa, manifest, upload, install-info, all subcommands; `--dry-run` on every subcommand |
-| `scripts/test-release.sh` | New self-contained stub/fixture test harness; 45 tests; run by `scripts/verify.sh` |
+| `scripts/release.sh` | New ad hoc release script: preflight, archive, export, verify-ipa, manifest, upload, install-info, all subcommands; `--dry-run` on every subcommand; fix pass adds project signing check, `RELEASE_ARCHIVE_SIGNING` opt-in, correct device count (plutil returns count directly), SENTRY_DSN non-empty check, PRODUCT_NAME bundle path, install-info cleanup |
+| `scripts/test-release.sh` | New self-contained stub/fixture test harness; 45 tests (R1), 62 tests after fix pass; run by `scripts/verify.sh` |
 | `scripts/release.env.example` | Env template; copy to `scripts/release.env` and fill in real values |
 | `scripts/verify.sh` | Added one step: runs `scripts/test-release.sh` |
 | `.gitignore` | Added `scripts/release.env`, `scripts/.release-ledger`, `build/` |
@@ -43,7 +43,9 @@ None. This package has no server-contract dependency.
    ```
    Set `RELEASE_TEAM_ID` (your 10-character Apple team ID), `RELEASE_PROFILE_NAME` (the
    exact name of the ad hoc profile as it appears in Xcode), `RELEASE_S3_BUCKET`, and
-   optionally `RELEASE_AWS_PROFILE`.
+   optionally `RELEASE_AWS_PROFILE`. Also configure signing in Xcode (ChristmasTracker
+   target → Signing and Capabilities → Release → Manual, your team, ad hoc profile) —
+   preflight will verify.
 
 3. **Configure AWS.**
    The upload subcommand uses the AWS CLI. Configure IAM credentials with
@@ -101,15 +103,15 @@ wrong during the first real preflight/archive/upload:
    matches the standard Apple ad hoc profile format. If Apple changes the structure, the
    grep/PlistBuddy path in `cmd_preflight` may need updating.
 
-3. **xcodebuild archive flags** — `archive` passes `CODE_SIGN_STYLE=Manual`,
-   `PROVISIONING_PROFILE_SPECIFIER`, `DEVELOPMENT_TEAM`, and `CURRENT_PROJECT_VERSION`
-   on the command line. This combination works for most projects, but if Xcode selects the
-   wrong certificate or profile, check the archive log in `build/release/<build>/`.
+3. **xcodebuild archive signing** — Signing settings are read from the Xcode project by
+   default (preflight checks them). If signing fails during archive, check the target's
+   Signing and Capabilities settings in Xcode, or set `RELEASE_ARCHIVE_SIGNING=cli` in
+   `scripts/release.env` as a fallback.
 
-4. **IPA layout** — `verify-ipa` unzips and reads `Payload/ChristmasTracker.app/Info.plist`
-   and `Payload/ChristmasTracker.app/embedded.mobileprovision`. If `xcodebuild` names the
-   `.app` differently, verify-ipa will fail with "Info.plist not found". Adjust the
-   `app_dir` glob in `cmd_verify_ipa` around line 561 of `release.sh`.
+4. **IPA layout** — `verify-ipa` reads `PRODUCT_NAME` from xcodebuild build settings to
+   find the `.app` bundle. If build settings are unavailable, it falls back to scanning
+   for a single `Payload/*.app` entry. This was fixed in the fix pass; the hardcoded
+   `ChristmasTracker.app` assumption no longer applies.
 
 5. **S3 bucket policy** — The upload subcommand assumes `aws s3 cp` with the configured
    credentials can write to `s3://<bucket>/<prefix>/<build>/`. Confirm the IAM policy
@@ -123,4 +125,4 @@ wrong during the first real preflight/archive/upload:
 
 ## Section 9 of PROGRAM.md (one line)
 
-> I6b-1 (release script): `scripts/release.sh` with preflight/archive/export/verify-ipa/manifest/upload/install-info, test harness (45 tests), and runbook — agents stop here; Brian runs the first release before 2026-11-25.
+> I6b-1 (release script + fix pass): `scripts/release.sh` with preflight (project signing check), archive/export/verify-ipa/manifest/upload/install-info, test harness (62 tests), and runbook — agents stop here; Brian runs the first release before 2026-11-25.

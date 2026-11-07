@@ -124,6 +124,22 @@ profile installed, it proceeds to verify expiry, identity, and optionally `scrip
    `run_tests()` returns; `local` variables are out of scope at that point, causing
    "unbound variable" on cleanup.
 
+## Corrected in fix pass (commit 0e46c4a)
+
+The following items from the original R1 delivery were found incorrect or incomplete during Brian's review and corrected in story G1:
+
+| Item | Original issue | Fix |
+|------|----------------|-----|
+| Archive signing | Passed `CODE_SIGN_STYLE=Manual`, `DEVELOPMENT_TEAM`, `PROVISIONING_PROFILE_SPECIFIER` as CLI overrides — breaks SPM dependencies | Signing now read from Xcode project by default; CLI opt-in via `RELEASE_ARCHIVE_SIGNING=cli` |
+| Device count | Piped plutil output through `wc -l`; plutil returns count directly, so count was always 1 | Removed `wc -l` pipe; validates numeric result; fails on 0 |
+| SENTRY_DSN | Treated key existence as sufficient; empty value passed | Now fails if key missing or value empty |
+| Bundle name | Hardcoded `ChristmasTracker.app` in verify-ipa and export | Now reads `PRODUCT_NAME` from build settings with `Payload` scan fallback |
+| install-info output | Included `npm run policy:set` example with unconfirmed flag names | Removed example; replaced with "(unconfirmed here)" note |
+
+Gate 2 verdicts (R1 — retroactive, applied during fix pass):
+- convention-reviewer: PASS (reviewed on G1 diff; no issues found in R1 scope)
+- acceptance-reviewer: PASS with the above corrections applied
+
 ## Not done or partial
 
-None. All Gate 1 acceptance criteria met; 45/45 tests pass; verify.sh passes.
+The five items in "Corrected in fix pass" were delivered with bugs in R1. All five are corrected in commit 0e46c4a (story G1).
