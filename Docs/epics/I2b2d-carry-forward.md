@@ -207,3 +207,47 @@ Package tests (inventory only; package tests may change only for E1):
   - App sources: `Core/API/SessionEndingSeam.swift`, `Core/API/ClientSeams.swift`.
   - App tests: `Core/API/ClientSeamsTests.swift`, `Core/API/SessionEndingSeamTests.swift`, `Core/API/SeamTests.swift` (the `NoopSessionEnding` signature only).
   - A new app test file `Core/API/StaleSessionEndTests.swift` is allowed for the two-user and composition tests.
+
+### E2: one session-end entry point
+- Contract slice: none. This is app-internal. Client guide section 4 and the 401 "refresh once, then re-login" rule are unchanged.
+- Callers today. Every teardown goes through `AuthenticationService.logout(reason:)`:
+  - the server end (`ClientSeams.swift:87`, after the E1 token check);
+  - the refresh credential failure (`AuthenticationService.swift:391-404`, through its own flag);
+  - the user (`ProfileView.swift:86`);
+  - the lock fallback (`InactivityLockController.swift:137`).
+
+  The two flags are inventory 2.
+- New interface: yes. These signatures are fixed at Gate 1, all on the `@MainActor` `AuthenticationService`.
+  - `internal func endSession(reason: TeardownReason, deletingEnrollmentForCurrentUser: Bool = false) async`. This is THE single guarded entry point, and the only place a teardown happens. It does three things, in order:
+    1. When `deletingEnrollmentForCurrentUser` is true and the enrolled user is the current user, it deletes the enrollment and refreshes the biometric state (today's U3 behaviour).
+    2. It runs today's local-first logout body: `sessionManager.teardown(reason:)`, then `clearAuthState()`, then `clearStoredTokens()`, then `isLoading = false`.
+    3. It sends the best-effort, non-awaited `repo.logout()`.
+  - `func logout(reason: TeardownReason = .userLogout) async` keeps its signature. It now just calls `endSession(reason:)`, with the enrollment untouched as before.
+  - `internal func handleServerSessionEnd(reason: SessionEndReason, requestToken: String?) async`. It moves the E1 adapter logic from the box closure into the service:
+    - It is a no-op when not signed in.
+    - When signed in, it ignores a nil or non-matching token with the fixed log "Session end ignored: ignored a stale session-end".
+    - On a match, it logs "Session ended by the server: \(reason)" and calls `endSession(reason: .sessionExpired)`. The enrollment is never deleted.
+  - The refresh credential-failure paths (`refreshTokenIfNeeded` and `forceRefresh`) call `endSession(reason: .sessionExpired, deletingEnrollmentForCurrentUser: true)` only when `isAuthenticated`. `forceRefresh` still rethrows.
+  - `endSessionAfterRefreshCredentialFailure()` is removed, or reduced to that one call.
+  - `ClientSeams.swift`: the session-ending closure only forwards: `await box.value?.handleServerSessionEnd(reason:requestToken:)` on the main actor.
+  - `AuthServiceBox.isEndingSession` and its `nonisolated(unsafe)` are removed, and the box and closure comments are updated.
+- Guard semantics (one guard, owned by the service):
+  - The first `endSession` call tears down.
+  - Any `endSession` call that arrives while one is in flight, from any path, waits for it to finish. It does not tear down again and does not delete the enrollment, so every awaiting caller returns after the teardown.
+  - After an end completes, further `endSession` calls are no-ops until a new session starts.
+  - The guard resets when a session starts. That is a successful login, register, or Face ID sign-in, which all go through `handleAuthSuccess`. A later end then works.
+  - A fresh service that was never signed in can still end once (for example, the lock fallback or a user logout on a new service).
+  - The mechanism is the implementer's choice, for example a stored `Task<Void, Never>?` that callers await. It must not use GCD, and it must not rely on sleeps or yields.
+- Instrumentation: `endSession` and `handleServerSessionEnd` are main-actor-isolated, so they get manual SentrySDK spans with the explaining comment. The Sentry names are `service.authentication.endSession` and `service.authentication.handleServerSessionEnd`. Nothing that identifies the user goes into a span.
+- Acceptance (tests: fakes, deterministic handshakes, no sleeps or yields):
+  1. A server end and a refresh credential failure that overlap tear down once. The refresh failure deletes the enrollment only if it starts the end.
+  2. A user logout and a server end that overlap tear down once. Logout is held inside the teardown by a clearable that signals when it is entered and waits for a release. A matching-token server end arrives during the hold. The result is one teardown, and both callers return after it.
+  3. A user logout and a refresh credential failure that overlap tear down once, with the enrollment left intact because the logout started the end.
+  4. After an end and a new sign-in, another end tears down again (the guard resets).
+  5. A server-initiated end never deletes the Face ID enrollment.
+  6. `handleServerSessionEnd` keeps the E1 behaviour: a stale token, a nil token, or being signed out is a no-op.
+  7. The existing U2, U3 and E1 tests still pass unchanged in meaning: ClientSeamsTests, StaleSessionEndTests, SessionEndingSeamTests, the U3 tests in SignInWithBiometricTests, and the LogoutPath and SessionTeardown tests. Any existing test that calls logout twice on one service and expects two teardowns must be reported. It is not silently rewritten.
+- Files:
+  - App sources: `Features/Authentication/Services/AuthenticationService.swift`, `Core/API/ClientSeams.swift`.
+  - App tests: a new `Features/Authentication/SessionEndGuardTests.swift`. `Core/API/ClientSeamsTests.swift` may change only if the box flag removal needs it (a signature or call site only).
+  - No package change.

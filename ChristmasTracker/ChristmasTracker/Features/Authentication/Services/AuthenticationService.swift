@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import TrackerAPI
 import TrackerInstrumentation
 
 @MainActor
@@ -59,8 +60,10 @@ final class AuthenticationService {
     // Single-flight refresh: keyed by refresh token so concurrent callers share one repo call.
     private var inflightRefreshTasks: [String: Task<AuthSession, Error>] = [:]
 
-    // Single-flight session end after a refresh credential failure (main-actor isolated).
-    private var isEndingSession: Bool = false
+    // The one session-end guard (main-actor isolated). Set by the first endSession call of a
+    // session and kept after it completes, so later calls await it (in flight) or return at
+    // once (completed). handleAuthSuccess clears it when a new session starts.
+    private var sessionEndTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -280,28 +283,67 @@ final class AuthenticationService {
         }
     }
 
-    /// Logout current user
+    /// Logout current user. Goes through the single session-end guard; the enrollment is untouched.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
     func logout(reason: TeardownReason = .userLogout) async {
-        // Capture repo reference before clearing state.
-        let repo = authRepository
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.logout",
+            operation: "service.authentication.logout"
+        )
+        defer { transaction.finish() }
+        await endSession(reason: reason)
+    }
 
-        // Local teardown FIRST — the user is signed out immediately regardless of network.
-        // SessionClearable path clears all registered clearables.
-        await sessionManager.teardown(reason: reason)
-        // AuthenticationService is not a registered clearable: SessionManager must exist before
-        // AuthenticationService can be constructed (circular dependency), so it clears its own state here.
-        clearAuthState()
-        clearStoredTokens()
-        isLoading = false
-
-        // Best-effort non-awaited server logout — enrollment is never touched here.
-        Task {
-            do {
-                try await repo.logout()
-            } catch {
-                LogError("Logout API failed (best-effort): \(error)", category: .auth)
-            }
+    /// The single guarded session-end entry point; the only place a teardown happens.
+    /// The first call of a session tears down. Calls that arrive while it is in flight await it
+    /// and do not tear down or delete again; after it completes, calls are no-ops until a new
+    /// session starts (handleAuthSuccess resets the guard). A never-signed-in service can end once.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
+    internal func endSession(reason: TeardownReason, deletingEnrollmentForCurrentUser: Bool = false) async {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.endSession",
+            operation: "service.authentication.endSession"
+        )
+        defer { transaction.finish() }
+        if let existing = sessionEndTask {
+            await existing.value
+            return
         }
+        // Created and stored with no suspension in between; main-actor isolation serializes callers.
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.performSessionEnd(reason: reason, deletingEnrollment: deletingEnrollmentForCurrentUser)
+        }
+        sessionEndTask = task
+        await task.value
+    }
+
+    /// A server-initiated session end (403 ACCOUNT_DISABLED or 404 USER_NOT_FOUND), forwarded by
+    /// the SessionEnding seam. Ends only a signed-in session, and only when the failing request
+    /// carried the current access token. Never deletes the Face ID enrollment.
+    /// Stale responses: a slow 403/404 to a request made by an earlier session (for example,
+    /// user A's request answered after user B signed in) carries A's token, not the current one,
+    /// so it is ignored. A nil request token is ignored too. Trade-off: a request that used a
+    /// token a refresh has since rotated is also ignored; that is acceptable because the next
+    /// request carries the new token and gets its own 403/404, which ends the session.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
+    // using manual SentrySDK span per coding-standards.md.
+    internal func handleServerSessionEnd(reason: SessionEndReason, requestToken: String?) async {
+        let transaction = SentrySDK.startTransaction(
+            name: "service.authentication.handleServerSessionEnd",
+            operation: "service.authentication.handleServerSessionEnd"
+        )
+        defer { transaction.finish() }
+        guard isAuthenticated else { return }
+        guard let requestToken, requestToken == currentAccessToken else {
+            // No token values in the log.
+            LogInfo("Session end ignored: ignored a stale session-end", category: .auth)
+            return
+        }
+        LogInfo("Session ended by the server: \(reason)", category: .auth)
+        await endSession(reason: .sessionExpired)
     }
 
     /// Refresh access token
@@ -383,24 +425,43 @@ final class AuthenticationService {
 
     // MARK: - Private Helpers
 
-    /// Ends the session after a refresh-context credential failure (D-b): deletes the Face ID
-    /// enrollment when it belongs to the current user, then logs out with `.sessionExpired`.
-    /// No-op when nobody is signed in or another session end is already in progress, so a
-    /// concurrent refreshTokenIfNeeded and forceRefresh sharing one failed refresh, or a
-    /// forceRefresh that arrives during logout, tears down at most once.
+    /// Ends the session after a refresh-context credential failure (D-b), only when signed in:
+    /// the guarded end deletes the Face ID enrollment if it belongs to the current user and
+    /// this call starts the end.
     private func endSessionAfterRefreshCredentialFailure() async {
-        // Check and set with no suspension between them; main-actor isolation serializes callers.
-        guard isAuthenticated, !isEndingSession else { return }
-        isEndingSession = true
-        defer { isEndingSession = false }
+        guard isAuthenticated else { return }
+        await endSession(reason: .sessionExpired, deletingEnrollmentForCurrentUser: true)
+    }
 
-        if credentialStore.enrolledUser()?.userId == currentUser?.id {
+    /// The body of a session end; run only by the task endSession stores as the guard.
+    private func performSessionEnd(reason: TeardownReason, deletingEnrollment: Bool) async {
+        if deletingEnrollment, let userId = currentUser?.id, credentialStore.enrolledUser()?.userId == userId {
             try? credentialStore.delete()
             // Keep the enrolled-user snapshot in step with the store so the login screen
             // does not offer Face ID for a deleted token.
             refreshBiometricState()
         }
-        await logout(reason: .sessionExpired)
+
+        // Capture repo reference before clearing state.
+        let repo = authRepository
+
+        // Local teardown FIRST — the user is signed out immediately regardless of network.
+        // SessionClearable path clears all registered clearables.
+        await sessionManager.teardown(reason: reason)
+        // AuthenticationService is not a registered clearable: SessionManager must exist before
+        // AuthenticationService can be constructed (circular dependency), so it clears its own state here.
+        clearAuthState()
+        clearStoredTokens()
+        isLoading = false
+
+        // Best-effort non-awaited server logout — enrollment is never touched here.
+        Task {
+            do {
+                try await repo.logout()
+            } catch {
+                LogError("Logout API failed (best-effort): \(error)", category: .auth)
+            }
+        }
     }
 
     /// Applies the biometric offer logic shared between login() and register().
@@ -467,6 +528,8 @@ final class AuthenticationService {
     }
 
     private func handleAuthSuccess(session: AuthSession) async {
+        // A new session starts: reset the session-end guard so a later end tears down again.
+        sessionEndTask = nil
         // Update user
         currentUser = session.user
         isAuthenticated = true
