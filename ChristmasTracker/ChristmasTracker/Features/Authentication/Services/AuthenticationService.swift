@@ -50,12 +50,9 @@ final class AuthenticationService {
 
     // MARK: - Private State
     private var tokens: AuthTokens?
-    private let deviceFingerprint: String
     private static let keychainBiometricTokenKey = "auth.biometric_token"
     private static let keychainBiometricUserIdKey = "auth.user_id"
     private static let keychainReasonMessage = "Authenticate to access your Christmas Tracker account"
-    private static let keychainAuthTokensKey = "auth.tokens"
-    private static let keychainAuthRefreshTokenKey = "auth.refresh_token"
 
     // Single-flight refresh: keyed by refresh token so concurrent callers share one repo call.
     private var inflightRefreshTasks: [String: Task<AuthSession, Error>] = [:]
@@ -83,8 +80,6 @@ final class AuthenticationService {
         self.legacyCleanup = legacyCleanup
         self.credentialStore = credentialStore
         self.enrollmentHistory = enrollmentHistory
-
-        self.deviceFingerprint = (try? DeviceFingerprintService.getFingerprint()) ?? "unknown"
 
         refreshBiometricAvailability()
         legacyCleanup.cleanUpLegacyTokens()
@@ -569,13 +564,7 @@ final class AuthenticationService {
         error = nil
     }
     private func clearStoredTokens() {
-        do {
-            try KeychainService.delete(Self.keychainAuthTokensKey)
-            try KeychainService.delete(Self.keychainAuthRefreshTokenKey)
-            LogDebug("Stored tokens cleared", category: .auth)
-        } catch {
-            LogError("Failed to clear tokens: \(error)", category: .auth)
-        }
+        legacyCleanup.clearStoredSessionTokens()
     }
 
     /// Full biometric state refresh: availability, type, and enrolled user snapshot.

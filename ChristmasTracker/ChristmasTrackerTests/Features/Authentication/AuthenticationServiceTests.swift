@@ -11,11 +11,15 @@ import Testing
 
 // MARK: - R9 test helper: FakeLegacyTokenCleanup
 
-/// Counts how many times cleanUpLegacyTokens() is called.
+/// Counts how many times cleanUpLegacyTokens() and clearStoredSessionTokens() are called.
+/// Never touches the Keychain (I2b-2d E3, D2): unit tests inject it so no AuthenticationService
+/// built in a unit test reaches KeychainService through init, logout or clearForSession.
 /// Lives in the test target only — never used in Previews or production.
 internal final class FakeLegacyTokenCleanup: LegacyTokenCleaning {
     private(set) var cleanUpCallCount: Int = 0
+    private(set) var clearStoredSessionTokensCallCount: Int = 0
     func cleanUpLegacyTokens() { cleanUpCallCount += 1 }
+    func clearStoredSessionTokens() { clearStoredSessionTokensCallCount += 1 }
 }
 
 // MARK: - R9 test helper: MockAuthenticationRepository actor-setter extension
@@ -53,7 +57,9 @@ struct AuthenticationServiceTests {
         let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         await service.login(
             email: "test@example.com",
@@ -71,7 +77,9 @@ struct AuthenticationServiceTests {
         let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         await service.login(
             email: "fail@example.com",
@@ -88,7 +96,9 @@ struct AuthenticationServiceTests {
         let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         await service.register(
             email: "new@example.com",
@@ -107,7 +117,9 @@ struct AuthenticationServiceTests {
         let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         // Login first
         await service.login(
@@ -133,7 +145,9 @@ struct AuthenticationServiceTests {
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
-            biometricAuthenticator: fakeAuth
+            biometricAuthenticator: fakeAuth,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         service.refreshBiometricAvailability()
         #expect(service.isBiometricAvailable == false)
@@ -148,7 +162,9 @@ struct AuthenticationServiceTests {
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
-            biometricAuthenticator: fakeAuth
+            biometricAuthenticator: fakeAuth,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         service.refreshBiometricAvailability()
         #expect(service.biometricType == .touchID)
@@ -163,7 +179,9 @@ struct AuthenticationServiceTests {
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
-            biometricAuthenticator: fakeAuth
+            biometricAuthenticator: fakeAuth,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         service.refreshBiometricAvailability()
         #expect(service.biometricType == .faceID)
@@ -178,7 +196,9 @@ struct AuthenticationServiceTests {
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
-            biometricAuthenticator: fakeAuth
+            biometricAuthenticator: fakeAuth,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         #expect(service.isBiometricAvailable == false)
         fakeAuth.stubbedIsAvailable = true
@@ -194,7 +214,9 @@ struct AuthenticationServiceTests {
         let service = AuthenticationService(
             repository: mockRepo,
             sessionManager: sessionManager,
-            biometricAuthenticator: FakeBiometricAuthenticator()
+            biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         return (service, mockRepo)
     }
@@ -241,7 +263,8 @@ struct AuthenticationServiceTests {
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
             emailStore: emailStore,
-            legacyCleanup: cleanup
+            legacyCleanup: cleanup,
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         return (service, mockRepo, emailStore, cleanup)
     }
@@ -358,6 +381,7 @@ struct AuthenticationServiceTests {
             repository: AccountDisabledLoginRepository(),
             sessionManager: SessionManager(initialClearables: []),
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
 

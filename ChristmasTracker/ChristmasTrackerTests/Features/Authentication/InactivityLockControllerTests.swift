@@ -122,7 +122,9 @@ struct InactivityLockControllerTests {
         let sessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: mockRepo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
         #expect(authService.isAuthenticated == true,

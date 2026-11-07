@@ -48,6 +48,7 @@ struct EnrollCurrentSessionTests {
             repository: repo,
             sessionManager: sessionManager,
             biometricAuthenticator: auth,
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         return (service, repo, store, auth)

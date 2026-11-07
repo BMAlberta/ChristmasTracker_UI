@@ -227,13 +227,34 @@ private actor SuspendingLogoutRepository: AuthenticationRepository {
         )
     }
 
+    // Deterministic handshake (I2b-2d E3): logout() records that it was entered, wakes every
+    // waitUntilLogoutEntered() caller, then suspends until resumeLogout(). No yields or sleeps.
+    private var logoutEntered = false
+    private var logoutReleased = false
+    private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
+
     func logout() async throws {
+        logoutEntered = true
+        let waiters = enteredWaiters
+        enteredWaiters = []
+        for waiter in waiters { waiter.resume() }
+        if logoutReleased { return }
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
             logoutContinuation = c
         }
     }
 
+    /// Returns once logout() has been entered (at once if it already was).
+    func waitUntilLogoutEntered() async {
+        if logoutEntered { return }
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            enteredWaiters.append(c)
+        }
+    }
+
+    /// Releases a suspended logout(); a later logout() call returns at once.
     func resumeLogout() {
+        logoutReleased = true
         logoutContinuation?.resume()
         logoutContinuation = nil
     }
@@ -252,6 +273,7 @@ private func makeSUT(
         repository: repo,
         sessionManager: sessionManager,
         biometricAuthenticator: biometricAuthenticator,
+        legacyCleanup: FakeLegacyTokenCleanup(),
         credentialStore: credentialStore
     )
 }
@@ -462,7 +484,8 @@ struct SignInWithBiometricTests {
 
     // MARK: - Logout order: isAuthenticated set false before logout call completes
 
-    @Test("logout sets isAuthenticated false before repository logout call completes")
+    @Test("logout sets isAuthenticated false before repository logout call completes",
+          .timeLimit(.minutes(1)))
     func logoutSetsIsAuthenticatedFalseBeforeRepoLogoutCompletes() async throws {
         let suspendingRepo = SuspendingLogoutRepository()
         let sessionManager = SessionManager(initialClearables: [])
@@ -470,6 +493,7 @@ struct SignInWithBiometricTests {
             repository: suspendingRepo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: InMemoryBiometricCredentialStore()
         )
 
@@ -477,13 +501,14 @@ struct SignInWithBiometricTests {
         await sut.login(email: "lo@example.com", password: "pass", rememberEmail: false)
         try #require(sut.isAuthenticated == true, "Precondition: must be authenticated")
 
-        // Start logout in a background task; it will suspend inside repo.logout.
+        // Start logout in a task; the best-effort repo.logout() it sends suspends until released.
         let logoutTask = Task {
             await sut.logout()
         }
 
-        // Yield so the logout task can run up to the suspension point inside repo.logout.
-        for _ in 0..<10 { await Task.yield() }
+        // Deterministic handshake: the service sends repo.logout() only after its local
+        // teardown (clearAuthState) has run, so entry means the local sign-out is done.
+        await suspendingRepo.waitUntilLogoutEntered()
 
         // The contract: isAuthenticated must be false BEFORE the repo logout call returns.
         #expect(sut.isAuthenticated == false,
@@ -510,6 +535,7 @@ struct SignInWithBiometricTests {
             repository: repo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         // Log in to establish token state.
@@ -527,6 +553,7 @@ struct SignInWithBiometricTests {
             repository: expiringRepo,
             sessionManager: sessionManager2,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         await sut2.login(email: "u1@example.com", password: "pass", rememberEmail: false)
@@ -553,6 +580,7 @@ struct SignInWithBiometricTests {
             repository: expiringRepo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         await sut.login(email: "u1@example.com", password: "pass", rememberEmail: false)
@@ -576,6 +604,7 @@ struct SignInWithBiometricTests {
             repository: credFailRepo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         await sut.login(email: "u1@example.com", password: "pass", rememberEmail: false)
@@ -599,6 +628,7 @@ struct SignInWithBiometricTests {
             repository: credFailRepo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         await sut.login(email: "u1@example.com", password: "pass", rememberEmail: false)
@@ -623,6 +653,7 @@ struct SignInWithBiometricTests {
             repository: netFailRepo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         await sut.login(email: "u1@example.com", password: "pass", rememberEmail: false)
@@ -722,6 +753,7 @@ struct SignInWithBiometricTests {
             repository: repo,
             sessionManager: sessionManager,
             biometricAuthenticator: FakeBiometricAuthenticator(),
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
 
@@ -1070,6 +1102,7 @@ private func makeSignedInFixture(
         repository: repo,
         sessionManager: sessionManager,
         biometricAuthenticator: FakeBiometricAuthenticator(),
+        legacyCleanup: FakeLegacyTokenCleanup(),
         credentialStore: store
     )
     await sut.login(email: "u1@test.invalid", password: "password-FAKE", rememberEmail: false)

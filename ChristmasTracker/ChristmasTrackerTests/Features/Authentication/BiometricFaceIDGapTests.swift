@@ -33,6 +33,7 @@ private func makeAuthSUT(
         repository: repo,
         sessionManager: sessionManager,
         biometricAuthenticator: biometricAuthenticator,
+        legacyCleanup: FakeLegacyTokenCleanup(),
         credentialStore: credentialStore
     )
     return (sut, credentialStore, biometricAuthenticator)
@@ -49,6 +50,7 @@ private func makeAutoAttemptSUT(
         repository: repo,
         sessionManager: sessionManager,
         biometricAuthenticator: biometricAuthenticator,
+        legacyCleanup: FakeLegacyTokenCleanup(),
         credentialStore: credentialStore
     )
     let model = LoginBiometricModel(authService: service)
@@ -106,6 +108,10 @@ struct ClearBiometricOfferActionTests {
 
 // These tests will FAIL TO COMPILE until the implementer adds `policyEvaluator` to
 // KeychainBiometricCredentialStore.
+//
+// Adapter-test exception (I2b-2d D2(c)): this suite builds the real
+// KeychainBiometricCredentialStore on purpose to exercise its LAError mapping, so it reaches
+// the system Keychain adapter. Every other unit test uses an in-memory credential store.
 
 @Suite("KeychainBiometricCredentialStore LAError mapping — Criterion 2")
 struct KeychainLAErrorMappingTests {

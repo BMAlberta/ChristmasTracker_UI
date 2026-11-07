@@ -50,6 +50,7 @@ struct ProfileToggleEnrollmentTests {
             repository: repo,
             sessionManager: sessionManager,
             biometricAuthenticator: auth,
+            legacyCleanup: FakeLegacyTokenCleanup(),
             credentialStore: store
         )
         // Optionally pre-seed a foreign enrollment (without biometric prompt)

@@ -166,7 +166,9 @@ struct SessionTeardownTests {
         let innerSessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: mockRepo,
-            sessionManager: innerSessionManager
+            sessionManager: innerSessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
 
         // Login first
@@ -231,7 +233,9 @@ struct SessionTeardownTests {
         let innerSessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: mockRepo,
-            sessionManager: innerSessionManager
+            sessionManager: innerSessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
 
         await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
@@ -262,7 +266,9 @@ struct SessionTeardownTests {
         let innerSessionManager = await SessionManager(initialClearables: [])
         let authService = await AuthenticationService(
             repository: mockRepo,
-            sessionManager: innerSessionManager
+            sessionManager: innerSessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
 
         await authService.login(email: "test@example.com", password: "password", rememberEmail: false)

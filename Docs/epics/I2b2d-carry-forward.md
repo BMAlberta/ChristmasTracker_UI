@@ -251,3 +251,99 @@ Package tests (inventory only; package tests may change only for E1):
   - App sources: `Features/Authentication/Services/AuthenticationService.swift`, `Core/API/ClientSeams.swift`.
   - App tests: a new `Features/Authentication/SessionEndGuardTests.swift`. `Core/API/ClientSeamsTests.swift` may change only if the box flag removal needs it (a signature or call site only).
   - No package change.
+
+### E3: deterministic logout tests and no real Keychain in units
+- Contract slice: none.
+- Isolated runs, taken before E3 at 427bf51 with `scripts/test.sh`:
+
+  | Run alone | Result |
+  |---|---|
+  | `SignInWithBiometricTests/logoutSetsIsAuthenticatedFalseBeforeRepoLogoutCompletes()` | **0 passed, 1 failed** ("isAuthenticated must be false while repo.logout is still suspended") |
+  | `SignInWithBiometricTests` | 29 passed, 1 failed (the same test) |
+  | `SignInWithBiometricTests/concurrentRefreshesSharingAccountDisabledTearDownOnce()` | 1 passed |
+  | `InactivityLockControllerTests` | 21 passed |
+  | `InactivityLockPresenterTests` | 5 passed |
+  | `InactivityLockIntegrationTests` | 10 passed |
+  | `ListServiceTests` | 13 passed |
+  | package, `swift test --filter "RefreshOn401MiddlewareTests"` | 11 passed |
+
+  Only the target test fails when run alone, so it is the only one this story rewrites. The others are reported as passing alone. The package and Lists tests are out of scope and stay as they are.
+- Why the target fails: logout now runs `endSession`, then a stored Task, then `performSessionEnd`, then the `sessionManager.teardown` actor hop, then `clearAuthState()`. Ten `Task.yield()` calls do not reliably cover that path. `repo.logout()` is called only after `clearAuthState()`, from the best-effort Task.
+- D2(b) evidence: `AuthenticationService.deviceFingerprint` has no reader.
+  - Its only references are its declaration (`AuthenticationService.swift:53`) and its assignment in `init` (`:87`).
+  - SentryBootstrap has no fingerprint reference.
+  - The other `deviceFingerprint` in the app is a separate stored property of `NetworkAPIClient`: `NetworkAPIClient.swift:21, 31` sets it, and `:123` sends it as `X-Device-Fingerprint`.
+  - `NetworkAPIClient` is built in production at `ChristmasTrackerApp.swift:110, 129` and keeps calling `DeviceFingerprintService.getFingerprint()`, so production still creates and persists the fingerprint UUID.
+  - The derived spec's `deviceFingerprint` (`openapi.json:2058`) and the client guide's refresh example (`client-guide.md:132`) are server-side data. AuthenticationService never sends either.
+  - So the property is removed.
+- New interface: yes. These signatures are fixed at Gate 1.
+  - `LegacyTokenCleaning.swift`: the protocol gains `func clearStoredSessionTokens()`.
+    - `LegacyTokenCleanup` implements it with exactly today's `AuthenticationService.clearStoredTokens()` body, which is a `do` block containing:
+      - `try KeychainService.delete("auth.tokens")`
+      - `try KeychainService.delete("auth.refresh_token")`
+      - `LogDebug("Stored tokens cleared", category: .auth)`
+
+      plus the `catch` that logs `LogError("Failed to clear tokens: \(error)", category: .auth)`.
+    - That keeps the same keys, the same order, the same short-circuit on the first error, and the same log lines.
+    - `cleanUpLegacyTokens()` is unchanged.
+  - `AuthenticationService.clearStoredTokens()` becomes `legacyCleanup.clearStoredSessionTokens()`. It is still called from `performSessionEnd` and `clearForSession`.
+    - The two now-unused key constants (`keychainAuthTokensKey`, `keychainAuthRefreshTokenKey`) are removed. The other constants are left alone.
+    - The production default `legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup()` is unchanged.
+  - `AuthenticationService`: remove the `deviceFingerprint` stored property and its `init` assignment. `init`'s other behaviour (legacy cleanup, biometric availability) is unchanged.
+- Test changes:
+  1. The target test is rewritten with a deterministic handshake. The repository's `logout()` signals when it is entered (a continuation or AsyncStream), then suspends until it is released. The test:
+     - logs in;
+     - starts logout;
+     - awaits "repo logout entered";
+     - asserts `isAuthenticated == false` while the repository logout is still suspended;
+     - releases;
+     - awaits the logout task.
+
+     It uses no yields and no sleeps, and carries `.timeLimit(.minutes(1))`. It keeps its name and its contract, so it counts as rewritten, not new.
+  2. `FakeLegacyTokenCleanup` (in `AuthenticationServiceTests.swift:16`) implements `clearStoredSessionTokens()` and counts calls.
+  3. New tests:
+     - Logout calls the seam exactly once (`clearStoredSessionTokens` count 1, `cleanUpLegacyTokens` still 1 from `init`).
+     - `clearForSession` calls the seam.
+     - A guard test, as described below.
+  4. Every unit-test construction of AuthenticationService injects:
+     - `legacyCleanup: FakeLegacyTokenCleanup()`;
+     - an in-memory credential store wherever it uses the `KeychainBiometricCredentialStore()` default today.
+
+     This covers the 35 constructions in inventory 3. Their meaning is unchanged; only the wiring changes. `biometricAuthenticator` defaults are left alone, per D2: the LocalAuthentication paths are reported as found, not fixed.
+  5. Adapter-test exceptions: a short comment is added at the top of `Core/Security/KeychainServiceTests.swift` and on the real-store suite in `BiometricFaceIDGapTests.swift`. It names each as an adapter-test exception (D2(c)). No test logic changes.
+- The guard test (D2(d)): a test fails if any unit-test file builds `AuthenticationService(` without `legacyCleanup:`. The intended approach:
+  - The test locates the test sources from its own `#filePath`.
+  - It scans every `.swift` file under `ChristmasTrackerTests/` for `AuthenticationService(` call sites.
+  - It requires `legacyCleanup:` within that call's argument list.
+  - It ignores the scanner's own file and comments.
+
+  If the simulator test process cannot read the host source tree, the test-writer stops and reports that. The report then documents why a guard is not possible, and production is not changed to detect tests.
+- Acceptance:
+  - The target test passes alone 5 times in a row (the Orchestrator records the 5 runs) and passes in the full suite.
+  - After the change, no unit test reaches `KeychainService` through AuthenticationService (logout, init or `clearForSession`).
+  - The only unit tests that still call the real Keychain are the two named adapter-test exceptions.
+  - The E3 report lists every remaining real-Keychain or LocalAuthentication path, with file and line (D2(e)).
+- Files:
+  - Production: `Features/Authentication/Services/LegacyTokenCleaning.swift`, `Features/Authentication/Services/AuthenticationService.swift`.
+  - Tests: every test file in inventory 3 that constructs AuthenticationService, which is these 15:
+    - ClientSeamsTests
+    - AutoAttemptF3Tests
+    - LoginBiometricModelTests
+    - InactivityLockControllerTests
+    - EnrollMarkerRegistrationTests
+    - AuthServiceRegisterSignatureTests
+    - BiometricOfferIntegrationTests
+    - ProfileToggleEnrollmentTests
+    - EnrollCurrentSessionTests
+    - BiometricFaceIDGapTests
+    - AuthenticationServiceTests
+    - ObservableSnapshotTests
+    - LogoutPathTests
+    - SignInWithBiometricTests
+    - SessionTeardownTests
+
+    Also allowed:
+    - StaleSessionEndTests and SessionEndGuardTests, to check them only.
+    - `Core/Security/KeychainServiceTests.swift`, for the comment only.
+    - A new `Features/Authentication/LegacyTokenSeamTests.swift`, for the seam and guard tests.
+  - No package change.
