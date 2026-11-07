@@ -21,6 +21,9 @@ swift test --package-path "LocalPackages/TrackerAPI" || { echo "=== verify: PACK
 echo "=== verify: TrackerAPI import audit ==="
 scripts/check-package-imports.sh || { echo "=== verify: IMPORT AUDIT FAILED ==="; FAIL=1; }
 
+echo "=== verify: release script tests ==="
+scripts/test-release.sh || { echo "=== verify: RELEASE SCRIPT TESTS FAILED ==="; FAIL=1; }
+
 echo "=== verify: prohibited frameworks in changed lines ==="
 if git rev-parse --verify master > /dev/null 2>&1; then
   if git diff master...HEAD -U0 -- '*.swift' | grep -E '^\+[^+].*(import Combine|DispatchQueue)'; then
