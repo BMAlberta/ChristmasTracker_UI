@@ -27,7 +27,9 @@ struct AuthServiceRegisterSignatureTests {
         let sessionManager = SessionManager(initialClearables: [])
         let service = AuthenticationService(
             repository: mockRepo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
         return (service, mockRepo)
     }

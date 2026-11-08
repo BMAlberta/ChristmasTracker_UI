@@ -103,6 +103,7 @@ private func makeSUT(
         repository: repo,
         sessionManager: sessionManager,
         biometricAuthenticator: biometricAuthenticator,
+        legacyCleanup: FakeLegacyTokenCleanup(),
         credentialStore: credentialStore
     )
 }

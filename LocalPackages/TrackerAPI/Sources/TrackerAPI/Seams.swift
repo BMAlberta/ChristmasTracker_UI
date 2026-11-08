@@ -67,8 +67,11 @@ public enum SessionEndReason: Sendable, Equatable {
 
 // MARK: - SessionEnding
 /// Called by SessionEndingMiddleware when the server reports that the session can no longer continue.
+/// `requestToken` is the bearer token the failing request carried (the text after `"Bearer "` in
+/// its Authorization header), or nil when it carried none. The handler uses it to ignore a stale
+/// response to a request made under a different session.
 public protocol SessionEnding: Sendable {
-    func sessionEnded(reason: SessionEndReason) async
+    func sessionEnded(reason: SessionEndReason, requestToken: String?) async
 }
 
 // MARK: - RateLimitSleeping

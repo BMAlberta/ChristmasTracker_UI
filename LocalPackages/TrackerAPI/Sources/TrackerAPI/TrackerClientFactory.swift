@@ -37,32 +37,57 @@ public enum TrackerClientFactory {
             resolvedTransport = URLSessionTransport(configuration: .init(session: session))
         }
 
-        // Middleware order (outermost first; each wraps the ones after it):
-        // 1. Headers: adds the platform, build, and version headers and observes the request ID.
-        // 2. RefreshOn401: on a 401, refreshes once and replays through everything below it, so
-        //    the replay passes through BearerAuth again and carries the fresh token.
-        // 3. RateLimit: handles 429 (retry where safe, otherwise TrackerAPIError.rateLimited).
-        // 4. VersionOutdated: reports a 426 to the version gate.
-        // 5. SessionEnding (only when a handler is given): inside RefreshOn401 and RateLimit, so
-        //    it inspects every 403 or 404 that comes back from the server, including one returned
-        //    to a replay; a 403 or 404 is never retried, so the handler runs at most once per
-        //    response. It is non-throwing and returns the body intact for the typed decoder.
-        // 6. BearerAuth: innermost, so every attempt (including replays) reads the current token.
-        var middleware: [any ClientMiddleware] = [
-            HeadersMiddleware(info: info, requestIDObserver: requestIDObserver),
-            RefreshOn401Middleware(refresher: sessionRefresher, tokenProvider: tokenProvider),
-            RateLimitMiddleware(),
-            VersionOutdatedMiddleware(handler: versionOutdatedHandler)
-        ]
-        if let sessionEndingHandler {
-            middleware.append(SessionEndingMiddleware(handler: sessionEndingHandler))
-        }
-        middleware.append(BearerAuthMiddleware(tokenProvider: tokenProvider))
+        let middleware = makeMiddlewares(
+            info: info,
+            tokenProvider: tokenProvider,
+            sessionRefresher: sessionRefresher,
+            versionOutdatedHandler: versionOutdatedHandler,
+            requestIDObserver: requestIDObserver,
+            sessionEndingHandler: sessionEndingHandler
+        )
         return Client(
             serverURL: serverURL,
             configuration: Configuration(dateTranscoder: TrackerDateTranscoder()),
             transport: resolvedTransport,
             middlewares: middleware
         )
+    }
+
+    /// The middleware chain used by `make(...)`, outermost first. Internal so a package test can
+    /// pin the exact order.
+    static func makeMiddlewares(
+        info: AppClientInfo,
+        tokenProvider: any AccessTokenProviding,
+        sessionRefresher: any SessionRefreshing,
+        versionOutdatedHandler: any VersionOutdatedHandling,
+        requestIDObserver: (any RequestIDObserving)?,
+        sessionEndingHandler: (any SessionEnding)?
+    ) -> [any ClientMiddleware] {
+        // Middleware order (outermost first; each wraps the ones after it):
+        // 1. Headers: adds the platform, build, and version headers and observes the request ID.
+        // 2. RefreshOn401: on a 401, refreshes once and replays through everything below it, so
+        //    the replay passes through BearerAuth again and carries the fresh token.
+        // 3. RateLimit: handles 429 (retry where safe, otherwise TrackerAPIError.rateLimited).
+        // 4. VersionOutdated: reports a 426 to the version gate.
+        // 5. BearerAuth: sets the Authorization header from the current token on every attempt
+        //    (including replays).
+        // 6. SessionEnding (only when a handler is given): innermost, inside BearerAuth, because
+        //    it must see the Authorization header BearerAuth sets; it passes that request's
+        //    bearer token to the handler so a stale response cannot end a newer session. It is
+        //    also inside RefreshOn401 and RateLimit, so it inspects every 403 or 404 that comes
+        //    back from the server, including one returned to a replay; a 403 or 404 is never
+        //    retried, so the handler runs at most once per response. It is non-throwing and
+        //    returns the body intact for the typed decoder.
+        var middleware: [any ClientMiddleware] = [
+            HeadersMiddleware(info: info, requestIDObserver: requestIDObserver),
+            RefreshOn401Middleware(refresher: sessionRefresher, tokenProvider: tokenProvider),
+            RateLimitMiddleware(),
+            VersionOutdatedMiddleware(handler: versionOutdatedHandler),
+            BearerAuthMiddleware(tokenProvider: tokenProvider)
+        ]
+        if let sessionEndingHandler {
+            middleware.append(SessionEndingMiddleware(handler: sessionEndingHandler))
+        }
+        return middleware
     }
 }

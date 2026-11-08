@@ -111,7 +111,9 @@ struct LogoutPathTests {
         let listDataStore = ListDataStore()
         let authService = AuthenticationService(
             repository: repo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
 
         await sessionManager.register(listDataStore)
@@ -153,7 +155,9 @@ struct LogoutPathTests {
         let listDataStore = ListDataStore()
         let authService = AuthenticationService(
             repository: repo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
 
         await sessionManager.register(listDataStore)
@@ -241,7 +245,9 @@ struct LogoutPathTests {
         let sessionManager = SessionManager(initialClearables: [])
         let authService = AuthenticationService(
             repository: repo,
-            sessionManager: sessionManager
+            sessionManager: sessionManager,
+            legacyCleanup: FakeLegacyTokenCleanup(),
+            credentialStore: InMemoryBiometricCredentialStore()
         )
 
         await authService.login(email: "test@example.com", password: "password", rememberEmail: false)

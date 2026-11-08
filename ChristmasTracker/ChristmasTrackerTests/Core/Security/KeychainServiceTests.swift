@@ -4,6 +4,10 @@
 //
 //  Created by Brian Alberta on 2/7/26.
 //
+//  Adapter-test exception (I2b-2d D2(c)): these tests exercise the real KeychainService
+//  adapter on purpose, so they call the system Keychain. Every other unit test must reach
+//  token storage only through fakes (FakeLegacyTokenCleanup, in-memory credential stores).
+//
 
 import Testing
 import Foundation

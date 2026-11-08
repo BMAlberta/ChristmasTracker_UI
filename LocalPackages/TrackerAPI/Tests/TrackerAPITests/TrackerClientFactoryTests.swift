@@ -13,6 +13,14 @@ import HTTPTypes
 import OpenAPIRuntime
 @testable import TrackerAPI
 
+// MARK: - NoopSessionEndingHandler
+
+/// A SessionEnding handler that does nothing; used only to ask makeMiddlewares for the
+/// SessionEnding layer (I2b-2d E1, decision D1).
+private actor NoopSessionEndingHandler: SessionEnding {
+    func sessionEnded(reason: SessionEndReason, requestToken: String?) async {}
+}
+
 @Suite("TrackerClientFactory")
 struct TrackerClientFactoryTests {
 
@@ -414,5 +422,48 @@ struct TrackerClientFactoryTests {
         let req = try #require(recorded?.request, "Expected a recorded request")
         let authHeader = req.headerFields[.authorization]
         #expect(authHeader == nil, "Authorization header must be absent on public operations")
+    }
+
+    // MARK: - Middleware order (I2b-2d E1, decision D1)
+    //
+    // Outermost first: Headers, RefreshOn401, RateLimit, VersionOutdated, BearerAuth, then
+    // SessionEnding only when a handler is given. SessionEnding sits inside BearerAuth so it
+    // sees the Authorization header BearerAuth sets.
+
+    private func makeMiddlewares(sessionEndingHandler: (any SessionEnding)?) -> [any ClientMiddleware] {
+        TrackerClientFactory.makeMiddlewares(
+            info: makeInfo(),
+            tokenProvider: FakeAccessTokenProvider(),
+            sessionRefresher: FakeSessionRefresher(),
+            versionOutdatedHandler: FakeVersionOutdatedHandler(),
+            requestIDObserver: nil,
+            sessionEndingHandler: sessionEndingHandler
+        )
+    }
+
+    @Test("makeMiddlewares with a handler returns exactly Headers, RefreshOn401, RateLimit, VersionOutdated, BearerAuth, SessionEnding")
+    func makeMiddlewaresWithHandlerHasExactOrder() throws {
+        let middlewares = makeMiddlewares(sessionEndingHandler: NoopSessionEndingHandler())
+
+        try #require(middlewares.count == 6, "Expected exactly six middlewares, got \(middlewares.count)")
+        #expect(middlewares[0] is HeadersMiddleware, "Index 0 must be HeadersMiddleware")
+        #expect(middlewares[1] is RefreshOn401Middleware, "Index 1 must be RefreshOn401Middleware")
+        #expect(middlewares[2] is RateLimitMiddleware, "Index 2 must be RateLimitMiddleware")
+        #expect(middlewares[3] is VersionOutdatedMiddleware, "Index 3 must be VersionOutdatedMiddleware")
+        #expect(middlewares[4] is BearerAuthMiddleware, "Index 4 must be BearerAuthMiddleware")
+        #expect(middlewares[5] is SessionEndingMiddleware, "Index 5 must be SessionEndingMiddleware (inside BearerAuth)")
+    }
+
+    @Test("makeMiddlewares without a handler returns exactly Headers, RefreshOn401, RateLimit, VersionOutdated, BearerAuth")
+    func makeMiddlewaresWithoutHandlerHasExactOrder() throws {
+        let middlewares = makeMiddlewares(sessionEndingHandler: nil)
+
+        try #require(middlewares.count == 5, "Expected exactly five middlewares, got \(middlewares.count)")
+        #expect(middlewares[0] is HeadersMiddleware, "Index 0 must be HeadersMiddleware")
+        #expect(middlewares[1] is RefreshOn401Middleware, "Index 1 must be RefreshOn401Middleware")
+        #expect(middlewares[2] is RateLimitMiddleware, "Index 2 must be RateLimitMiddleware")
+        #expect(middlewares[3] is VersionOutdatedMiddleware, "Index 3 must be VersionOutdatedMiddleware")
+        #expect(middlewares[4] is BearerAuthMiddleware, "Index 4 must be BearerAuthMiddleware")
+        #expect(!middlewares.contains { $0 is SessionEndingMiddleware }, "No SessionEndingMiddleware without a handler")
     }
 }
