@@ -33,25 +33,27 @@ actor MockListRepository: ListRepository {
 
     // MARK: - List Repository
 
+    // Mock repository: intentionally uninstrumented.
     func fetchLists() async throws -> [GiftList] {
         LogDebug("Mock fetchLists", category: .business)
 
         try await Task.sleep(for: .seconds(delay))
 
         if shouldFail {
-            throw ListError.fetchFailed
+            throw ListError.server
         }
 
         return lists.map { $0.asGiftList() }
     }
 
+    // Mock repository: intentionally uninstrumented.
     func fetchListDetail(id: String) async throws -> ListDetail {
         LogDebug("Mock fetchListDetail", category: .business)
 
         try await Task.sleep(for: .seconds(delay))
 
         if shouldFail {
-            throw ListError.fetchFailed
+            throw ListError.server
         }
 
         guard let list = lists.first(where: { $0.id == id }) else {
@@ -68,7 +70,7 @@ actor MockListRepository: ListRepository {
         try await Task.sleep(for: .seconds(delay))
 
         if shouldFail {
-            throw ListError.createFailed
+            throw ListError.server
         }
 
         let isSelfList = input.recipientId == MockListData.currentUser.id
@@ -111,7 +113,7 @@ actor MockListRepository: ListRepository {
         try await Task.sleep(for: .seconds(delay))
 
         if shouldFail {
-            throw ListError.updateFailed
+            throw ListError.server
         }
 
         guard let index = lists.firstIndex(where: { $0.id == id }) else {
@@ -124,13 +126,14 @@ actor MockListRepository: ListRepository {
         return updated
     }
 
+    // Mock repository: intentionally uninstrumented.
     func deleteList(id: String) async throws {
         LogDebug("Mock deleteList", category: .business)
 
         try await Task.sleep(for: .seconds(delay))
 
         if shouldFail {
-            throw ListError.deleteFailed
+            throw ListError.server
         }
 
         guard let index = lists.firstIndex(where: { $0.id == id }) else {

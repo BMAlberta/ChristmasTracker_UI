@@ -44,8 +44,10 @@ nonisolated func mapListSummary(_ summary: Components.Schemas.ListSummary) -> Gi
             canLeaveList: core.canLeaveList
         ),
         memberCount: core.memberCount,
-        itemCount: core.itemCount,
-        purchasedCount: core.purchasedCount,
+        // Count hardening: a viewer who cannot see gift activity never gets counts, even if the
+        // server sent them.
+        itemCount: original.canSeeGiftActivity ? core.itemCount : nil,
+        purchasedCount: original.canSeeGiftActivity ? core.purchasedCount : nil,
         createdAt: core.createdAt,
         updatedAt: core.updatedAt
     )

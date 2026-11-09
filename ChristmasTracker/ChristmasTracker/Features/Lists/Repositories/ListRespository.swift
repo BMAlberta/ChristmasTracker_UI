@@ -33,28 +33,60 @@ nonisolated protocol ListRepository: Repository {
     func deleteList(id: String) async throws
 }
 // MARK: - List Errors
-enum ListError: Error, LocalizedError {
-    case fetchFailed
+
+/// Typed failures of the list operations. Messages are plain: the documented server message
+/// text is shown only for `validation`; no ids, names or emails ever appear.
+nonisolated enum ListError: Error, LocalizedError, Equatable, Sendable {
+    case forbidden
     case notFound
-    case createFailed
-    case updateFailed
-    case deleteFailed
+    case recipientNotFound
+    case duplicateRecipientYear
+    case archivedReadOnly
+    case validation(message: String)
+    case rateLimited(retryAfter: TimeInterval)
     case unauthorized
-    
-    var errorDescription: String? {
+    /// Kept for the views. The repository never produces it: the session-ending middleware ends
+    /// the session before the error returns, and the service discards results of a stale session.
+    case sessionEnded
+    case network
+    case invalidResponse
+    case server
+
+    var userMessage: String {
         switch self {
-        case .fetchFailed:
-            return "Failed to load lists."
+        case .forbidden:
+            return "You don't have permission to do that."
         case .notFound:
-            return "List not found."
-        case .createFailed:
-            return "Failed to create list."
-        case .updateFailed:
-            return "Failed to update list."
-        case .deleteFailed:
-            return "Failed to delete list."
+            return "That list could not be found."
+        case .recipientNotFound:
+            return "That recipient could not be found."
+        case .duplicateRecipientYear:
+            return "A list for this person and year already exists."
+        case .archivedReadOnly:
+            return "This list is archived and can no longer be changed."
+        case .validation(let message):
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "The information you provided is invalid." : message
+        case .rateLimited(let retryAfter):
+            guard retryAfter.isFinite, retryAfter >= 1 else {
+                return "Too many requests. Please try again in a moment."
+            }
+            let seconds = Int(min(retryAfter, 3600).rounded(.up))
+            return "Too many requests. Please try again in \(seconds) seconds."
         case .unauthorized:
-            return "You don't have permission to perform this action"
+            return "Please sign in again to continue."
+        case .sessionEnded:
+            return "Your session has ended. Please sign in again."
+        case .network:
+            return "Could not reach the server. Check your connection and try again."
+        case .invalidResponse:
+            return "The server sent a response the app could not read."
+        case .server:
+            return "Something went wrong on the server. Please try again later."
         }
+    }
+
+    var errorDescription: String? {
+        userMessage
     }
 }

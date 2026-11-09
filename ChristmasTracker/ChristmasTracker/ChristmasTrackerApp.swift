@@ -111,10 +111,7 @@ struct AppDependencies: Sendable {
         return AppDependencies(
             apiClient: apiClient,
             authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
-            // TEMPORARY until I3a-L2: the hand-written list repository is gone and
-            // GeneratedClientListRepository does not exist yet, so real mode gets an EMPTY list
-            // repository. Not shippable; L2 replaces this.
-            listRepository: MockListRepository(withMockData: false),
+            listRepository: GeneratedClientListRepository(client: generatedClient),
             itemRepository: NetworkItemRepository(apiClient: apiClient),
             trackerClient: generatedClient
         )
@@ -133,7 +130,8 @@ struct AppDependencies: Sendable {
             return AppDependencies(
                 apiClient: apiClient,
                 authRepository: MockAuthenticationRepository(),
-                // TEMPORARY until I3a-L2: empty list repository, see makeReal(generatedClient:).
+                // No generated client exists on this legacy path (auth is a mock here too), so
+                // it cannot reach the server; the real composition is makeReal(generatedClient:).
                 listRepository: MockListRepository(withMockData: false),
                 itemRepository: NetworkItemRepository(apiClient: apiClient),
                 trackerClient: nil

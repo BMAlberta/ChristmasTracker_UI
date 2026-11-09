@@ -15,25 +15,35 @@ final class ListService {
     // MARK: - Dependencies
     private nonisolated let repository: any ListRepository
     private nonisolated let dataStore: ListDataStore
-    
-    // MARK: - Publlished State
+
+    // MARK: - Published State
     private(set) var lists: [GiftList] = []
     private(set) var currentListDetail: ListDetail?
     private(set) var isLoading: Bool = false
     private(set) var isRefreshing: Bool = false
     private(set) var error: ListError?
     private(set) var lastUpdated: Date?
-    
+
+    // MARK: - Session safety
+
+    /// Incremented every time the session is cleared. Every operation captures it before its
+    /// first await and drops its result (and any error) if it changed, so a sign-out or a user
+    /// switch never leaves the previous user's data in the service or the cache.
+    private var generation = 0
+
+    /// Cancel handles of the repository calls that are in flight, keyed by call.
+    private var inFlight: [UUID: () -> Void] = [:]
+
     // MARK: - Filtering
-    
+
     enum FilterType {
         case all
         case owned
         case shared
     }
-    
+
     var currentFilter: FilterType = .all
-    
+
     var filteredLists: [GiftList] {
         switch currentFilter {
         case .all:
@@ -44,96 +54,123 @@ final class ListService {
             return lists.filter { ListPermissions($0.capabilities).category == .shared }
         }
     }
-    
+
     // MARK: - Initialization
     init(repository: any ListRepository, dataStore: ListDataStore) {
         self.repository = repository
         self.dataStore = dataStore
     }
+
     // MARK: - Public Methods
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
     func loadLists() async {
         guard !isLoading else { return }
+        let span = SentrySDK.startTransaction(name: "service.lists.loadLists", operation: "service.lists.loadLists")
+        defer { span.finish() }
 
+        let gen = generation
         isLoading = true
-        defer { isLoading = false }
+        defer { if gen == generation { isLoading = false } }
         error = nil
 
         do {
-            //Check cache
+            // Check cache
             let cached = await dataStore.getLists()
+            guard gen == generation else { return }
             if !cached.isEmpty {
-                lists = cached
+                lists = visibleLists(cached)
 
-                //Background refresh
-                if await dataStore.shouldRefresh() {
+                // Background refresh
+                if await dataStore.shouldRefresh(), gen == generation {
                     await refreshLists()
                 }
                 return
             }
 
             // Fetch from repository
-            let fetchedLists = try await repository.fetchLists()
+            let repository = self.repository
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() })
+            guard gen == generation else { return }
 
             // Update cache
-            await dataStore.setLists(fetchedLists)
-            lists = fetchedLists
+            await dataStore.setLists(fetched)
+            guard gen == generation else { return }
+            lists = fetched
             lastUpdated = Date()
 
-            LogInfo("Loaded \(fetchedLists.count) lists", category: .business)
-
+            LogInfo("Loaded \(fetched.count) lists", category: .business)
         } catch {
-            self.error = handleError(error, operation: "load lists")
+            _ = record(error, generation: gen, operation: "load lists")
         }
     }
-    
+
+    // Actor-isolated (@MainActor): manual SentrySDK span, see loadLists.
     func refreshLists() async {
         guard !isRefreshing else { return }
-        
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.refreshLists",
+            operation: "service.lists.refreshLists"
+        )
+        defer { span.finish() }
+
+        let gen = generation
         isRefreshing = true
+        defer { if gen == generation { isRefreshing = false } }
         error = nil
-        
+
         do {
-            let fetchedLists = try await repository.fetchLists()
-            await dataStore.setLists(fetchedLists)
-            lists = fetchedLists
+            let repository = self.repository
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() })
+            guard gen == generation else { return }
+            await dataStore.setLists(fetched)
+            guard gen == generation else { return }
+            lists = fetched
             lastUpdated = Date()
-            
-            LogInfo("Refreshed \(fetchedLists.count) lists", category: .business)
-        } catch let listError as ListError {
-            error = listError
+
+            LogInfo("Refreshed \(fetched.count) lists", category: .business)
         } catch {
-            self.error = handleError(error, operation: "refresh lists")
+            _ = record(error, generation: gen, operation: "refresh lists")
         }
-        
-        isRefreshing = false
     }
-    
+
+    // Actor-isolated (@MainActor): manual SentrySDK span, see loadLists.
     func loadListDetail(id: String) async {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.loadListDetail",
+            operation: "service.lists.loadListDetail"
+        )
+        defer { span.finish() }
+
+        let gen = generation
         isLoading = true
+        defer { if gen == generation { isLoading = false } }
         error = nil
         currentListDetail = nil
-        
+
         do {
             if let cached = await dataStore.getListDetail(id: id) {
+                guard gen == generation else { return }
                 currentListDetail = cached
-                isLoading = false
                 return
             }
-            
-            let detail = try await repository.fetchListDetail(id: id)
-            
+            guard gen == generation else { return }
+
+            let repository = self.repository
+            let detail = try await perform { try await repository.fetchListDetail(id: id) }
+            guard gen == generation else { return }
+
             await dataStore.setListDetail(detail)
-            
+            guard gen == generation else { return }
             currentListDetail = detail
-            
+
             LogInfo("Loaded list detail", category: .business)
         } catch {
-            self.error = handleError(error, operation: "load list details")
+            _ = record(error, generation: gen, operation: "load list details")
         }
-        
-        isLoading = false
     }
-    
+
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No list data goes into the span.
     func createList(_ input: CreateListInput) async throws {
@@ -142,26 +179,35 @@ final class ListService {
             operation: "service.lists.createList"
         )
         defer { span.finish() }
+
+        let gen = generation
         isLoading = true
+        defer { if gen == generation { isLoading = false } }
         error = nil
 
         do {
-            let newList = try await repository.createList(input)
+            let repository = self.repository
+            let created = try await perform { try await repository.createList(input) }
+            try ensureCurrent(gen)
 
-            await dataStore.setListDetail(newList)
+            // The returned detail carries fresh flags: use it, do not refetch.
+            let summary = created.asGiftList()
+            try ensureCurrent(gen)
+            await dataStore.storeCreated(created)
+            try ensureCurrent(gen)
 
-            await refreshLists()
+            if let index = lists.firstIndex(where: { $0.id == summary.id }) {
+                lists[index] = summary
+            } else {
+                lists.append(summary)
+            }
 
             LogInfo("Created list", category: .business)
         } catch {
-            self.error = handleError(error, operation: "create list")
-            isLoading = false
-            throw error
+            throw failure(error, generation: gen, operation: "create list")
         }
-        
-        isLoading = false
     }
-    
+
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No list data goes into the span.
     func updateList(id: String, _ input: UpdateListInput) async throws {
@@ -170,29 +216,35 @@ final class ListService {
             operation: "service.lists.updateList"
         )
         defer { span.finish() }
+
+        let gen = generation
         isLoading = true
+        defer { if gen == generation { isLoading = false } }
         error = nil
 
         do {
-            let updated = try await repository.updateList(id: id, input)
-            
+            let repository = self.repository
+            let updated = try await perform { try await repository.updateList(id: id, input) }
+            try ensureCurrent(gen)
+
+            // The returned detail carries fresh flags: use it, do not refetch.
+            let summary = updated.asGiftList()
             await dataStore.setListDetail(updated)
-            
-            if currentListDetail?.id == id {
+            try ensureCurrent(gen)
+
+            if let index = lists.firstIndex(where: { $0.id == summary.id }) {
+                lists[index] = summary
+            }
+            if currentListDetail?.id == updated.id {
                 currentListDetail = updated
             }
-            
-            await refreshLists()
-            
+
             LogInfo("Updated list", category: .business)
         } catch {
-            self.error = handleError(error, operation: "update list")
-            isLoading = false
-            throw error
+            throw failure(error, generation: gen, operation: "update list")
         }
-        isLoading = false
     }
-    
+
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No list data goes into the span.
     func deleteList(id: String) async throws {
@@ -201,85 +253,125 @@ final class ListService {
             operation: "service.lists.deleteList"
         )
         defer { span.finish() }
+
+        let gen = generation
         isLoading = true
+        defer { if gen == generation { isLoading = false } }
         error = nil
-        
+
         do {
-            try await repository.deleteList(id: id)
-            
+            let repository = self.repository
+            try await perform { try await repository.deleteList(id: id) }
+            try ensureCurrent(gen)
+
+            // The server archives the list; remove it locally without refetching. Later
+            // refreshes drop it because it comes back ARCHIVED.
             await dataStore.removeList(id: id)
-            
+            try ensureCurrent(gen)
+
             lists.removeAll { $0.id == id }
-            
             if currentListDetail?.id == id {
                 currentListDetail = nil
             }
-            
+
             LogInfo("Deleted list", category: .business)
         } catch {
-            self.error = handleError(error, operation: "delete list")
-            isLoading = false
-            throw error
+            throw failure(error, generation: gen, operation: "delete list")
         }
-        
-        isLoading = false
     }
-    
+
     func clearCurrentDetail() {
         currentListDetail = nil
     }
 
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual span is used. No data goes into the span.
     func clearCache() async {
-        await dataStore.clear()
-        lists = []
-        currentListDetail = nil
+        let span = SentrySDK.startTransaction(name: "service.lists.clearCache", operation: "service.lists.clearCache")
+        defer { span.finish() }
+        await resetSession()
+    }
+
+    // MARK: - SessionClearable
+
+    /// Ends this service's session: cancels in-flight work, bumps the generation so late results
+    /// are discarded, and empties the published state and the cache.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual span is used. No data goes into the span.
+    func clearForSession() async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.clearForSession",
+            operation: "service.lists.clearForSession"
+        )
+        defer { span.finish() }
+        await resetSession()
     }
 
     // MARK: - Private Functions
-    
-    // MARK: - SessionClearable
 
-    func clearForSession() async throws {
-        await dataStore.clear()
+    // Covered by the manual spans of its public callers (clearForSession, clearCache).
+    private func resetSession() async {
+        generation += 1
+        let cancellers = inFlight.values
+        inFlight.removeAll()
+        for cancel in cancellers { cancel() }
+
         lists = []
         currentListDetail = nil
+        error = nil
+        isLoading = false
+        isRefreshing = false
+        lastUpdated = nil
+        currentFilter = .all
+
+        // The service clears the cache itself, so it does not depend on the store also being
+        // registered with the session manager.
+        await dataStore.clear()
     }
 
-    private func handleError(_ error: Error, operation: String) -> ListError {
-        if let apiError = error as? APIError {
-            switch apiError {
-            case .httpError(let statusCode, _
-            ):
-                switch statusCode {
-                case 401, 403:
-                    LogError("\(operation): Unauthorized (HTTP \(statusCode))", category: .business)
-                    return .unauthorized
-                case 404:
-                    LogError("\(operation): Not found (HTTP 404)", category: .business)
-                    return .notFound
-                case 409:
-                    LogError("\(operation): Conflict (HTTP 409)", category: .business)
-                    return .createFailed
-                default:
-                    LogError("\(operation): HTTP error \(statusCode)", category: .business)
-                    return .fetchFailed
-                }
-            case .networkUnavailable:
-                LogError("\(operation): Network unavailable", category: .business)
-                return .fetchFailed
-            case .decodingError(let underlying):
-                LogError("\(operation): Decode error - \(underlying)", category: .business)
-                return .fetchFailed
-            default:
-                LogError("\(operation): Unknown API error", category: .business)
-                return .fetchFailed
-            }
-        } else if let listError = error as? ListError {
-            return listError
-        } else {
-            LogError("\(operation): Unknown error - \(error)", category: .business)
-            return .fetchFailed
+    /// ARCHIVED lists are hidden everywhere; DRAFT behaves like ACTIVE.
+    private func visibleLists(_ fetched: [GiftList]) -> [GiftList] {
+        fetched.filter { $0.status != .archived }
+    }
+
+    /// Runs a repository call in a task the service can cancel at teardown. Cancelling the caller
+    /// cancels the call too.
+    // Covered by the manual spans of its public callers (the load, create, update and delete functions).
+    private func perform<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
+        let task = Task { try await work() }
+        let token = UUID()
+        inFlight[token] = { task.cancel() }
+        defer { inFlight[token] = nil }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
         }
+    }
+
+    /// Stops a write that finished after the session was cleared.
+    private func ensureCurrent(_ gen: Int) throws {
+        if gen != generation { throw CancellationError() }
+    }
+
+    /// Records the error of a failed call and returns it. Returns nil for cancellation and for a
+    /// call that belongs to a session that has ended: neither is shown to the user.
+    private func record(_ error: any Error, generation gen: Int, operation: String) -> ListError? {
+        if error is CancellationError || gen != generation { return nil }
+        let listError = (error as? ListError) ?? .server
+        // Only the operation name is logged: no ids, names, emails or server text.
+        LogError("\(operation) failed", category: .business)
+        self.error = listError
+        return listError
+    }
+
+    /// The error a throwing operation rethrows: the typed ListError, or CancellationError when the
+    /// call was cancelled or its session ended.
+    private func failure(_ error: any Error, generation gen: Int, operation: String) -> any Error {
+        if let listError = record(error, generation: gen, operation: operation) {
+            return listError
+        }
+        return CancellationError()
     }
 }
 

@@ -30,8 +30,9 @@ import Foundation
         ]
     }
     func fetchListDetail(id: String) async throws -> ListDetail { throw ListError.notFound }
-    func createList(_ input: CreateListInput) async throws -> ListDetail { throw ListError.createFailed }
-    func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail { throw ListError.updateFailed }
+    // EDITED (I3a-L2): ListError.createFailed / .updateFailed were removed; both now throw .server.
+    func createList(_ input: CreateListInput) async throws -> ListDetail { throw ListError.server }
+    func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail { throw ListError.server }
     func deleteList(id: String) async throws {}
 }
 

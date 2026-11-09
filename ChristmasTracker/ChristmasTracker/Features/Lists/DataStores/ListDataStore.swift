@@ -37,6 +37,19 @@ actor ListDataStore {
         }
     }
     
+    /// Caches a newly created list in ONE actor hop: the detail, and its summary (replaced in
+    /// place when the id exists, appended otherwise). Atomic so a teardown cannot fall between
+    /// the two writes.
+    func storeCreated(_ detail: ListDetail) {
+        listDetails[detail.id] = detail
+        let summary = detail.asGiftList()
+        if let index = listSummaries.firstIndex(where: { $0.id == summary.id }) {
+            listSummaries[index] = summary
+        } else {
+            listSummaries.append(summary)
+        }
+    }
+
     func removeList(id: String) {
         listSummaries.removeAll { $0.id == id }
         listDetails.removeValue(forKey: id)
@@ -51,7 +64,10 @@ actor ListDataStore {
     func setListDetail(_ detail: ListDetail) {
         listDetails[detail.id] = detail
         
-        updateListSummary(detail.asGiftList())
+        // An archived detail fetched by id never touches the summary cache (archived lists are hidden).
+        if detail.status != .archived {
+            updateListSummary(detail.asGiftList())
+        }
     }
     
     // MARK: - Cache Management
