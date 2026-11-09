@@ -255,12 +255,41 @@ get_app_build_settings() {
     fi
 }
 
+# Read one build setting from already-captured settings text with an anchored pattern:
+# line start, optional whitespace, exactly KEY, optional whitespace, '='. This is what
+# keeps FULL_PRODUCT_NAME from answering for PRODUCT_NAME and EXPANDED_CODE_SIGN_IDENTITY
+# from answering for CODE_SIGN_IDENTITY. Internal spaces in the value are preserved;
+# leading and trailing whitespace is trimmed. Prints nothing when the key is absent.
+# The consumer must read to EOF: the settings text is ~40 KB, and a consumer that quits on
+# the first match (sed ... q) closes the pipe while printf is still writing, which under
+# pipefail turns into a silent SIGPIPE (141) failure. awk prints only the first match but
+# keeps reading. Keys are plain [A-Z_] names (no regex metacharacters).
+# Usage: setting_value_from "<settings text>" KEY
+setting_value_from() {
+    local settings="$1"
+    local key="$2"
+    printf '%s\n' "$settings" | awk -v k="$key" '
+        !found && $0 ~ "^[[:space:]]*" k "[[:space:]]*=" {
+            sub("^[[:space:]]*" k "[[:space:]]*=[[:space:]]*", "")
+            sub("[[:space:]]*$", "")
+            print
+            found = 1
+        }'
+}
+
+# Convenience: run xcodebuild -showBuildSettings (via get_app_build_settings) and read one key.
+# Usage: setting_value KEY
+setting_value() {
+    local key="$1"
+    setting_value_from "$(get_app_build_settings)" "$key"
+}
+
 get_product_name() {
-    get_app_build_settings | grep "PRODUCT_NAME" | head -1 | sed 's/.*= *//' | tr -d '[:space:]'
+    setting_value PRODUCT_NAME
 }
 
 get_marketing_version() {
-    get_app_build_settings | grep "MARKETING_VERSION" | head -1 | sed 's/.*= *//' | tr -d '[:space:]'
+    setting_value MARKETING_VERSION
 }
 
 # ---------------------------------------------------------------------------
@@ -278,11 +307,12 @@ check_project_signing() {
     local xcode_path="ChristmasTracker/ChristmasTracker.xcodeproj — ChristmasTracker target, Signing and Capabilities, Release"
     local code_sign_style dev_team prov_profile code_sign_id bundle_id
 
-    code_sign_style="$(printf '%s\n' "$settings" | grep "CODE_SIGN_STYLE" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
-    dev_team="$(printf '%s\n' "$settings" | grep "DEVELOPMENT_TEAM" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
-    prov_profile="$(printf '%s\n' "$settings" | grep "PROVISIONING_PROFILE_SPECIFIER" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
-    code_sign_id="$(printf '%s\n' "$settings" | grep "CODE_SIGN_IDENTITY" | head -1 | sed 's/.*= *//' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
-    bundle_id="$(printf '%s\n' "$settings" | grep "PRODUCT_BUNDLE_IDENTIFIER" | head -1 | sed 's/.*= *//' | tr -d '[:space:]')"
+    # Settings are captured once above; every read goes through the anchored helper.
+    code_sign_style="$(setting_value_from "$settings" CODE_SIGN_STYLE)"
+    dev_team="$(setting_value_from "$settings" DEVELOPMENT_TEAM)"
+    prov_profile="$(setting_value_from "$settings" PROVISIONING_PROFILE_SPECIFIER)"
+    code_sign_id="$(setting_value_from "$settings" CODE_SIGN_IDENTITY)"
+    bundle_id="$(setting_value_from "$settings" PRODUCT_BUNDLE_IDENTIFIER)"
 
     if [ "$code_sign_style" != "Manual" ]; then
         echo "[release] ERROR: CODE_SIGN_STYLE is wrong (got: '${code_sign_style}'). Fix in Xcode: ${xcode_path}: turn off Automatically manage signing." >&2; fail=1
@@ -612,17 +642,26 @@ PLIST
         -exportOptionsPlist "${export_opts}"
 
     if [ "$DRY_RUN" -eq 0 ]; then
-        # xcodebuild places the IPA directly in the export path
-        local product_name
-        product_name="$(get_product_name)" || product_name=""
-        local xc_ipa
-        if [ -n "$product_name" ]; then
-            xc_ipa="${bdir}/${product_name}.ipa"
-        else
-            xc_ipa="${bdir}/ChristmasTracker.ipa"
+        # xcodebuild places the IPA directly in the export path, but its file name is not
+        # guaranteed (it is usually the product name, but can differ). Do not assume
+        # ChristmasTracker.ipa: list *.ipa directly in the export dir and require exactly one.
+        local ipa_count=0
+        local found_ipa=""
+        local found_list=""
+        while IFS= read -r -d '' f; do
+            ipa_count=$((ipa_count + 1))
+            found_ipa="$f"
+            found_list="${found_list} $(basename "$f")"
+        done < <(find "$bdir" -maxdepth 1 -name '*.ipa' -print0 2>/dev/null)
+        if [ "$ipa_count" -eq 0 ]; then
+            die "export: found 0 .ipa files in ${bdir} after -exportArchive (no .ipa was produced). Check the xcodebuild output above."
         fi
-        if [ -f "$xc_ipa" ]; then
-            mv "$xc_ipa" "$ipath"
+        if [ "$ipa_count" -ne 1 ]; then
+            die "export: expected exactly 1 .ipa in ${bdir} after -exportArchive, found ${ipa_count}:${found_list}. Remove stale files from that directory and re-run export."
+        fi
+        # Guard the self-move: mv onto itself is an error on some systems.
+        if [ "$found_ipa" != "$ipath" ]; then
+            mv "$found_ipa" "$ipath"
         fi
         [ -f "$ipath" ] || die "export did not produce an IPA at $ipath"
         info "export: succeeded — ${ipath}"
@@ -1125,7 +1164,22 @@ cmd_install_info() {
    --ipa-url:         ${ipa_public_url}
    --min-build:       (choose: raising this forces an update on older builds; see runbook)
 
-   Pass these to policy:set; the exact flag names are in the API chat's local quickstart (unconfirmed here).
+   This script never runs policy:set. Copy one of the commands below, edit --notes, and run it yourself.
+
+   Development database (backend repo):
+   npm run policy:set -- --platform ios --latest-build ${build} --latest-version ${marketing_version} --recommended-version ${marketing_version} --notes "<edit: what changed in this build>" --manifest-url ${manifest_public_url} --ipa-url ${ipa_public_url}
+
+   Production server (run on the server):
+   bash repo/deploy/scripts/compose.sh exec api node dist/scripts/policy-set.js --platform ios --latest-build ${build} --latest-version ${marketing_version} --recommended-version ${marketing_version} --notes "<edit: what changed in this build>" --manifest-url ${manifest_public_url} --ipa-url ${ipa_public_url}
+
+   WARNING — force-update variant (NOT filled in on purpose):
+   Adding --min-build N --minimum-version X.Y blocks every build older than N on every phone.
+   Raise it only after the new build is installed on every family phone. When you do, append:
+     --min-build N --minimum-version X.Y
+   (replace N and X.Y yourself; never paste this build's values here without checking every phone first).
+   Other flags the command accepts: --enabled true|false.
+
+   The --manifest-url and --ipa-url values cannot be cleared once set; a later policy:set can only point them at another valid pair.
 
 4. Device verification steps:
    a. Tap the install link on a registered device (must be in the provisioning profile).

@@ -216,15 +216,35 @@ Omit `--yes` and add `--dry-run` to preview the commands without executing them.
 bash scripts/release.sh install-info --build 500
 ```
 
-The command prints a values-only block (platform, build, version, URLs) labelled
-"Values for policy:set". Pass these to `policy:set` on the **API server** (not here —
-the script never runs `policy:set`). The exact flag names are in the API chat's local
-quickstart (unconfirmed here).
+The command prints the values block labelled "Values for policy:set" followed by two
+filled-in commands (the recipe below with the real build, version, and URLs). The
+script never runs `policy:set`; you copy one command, edit `--notes`, and run it.
 
-Decide whether to raise the minimum build. Raising it forces devices on older builds to
-update before they can use the app. For the first release (500 replacing 4.4), there
-is no prior v2 build to force off, so you can leave the minimum at its default or
-set it to 500 to block the 4.4 distribution channel entirely.
+Development database (backend repo):
+
+```bash
+npm run policy:set -- --platform ios --latest-build <build> --latest-version <version> --recommended-version <version> --notes "<what changed in this build>" --manifest-url https://content.bmalberta.com/distribution/tracker/<build>/manifest.plist --ipa-url https://content.bmalberta.com/distribution/tracker/<build>/ChristmasTracker-<version>-<build>.ipa
+```
+
+Production server (run on the server):
+
+```bash
+bash repo/deploy/scripts/compose.sh exec api node dist/scripts/policy-set.js --platform ios --latest-build <build> --latest-version <version> --recommended-version <version> --notes "<what changed in this build>" --manifest-url https://content.bmalberta.com/distribution/tracker/<build>/manifest.plist --ipa-url https://content.bmalberta.com/distribution/tracker/<build>/ChristmasTracker-<version>-<build>.ipa
+```
+
+Accepted flags: `--platform`, `--min-build`, `--latest-build`, `--minimum-version`,
+`--recommended-version`, `--latest-version`, `--manifest-url`, `--ipa-url`, `--notes`,
+`--enabled true|false`.
+
+**Warning — force update.** Adding `--min-build N --minimum-version X.Y` blocks every
+build older than N on every phone. Raise `--min-build` / `--minimum-version` only after
+every family phone has the new build installed and working. The commands above
+deliberately omit these flags; `install-info` prints them only as unfilled placeholders.
+For the first release (500 replacing 4.4), there is no prior v2 build to force off, so
+leave the minimum alone until every phone is on 500.
+
+**The `--manifest-url` and `--ipa-url` values cannot be cleared once set**; a later
+`policy:set` can only point them at another valid pair.
 
 ### Step 8 — Run all subcommands in one shot (alternative)
 
@@ -266,13 +286,18 @@ its own and you understand what each step does.
 **Never delete an uploaded build.** The itms-services link for any build that was
 ever distributed will continue to work as long as the objects exist on S3.
 
-To roll back to a previous build, run `policy:set` on the API server with the previous build's values (exact flag names are in the API chat's local quickstart — unconfirmed here):
+Rollback means pointing the policy at the previous build's manifest and IPA URLs. Since
+the URLs cannot be cleared once set, rollback only ever sets them to another valid pair
+(the previous build's objects, which are still on S3). Run the Step 7 recipe with the
+previous build's values — on the server:
 
-- `--platform ios`
-- `--latest-build <prev-build>`
-- `--latest-version <prev-version>`
-- `--manifest-url https://content.bmalberta.com/distribution/tracker/<prev-build>/manifest.plist`
-- `--ipa-url https://content.bmalberta.com/distribution/tracker/<prev-build>/ChristmasTracker-<prev-version>-<prev-build>.ipa`
+```bash
+bash repo/deploy/scripts/compose.sh exec api node dist/scripts/policy-set.js --platform ios --latest-build <prev-build> --latest-version <prev-version> --recommended-version <prev-version> --notes "rollback to <prev-build>" --manifest-url https://content.bmalberta.com/distribution/tracker/<prev-build>/manifest.plist --ipa-url https://content.bmalberta.com/distribution/tracker/<prev-build>/ChristmasTracker-<prev-version>-<prev-build>.ipa
+```
+
+(or the `npm run policy:set -- ...` form against the development database). If
+`--min-build` was already raised above `<prev-build>`, phones on the previous build are
+blocked until you lower it again with `--min-build <prev-build> --minimum-version <prev-version>`.
 
 The first release (500) has nothing to roll back to. If 500 is broken and you need
 the app working immediately, re-sign a corrected build as 501.
