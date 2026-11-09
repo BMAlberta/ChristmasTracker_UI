@@ -43,13 +43,15 @@ public enum ErrorCodeClassification: Sendable, Equatable {
 
 public func classifyErrorCode(errorCode: Int) -> ErrorCodeClassification {
     switch errorCode {
-    case 1005, 1006, 1013:
+    case 1005, 1006, 1013,
+         1008, // ACCOUNT_DISABLED
+         4002: // USER_NOT_FOUND
         return .reLogin
     case 1002, 1003, 1004:
         return .refreshAndReplay
     case 1014:
         return .forceUpdate
-    case 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4010:
+    case 4001, 4003, 4004, 4005, 4006, 4007, 4010, 4011: // 4011 PERSON_NOT_FOUND
         return .notFound
     case 8001, 8002, 9001, 9002:
         return .backOff

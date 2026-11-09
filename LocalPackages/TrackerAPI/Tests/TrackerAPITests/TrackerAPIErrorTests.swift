@@ -167,6 +167,16 @@ struct TrackerAPIErrorTests {
         #expect(classifyErrorCode(errorCode: 1013) == .reLogin)
     }
 
+    @Test("Error code 1008 (ACCOUNT_DISABLED) classifies as .reLogin")
+    func classify1008ReLogin() {
+        #expect(classifyErrorCode(errorCode: 1008) == .reLogin)
+    }
+
+    @Test("Error code 4002 (USER_NOT_FOUND) classifies as .reLogin")
+    func classify4002ReLogin() {
+        #expect(classifyErrorCode(errorCode: 4002) == .reLogin)
+    }
+
     // MARK: - classifyErrorCode — refreshAndReplay
 
     @Test("Error code 1002 classifies as .refreshAndReplay")
@@ -198,9 +208,9 @@ struct TrackerAPIErrorTests {
         #expect(classifyErrorCode(errorCode: 4001) == .notFound)
     }
 
-    @Test("Error code 4002 classifies as .notFound")
-    func classify4002NotFound() {
-        #expect(classifyErrorCode(errorCode: 4002) == .notFound)
+    @Test("Error code 4011 (PERSON_NOT_FOUND) classifies as .notFound")
+    func classify4011NotFound() {
+        #expect(classifyErrorCode(errorCode: 4011) == .notFound)
     }
 
     @Test("Error code 4003 classifies as .notFound")
@@ -268,11 +278,6 @@ struct TrackerAPIErrorTests {
     @Test("Error code 1001 classifies as .showMessage")
     func classify1001ShowMessage() {
         #expect(classifyErrorCode(errorCode: 1001) == .showMessage)
-    }
-
-    @Test("Error code 1008 classifies as .showMessage")
-    func classify1008ShowMessage() {
-        #expect(classifyErrorCode(errorCode: 1008) == .showMessage)
     }
 
     @Test("Error code 1009 classifies as .showMessage")

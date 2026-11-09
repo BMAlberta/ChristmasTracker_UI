@@ -128,7 +128,13 @@ struct DecodingTests {
             "canPurchase": true,
             "canAddOffList": true,
             "canSeeOffList": true,
-            "canCreateItem": true
+            "canCreateItem": true,
+            "canSeeMembers": true,
+            "canEditList": true,
+            "canDeleteList": true,
+            "canManageMembers": true,
+            "canSetCoOwner": true,
+            "canLeaveList": false
         }
         """
         let data = try #require(json.data(using: .utf8))
@@ -171,7 +177,13 @@ struct DecodingTests {
             "canPurchase": true,
             "canAddOffList": true,
             "canSeeOffList": true,
-            "canCreateItem": true
+            "canCreateItem": true,
+            "canSeeMembers": true,
+            "canEditList": true,
+            "canDeleteList": true,
+            "canManageMembers": true,
+            "canSetCoOwner": true,
+            "canLeaveList": false
         }
         """
         let data = try #require(json.data(using: .utf8))
@@ -386,7 +398,13 @@ struct DecodingTests {
             "canPurchase": true,
             "canAddOffList": false,
             "canSeeOffList": true,
-            "canCreateItem": true
+            "canCreateItem": true,
+            "canSeeMembers": true,
+            "canEditList": true,
+            "canDeleteList": true,
+            "canManageMembers": true,
+            "canSetCoOwner": true,
+            "canLeaveList": false
         }
         """
         let data = try #require(json.data(using: .utf8))
@@ -405,6 +423,61 @@ struct DecodingTests {
         #expect(summary.value2.canAddOffList == false)
         #expect(summary.value2.canSeeOffList == true)
         #expect(summary.value2.canCreateItem == true)
+
+        // Revision 26 list-management flags — flat JSON keys on the base object.
+        #expect(summary.value1.canSeeMembers == true)
+        #expect(summary.value1.canEditList == true)
+        #expect(summary.value1.canDeleteList == true)
+        #expect(summary.value1.canManageMembers == true)
+        #expect(summary.value1.canSetCoOwner == true)
+        #expect(summary.value1.canLeaveList == false)
+    }
+
+    // MARK: - 8b. ListDetail without members
+
+    @Test("Decode ListDetail with the members key absent yields nil members")
+    func decodeListDetailWithoutMembers() async throws {
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000041",
+            "name": "Detail List Without Members",
+            "theme": null,
+            "year": 2026,
+            "visibility": "PRIVATE",
+            "status": "ACTIVE",
+            "recipient": {
+                "id": "00000000-0000-0000-0000-000000000010",
+                "displayName": "Alice"
+            },
+            "owner": {
+                "id": "00000000-0000-0000-0000-000000000011",
+                "displayName": "Bob"
+            },
+            "coOwner": null,
+            "myRole": "member",
+            "memberCount": 4,
+            "createdAt": "2026-11-02T00:00:00Z",
+            "updatedAt": "2026-11-02T00:00:00Z",
+            "isRecipient": false,
+            "canSeeGiftActivity": true,
+            "canPurchase": true,
+            "canAddOffList": true,
+            "canSeeOffList": true,
+            "canCreateItem": true,
+            "canSeeMembers": false,
+            "canEditList": false,
+            "canDeleteList": false,
+            "canManageMembers": false,
+            "canSetCoOwner": false,
+            "canLeaveList": true
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let detail = try makeDecoder().decode(Components.Schemas.ListDetail.self, from: data)
+        #expect(detail.value2.members == nil)
+        #expect(detail.value1.value1.memberCount == 4)
+        #expect(detail.value1.value1.canSeeMembers == false)
+        #expect(detail.value1.value1.canLeaveList == true)
     }
 
     // MARK: - 8. ListDetail allOf
@@ -438,6 +511,12 @@ struct DecodingTests {
             "canAddOffList": true,
             "canSeeOffList": true,
             "canCreateItem": true,
+            "canSeeMembers": true,
+            "canEditList": true,
+            "canDeleteList": true,
+            "canManageMembers": true,
+            "canSetCoOwner": true,
+            "canLeaveList": false,
             "members": [
                 {
                     "id": "00000000-0000-0000-0000-000000000050",
