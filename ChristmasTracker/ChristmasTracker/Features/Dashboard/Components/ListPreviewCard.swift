@@ -7,168 +7,48 @@
 
 import SwiftUI
 
+/// One list on the dashboard. It shows what the row state allows and nothing else: when counts
+/// are hidden the card has no note or placeholder about them.
 struct ListPreviewCard: View {
-    
-    let list: GiftList
+
+    let state: ListRowState
 
     var body: some View {
-        let permissions = ListPermissions(list.capabilities)
-        let badge = ListRoleBadge(list: list)
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            ListPreviewCardHeader(
-                title: list.name,
-                subtitle: "For \(list.recipientName)",
-                roleDisplayName: badge.title,
-                roleColor: badge.tone.color
-            )
+            HStack(alignment: .top, spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(state.title)
+                        .font(.appTitle3)
+                        .foregroundStyle(Color.textPrimaryColor)
+                    Text(state.subtitle)
+                        .font(.appBody)
+                        .foregroundStyle(Color.textMutedColor)
+                }
+                Spacer(minLength: AppSpacing.sm)
+                ListBadge(title: state.badgeTitle, tone: state.badgeTone)
+            }
 
-            Divider()
-
-            if permissions.showsCounts(itemCount: list.itemCount, purchasedCount: list.purchasedCount),
-               let itemCount = list.itemCount,
-               let purchasedCount = list.purchasedCount {
-                ListStatsSection(
-                    itemCount: itemCount,
-                    purchasedCount: purchasedCount,
-                    progress: permissions.showsProgress(
-                        itemCount: itemCount,
-                        purchasedCount: purchasedCount
-                    ) ? list.progress : nil
+            if let itemCountText = state.itemCountText, let purchasedCountText = state.purchasedCountText {
+                Divider()
+                ListCountsView(
+                    itemCountText: itemCountText,
+                    purchasedCountText: purchasedCountText,
+                    progress: state.progress
                 )
-            } else {
-                ListStatsHiddenNote()
             }
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .clipShape(.rect(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-    }
-}
-
-private struct ListPreviewCardHeader: View {
-    
-    let title: String
-    let subtitle: String
-    let roleDisplayName: String
-    let roleColor: Color
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text(title)
-                    .font(.appTitle3)
-                    .foregroundStyle(Color.textPrimaryColor)
-                
-                Text(subtitle)
-                    .font(.appBody)
-                    .foregroundStyle(Color.textMutedColor)
-            }
-            
-            Spacer()
-            
-            RoleBadge(
-                displayName: roleDisplayName,
-                color: roleColor
-            )
-        }
-    }
-}
-
-private struct RoleBadge: View {
-    
-    let displayName: String
-    let color: Color
-    
-    var body: some View {
-        Text(displayName)
-            .font(.appCaption1)
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, AppSpacing.sm)
-            .padding(.vertical, AppSpacing.xs)
-            .background(color)
-            .clipShape(.rect(cornerRadius: 4))
-    }
-}
-
-private struct ListStatsSection: View {
-    
-    let itemCount: Int
-    let purchasedCount: Int
-    let progress: Double?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            ListStatsRow(
-                itemCount: itemCount,
-                purchasedCount: purchasedCount
-            )
-
-            if let progress {
-                ProgressView(value: progress)
-                    .tint(.primaryColor)
-            }
-        }
-    }
-}
-
-private struct ListStatsRow: View {
-    
-    let itemCount: Int
-    let purchasedCount: Int
-    
-    var body: some View {
-        HStack(spacing: AppSpacing.lg) {
-            ListStatItem(
-                icon: "list.bullet",
-                value: "\(purchasedCount)/\(itemCount)",
-                label: "Items"
-            )
-            
-            Spacer()
-        }
-    }
-}
-
-private struct ListStatItem: View {
-    
-    let icon: String
-    let value: String
-    let label: String
-    
-    var body: some View {
-        HStack(spacing: AppSpacing.xs) {
-            Image(systemName: icon)
-                .font(.appBody)
-                .foregroundStyle(Color.accentColor)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.appHeadline)
-                    .foregroundStyle(Color.textPrimaryColor)
-                
-                Text(label)
-                    .font(.appCaption2)
-                    .foregroundStyle(Color.textMutedColor)
-            }
-        }
-    }
-}
-
-private struct ListStatsHiddenNote: View {
-    
-    var body: some View {
-        Text("Item details are hidden to keep gifts a surprise")
-            .font(.appCaption1)
-            .foregroundStyle(Color.textMutedColor)
-            .italic()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(state.accessibilityLabel)
+        .accessibilityHint(state.accessibilityHint)
     }
 }
 
 #Preview {
     VStack {
-        ListPreviewCard(list: MockListData.ownerOfChildList.asGiftList())
-        ListPreviewCard(list: MockListData.blindOwnerOfSelfList.asGiftList())
+        ListPreviewCard(state: ListRowState(list: MockListData.ownerOfChildList.asGiftList()))
+        ListPreviewCard(state: ListRowState(list: MockListData.blindOwnerOfSelfList.asGiftList()))
     }
-    .padding()
+    .padding(EdgeInsets.appScreenPadding)
 }

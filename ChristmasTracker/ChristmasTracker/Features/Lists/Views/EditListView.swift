@@ -7,61 +7,88 @@
 
 import SwiftUI
 
+/// Edits the name, theme and visibility of a list. Only changed fields are sent.
 struct EditListView: View {
-    
+
     let list: ListDetail
-    
+
     @Environment(\.listService) private var listService
     @Environment(\.dismiss) private var dismiss
-    
-    // MARK: - Form State
+
     @State private var name: String
     @State private var theme: String
     @State private var visibility: ListVisibility
-    
+
     @State private var isSaving = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
+    @State private var errorPresentation: ListErrorPresentation?
+
     init(list: ListDetail) {
         self.list = list
         _name = State(initialValue: list.name)
         _theme = State(initialValue: list.theme ?? "")
         _visibility = State(initialValue: list.visibility)
     }
-    
+
+    private var validity: EditFormValidity {
+        ListFormValidation.validateEdit(name: name, theme: theme)
+    }
+
+    private var pendingInput: UpdateListInput? {
+        ListFormValidation.makeUpdateInput(original: list, name: name, theme: theme, visibility: visibility)
+    }
+
+    private var canSave: Bool {
+        validity.isValid && pendingInput != nil && !isSaving
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if let errorPresentation {
+                    Section {
+                        ListErrorBanner(
+                            presentation: errorPresentation,
+                            onRetry: { Task { await saveChanges() } },
+                            onLeave: { dismiss() },
+                            onDismiss: { self.errorPresentation = nil }
+                        )
+                    }
+                }
                 Section("List Details") {
                     TextField("List Name", text: $name)
                         .autocorrectionDisabled()
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("editList.nameField")
+                    if validity.nameEmptyOrTooLong, !name.isEmpty {
+                        problemText("Use 1 to \(ListFormValidation.nameLimit) characters.")
+                    }
                     TextField("Theme (optional)", text: $theme)
                         .autocorrectionDisabled()
-                    HStack {
-                        Text("Year")
-                        Spacer()
-                        Text("\(list.year)")
-                            .foregroundColor(.textMutedColor)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("editList.themeField")
+                    if validity.themeTooLong {
+                        problemText("Use at most \(ListFormValidation.themeLimit) characters.")
                     }
+                    LabeledContent("Year", value: list.year.yearDisplay)
+                        .foregroundStyle(Color.textMutedColor)
                 }
                 Section("Recipient") {
-                    HStack {
-                        Text("Recipient")
-                        Spacer()
-                        Text(list.recipientName)
-                            .foregroundColor(.textMutedColor)
-                    }
+                    LabeledContent("Recipient", value: list.recipientName)
+                        .foregroundStyle(Color.textMutedColor)
                 }
                 Section("Privacy") {
                     Picker("Visibility", selection: $visibility) {
-                        Text("Private").tag(ListVisibility.private)
-                        Text("Invite Only").tag(ListVisibility.inviteOnly)
-                        Text("Friends Only").tag(ListVisibility.friendsOnly)
-                        Text("Public").tag(ListVisibility.public)
+                        ForEach(ListFormValidation.selectableVisibilities, id: \.self) { option in
+                            Text(option.title).tag(option)
+                        }
                     }
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("editList.visibilityPicker")
                 }
             }
+            .font(.appBody)
+            .scrollContentBackground(.hidden)
+            .background(Color.backgroundPrimaryColor)
             .navigationTitle("Edit List")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -69,13 +96,13 @@ struct EditListView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .frame(minHeight: 44)
                     .disabled(isSaving)
+                    .accessibilityIdentifier("editList.cancelButton")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        Task {
-                            await saveChanges()
-                        }
+                        Task { await saveChanges() }
                     } label: {
                         if isSaving {
                             ProgressView()
@@ -83,50 +110,38 @@ struct EditListView: View {
                             Text("Save")
                         }
                     }
-                    .disabled(!hasChanges || !isFormValid || isSaving)
+                    .frame(minHeight: 44)
+                    .disabled(!canSave)
+                    .accessibilityIdentifier("editList.saveButton")
                 }
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
             }
         }
     }
-    
-    // MARK: - Validation
-    private var isFormValid: Bool {
-        !name.isEmpty
+
+    private func problemText(_ text: String) -> some View {
+        Text(text)
+            .font(.appCaption1)
+            .foregroundStyle(Color.accentColor)
     }
-    
-    private var hasChanges: Bool {
-        name != list.name ||
-        theme != (list.theme ?? "") ||
-        visibility != list.visibility
-    }
-    
+
     // MARK: - Actions
-    
+
     private func saveChanges() async {
+        guard validity.isValid, let input = pendingInput else { return }
         isSaving = true
-        // Build request with only changed fields
-        let input = UpdateListInput(
-            name: name != list.name ? name.trimmingCharacters(in: .whitespaces) : nil,
-            theme: theme != (list.theme ?? "") ? (theme.isEmpty ? nil :
-                                                    theme.trimmingCharacters(in: .whitespaces)) : nil,
-            visibility: visibility != list.visibility ? visibility : nil
-        )
+        errorPresentation = nil
+        defer { isSaving = false }
+
         do {
             try await listService.updateList(id: list.id, input)
             dismiss()
+        } catch is CancellationError {
+            return
         } catch {
-            errorMessage = error.localizedDescription
-            showError = true
+            errorPresentation = ListErrorPresentation((error as? ListError) ?? .server)
         }
-        isSaving = false
     }
 }
-
 
 #Preview {
     EditListView(list: MockListData.ownerOfChildList)

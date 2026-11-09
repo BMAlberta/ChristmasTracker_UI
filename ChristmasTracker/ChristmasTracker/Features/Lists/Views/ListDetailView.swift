@@ -6,322 +6,339 @@
 //
 
 import SwiftUI
+
 struct ListDetailView: View {
     let listId: String
     @Environment(\.listService) private var listService
     @Environment(\.dismiss) private var dismiss
     @Environment(\.itemService) private var itemService
-    
-    @State private var showEditSheet = false
+
+    @State private var editingDetail: ListDetail?
     @State private var showDeleteConfirmation = false
-    @State private var showAddItemSheet = false
     @State private var selectedItemId: String?
-    
+    @State private var actionError: ListErrorPresentation?
+
+    /// The loaded detail, only when it belongs to this screen's list. A previous list's data
+    /// is never shown while this list loads.
+    private var currentDetail: ListDetail? {
+        guard let detail = listService.currentListDetail, detail.id == listId else { return nil }
+        return detail
+    }
+
     var body: some View {
-        Group {
-            if listService.isLoading && listService.currentListDetail == nil {
-                LoadingView(message: "Loading list...")
-            } else if let error = listService.error {
-                ErrorStateView(error: error) {
-                    Task { await listService.loadListDetail(id: listId) }
-                }
-            } else if let detail = listService.currentListDetail {
-                detailContent(detail: detail)
+        let detail = currentDetail
+        let state = detail.map { ListDetailState(detail: $0) }
+        return content(detail: detail, state: state)
+            .background(Color.backgroundPrimaryColor)
+            .navigationTitle("List Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $selectedItemId) { itemId in
+                ItemDetailView(itemId: itemId)
             }
-        }
-        .background(Color.backgroundPrimaryColor)
-        .navigationTitle("List Details")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(item: $selectedItemId) { itemId in
-            ItemDetailView(itemId: itemId)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if let detail = listService.currentListDetail,
-                   ListPermissions(detail.capabilities).canEditList {
-                    Button("Edit") {
-                        showEditSheet = true
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let detail, state?.showsEditAction == true {
+                        Button("Edit") {
+                            editingDetail = detail
+                        }
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Changes the name, theme and visibility of this list")
+                        .accessibilityIdentifier("listDetail.editButton")
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showEditSheet) {
-            if let detail = listService.currentListDetail {
+            .sheet(item: $editingDetail) { detail in
                 EditListView(list: detail)
             }
-        }
-        .task {
-            await listService.loadListDetail(id: listId)
-            await itemService.loadItems(listId: listId)
+            .confirmationDialog(
+                ListDeleteConfirmation.title,
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(ListDeleteConfirmation.confirmButtonTitle, role: .destructive) {
+                    Task { await deleteList() }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text(ListDeleteConfirmation.message)
+            }
+            .refreshable {
+                await load()
+            }
+            .task {
+                await load()
+            }
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private func content(detail: ListDetail?, state: ListDetailState?) -> some View {
+        if let detail, let state {
+            detailContent(detail: detail, state: state)
+        } else if !listService.isLoading, let error = listService.error {
+            ListErrorBanner(
+                presentation: ListErrorPresentation(error),
+                onRetry: { Task { await load() } },
+                onLeave: { dismiss() }
+            )
+            .padding(EdgeInsets.appScreenPadding)
+            .frame(maxHeight: .infinity, alignment: .top)
+        } else {
+            LoadingView(message: "Loading list...")
         }
     }
-    private func detailContent(detail: ListDetail) -> some View {
-        let permissions = ListPermissions(detail.capabilities)
-        return ScrollView {
+
+    private func load() async {
+        actionError = nil
+        await listService.loadListDetail(id: listId)
+        await itemService.loadItems(listId: listId)
+    }
+
+    private func deleteList() async {
+        do {
+            try await listService.deleteList(id: listId)
+            dismiss()
+        } catch is CancellationError {
+            return
+        } catch {
+            actionError = ListErrorPresentation((error as? ListError) ?? .server)
+        }
+    }
+
+    private func detailContent(detail: ListDetail, state: ListDetailState) -> some View {
+        ScrollView {
             VStack(spacing: AppSpacing.xl) {
-                headerCard(detail: detail)
-                if permissions.showsCounts(itemCount: detail.itemCount, purchasedCount: detail.purchasedCount) {
-                    statsCard(detail: detail)
+                if let actionError {
+                    ListErrorBanner(
+                        presentation: actionError,
+                        onRetry: { Task { await deleteList() } },
+                        onLeave: { dismiss() },
+                        onDismiss: { self.actionError = nil }
+                    )
                 }
-                
-                itemsSection(detail: detail)
-                
-                if permissions.showsMembersSection, let members = detail.members {
+                headerCard(state: state)
+                if state.showsStatsCard,
+                   let itemCountText = state.itemCountText,
+                   let purchasedCountText = state.purchasedCountText {
+                    statsCard(
+                        itemCountText: itemCountText,
+                        purchasedCountText: purchasedCountText,
+                        progress: state.progress
+                    )
+                }
+                if showsItemsSection(state: state) {
+                    itemsSection(state: state, detail: detail)
+                }
+                if state.showsMembersSection, let members = detail.members {
                     membersCard(members: members)
                 }
-               
-                if permissions.canDeleteList {
-                    actionsSection()
+                if state.showsDeleteAction {
+                    deleteButton
                 }
             }
             .padding(EdgeInsets.appScreenPadding)
         }
-        .confirmationDialog(
-            "Are you sure you want to delete this list?",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete List", role: .destructive) {
-                Task {
-                    try? await listService.deleteList(id: detail.id)
-                    dismiss()
-                }
-            }
-        } message: {
-            Button("Cancel", role: .cancel) { }
-            Text("This action cannot be undone. All items will be permanently deleted.")
-        }
     }
-    private func headerCard(detail: ListDetail) -> some View {
+
+    /// Viewers who may not see counts get no items section unless items were actually returned,
+    /// so an empty section never hints at whether items exist.
+    private func showsItemsSection(state: ListDetailState) -> Bool {
+        state.showsStatsCard || !scopedItems.isEmpty
+    }
+
+    /// Items render only under the list they were loaded for.
+    private var scopedItems: [GiftItem] {
+        ListItemsScope.itemsToShow(itemService.items, currentListId: itemService.currentListId, listId: listId)
+    }
+
+    private var scopedFilteredItems: [GiftItem] {
+        ListItemsScope.itemsToShow(
+            itemService.filteredItems,
+            currentListId: itemService.currentListId,
+            listId: listId
+        )
+    }
+
+    // MARK: - Cards
+
+    private func headerCard(state: ListDetailState) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack {
+            HStack(alignment: .top, spacing: AppSpacing.md) {
                 VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text(detail.name)
+                    Text(state.title)
                         .font(.appTitle1)
-                        .foregroundColor(.textPrimaryColor)
-                    Text("For \(detail.recipientName)")
+                        .foregroundStyle(Color.textPrimaryColor)
+                    Text(state.subtitle)
                         .font(.appTitle3)
-                        .foregroundColor(.textMutedColor)
+                        .foregroundStyle(Color.textMutedColor)
                 }
-                Spacer()
-                Text(ListRoleBadge(detail: detail).title)
-                    .font(.appCaption1)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, AppSpacing.sm)
-                    .padding(.vertical, AppSpacing.xs)
-                    .background(ListRoleBadge(detail: detail).tone.color)
-                    .cornerRadius(4)
+                Spacer(minLength: AppSpacing.sm)
+                ListBadge(title: state.badgeTitle, tone: state.badgeTone)
             }
-            if let theme = detail.theme {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "sparkles")
-                        .font(.appCaption1)
-                        .foregroundColor(.accentColor)
-                    Text(theme)
-                        .font(.appBody)
-                        .foregroundColor(.accentColor)
-                }
+            if let theme = state.theme, !theme.isEmpty {
+                Label(theme, systemImage: "sparkles")
+                    .font(.appBody)
+                    .foregroundStyle(Color.accentColor)
             }
             HStack {
-                Label("\(detail.year.yearDisplay)", systemImage: "calendar")
-                    .font(.appCaption1)
-                    .foregroundColor(.textMutedColor)
+                Label(state.year.yearDisplay, systemImage: "calendar")
                 Spacer()
-                Label(detail.visibility.displayName, systemImage: detail.visibility.icon)
-                    .font(.appCaption1)
-                    .foregroundColor(.textMutedColor)
+                Label(state.visibilityTitle, systemImage: state.visibilityIcon)
             }
-            .padding(.top, AppSpacing.xs)
+            .font(.appCaption1)
+            .foregroundStyle(Color.textMutedColor)
+            Label(state.memberCountText, systemImage: "person.2")
+                .font(.appCaption1)
+                .foregroundStyle(Color.textMutedColor)
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
     }
-    private func statsCard(detail: ListDetail) -> some View {
-        VStack(spacing: AppSpacing.md) {
+
+    private func statsCard(itemCountText: String, purchasedCountText: String, progress: Double?) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             Text("Progress")
                 .font(.appHeadline)
-                .foregroundColor(.textPrimaryColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let itemCount = detail.itemCount,
-               let purchasedCount = detail.purchasedCount {
-                HStack(spacing: AppSpacing.lg) {
-                    statItem(
-                        icon: "list.bullet",
-                        value: "\(purchasedCount)/\(itemCount)",
-                        label: "Items"
-                    )
-                    Spacer()
-                }
-                if let progress = detail.progress {
-                    ProgressView(value: progress)
-                        .tint(.primaryColor)
-                }
-            }
+                .foregroundStyle(Color.textPrimaryColor)
+            ListCountsView(
+                itemCountText: itemCountText,
+                purchasedCountText: purchasedCountText,
+                progress: progress
+            )
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
     }
-    private func statItem(icon: String, value: String, label: String) -> some View {
-        HStack(spacing: AppSpacing.xs) {
-            Image(systemName: icon)
-                .font(.appBody)
-                .foregroundColor(.accentColor)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.appHeadline)
-                    .foregroundColor(.textPrimaryColor)
-                Text(label)
-                    .font(.appCaption2)
-                    .foregroundColor(.textMutedColor)
-            }
-        }
-    }
+
     private func membersCard(members: [ListMember]) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             HStack {
                 Text("Members")
                     .font(.appHeadline)
-                    .foregroundColor(.textPrimaryColor)
+                    .foregroundStyle(Color.textPrimaryColor)
                 Spacer()
                 Text("\(members.count)")
                     .font(.appCaption1)
-                    .foregroundColor(.textMutedColor)
+                    .foregroundStyle(Color.textMutedColor)
             }
             ForEach(members) { member in
                 HStack(spacing: AppSpacing.md) {
                     Circle()
                         .fill(Color.primaryColor.opacity(0.2))
-                        .frame(width: 40, height: 40)
-                        .overlay(
+                        .frame(width: 44, height: 44)
+                        .overlay {
                             Text(String(member.displayName.prefix(1)))
                                 .font(.appHeadline)
-                                .foregroundColor(.primaryColor)
-                        )
-                    VStack(alignment: .leading, spacing: 2) {
+                                .foregroundStyle(Color.primaryColor)
+                        }
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
                         Text(member.displayName)
                             .font(.appBody)
-                            .foregroundColor(.textPrimaryColor)
+                            .foregroundStyle(Color.textPrimaryColor)
                         if let email = member.email {
                             Text(email)
                                 .font(.appCaption1)
-                                .foregroundColor(.textMutedColor)
+                                .foregroundStyle(Color.textMutedColor)
                         }
                     }
                     Spacer()
                     Text(member.role.displayName)
                         .font(.appCaption1)
-                        .foregroundColor(.textMutedColor)
+                        .foregroundStyle(Color.textMutedColor)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
     }
-    private func actionsSection() -> some View {
-        VStack(spacing: AppSpacing.md) {
-            Button {
-                showDeleteConfirmation = true
-            } label: {
-                HStack {
-                    Image(systemName: "trash")
-                    Text("Delete List")
-                }
+
+    private var deleteButton: some View {
+        Button(role: .destructive) {
+            showDeleteConfirmation = true
+        } label: {
+            Label("Delete List", systemImage: "trash")
                 .font(.appHeadline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(Color.red)
-                .cornerRadius(12)
-            }
+                .foregroundStyle(Color.surfaceColor)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.vertical, AppSpacing.xs)
+                .background(Color.accentColor, in: .rect(cornerRadius: AppSpacing.md))
         }
+        .accessibilityHint("Removes this list from your lists after you confirm")
+        .accessibilityIdentifier("listDetail.deleteButton")
     }
-    
-    private func itemsSection(detail: ListDetail) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
+
+    private func itemsSection(state: ListDetailState, detail: ListDetail) -> some View {
+        let items = scopedFilteredItems
+        let hasItems = !scopedItems.isEmpty
+        let firstItemId = items.first?.id
+        return VStack(alignment: .leading, spacing: AppSpacing.md) {
             HStack {
                 Text("Items")
                     .font(.appHeadline)
-                    .foregroundColor(.textPrimaryColor)
+                    .foregroundStyle(Color.textPrimaryColor)
                 Spacer()
-                if !itemService.items.isEmpty {
-                    Text("\(itemService.filteredItems.count)")
+                if state.showsStatsCard, hasItems {
+                    Text("\(items.count)")
                         .font(.appCaption1)
-                        .foregroundColor(.textMutedColor)
+                        .foregroundStyle(Color.textMutedColor)
                 }
             }
-            if itemService.isLoading && itemService.items.isEmpty {
-                // Loading
+            if itemService.isLoading && !hasItems {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.xl)
-            } else if itemService.items.isEmpty {
-                // Empty state
+            } else if !hasItems {
                 VStack(spacing: AppSpacing.md) {
                     Image(systemName: "gift.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(.textMutedColor)
+                        .font(.appTitle1)
+                        .foregroundStyle(Color.textMutedColor)
+                        .accessibilityHidden(true)
                     Text("No items yet")
                         .font(.appBody)
-                        .foregroundColor(.textMutedColor)
-                    if detail.capabilities.canCreateItem {
-                        Button("Add First Item") {
-                            showAddItemSheet = true
-                        }
-                        .font(.appHeadline)
-                        .foregroundColor(.primaryColor)
-                    }
+                        .foregroundStyle(Color.textMutedColor)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppSpacing.xl)
             } else {
-                // Items list
-                ForEach(itemService.filteredItems) { item in
-                    ItemRow(item: item, detail: detail)
-                        .onTapGesture {
-                            selectedItemId = item.id
+                ForEach(items) { item in
+                    Button {
+                        selectedItemId = item.id
+                    } label: {
+                        ItemRow(item: item, detail: detail)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .top) {
+                        if item.id != firstItemId {
+                            Divider()
+                                .padding(.leading, AppSpacing.xxxl)
+                                .offset(y: -AppSpacing.md / 2)
                         }
-                    if item.id != itemService.filteredItems.last?.id {
-                        Divider()
-                            .padding(.leading, 52)
                     }
                 }
             }
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-    }
-    
-}
-// MARK: - ListVisibility Extension
-extension ListVisibility {
-    var displayName: String {
-        switch self {
-        case .private: return "Private"
-        case .inviteOnly: return "Invite Only"
-        case .friendsOnly: return "Friends Only"
-        case .public: return "Public"
-        }
-    }
-    var icon: String {
-        switch self {
-        case .private: return "lock.fill"
-        case .inviteOnly: return "person.2.fill"
-        case .friendsOnly: return "person.crop.circle.badge.checkmark"
-        case .public: return "globe"
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
     }
 }
-#Preview {
+
+#Preview("Owner of a child list") {
     NavigationStack {
-        ListDetailView(listId: "1")
+        ListDetailView(listId: MockListData.ownerOfChildList.id)
+            .environment(\.listService, ListService(
+                repository: MockListRepository(),
+                dataStore: ListDataStore()
+            ))
+    }
+}
+
+#Preview("Blind owner") {
+    NavigationStack {
+        ListDetailView(listId: MockListData.blindOwnerOfSelfList.id)
             .environment(\.listService, ListService(
                 repository: MockListRepository(),
                 dataStore: ListDataStore()
