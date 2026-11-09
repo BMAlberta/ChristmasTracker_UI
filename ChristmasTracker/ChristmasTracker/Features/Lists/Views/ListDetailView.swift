@@ -37,7 +37,8 @@ struct ListDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if let detail = listService.currentListDetail, detail.canEdit {
+                if let detail = listService.currentListDetail,
+                   ListPermissions(detail.capabilities).canEditList {
                     Button("Edit") {
                         showEditSheet = true
                     }
@@ -55,19 +56,22 @@ struct ListDetailView: View {
         }
     }
     private func detailContent(detail: ListDetail) -> some View {
-        ScrollView {
+        let permissions = ListPermissions(detail.capabilities)
+        return ScrollView {
             VStack(spacing: AppSpacing.xl) {
                 headerCard(detail: detail)
-                if detail.itemCount != nil {
+                if permissions.showsCounts(itemCount: detail.itemCount, purchasedCount: detail.purchasedCount) {
                     statsCard(detail: detail)
                 }
                 
                 itemsSection(detail: detail)
                 
-                membersCard(detail: detail)
+                if permissions.showsMembersSection, let members = detail.members {
+                    membersCard(members: members)
+                }
                
-                if detail.canEdit {
-                    actionsSection(detail: detail)
+                if permissions.canDeleteList {
+                    actionsSection()
                 }
             }
             .padding(EdgeInsets.appScreenPadding)
@@ -100,12 +104,12 @@ struct ListDetailView: View {
                         .foregroundColor(.textMutedColor)
                 }
                 Spacer()
-                Text(detail.myRole.displayName)
+                Text(ListRoleBadge(detail: detail).title)
                     .font(.appCaption1)
                     .foregroundColor(.white)
                     .padding(.horizontal, AppSpacing.sm)
                     .padding(.vertical, AppSpacing.xs)
-                    .background(detail.myRole.color)
+                    .background(ListRoleBadge(detail: detail).tone.color)
                     .cornerRadius(4)
             }
             if let theme = detail.theme {
@@ -117,12 +121,6 @@ struct ListDetailView: View {
                         .font(.appBody)
                         .foregroundColor(.accentColor)
                 }
-            }
-            if let description = detail.description {
-                Text(description)
-                    .font(.appBody)
-                    .foregroundColor(.textMutedColor)
-                    .padding(.top, AppSpacing.xs)
             }
             HStack {
                 Label("\(detail.year.yearDisplay)", systemImage: "calendar")
@@ -154,18 +152,12 @@ struct ListDetailView: View {
                         value: "\(purchasedCount)/\(itemCount)",
                         label: "Items"
                     )
-                    if let budget = detail.totalBudget,
-                       let spent = detail.totalSpent {
-                        statItem(
-                            icon: "dollarsign.circle",
-                            value: "$\(Int(spent))/$\(Int(budget))",
-                            label: "Budget"
-                        )
-                    }
                     Spacer()
                 }
-                ProgressView(value: detail.progress)
-                    .tint(.primaryColor)
+                if let progress = detail.progress {
+                    ProgressView(value: progress)
+                        .tint(.primaryColor)
+                }
             }
         }
         .padding(AppSpacing.lg)
@@ -188,32 +180,32 @@ struct ListDetailView: View {
             }
         }
     }
-    private func membersCard(detail: ListDetail) -> some View {
+    private func membersCard(members: [ListMember]) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             HStack {
                 Text("Members")
                     .font(.appHeadline)
                     .foregroundColor(.textPrimaryColor)
                 Spacer()
-                Text("\(detail.members.count)")
+                Text("\(members.count)")
                     .font(.appCaption1)
                     .foregroundColor(.textMutedColor)
             }
-            ForEach(detail.members) { member in
+            ForEach(members) { member in
                 HStack(spacing: AppSpacing.md) {
                     Circle()
                         .fill(Color.primaryColor.opacity(0.2))
                         .frame(width: 40, height: 40)
                         .overlay(
-                            Text(String(member.userName.prefix(1)))
+                            Text(String(member.displayName.prefix(1)))
                                 .font(.appHeadline)
                                 .foregroundColor(.primaryColor)
                         )
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(member.userName)
+                        Text(member.displayName)
                             .font(.appBody)
                             .foregroundColor(.textPrimaryColor)
-                        if let email = member.userEmail {
+                        if let email = member.email {
                             Text(email)
                                 .font(.appCaption1)
                                 .foregroundColor(.textMutedColor)
@@ -231,23 +223,21 @@ struct ListDetailView: View {
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
-    private func actionsSection(detail: ListDetail) -> some View {
+    private func actionsSection() -> some View {
         VStack(spacing: AppSpacing.md) {
-            if detail.myRole == .owner {
-                Button {
-                    showDeleteConfirmation = true
-                } label: {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("Delete List")
-                    }
-                    .font(.appHeadline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(Color.red)
-                    .cornerRadius(12)
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                HStack {
+                    Image(systemName: "trash")
+                    Text("Delete List")
                 }
+                .font(.appHeadline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.md)
+                .background(Color.red)
+                .cornerRadius(12)
             }
         }
     }
@@ -279,7 +269,7 @@ struct ListDetailView: View {
                     Text("No items yet")
                         .font(.appBody)
                         .foregroundColor(.textMutedColor)
-                    if detail.canEdit {
+                    if detail.capabilities.canCreateItem {
                         Button("Add First Item") {
                             showAddItemSheet = true
                         }
@@ -316,6 +306,7 @@ extension ListVisibility {
         switch self {
         case .private: return "Private"
         case .inviteOnly: return "Invite Only"
+        case .friendsOnly: return "Friends Only"
         case .public: return "Public"
         }
     }
@@ -323,6 +314,7 @@ extension ListVisibility {
         switch self {
         case .private: return "lock.fill"
         case .inviteOnly: return "person.2.fill"
+        case .friendsOnly: return "person.crop.circle.badge.checkmark"
         case .public: return "globe"
         }
     }

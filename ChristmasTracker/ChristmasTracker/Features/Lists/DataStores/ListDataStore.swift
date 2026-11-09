@@ -51,23 +51,7 @@ actor ListDataStore {
     func setListDetail(_ detail: ListDetail) {
         listDetails[detail.id] = detail
         
-        let summary = GiftList(
-            id: detail.id,
-            name: detail.name,
-            theme: detail.theme,
-            year: detail.year,
-            visibility: detail.visibility,
-            status: detail.status,
-            recipient: detail.recipient,
-            owner: detail.owner,
-            coOwner: detail.coOwner,
-            myRole: detail.myRole,
-            itemCount: detail.itemCount,
-            purchasedCount: detail.purchasedCount,
-            createdAt: detail.createdAt,
-            updatedAt: detail.updatedAt
-        )
-        updateListSummary(summary)
+        updateListSummary(detail.asGiftList())
     }
     
     // MARK: - Cache Management

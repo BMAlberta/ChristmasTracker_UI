@@ -10,24 +10,30 @@ import SwiftUI
 struct ListPreviewCard: View {
     
     let list: GiftList
-    
+
     var body: some View {
+        let permissions = ListPermissions(list.capabilities)
+        let badge = ListRoleBadge(list: list)
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             ListPreviewCardHeader(
                 title: list.name,
                 subtitle: "For \(list.recipientName)",
-                roleDisplayName: list.myRole.displayName,
-                roleColor: list.myRole.color
+                roleDisplayName: badge.title,
+                roleColor: badge.tone.color
             )
-            
+
             Divider()
-            
-            if let itemCount = list.itemCount,
+
+            if permissions.showsCounts(itemCount: list.itemCount, purchasedCount: list.purchasedCount),
+               let itemCount = list.itemCount,
                let purchasedCount = list.purchasedCount {
                 ListStatsSection(
                     itemCount: itemCount,
                     purchasedCount: purchasedCount,
-                    progress: list.progress
+                    progress: permissions.showsProgress(
+                        itemCount: itemCount,
+                        purchasedCount: purchasedCount
+                    ) ? list.progress : nil
                 )
             } else {
                 ListStatsHiddenNote()
@@ -89,17 +95,19 @@ private struct ListStatsSection: View {
     
     let itemCount: Int
     let purchasedCount: Int
-    let progress: Double
-    
+    let progress: Double?
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             ListStatsRow(
                 itemCount: itemCount,
                 purchasedCount: purchasedCount
             )
-            
-            ProgressView(value: progress)
-                .tint(.primaryColor)
+
+            if let progress {
+                ProgressView(value: progress)
+                    .tint(.primaryColor)
+            }
         }
     }
 }
@@ -150,7 +158,7 @@ private struct ListStatItem: View {
 private struct ListStatsHiddenNote: View {
     
     var body: some View {
-        Text("Item details hidden (you're the owner)")
+        Text("Item details are hidden to keep gifts a surprise")
             .font(.appCaption1)
             .foregroundStyle(Color.textMutedColor)
             .italic()
@@ -158,23 +166,9 @@ private struct ListStatsHiddenNote: View {
 }
 
 #Preview {
-    ListPreviewCard(
-        list: GiftList(
-            id: "1",
-            name: "Christmas 2024",
-            theme: "Classic",
-            year: 2024,
-            visibility: .private,
-            status: .active,
-            recipient: ListPerson(id: "recipient-1", displayName: "Tommy"),
-            owner: ListPerson(id: "owner-1", displayName: "Brian"),
-            coOwner: nil,
-            myRole: .owner,
-            itemCount: 12,
-            purchasedCount: 8,
-            createdAt: Date(),
-            updatedAt: Date()
-        )
-    )
+    VStack {
+        ListPreviewCard(list: MockListData.ownerOfChildList.asGiftList())
+        ListPreviewCard(list: MockListData.blindOwnerOfSelfList.asGiftList())
+    }
     .padding()
 }

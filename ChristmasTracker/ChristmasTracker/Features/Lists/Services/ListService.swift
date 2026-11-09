@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Sentry
 import SwiftUI
 
 @MainActor
@@ -38,9 +39,9 @@ final class ListService {
         case .all:
             return lists
         case .owned:
-            return lists.filter { $0.myRole == .owner || $0.myRole == .coOwner}
+            return lists.filter { ListPermissions($0.capabilities).category == .owned }
         case .shared:
-            return lists.filter { $0.myRole == .member || $0.myRole == .viewer }
+            return lists.filter { ListPermissions($0.capabilities).category == .shared }
         }
     }
     
@@ -125,7 +126,7 @@ final class ListService {
             
             currentListDetail = detail
             
-            LogInfo("Loaded detail for list `\(detail.name)`", category: .business)
+            LogInfo("Loaded list detail", category: .business)
         } catch {
             self.error = handleError(error, operation: "load list details")
         }
@@ -133,18 +134,25 @@ final class ListService {
         isLoading = false
     }
     
-    func createList(_ request: CreateListRequest) async throws {
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
+    func createList(_ input: CreateListInput) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.createList",
+            operation: "service.lists.createList"
+        )
+        defer { span.finish() }
         isLoading = true
         error = nil
-        
+
         do {
-            let newList = try await repository.createList(request)
-            
+            let newList = try await repository.createList(input)
+
             await dataStore.setListDetail(newList)
-            
+
             await refreshLists()
-            
-            LogInfo("Created list `\(newList.name)`", category: .business)
+
+            LogInfo("Created list", category: .business)
         } catch {
             self.error = handleError(error, operation: "create list")
             isLoading = false
@@ -154,12 +162,19 @@ final class ListService {
         isLoading = false
     }
     
-    func updateList(id: String, _ request: UpdateListRequest) async throws {
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
+    func updateList(id: String, _ input: UpdateListInput) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.updateList",
+            operation: "service.lists.updateList"
+        )
+        defer { span.finish() }
         isLoading = true
         error = nil
-        
+
         do {
-            let updated = try await repository.updateList(id: id, request)
+            let updated = try await repository.updateList(id: id, input)
             
             await dataStore.setListDetail(updated)
             
@@ -169,7 +184,7 @@ final class ListService {
             
             await refreshLists()
             
-            LogInfo("Updated list '\(updated.name)'", category: .business)
+            LogInfo("Updated list", category: .business)
         } catch {
             self.error = handleError(error, operation: "update list")
             isLoading = false
@@ -178,7 +193,14 @@ final class ListService {
         isLoading = false
     }
     
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
     func deleteList(id: String) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.deleteList",
+            operation: "service.lists.deleteList"
+        )
+        defer { span.finish() }
         isLoading = true
         error = nil
         
@@ -193,7 +215,7 @@ final class ListService {
                 currentListDetail = nil
             }
             
-            LogInfo("Deleted list \(id)", category: .business)
+            LogInfo("Deleted list", category: .business)
         } catch {
             self.error = handleError(error, operation: "delete list")
             isLoading = false

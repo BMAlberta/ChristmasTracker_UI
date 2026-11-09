@@ -43,16 +43,14 @@ struct ListServiceTests {
         let service = ListService(repository: mockRepo, dataStore: dataStore)
         await service.loadLists()
         let initialCount = service.lists.count
-        let request = CreateListRequest(
+        let input = CreateListInput(
+            recipientId: "test-recipient",
+            year: 2024,
             name: "Test List",
             theme: "Test Theme",
-            year: 2024,
-            recipientId: "test-recipient",
-            description: "Test description",
-            visibility: .private,
-            coOwnerId: nil
+            visibility: .private
         )
-        try await service.createList(request)
+        try await service.createList(input)
         #expect(service.lists.count == initialCount + 1)
         #expect(service.lists.contains(where: { $0.name == "Test List" }))
     }
@@ -63,13 +61,12 @@ struct ListServiceTests {
         let service = ListService(repository: mockRepo, dataStore: dataStore)
         await service.loadLists()
         let listId = service.lists.first!.id
-        let request = UpdateListRequest(
+        let input = UpdateListInput(
             name: "Updated Name",
             theme: nil,
-            description: nil,
             visibility: nil
         )
-        try await service.updateList(id: listId, request)
+        try await service.updateList(id: listId, input)
         #expect(service.lists.contains(where: { $0.id == listId && $0.name == "Updated Name" }))
     }
     @Test("Delete list removes from collection")
@@ -87,7 +84,9 @@ struct ListServiceTests {
         let cached = await dataStore.getLists()
         #expect(!cached.contains(where: { $0.id == listToDelete }))
     }
-    @Test("Filter owned shows only owner/co-owner lists")
+    // REWRITTEN (I3a-L1): the owned/shared filter is a display grouping decided by
+    // ListPermissions.category (management flags), never by myRole.
+    @Test("Filter owned shows only lists whose management flags make them owned")
     func testFilterOwned() async {
         let mockRepo = MockListRepository()
         let dataStore = ListDataStore()
@@ -95,10 +94,11 @@ struct ListServiceTests {
         await service.loadLists()
         service.currentFilter = .owned
         #expect(service.filteredLists.allSatisfy {
-            $0.myRole == .owner || $0.myRole == .coOwner
+            ListPermissions($0.capabilities).category == .owned
         })
     }
-    @Test("Filter shared shows only member/viewer lists")
+    // REWRITTEN (I3a-L1): flag-based, see testFilterOwned.
+    @Test("Filter shared shows only lists whose management flags do not make them owned")
     func testFilterShared() async {
         let mockRepo = MockListRepository()
         let dataStore = ListDataStore()
@@ -106,8 +106,34 @@ struct ListServiceTests {
         await service.loadLists()
         service.currentFilter = .shared
         #expect(service.filteredLists.allSatisfy {
-            $0.myRole == .member || $0.myRole == .viewer
+            ListPermissions($0.capabilities).category == .shared
         })
+    }
+    // ADDED (I3a-L1): deterministic membership with a fixed set of lists, role deliberately
+    // contradicting the flags so a role-based filter fails.
+    @Test("Filter owned and shared split a known set of lists by flags, not by role")
+    func testFilterSplitsByFlagsNotRole() async {
+        let managing = ListFixtures.Flags(canEditList: true, canDeleteList: true, canManageMembers: true)
+        let deleteOnly = ListFixtures.Flags(canDeleteList: true)
+        let none = ListFixtures.Flags()
+        let lists = [
+            ListFixtures.giftList(id: "a-owner", myRole: .owner, flags: managing),
+            ListFixtures.giftList(id: "b-coowner", myRole: .coOwner, flags: managing),
+            ListFixtures.giftList(id: "c-viewer-with-delete", myRole: .viewer, flags: deleteOnly),
+            ListFixtures.giftList(id: "d-owner-no-flags", myRole: .owner, flags: none),
+            ListFixtures.giftList(id: "e-member", myRole: .member, flags: none),
+            ListFixtures.giftList(id: "f-viewer", myRole: .viewer, flags: none)
+        ]
+        let service = ListService(repository: FixedListRepository(lists: lists), dataStore: ListDataStore())
+        await service.loadLists()
+
+        service.currentFilter = .all
+        #expect(service.filteredLists.map(\.id) == ["a-owner", "b-coowner", "c-viewer-with-delete",
+                                                    "d-owner-no-flags", "e-member", "f-viewer"])
+        service.currentFilter = .owned
+        #expect(service.filteredLists.map(\.id) == ["a-owner", "b-coowner", "c-viewer-with-delete"])
+        service.currentFilter = .shared
+        #expect(service.filteredLists.map(\.id) == ["d-owner-no-flags", "e-member", "f-viewer"])
     }
     @Test("Load detail fetches and caches")
     func testLoadListDetail() async {
@@ -156,16 +182,14 @@ struct ListServiceTests {
         await service.loadLists()
         let initialCount = service.lists.count
 
-        let request = CreateListRequest(
+        let input = CreateListInput(
+            recipientId: "r-test",
+            year: 2025,
             name: "Cache Test List",
             theme: nil,
-            year: 2025,
-            recipientId: "r-test",
-            description: nil,
-            visibility: .private,
-            coOwnerId: nil
+            visibility: .private
         )
-        try await service.createList(request)
+        try await service.createList(input)
 
         // Second service shares same cache — simulates another view reloading
         let service2 = ListService(repository: mockRepo, dataStore: dataStore)
@@ -222,6 +246,18 @@ struct ListServiceTests {
         #expect(service2.lists.isEmpty)
     }
 }
+/// Returns a fixed set of lists (ADDED I3a-L1, used by the flag-based filter test).
+/// Writes are not exercised by the tests that use it.
+@MainActor private final class FixedListRepository: ListRepository {
+    private let lists: [GiftList]
+    init(lists: [GiftList]) { self.lists = lists }
+    func fetchLists() async throws -> [GiftList] { lists }
+    func fetchListDetail(id: String) async throws -> ListDetail { throw ListError.notFound }
+    func createList(_ input: CreateListInput) async throws -> ListDetail { throw ListError.createFailed }
+    func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail { throw ListError.updateFailed }
+    func deleteList(id: String) async throws { throw ListError.deleteFailed }
+}
+
 extension MockListRepository {
     func setShouldFail(_ value: Bool) {
         shouldFail = value

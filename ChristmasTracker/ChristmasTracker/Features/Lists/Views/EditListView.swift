@@ -17,7 +17,6 @@ struct EditListView: View {
     // MARK: - Form State
     @State private var name: String
     @State private var theme: String
-    @State private var description: String
     @State private var visibility: ListVisibility
     
     @State private var isSaving = false
@@ -28,7 +27,6 @@ struct EditListView: View {
         self.list = list
         _name = State(initialValue: list.name)
         _theme = State(initialValue: list.theme ?? "")
-        _description = State(initialValue: list.description ?? "")
         _visibility = State(initialValue: list.visibility)
     }
     
@@ -55,14 +53,11 @@ struct EditListView: View {
                             .foregroundColor(.textMutedColor)
                     }
                 }
-                Section("Description") {
-                    TextField("Add notes or details (optional)", text: $description, axis: .vertical)
-                            .lineLimit(3...6)
-                }
                 Section("Privacy") {
                     Picker("Visibility", selection: $visibility) {
                         Text("Private").tag(ListVisibility.private)
                         Text("Invite Only").tag(ListVisibility.inviteOnly)
+                        Text("Friends Only").tag(ListVisibility.friendsOnly)
                         Text("Public").tag(ListVisibility.public)
                     }
                 }
@@ -107,7 +102,6 @@ struct EditListView: View {
     private var hasChanges: Bool {
         name != list.name ||
         theme != (list.theme ?? "") ||
-        description != (list.description ?? "") ||
         visibility != list.visibility
     }
     
@@ -116,16 +110,14 @@ struct EditListView: View {
     private func saveChanges() async {
         isSaving = true
         // Build request with only changed fields
-        let request = UpdateListRequest(
+        let input = UpdateListInput(
             name: name != list.name ? name.trimmingCharacters(in: .whitespaces) : nil,
             theme: theme != (list.theme ?? "") ? (theme.isEmpty ? nil :
                                                     theme.trimmingCharacters(in: .whitespaces)) : nil,
-            description: description != (list.description ?? "") ? (description.isEmpty ? nil :
-                                                                        description.trimmingCharacters(in: .whitespaces)) : nil,
             visibility: visibility != list.visibility ? visibility : nil
         )
         do {
-            try await listService.updateList(id: list.id, request)
+            try await listService.updateList(id: list.id, input)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -137,7 +129,7 @@ struct EditListView: View {
 
 
 #Preview {
-    EditListView(list: MockListData.allLists[0])
+    EditListView(list: MockListData.ownerOfChildList)
         .environment(\.listService, ListService(
             repository: MockListRepository(),
             dataStore: ListDataStore()

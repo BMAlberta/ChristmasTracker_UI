@@ -160,7 +160,7 @@ struct DashboardView: View {
                             selectedListId = list.id
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if list.myRole == .owner {
+                            if ListPermissions(list.capabilities).canDeleteList {
                                 Button(role: .destructive) {
                                     listToDelete = list
                                 } label: {

@@ -19,14 +19,14 @@ nonisolated protocol ListRepository: Repository {
     func fetchListDetail(id: String) async throws -> ListDetail
 
     /// Create a new list
-    /// - Parameter request: CreateListRequest with new list information.
+    /// - Parameter input: CreateListInput with new list information.
     /// - Returns: ListDetail
-    func createList(_ request: CreateListRequest) async throws -> ListDetail
+    func createList(_ input: CreateListInput) async throws -> ListDetail
 
     /// Update an existing list.
-    /// - Parameter request: UpdateListRequest with the updated list information.
+    /// - Parameter input: UpdateListInput with the updated list information.
     /// - Returns: ListDetail
-    func updateList(id: String, _ request: UpdateListRequest) async throws -> ListDetail
+    func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail
 
     /// Delete a list
     /// - Parameter id: ID of the list to be deleted.

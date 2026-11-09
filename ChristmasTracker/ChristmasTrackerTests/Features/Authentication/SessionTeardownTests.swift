@@ -21,19 +21,17 @@ import Foundation
 
 /// A fast MockListRepository that doesn't sleep — avoids slow test suite.
 @MainActor private final class FastMockListRepository: ListRepository {
-    func fetchLists() async throws -> [GiftList] { MockListData.allLists.map { detail in
-        GiftList(
-            id: detail.id, name: detail.name, theme: detail.theme, year: detail.year,
-            visibility: detail.visibility, status: detail.status,
-            recipient: detail.recipient, owner: detail.owner, coOwner: detail.coOwner,
-            myRole: detail.myRole, itemCount: detail.itemCount,
-            purchasedCount: detail.purchasedCount,
-            createdAt: detail.createdAt, updatedAt: detail.updatedAt
-        )
-    }}
+    // I3a-L1: three fixed lists built from fixtures (no dependency on MockListData's shape).
+    func fetchLists() async throws -> [GiftList] {
+        [
+            ListFixtures.giftList(id: "t-1", name: "Teardown One"),
+            ListFixtures.giftList(id: "t-2", name: "Teardown Two"),
+            ListFixtures.giftList(id: "t-3", name: "Teardown Three")
+        ]
+    }
     func fetchListDetail(id: String) async throws -> ListDetail { throw ListError.notFound }
-    func createList(_ request: CreateListRequest) async throws -> ListDetail { throw ListError.createFailed }
-    func updateList(id: String, _ request: UpdateListRequest) async throws -> ListDetail { throw ListError.updateFailed }
+    func createList(_ input: CreateListInput) async throws -> ListDetail { throw ListError.createFailed }
+    func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail { throw ListError.updateFailed }
     func deleteList(id: String) async throws {}
 }
 
@@ -68,19 +66,9 @@ struct SessionTeardownTests {
         let dataStore = ListDataStore()
 
         // Seed the store with data
-        let sampleList = MockListData.allLists.first.map { detail in
-            GiftList(
-                id: detail.id, name: detail.name, theme: detail.theme, year: detail.year,
-                visibility: detail.visibility, status: detail.status,
-                recipient: detail.recipient, owner: detail.owner, coOwner: detail.coOwner,
-                myRole: detail.myRole, itemCount: detail.itemCount,
-                purchasedCount: detail.purchasedCount,
-                createdAt: detail.createdAt, updatedAt: detail.updatedAt
-            )
-        }
-        if let sampleList {
-            await dataStore.setLists([sampleList])
-        }
+        // I3a-L1: a fixture list replaces the MockListData-derived one (same meaning: one seeded list).
+        let sampleList = ListFixtures.giftList(id: "t-1", name: "Teardown One")
+        await dataStore.setLists([sampleList])
 
         let before = await dataStore.getLists()
         #expect(!before.isEmpty, "Precondition: store must have data before teardown")
