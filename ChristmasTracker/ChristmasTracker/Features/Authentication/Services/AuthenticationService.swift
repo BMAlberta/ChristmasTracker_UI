@@ -62,6 +62,10 @@ final class AuthenticationService {
     // once (completed). handleAuthSuccess clears it when a new session starts.
     private var sessionEndTask: Task<Void, Never>?
 
+    // Session generation: incremented by every successful sign-in. A session end captures it
+    // when it starts and skips its final clearing if a new sign-in has happened since.
+    private var sessionGeneration: Int = 0
+
     // MARK: - Initialization
 
     init(
@@ -307,9 +311,14 @@ final class AuthenticationService {
             return
         }
         // Created and stored with no suspension in between; main-actor isolation serializes callers.
+        let generation = sessionGeneration
         let task = Task<Void, Never> { [weak self] in
             guard let self else { return }
-            await self.performSessionEnd(reason: reason, deletingEnrollment: deletingEnrollmentForCurrentUser)
+            await self.performSessionEnd(
+                reason: reason,
+                deletingEnrollment: deletingEnrollmentForCurrentUser,
+                generation: generation
+            )
         }
         sessionEndTask = task
         await task.value
@@ -429,7 +438,7 @@ final class AuthenticationService {
     }
 
     /// The body of a session end; run only by the task endSession stores as the guard.
-    private func performSessionEnd(reason: TeardownReason, deletingEnrollment: Bool) async {
+    private func performSessionEnd(reason: TeardownReason, deletingEnrollment: Bool, generation: Int) async {
         if deletingEnrollment, let userId = currentUser?.id, credentialStore.enrolledUser()?.userId == userId {
             try? credentialStore.delete()
             // Keep the enrolled-user snapshot in step with the store so the login screen
@@ -445,11 +454,15 @@ final class AuthenticationService {
         await sessionManager.teardown(reason: reason)
         // AuthenticationService is not a registered clearable: SessionManager must exist before
         // AuthenticationService can be constructed (circular dependency), so it clears its own state here.
+        // A sign-in that completed while the teardown was in flight owns the state now; leave it.
+        guard generation == sessionGeneration else { return }
         clearAuthState()
         clearStoredTokens()
         isLoading = false
 
         // Best-effort non-awaited server logout — enrollment is never touched here.
+        // Only for an unsuperseded end: a superseded end must make no server call, because
+        // the request would carry the NEW session's token and log the new user out.
         Task {
             do {
                 try await repo.logout()
@@ -525,6 +538,7 @@ final class AuthenticationService {
     private func handleAuthSuccess(session: AuthSession) async {
         // A new session starts: reset the session-end guard so a later end tears down again.
         sessionEndTask = nil
+        sessionGeneration += 1
         // Update user
         currentUser = session.user
         isAuthenticated = true

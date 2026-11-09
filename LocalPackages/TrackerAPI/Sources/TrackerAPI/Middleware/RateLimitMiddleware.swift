@@ -28,7 +28,7 @@ private func parseRetryAfter(from body: HTTPBody?) async -> TimeInterval? {
         let error = json?["error"] as? [String: Any]
         let details = error?["details"] as? [String: Any]
         if let retryAfter = details?["retryAfter"] as? TimeInterval {
-            return retryAfter
+            return finiteWait(retryAfter)
         }
     } catch {}
     return nil
@@ -36,7 +36,14 @@ private func parseRetryAfter(from body: HTTPBody?) async -> TimeInterval? {
 
 private func retryAfterFromHeader(_ response: HTTPResponse) -> TimeInterval? {
     guard let value = response.headerFields[retryAfterHeader] else { return nil }
-    return TimeInterval(value)
+    guard let seconds = TimeInterval(value) else { return nil }
+    return finiteWait(seconds)
+}
+
+/// A non-finite wait (NaN or infinite) is treated as absent; a finite one is clamped to [0, cap].
+private func finiteWait(_ seconds: TimeInterval) -> TimeInterval? {
+    guard seconds.isFinite else { return nil }
+    return min(max(seconds, 0), maxSingleWait)
 }
 
 public struct RateLimitMiddleware: ClientMiddleware {
@@ -64,10 +71,9 @@ public struct RateLimitMiddleware: ClientMiddleware {
             }
 
             // Extract retryAfter: JSON body takes priority over header
-            var retryAfter = await parseRetryAfter(from: responseBody)
+            let retryAfter = await parseRetryAfter(from: responseBody)
                 ?? retryAfterFromHeader(response)
                 ?? 1.0
-            retryAfter = min(retryAfter, maxSingleWait)
 
             if !canRetry || attempt == maxRetries || totalWaited + retryAfter > maxTotalWait {
                 throw TrackerAPIError.rateLimited(retryAfter: retryAfter)
@@ -85,6 +91,9 @@ public struct RateLimitMiddleware: ClientMiddleware {
 public struct DefaultSleeper: RateLimitSleeping {
     public init() {}
     public func sleep(seconds: TimeInterval) async {
-        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        guard seconds.isFinite, seconds > 0 else { return }
+        // Clamp before converting so the nanosecond count always fits in UInt64.
+        let nanoseconds = min(seconds, 1_000_000) * 1_000_000_000
+        try? await Task.sleep(nanoseconds: UInt64(nanoseconds))
     }
 }

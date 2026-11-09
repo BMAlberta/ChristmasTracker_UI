@@ -32,7 +32,18 @@
 //    11. clearForSession_resetsLockedRunningControllerToUnlockedAndNotRunning
 //
 //  Concurrency: all controller tests are @MainActor (controller is @MainActor).
-//  Tests that use the timer/sleeper path use Task.yield() — no real Task.sleep.
+//  Tests that use the timer/sleeper path use deterministic handshakes (I3a-H2):
+//  FakeSleeper.waitForSleepCount(_:) before release()/advance, and a presenter signal after a
+//  timer-driven lock. No real Task.sleep and no Task.yield() on the timer path.
+//
+//  I3a-H2 flaky-test fix: foregroundIdleFiresTimerAtDeadline (and the three timer tests below)
+//  used one Task.yield() to "let the timer task reach sleeper.sleep()". A yield does not
+//  guarantee the task ran, so sleeper.release() could find no pending sleep and do nothing,
+//  and a second yield did not guarantee checkTimeout() had run. Rewritten with handshakes:
+//    - foregroundIdleFiresTimerAtDeadline
+//    - timerReleasedOneSecondEarlyReschedulesForSameDeadline
+//    - unlockAfterIdleLock_freshDeadlineAndNoRelockOnNewDeadlineMinusOne
+//    - recordActivityWhileRunningPushesDeadlineAndReschedules
 //
 
 import Testing
@@ -50,6 +61,28 @@ private struct FakePolicy: LockTimeoutProviding {
 private final class FakeSceneEventProvider: SceneEventProviding {
     var willResignActiveHandler: (() -> Void)?
     var didBecomeActiveHandler: (() -> Void)?
+}
+
+/// Presenter that lets a test await the controller's lock signal instead of yielding.
+@MainActor
+private final class SignalingLockPresenter: InactivityLockPresenting {
+    private(set) var presentCallCount = 0
+    private var presentWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func presentLock() {
+        presentCallCount += 1
+        let waiters = presentWaiters
+        presentWaiters = []
+        for waiter in waiters { waiter.resume() }
+    }
+
+    func dismissLock() {}
+
+    /// Returns once presentLock() has been called at least once (immediately if already so).
+    func waitForPresent() async {
+        guard presentCallCount == 0 else { return }
+        await withCheckedContinuation { presentWaiters.append($0) }
+    }
 }
 
 // MARK: - Suite
@@ -165,7 +198,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield() // let timer task reach sleeper.sleep()
+        await sleeper.waitForSleepCount(1)
         // Advance past the 10-minute deadline
         clock.advance(by: .seconds(10 * 60 + 1))
         controller.sceneDidBecomeActive()
@@ -180,7 +213,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         // Advance to deadline - 10 seconds
         clock.advance(by: .seconds(10 * 60 - 10))
         controller.sceneDidBecomeActive()
@@ -195,7 +228,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         clock.advance(by: .seconds(10 * 60 + 1))
         controller.sceneDidBecomeActive()
         try #require(controller.lockState == .locked,
@@ -212,7 +245,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         clock.advance(by: .seconds(10 * 60 + 1))
         controller.sceneDidBecomeActive()
         try #require(controller.lockState == .locked,
@@ -229,7 +262,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         clock.advance(by: .seconds(10 * 60 + 1))
         controller.sceneDidBecomeActive()
         try #require(controller.lockState == .locked,
@@ -249,14 +282,17 @@ struct InactivityLockControllerTests {
         let clock = FakeClock()
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
+        let presenter = SignalingLockPresenter()
+        controller.lockPresenter = presenter
         controller.start()
-        await Task.yield() // let timer task start and reach sleeper.sleep()
+        await sleeper.waitForSleepCount(1) // the timer task is suspended in the sleeper
         // Advance clock to the deadline, then release the sleeper so checkTimeout runs.
         clock.advance(by: .seconds(10 * 60))
         sleeper.release()
-        await Task.yield() // let timer task wake and run checkTimeout()
+        await presenter.waitForPresent() // checkTimeout() locked and signalled
         #expect(controller.lockState == .locked,
                 "Timer released at the deadline must lock the controller")
+        #expect(presenter.presentCallCount == 1)
         controller.stop()
     }
 
@@ -267,13 +303,13 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         let originalDeadline = sleeper.requestedDeadline
         try #require(originalDeadline != nil, "Precondition: timer must have requested a deadline")
         // Advance to deadline - 1 second (not yet timed out)
         clock.advance(by: .seconds(10 * 60 - 1))
         sleeper.release()
-        await Task.yield() // checkTimeout() sees not-timed-out → reschedules
+        await sleeper.waitForSleepCount(2) // checkTimeout() saw not-timed-out and rescheduled
         #expect(controller.lockState == .unlocked,
                 "Released one second early must not lock the controller")
         // The rescheduled deadline must be the same original deadline (not now + timeout).
@@ -289,28 +325,31 @@ struct InactivityLockControllerTests {
         let clock = FakeClock()
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
+        let presenter = SignalingLockPresenter()
+        controller.lockPresenter = presenter
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
+        let firstDeadline = sleeper.requestedDeadline
         // Fire the idle timer to lock.
         clock.advance(by: .seconds(10 * 60))
         sleeper.release()
-        await Task.yield()
+        await presenter.waitForPresent()
         try #require(controller.lockState == .locked,
                      "Precondition: controller must be locked after idle timeout")
         // Unlock — this must reset the deadline to now + timeout and reschedule the timer.
         controller.unlock()
-        await Task.yield() // let new timer task start
+        await sleeper.waitForSleepCount(2) // the new timer task is suspended in the sleeper
         #expect(controller.lockState == .unlocked)
         let newDeadline = sleeper.requestedDeadline
         try #require(newDeadline != nil, "Precondition: new timer must have a requested deadline")
+        #expect(newDeadline != firstDeadline, "unlock() must set a fresh deadline")
         // Advance to new deadline - 1 second; release early.
-        // The clock is currently at original + 10m; advance to newDeadline - 1s.
-        // new deadline = clock.now (at time of unlock) + 10 min; advance 10m - 1s more.
         clock.advance(by: .seconds(10 * 60 - 1))
         sleeper.release()
-        await Task.yield()
+        await sleeper.waitForSleepCount(3) // checkTimeout() saw not-timed-out and rescheduled
         #expect(controller.lockState == .unlocked,
                 "One second before new deadline must not relock the controller")
+        #expect(presenter.presentCallCount == 1, "No second lock before the new deadline")
         controller.stop()
     }
 
@@ -321,7 +360,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         // 9 minutes of foreground idle (deadline stays at start + 10m)
         clock.advance(by: .seconds(9 * 60))
         // Enter background — R1: sceneWillResignActive is a no-op; deadline unchanged
@@ -342,7 +381,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         let originalDeadline = controller.tracker.deadline
         // 5 minutes of foreground idle
         clock.advance(by: .seconds(5 * 60))
@@ -366,7 +405,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         // Advance exactly to the deadline.
         clock.advance(by: .seconds(10 * 60))
         controller.sceneDidBecomeActive()
@@ -382,7 +421,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         // Advance to deadline - 1 nanosecond.
         clock.advance(by: .seconds(10 * 60) - .nanoseconds(1))
         controller.sceneDidBecomeActive()
@@ -409,7 +448,7 @@ struct InactivityLockControllerTests {
 
         // Now start and stop, then try scene events again.
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         controller.stop()
         clock.advance(by: .seconds(15 * 60))
         controller.sceneWillResignActive()
@@ -431,7 +470,7 @@ struct InactivityLockControllerTests {
         clock.advance(by: .seconds(15 * 60))
         // start() must reset the deadline to clock.now + timeout.
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         // Immediately check: clock.now is at +15m; deadline is now +15m + 10m = +25m.
         // isTimedOut = clock.now (+15m) >= deadline (+25m) = false.
         controller.sceneDidBecomeActive()
@@ -448,14 +487,14 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         let initialDeadline = controller.tracker.deadline
         let initialSleeperDeadline = sleeper.requestedDeadline
         try #require(initialSleeperDeadline != nil, "Precondition: timer must have started")
         // Advance clock 5 minutes, then record activity.
         clock.advance(by: .seconds(5 * 60))
         controller.recordActivity()
-        await Task.yield() // let rescheduled timer task reach sleeper.sleep()
+        await sleeper.waitForSleepCount(2) // the rescheduled timer task is suspended in the sleeper
         // Deadline must have been pushed: new deadline = clock.now + 10m = initial + 15m.
         #expect(controller.tracker.deadline > initialDeadline,
                 "recordActivity() must push the deadline forward")
@@ -463,6 +502,7 @@ struct InactivityLockControllerTests {
                 "recordActivity() must reschedule the timer for the new deadline")
         let deadlineAfterActivity = controller.tracker.deadline
         let sleeperDeadlineAfterActivity = sleeper.requestedDeadline
+        let sleepCountAfterActivity = sleeper.sleepCallCount
         // Now lock the controller.
         clock.advance(by: .seconds(10 * 60 + 1))
         controller.sceneDidBecomeActive()
@@ -470,11 +510,12 @@ struct InactivityLockControllerTests {
                      "Precondition: controller must be locked for the locked-path check")
         // While locked, recordActivity() must be a no-op.
         controller.recordActivity()
-        await Task.yield()
         #expect(controller.tracker.deadline == deadlineAfterActivity,
                 "recordActivity() while locked must not change the deadline")
         #expect(sleeper.requestedDeadline == sleeperDeadlineAfterActivity,
                 "recordActivity() while locked must not reschedule the timer")
+        #expect(sleeper.sleepCallCount == sleepCountAfterActivity,
+                "recordActivity() while locked must not start another sleep")
         controller.stop()
     }
 
@@ -486,7 +527,7 @@ struct InactivityLockControllerTests {
         let sleeper = FakeSleeper()
         let controller = makeController(timeoutMinutes: 10, clock: clock, sleeper: sleeper)
         controller.start()
-        await Task.yield()
+        await sleeper.waitForSleepCount(1)
         // Drive to locked.
         clock.advance(by: .seconds(10 * 60 + 1))
         controller.sceneDidBecomeActive()
