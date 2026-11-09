@@ -20,7 +20,7 @@ import Foundation
 // MARK: - Helpers
 
 /// A fast MockListRepository that doesn't sleep — avoids slow test suite.
-private actor FastMockListRepository: ListRepository {
+@MainActor private final class FastMockListRepository: ListRepository {
     func fetchLists() async throws -> [GiftList] { MockListData.allLists.map { detail in
         GiftList(
             id: detail.id, name: detail.name, theme: detail.theme, year: detail.year,
@@ -38,7 +38,7 @@ private actor FastMockListRepository: ListRepository {
 }
 
 /// A fast MockItemRepository that doesn't sleep.
-private actor FastMockItemRepository: ItemRepository {
+@MainActor private final class FastMockItemRepository: ItemRepository {
     func fetchItems(listId: String) async throws -> [GiftItem] { MockItemData.allItems.filter { $0.listId == listId } }
     func fetchItemDetail(id: String) async throws -> GiftItem { throw ItemError.notFound }
     func createItem(listId: String, _ request: CreateItemRequest) async throws -> GiftItem { throw ItemError.createFailed }

@@ -24,6 +24,9 @@ scripts/check-package-imports.sh || { echo "=== verify: IMPORT AUDIT FAILED ==="
 echo "=== verify: release script tests ==="
 scripts/test-release.sh || { echo "=== verify: RELEASE SCRIPT TESTS FAILED ==="; FAIL=1; }
 
+echo "=== verify: destination script tests ==="
+scripts/test-destination.sh || { echo "=== verify: DESTINATION SCRIPT TESTS FAILED ==="; FAIL=1; }
+
 echo "=== verify: prohibited frameworks in changed lines ==="
 if git rev-parse --verify master > /dev/null 2>&1; then
   if git diff master...HEAD -U0 -- '*.swift' | grep -E '^\+[^+].*(import Combine|DispatchQueue)'; then

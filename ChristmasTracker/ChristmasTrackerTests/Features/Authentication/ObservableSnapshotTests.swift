@@ -60,7 +60,7 @@ private final class ErroringBiometricCredentialStore: BiometricCredentialStoring
 
 /// Repository that throws a specified AuthenticationError on refresh.
 /// Login succeeds so we can reach the refresh step in signInWithBiometric().
-private actor BiometricRefreshFailingRepository: AuthenticationRepository {
+@MainActor private final class BiometricRefreshFailingRepository: AuthenticationRepository {
     let refreshError: AuthenticationError
 
     init(refreshError: AuthenticationError) {

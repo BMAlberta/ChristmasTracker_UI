@@ -23,7 +23,7 @@ import Foundation
 /// Fast, configurable repository for logout and refresh failure scenarios.
 /// `loginExpiresIn` controls the `expiresIn` value returned by `login`, allowing
 /// tests to produce tokens that satisfy `AuthTokens.needsRefresh` immediately (pass 0).
-private actor ThrowingLogoutRepository: AuthenticationRepository {
+@MainActor private final class ThrowingLogoutRepository: AuthenticationRepository {
     var shouldFailLogout = false
     var shouldFailRefresh = false
     var loginExpiresIn: Int = 900

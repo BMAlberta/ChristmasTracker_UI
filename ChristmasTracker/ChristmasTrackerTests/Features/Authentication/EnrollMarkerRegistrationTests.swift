@@ -61,7 +61,7 @@ private final class InMemoryEnrollmentHistory: EnrollmentHistoryStoring, @unchec
 private func makeSUT(
     authenticatorResult: BiometricResult = .success,
     biometricsAvailable: Bool = true,
-    enrollmentHistory: InMemoryEnrollmentHistory = InMemoryEnrollmentHistory()
+    enrollmentHistory enrollmentHistoryOverride: InMemoryEnrollmentHistory? = nil
 ) -> (
     service: AuthenticationService,
     repo: MockAuthenticationRepository,
@@ -69,6 +69,8 @@ private func makeSUT(
     authenticator: FakeBiometricAuthenticator,
     history: InMemoryEnrollmentHistory
 ) {
+    // Built here, not as a default argument: default arguments are evaluated nonisolated.
+    let enrollmentHistory = enrollmentHistoryOverride ?? InMemoryEnrollmentHistory()
     let repo = MockAuthenticationRepository()
     let sessionManager = SessionManager(initialClearables: [])
     let store = InMemoryBiometricCredentialStore()

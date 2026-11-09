@@ -32,7 +32,7 @@ extension MockAuthenticationRepository {
 
 // MARK: - I2b-2c U3 test helper: login always fails with 403 ACCOUNT_DISABLED
 
-private actor AccountDisabledLoginRepository: AuthenticationRepository {
+@MainActor private final class AccountDisabledLoginRepository: AuthenticationRepository {
     func login(email: String, password: String) async throws -> AuthSession {
         throw AuthenticationError.accountDisabled
     }
