@@ -31,7 +31,7 @@ import Foundation
 // deduplication. Each suspending method waits on a checked continuation until
 // resume() is called.
 
-private actor SuspendableRepository: AuthenticationRepository {
+@MainActor private final class SuspendableRepository: AuthenticationRepository {
 
     // MARK: - Call-count tracking
 
@@ -155,7 +155,7 @@ private actor SuspendableRepository: AuthenticationRepository {
 // to be installed *before* the call. We provide a stream-based approach
 // for the single-flight test that is cleaner.
 
-private actor BlockingRepository: AuthenticationRepository {
+@MainActor private final class BlockingRepository: AuthenticationRepository {
     // Count of refresh calls received (even while blocked).
     private(set) var refreshCallCount: Int = 0
 
@@ -200,7 +200,7 @@ private actor BlockingRepository: AuthenticationRepository {
 
 // MARK: - SuspendingLogoutRepository
 
-private actor SuspendingLogoutRepository: AuthenticationRepository {
+@MainActor private final class SuspendingLogoutRepository: AuthenticationRepository {
     var logoutContinuation: CheckedContinuation<Void, Never>?
 
     func login(email: String, password: String) async throws -> AuthSession {
@@ -879,7 +879,7 @@ struct SignInWithBiometricTests {
 // MARK: - Supporting fake repositories
 
 /// Repository that returns login/refresh data with expiresIn: 0 so tokens.needsRefresh is true.
-private actor ExpiringTokenRepository: AuthenticationRepository {
+@MainActor private final class ExpiringTokenRepository: AuthenticationRepository {
     let enrolledUserId: String
 
     init(enrolledUserId: String) {
@@ -920,7 +920,7 @@ private actor ExpiringTokenRepository: AuthenticationRepository {
 
 /// Repository where refresh throws .invalidRefreshToken (credential failure).
 /// Login succeeds with expiresIn: 0.
-private actor CredentialFailureRepository: AuthenticationRepository {
+@MainActor private final class CredentialFailureRepository: AuthenticationRepository {
     let enrolledUserId: String
 
     init(enrolledUserId: String) {
@@ -953,7 +953,7 @@ private actor CredentialFailureRepository: AuthenticationRepository {
 }
 
 /// Repository where refresh throws .networkError.
-private actor NetworkFailRefreshRepository: AuthenticationRepository {
+@MainActor private final class NetworkFailRefreshRepository: AuthenticationRepository {
 
     private func makeUser(id: String, email: String) -> User {
         User(id: id, email: email, name: id, role: .user,
@@ -981,7 +981,7 @@ private actor NetworkFailRefreshRepository: AuthenticationRepository {
 }
 
 /// Repository that throws a specific error on refresh.
-private actor FailingRefreshRepository: AuthenticationRepository {
+@MainActor private final class FailingRefreshRepository: AuthenticationRepository {
     let error: AuthenticationError
 
     init(error: AuthenticationError) {
@@ -1014,7 +1014,7 @@ private actor FailingRefreshRepository: AuthenticationRepository {
 /// Login always succeeds for user "u1"; refresh always throws `refreshError`.
 /// With `blockFirstRefresh`, the first refresh call suspends until `unblock()` so concurrent
 /// callers can join the same single-flight refresh. Later calls throw immediately.
-private actor ScriptedRefreshRepository: AuthenticationRepository {
+@MainActor private final class ScriptedRefreshRepository: AuthenticationRepository {
     private let refreshError: AuthenticationError
     private let loginExpiresIn: Int
     private let blockFirstRefresh: Bool

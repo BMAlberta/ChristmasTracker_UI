@@ -93,8 +93,10 @@ struct FirstLaunchWipeTests {
     /// Creates an isolated `UserDefaults` suite and a fresh `MockKeychainWiper`.
     /// The suite name is randomized to prevent cross-test contamination.
     private func makeSUT(
-        mock: MockKeychainWiper = MockKeychainWiper()
+        mock mockOverride: MockKeychainWiper? = nil
     ) -> (sut: FirstLaunchWipe, defaults: UserDefaults, mock: MockKeychainWiper) {
+        // Built here, not as a default argument: default arguments are evaluated nonisolated.
+        let mock = mockOverride ?? MockKeychainWiper()
         let suiteName = "com.christmastracker.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         let sut = FirstLaunchWipe(

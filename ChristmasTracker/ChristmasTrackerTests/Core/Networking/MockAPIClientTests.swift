@@ -14,7 +14,7 @@ struct MockAPIClientTests {
     @Test("Mock client returns registered responses")
     func testMockResponse() async throws {
         let client = MockAPIClient()
-        struct TestResponse: Codable, Sendable {
+        nonisolated struct TestResponse: Codable, Sendable {
             let message: String
         }
         let mockData = TestResponse(message: "Hello")
@@ -33,7 +33,7 @@ struct MockAPIClientTests {
     func testNetworkDelay() async throws {
         let client = MockAPIClient()
         client.networkDelay = 0.1
-        struct TestResponse: Codable, Sendable {
+        nonisolated struct TestResponse: Codable, Sendable {
             let value: Int
         }
         try client.setMockResponse(TestResponse(value: 42), for: "/test")
@@ -56,7 +56,7 @@ struct MockAPIClientTests {
         let client = MockAPIClient()
         client.shouldFail = true
         client.customError = APIError.networkUnavailable
-        struct TestResponse: Codable, Sendable {
+        nonisolated struct TestResponse: Codable, Sendable {
             let value: Int
         }
         do {

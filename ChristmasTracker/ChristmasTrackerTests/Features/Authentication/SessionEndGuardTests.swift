@@ -89,7 +89,7 @@ private struct InMemoryRememberedEmailStore: RememberedEmailStoring {
 
 /// Counts clearForSession calls. When `holdsFirstCall` is true, the first call signals
 /// `waitUntilEntered()` and suspends until `release()`. Later calls are never held.
-private actor GatedClearable: SessionClearable {
+@MainActor private final class GatedClearable: SessionClearable {
     private let holdsFirstCall: Bool
     private(set) var clearCallCount = 0
     private(set) var completedCount = 0
@@ -138,7 +138,7 @@ private actor GatedClearable: SessionClearable {
 /// Login and register always succeed for user "u1" with a fresh access token per call.
 /// Refresh always throws `refreshError`. When `holdsFirstRefresh` is true, the first refresh
 /// signals `waitUntilRefreshEntered()` and suspends until `releaseRefresh()`.
-private actor GatedRefreshRepository: AuthenticationRepository {
+@MainActor private final class GatedRefreshRepository: AuthenticationRepository {
     static let userId = "u1"
 
     private let refreshError: AuthenticationError
