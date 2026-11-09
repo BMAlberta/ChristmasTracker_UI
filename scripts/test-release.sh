@@ -8,6 +8,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RELEASE_SCRIPT="${SCRIPT_DIR}/release.sh"
+# Real-shaped `xcodebuild -showBuildSettings` capture (sanitized). Every xcodebuild stub serves
+# this file or a per-test temp copy of it, so the look-alike keys (FULL_PRODUCT_NAME,
+# PRODUCT_MODULE_NAME, PROVISIONING_PROFILE_REQUIRED, ...) are always present.
+FIXTURE_SETTINGS="${SCRIPT_DIR}/fixtures/showbuildsettings-release.txt"
+if [ ! -f "$FIXTURE_SETTINGS" ]; then
+    echo "test-release.sh: missing fixture: ${FIXTURE_SETTINGS}" >&2
+    exit 1
+fi
 
 PASS=0
 FAIL=0
@@ -268,50 +276,126 @@ make_ipa() {
     echo "$ipa"
 }
 
+# Header line of the app-target block in the fixture.
+APP_BLOCK_HEADER="Build settings for action build and target ChristmasTracker:"
+
+# Make a per-test temp copy of the real settings fixture with KEY=VALUE overrides.
+# For each KEY=VALUE: an existing anchored line ("    KEY = ...") is replaced in place;
+# an absent key is inserted inside the app-target block, directly after its header line
+# (so e.g. EXPANDED_CODE_SIGN_IDENTITY lands BEFORE CODE_SIGN_IDENTITY — the trap an
+# unanchored grep|head -1 would fall into). Values must not contain '|' or '&'.
+# Usage: make_settings_fixture <dest> [KEY=VALUE ...]
+make_settings_fixture() {
+    local dest="$1"; shift
+    cp "$FIXTURE_SETTINGS" "$dest"
+    local kv key value tmp
+    tmp="${dest}.tmp"
+    for kv in "$@"; do
+        key="${kv%%=*}"
+        value="${kv#*=}"
+        if grep -q "^    ${key} = " "$dest"; then
+            sed "s|^    ${key} = .*|    ${key} = ${value}|" "$dest" > "$tmp"
+        else
+            awk -v hdr="$APP_BLOCK_HEADER" -v line="    ${key} = ${value}" \
+                '{ print } $0 == hdr { print line }' "$dest" > "$tmp"
+        fi
+        mv "$tmp" "$dest"
+    done
+}
+
+# Standard Manual-signing overrides: what the existing preflight/signing tests expect.
+# The real fixture is Automatic / "Apple Development" / TEAMID1234 with no profile specifier.
+# Usage: make_manual_settings_fixture <dest> [team] [extra KEY=VALUE ...]
+make_manual_settings_fixture() {
+    local dest="$1"; shift
+    local team="${1:-TESTTEAM99}"; [ "$#" -gt 0 ] && shift
+    make_settings_fixture "$dest" \
+        "CODE_SIGN_STYLE=Manual" \
+        "DEVELOPMENT_TEAM=${team}" \
+        "PROVISIONING_PROFILE_SPECIFIER=TestAdHocProfile" \
+        "CODE_SIGN_IDENTITY=Apple Distribution: Test User (${team})" \
+        "$@"
+}
+
+# Delete the anchored line for KEY from a settings copy (look-alike keys stay).
+# Usage: delete_setting <file> KEY
+delete_setting() {
+    local file="$1"
+    local key="$2"
+    local tmp="${file}.tmp"
+    sed "/^    ${key} = /d" "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
+# Splice a second "Build settings for action build and target <target>:" block with the
+# given KEY=VALUE lines AFTER (position=after, default) or BEFORE the existing content.
+# Usage: splice_settings_block <file> <after|before> <target> [KEY=VALUE ...]
+splice_settings_block() {
+    local file="$1"
+    local position="$2"
+    local target="$3"
+    shift 3
+    local block="${file}.block"
+    {
+        echo ""
+        echo "Build settings for action build and target ${target}:"
+        local kv
+        for kv in "$@"; do
+            echo "    ${kv%%=*} = ${kv#*=}"
+        done
+        echo ""
+    } > "$block"
+    local tmp="${file}.tmp"
+    if [ "$position" = "before" ]; then
+        cat "$block" "$file" > "$tmp"
+    else
+        cat "$file" "$block" > "$tmp"
+    fi
+    mv "$tmp" "$file"
+    rm -f "$block"
+}
+
 # ---------------------------------------------------------------------------
 # Stub factories
 # ---------------------------------------------------------------------------
 
 # Write stub scripts to a bin directory. These replace real tools.
 # Each stub records its calls in $STUB_LOG (passed via env).
+# Usage: write_stubs <bindir> <profile_dir(unused)> [team] [settings_file]
+#   settings_file: file the xcodebuild stub cats for -showBuildSettings. Default: a temp copy
+#   of the real fixture with the standard Manual-signing overrides (make_manual_settings_fixture),
+#   written to <bindir>/showbuildsettings.txt. The stub reads the file at call time, so a test
+#   may edit it after write_stubs returns.
 write_stubs() {
     local bindir="$1"
     local team="${3:-TESTTEAM99}"
+    local settings_file="${4:-}"
     # $2 (profile_dir) is unused in this stub factory; profile lookup is handled by HOME override in callers
 
     mkdir -p "$bindir"
 
-    # xcodebuild stub: prints MARKETING_VERSION for -showBuildSettings; exits 0 for archive/export
-    cat > "${bindir}/xcodebuild" <<'STUB'
+    if [ -z "$settings_file" ]; then
+        settings_file="${bindir}/showbuildsettings.txt"
+        make_manual_settings_fixture "$settings_file" "$team"
+    fi
+
+    # xcodebuild stub: cats the settings fixture for -showBuildSettings; exits 0 for archive/export
+    cat > "${bindir}/xcodebuild" <<STUB
 #!/bin/bash
-echo "STUB_CALL: xcodebuild $*" >> "${STUB_LOG:-/dev/null}"
-# If called with -showBuildSettings, print fake build settings
-if [[ "$*" == *"-showBuildSettings"* ]]; then
-    echo "Build settings for action build and target ChristmasTracker:"
-    echo "    CODE_SIGN_STYLE = Manual"
-    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
-    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
-    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
-    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
-    echo "    MARKETING_VERSION = 5.0"
-    echo "    PRODUCT_NAME = ChristmasTracker"
-    echo ""
-    echo "Build settings for action build and target ChristmasTrackerTests:"
-    echo "    CODE_SIGN_STYLE = Automatic"
-    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
-    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests"
-    echo "    MARKETING_VERSION = 5.0"
-    echo "    PRODUCT_NAME = ChristmasTrackerTests"
+echo "STUB_CALL: xcodebuild \$*" >> "\${STUB_LOG:-/dev/null}"
+# If called with -showBuildSettings, serve the real-shaped fixture copy
+if [[ "\$*" == *"-showBuildSettings"* ]]; then
+    cat "${settings_file}"
     exit 0
 fi
 # For archive: create a fake xcarchive directory at -archivePath
 ARCHIVE_PATH=""
-while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "-archivePath" ]]; then ARCHIVE_PATH="$2"; fi
+while [[ \$# -gt 0 ]]; do
+    if [[ "\$1" == "-archivePath" ]]; then ARCHIVE_PATH="\$2"; fi
     shift
 done
-if [[ -n "$ARCHIVE_PATH" ]]; then
-    mkdir -p "$ARCHIVE_PATH"
+if [[ -n "\$ARCHIVE_PATH" ]]; then
+    mkdir -p "\$ARCHIVE_PATH"
 fi
 exit 0
 STUB
@@ -432,6 +516,48 @@ STUB
     chmod +x "${bindir}/security"
 }
 
+# Write an xcodebuild stub that serves <settings_file> for -showBuildSettings, creates the
+# xcarchive dir for archive, and for -exportArchive touches each named file in -exportPath.
+# Usage: write_export_stub <bindir> <settings_file> [ipa_name ...]   (no names = export nothing)
+write_export_stub() {
+    local bindir="$1"
+    local settings_file="$2"
+    shift 2
+    local names=""
+    local n
+    for n in "$@"; do
+        names="${names} \"${n}\""
+    done
+    cat > "${bindir}/xcodebuild" <<STUB
+#!/bin/bash
+echo "STUB_CALL: xcodebuild \$*" >> "\${STUB_LOG:-/dev/null}"
+if [[ "\$*" == *"-showBuildSettings"* ]]; then
+    cat "${settings_file}"
+    exit 0
+fi
+if [[ "\$*" == *"-exportArchive"* ]]; then
+    # Simulate export: create the named IPA file(s) in -exportPath
+    EXPORT_PATH=""
+    while [[ \$# -gt 0 ]]; do
+        if [[ "\$1" == "-exportPath" ]]; then EXPORT_PATH="\$2"; fi
+        shift
+    done
+    if [[ -n "\$EXPORT_PATH" ]]; then
+        for name in ${names}; do
+            touch "\${EXPORT_PATH}/\${name}"
+        done
+    fi
+    exit 0
+fi
+while [[ \$# -gt 0 ]]; do
+    if [[ "\$1" == "-archivePath" ]]; then mkdir -p "\$2"; fi
+    shift
+done
+exit 0
+STUB
+    chmod +x "${bindir}/xcodebuild"
+}
+
 # ---------------------------------------------------------------------------
 # Test suite
 # ---------------------------------------------------------------------------
@@ -499,13 +625,7 @@ EOF
     local t5; t5="${tmpbase}/t-env5"; mkdir -p "$t5"
     write_env "$t5"
     local bindir5="${t5}/bin"
-    mkdir -p "$bindir5"
-    cat > "${bindir5}/xcodebuild" <<'STUB'
-#!/bin/bash
-echo "    MARKETING_VERSION = 5.0"
-exit 0
-STUB
-    chmod +x "${bindir5}/xcodebuild"
+    write_stubs "$bindir5" "" "TESTTEAM99"
     if ENV_FILE="${t5}/release.env" RELEASE_XCODEBUILD="${bindir5}/xcodebuild" \
        bash "${RELEASE_SCRIPT}" install-info --build 500 > /dev/null 2>&1; then
         test_pass
@@ -516,13 +636,8 @@ STUB
     echo ""
     echo "--- build number validation ---"
 
-    local bindir_xc; bindir_xc="${tmpbase}/xc-stubs"; mkdir -p "$bindir_xc"
-    cat > "${bindir_xc}/xcodebuild" <<'STUB'
-#!/bin/bash
-echo "    MARKETING_VERSION = 5.0"
-exit 0
-STUB
-    chmod +x "${bindir_xc}/xcodebuild"
+    local bindir_xc; bindir_xc="${tmpbase}/xc-stubs"
+    write_stubs "$bindir_xc" "" "TESTTEAM99"
 
     test_start "build number: non-numeric rejected"
     local tb; tb="${tmpbase}/t-bn1"; mkdir -p "$tb"
@@ -595,58 +710,15 @@ STUB
     local te; te="${tmpbase}/t-expo"; mkdir -p "$te"
     write_env "$te"
     mkdir -p "${te}/build/release/500"
-    cat > "${bindir_xc}/xcodebuild_export" <<'STUB'
-#!/bin/bash
-echo "    MARKETING_VERSION = 5.0"
-exit 0
-STUB
-    chmod +x "${bindir_xc}/xcodebuild_export"
-    # Run export --dry-run to trigger ExportOptions generation without actual xcodebuild
-    # The script writes ExportOptions.plist before calling xcodebuild in export mode
-    # We need to check the generated file; in --dry-run mode it prints but doesn't write.
-    # In live mode it writes. Let's use a fake xcodebuild that exits 0 and check the file.
+    # In --dry-run mode export prints but doesn't write ExportOptions.plist; in live mode it
+    # writes. Use a fake xcodebuild (fixture-backed settings, simulated -exportArchive that
+    # drops ChristmasTracker.ipa in -exportPath) and check the generated file.
     local bindir_e="${te}/bin"; mkdir -p "$bindir_e"
-    cat > "${bindir_e}/xcodebuild" <<STUB
-#!/bin/bash
-if [[ "\$*" == *"-showBuildSettings"* ]]; then
-    echo "    MARKETING_VERSION = 5.0"
-    exit 0
-fi
-# Fake archive: create directory
-while [[ \$# -gt 0 ]]; do
-    if [[ "\$1" == "-archivePath" ]]; then mkdir -p "\$2"; fi
-    shift
-done
-exit 0
-STUB
-    chmod +x "${bindir_e}/xcodebuild"
-    mkdir -p "${te}/build/release/500"
+    local settings_e="${te}/settings.txt"
+    make_manual_settings_fixture "$settings_e"
+    write_export_stub "$bindir_e" "$settings_e" "ChristmasTracker.ipa"
     # Create a fake xcarchive so export doesn't fail on missing archive check
     mkdir -p "${te}/build/release/500/ChristmasTracker.xcarchive"
-    # export will also look for the archive via build_dir; override BUILD root
-    # We test the plist generation directly by running export non-dry-run
-    # but catching that xcodebuild -exportArchive is a no-op
-    cat > "${bindir_e}/xcodebuild" <<STUB
-#!/bin/bash
-if [[ "\$*" == *"-showBuildSettings"* ]]; then
-    echo "    MARKETING_VERSION = 5.0"
-    exit 0
-fi
-if [[ "\$*" == *"-exportArchive"* ]]; then
-    # Simulate successful export: create the IPA in -exportPath
-    EXPORT_PATH=""
-    while [[ \$# -gt 0 ]]; do
-        if [[ "\$1" == "-exportPath" ]]; then EXPORT_PATH="\$2"; fi
-        shift
-    done
-    if [[ -n "\$EXPORT_PATH" ]]; then
-        touch "\${EXPORT_PATH}/ChristmasTracker.ipa"
-    fi
-    exit 0
-fi
-exit 0
-STUB
-    chmod +x "${bindir_e}/xcodebuild"
     ENV_FILE="${te}/release.env" \
         RELEASE_XCODEBUILD="${bindir_e}/xcodebuild" \
         RELEASE_PLUTIL=plutil \
@@ -1365,20 +1437,19 @@ STUB
     echo ""
     echo "--- project signing check ---"
 
-    # Helper: build a preflight-compatible HOME with a valid ad hoc profile
-    # and a custom xcodebuild stub with given settings output.
-    # Usage: signing_test_home <tmpdir> <settings_text>
-    # Sets fake_home, bindir, envdir in caller scope.
+    # Helper: build a preflight-compatible HOME with a valid ad hoc profile and an
+    # xcodebuild stub serving <td>/settings.txt — a copy of the real fixture with the
+    # standard Manual-signing overrides plus any per-case KEY=VALUE overrides.
+    # Usage: _make_signing_env <tmpdir> [KEY=VALUE ...]   → echoes "bindir|envdir|home"
     _make_signing_env() {
-        local td="$1"
-        local settings_text="$2"
+        local td="$1"; shift
         local bd="${td}/bin"
         mkdir -p "$bd"
+        local sf="${td}/settings.txt"
+        make_manual_settings_fixture "$sf" "TESTTEAM99" "$@"
         # Write all tool stubs using write_stubs (provides git, security, codesign, aws, etc.)
-        write_stubs "$bd" "" "TESTTEAM99"
-        # Override xcodebuild with custom settings
-        printf '#!/bin/bash\nif [[ "$*" == *"-showBuildSettings"* ]]; then\ncat <<'"'"'SETTINGS'"'"'\n%s\nSETTINGS\n  exit 0\nfi\n# archive: create xcarchive dir\nwhile [[ $# -gt 0 ]]; do\n  if [[ "$1" == "-archivePath" ]]; then mkdir -p "$2"; fi\n  shift\ndone\nexit 0\n' "$settings_text" > "${bd}/xcodebuild"
-        chmod +x "${bd}/xcodebuild"
+        # with xcodebuild pointed at the per-case settings copy
+        write_stubs "$bd" "" "TESTTEAM99" "$sf"
         # Write env
         local ed="${td}/envdir"
         mkdir -p "$ed"
@@ -1396,10 +1467,9 @@ STUB
     # Test 1: all five settings correct — signing check passes (no signing errors in output)
     test_start "project signing: all five settings correct → passes"
     local ts1; ts1="${tmpbase}/t-sign1"; mkdir -p "$ts1"
-    local settings_ok
-    settings_ok="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    # Standard Manual overrides only (all five settings correct)
     local sign_info1
-    sign_info1="$(_make_signing_env "$ts1" "$settings_ok")"
+    sign_info1="$(_make_signing_env "$ts1")"
     local bd1 ed1 fh1
     bd1="$(echo "$sign_info1" | cut -d'|' -f1)"
     ed1="$(echo "$sign_info1" | cut -d'|' -f2)"
@@ -1418,10 +1488,8 @@ STUB
     # Test 2: CODE_SIGN_STYLE wrong → error names CODE_SIGN_STYLE
     test_start "project signing: CODE_SIGN_STYLE wrong → error names CODE_SIGN_STYLE"
     local ts2; ts2="${tmpbase}/t-sign2"; mkdir -p "$ts2"
-    local settings_bad_style
-    settings_bad_style="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Automatic\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
     local sign_info2
-    sign_info2="$(_make_signing_env "$ts2" "$settings_bad_style")"
+    sign_info2="$(_make_signing_env "$ts2" "CODE_SIGN_STYLE=Automatic")"
     local bd2 ed2 fh2
     bd2="$(echo "$sign_info2" | cut -d'|' -f1)"
     ed2="$(echo "$sign_info2" | cut -d'|' -f2)"
@@ -1440,10 +1508,8 @@ STUB
     # Test 3: DEVELOPMENT_TEAM wrong → error without actual value
     test_start "project signing: DEVELOPMENT_TEAM wrong → error without actual value"
     local ts3; ts3="${tmpbase}/t-sign3"; mkdir -p "$ts3"
-    local settings_bad_team
-    settings_bad_team="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = WRONGTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
     local sign_info3
-    sign_info3="$(_make_signing_env "$ts3" "$settings_bad_team")"
+    sign_info3="$(_make_signing_env "$ts3" "DEVELOPMENT_TEAM=WRONGTEAM99")"
     local bd3 ed3 fh3
     bd3="$(echo "$sign_info3" | cut -d'|' -f1)"
     ed3="$(echo "$sign_info3" | cut -d'|' -f2)"
@@ -1462,10 +1528,8 @@ STUB
     # Test 4: PROVISIONING_PROFILE_SPECIFIER wrong → error without actual value
     test_start "project signing: PROVISIONING_PROFILE_SPECIFIER wrong → error without actual value"
     local ts4; ts4="${tmpbase}/t-sign4"; mkdir -p "$ts4"
-    local settings_bad_prof
-    settings_bad_prof="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = WrongProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
     local sign_info4
-    sign_info4="$(_make_signing_env "$ts4" "$settings_bad_prof")"
+    sign_info4="$(_make_signing_env "$ts4" "PROVISIONING_PROFILE_SPECIFIER=WrongProfile")"
     local bd4 ed4 fh4
     bd4="$(echo "$sign_info4" | cut -d'|' -f1)"
     ed4="$(echo "$sign_info4" | cut -d'|' -f2)"
@@ -1484,10 +1548,8 @@ STUB
     # Test 5: CODE_SIGN_IDENTITY wrong → error names CODE_SIGN_IDENTITY
     test_start "project signing: CODE_SIGN_IDENTITY wrong → error names CODE_SIGN_IDENTITY"
     local ts5; ts5="${tmpbase}/t-sign5"; mkdir -p "$ts5"
-    local settings_bad_id
-    settings_bad_id="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = iPhone Developer\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
     local sign_info5
-    sign_info5="$(_make_signing_env "$ts5" "$settings_bad_id")"
+    sign_info5="$(_make_signing_env "$ts5" "CODE_SIGN_IDENTITY=iPhone Developer")"
     local bd5 ed5 fh5
     bd5="$(echo "$sign_info5" | cut -d'|' -f1)"
     ed5="$(echo "$sign_info5" | cut -d'|' -f2)"
@@ -1506,10 +1568,8 @@ STUB
     # Test 6: PRODUCT_BUNDLE_IDENTIFIER wrong → error names PRODUCT_BUNDLE_IDENTIFIER
     test_start "project signing: PRODUCT_BUNDLE_IDENTIFIER wrong → error names PRODUCT_BUNDLE_IDENTIFIER"
     local ts6; ts6="${tmpbase}/t-sign6"; mkdir -p "$ts6"
-    local settings_bad_bundle
-    settings_bad_bundle="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.wrong.Bundle\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
     local sign_info6
-    sign_info6="$(_make_signing_env "$ts6" "$settings_bad_bundle")"
+    sign_info6="$(_make_signing_env "$ts6" "PRODUCT_BUNDLE_IDENTIFIER=com.wrong.Bundle")"
     local bd6 ed6 fh6
     bd6="$(echo "$sign_info6" | cut -d'|' -f1)"
     ed6="$(echo "$sign_info6" | cut -d'|' -f2)"
@@ -1528,10 +1588,15 @@ STUB
     # Test 7: multi-target output — only ChristmasTracker block used (Tests block has wrong CODE_SIGN_STYLE)
     test_start "project signing: multi-target output uses only ChristmasTracker block"
     local ts7; ts7="${tmpbase}/t-sign7"; mkdir -p "$ts7"
-    local settings_multi
-    settings_multi="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n\nBuild settings for action build and target ChristmasTrackerTests:\n    CODE_SIGN_STYLE = Automatic\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTrackerTests\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTrackerTests\n')"
     local sign_info7
-    sign_info7="$(_make_signing_env "$ts7" "$settings_multi")"
+    sign_info7="$(_make_signing_env "$ts7")"
+    # Splice a Tests-target block with a wrong CODE_SIGN_STYLE AFTER the app block
+    splice_settings_block "${ts7}/settings.txt" after "ChristmasTrackerTests" \
+        "CODE_SIGN_STYLE=Automatic" \
+        "DEVELOPMENT_TEAM=TESTTEAM99" \
+        "PRODUCT_BUNDLE_IDENTIFIER=com.alberta.ChristmasTrackerTests" \
+        "MARKETING_VERSION=5.0" \
+        "PRODUCT_NAME=ChristmasTrackerTests"
     local bd7 ed7 fh7
     bd7="$(echo "$sign_info7" | cut -d'|' -f1)"
     ed7="$(echo "$sign_info7" | cut -d'|' -f2)"
@@ -1551,17 +1616,18 @@ STUB
     echo ""
     echo "--- archive signing mode ---"
 
-    # Helper: build a minimal archive xcodebuild stub that logs its args
+    # Helper: build a minimal archive xcodebuild stub that logs its args and serves a
+    # fixture-derived settings file for -showBuildSettings
     _make_archive_stub() {
         local bd="$1"
         local stub_log="$2"
-        local settings_text="$3"
+        local settings_file="$3"
         cat > "${bd}/xcodebuild" <<ARCSTUB
 #!/bin/bash
 echo "STUB_CALL: xcodebuild \$*" >> "${stub_log}"
 printf '%s\n' "\$*" >> "${stub_log}"
 if [[ "\$*" == *"-showBuildSettings"* ]]; then
-    printf '%s\n' "${settings_text}"
+    cat "${settings_file}"
     exit 0
 fi
 # archive: create xcarchive dir
@@ -1574,8 +1640,8 @@ ARCSTUB
         chmod +x "${bd}/xcodebuild"
     }
 
-    local settings_archive
-    settings_archive="$(printf 'Build settings for action build and target ChristmasTracker:\n    CODE_SIGN_STYLE = Manual\n    DEVELOPMENT_TEAM = TESTTEAM99\n    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile\n    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)\n    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker\n    MARKETING_VERSION = 5.0\n    PRODUCT_NAME = ChristmasTracker\n')"
+    local settings_archive="${tmpbase}/settings-archive.txt"
+    make_manual_settings_fixture "$settings_archive"
 
     # Test 8: archive default mode — no signing args, CURRENT_PROJECT_VERSION present
     test_start "archive default: CURRENT_PROJECT_VERSION present, no signing args"
@@ -1638,24 +1704,8 @@ ARCSTUB
         local td="$1"
         local profile_mp="$2"  # path to .mobileprovision fixture
         local bd="${td}/bin"; mkdir -p "$bd"
+        # write_stubs' default xcodebuild serves the fixture copy with correct Manual signing
         write_stubs "$bd" "" "TESTTEAM99"
-        # Override xcodebuild with correct signing settings
-        cat > "${bd}/xcodebuild" <<'DCSTUB'
-#!/bin/bash
-if [[ "$*" == *"-showBuildSettings"* ]]; then
-    echo "Build settings for action build and target ChristmasTracker:"
-    echo "    CODE_SIGN_STYLE = Manual"
-    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
-    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
-    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
-    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
-    echo "    MARKETING_VERSION = 5.0"
-    echo "    PRODUCT_NAME = ChristmasTracker"
-    exit 0
-fi
-exit 0
-DCSTUB
-        chmod +x "${bd}/xcodebuild"
         local ed="${td}/envdir"; mkdir -p "$ed"
         write_env "$ed"
         local fh="${td}/home"
@@ -1872,24 +1922,13 @@ EOF
     test_start "verify-ipa: single Payload/*.app fallback when PRODUCT_NAME empty"
     local ts16; ts16="${tmpbase}/t-pn16"; mkdir -p "$ts16"
     write_env "$ts16"
-    # Create xcodebuild stub that returns no PRODUCT_NAME (empty line)
+    # Settings copy with the PRODUCT_NAME line deleted. FULL_PRODUCT_NAME = ChristmasTracker.app
+    # stays present — exactly the trap an unanchored lookup would fall into.
     local bd16="${ts16}/bin"; mkdir -p "$bd16"
-    write_stubs "$bd16" "$profile_pn_dir" "TESTTEAM99"
-    cat > "${bd16}/xcodebuild" <<'STUB16'
-#!/bin/bash
-if [[ "$*" == *"-showBuildSettings"* ]]; then
-    echo "Build settings for action build and target ChristmasTracker:"
-    echo "    CODE_SIGN_STYLE = Manual"
-    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
-    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
-    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
-    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
-    echo "    MARKETING_VERSION = 5.0"
-    exit 0
-fi
-exit 0
-STUB16
-    chmod +x "${bd16}/xcodebuild"
+    local settings16="${ts16}/settings.txt"
+    make_manual_settings_fixture "$settings16"
+    delete_setting "$settings16" PRODUCT_NAME
+    write_stubs "$bd16" "$profile_pn_dir" "TESTTEAM99" "$settings16"
     local info_pn16
     info_pn16="$(make_info_plist "$ts16" "com.alberta.ChristmasTracker" "500" "5.0" \
         "https://api.bmalberta.com" "real" "production" "false")"
@@ -1913,23 +1952,11 @@ STUB16
     local ts17; ts17="${tmpbase}/t-pn17"; mkdir -p "$ts17"
     write_env "$ts17"
     local bd17="${ts17}/bin"; mkdir -p "$bd17"
-    write_stubs "$bd17" "$profile_pn_dir" "TESTTEAM99"
-    # Same stub with no PRODUCT_NAME
-    cat > "${bd17}/xcodebuild" <<'STUB17'
-#!/bin/bash
-if [[ "$*" == *"-showBuildSettings"* ]]; then
-    echo "Build settings for action build and target ChristmasTracker:"
-    echo "    CODE_SIGN_STYLE = Manual"
-    echo "    DEVELOPMENT_TEAM = TESTTEAM99"
-    echo "    PROVISIONING_PROFILE_SPECIFIER = TestAdHocProfile"
-    echo "    CODE_SIGN_IDENTITY = Apple Distribution: Test User (TESTTEAM99)"
-    echo "    PRODUCT_BUNDLE_IDENTIFIER = com.alberta.ChristmasTracker"
-    echo "    MARKETING_VERSION = 5.0"
-    exit 0
-fi
-exit 0
-STUB17
-    chmod +x "${bd17}/xcodebuild"
+    # Same settings copy with no PRODUCT_NAME (FULL_PRODUCT_NAME still present)
+    local settings17="${ts17}/settings.txt"
+    make_manual_settings_fixture "$settings17"
+    delete_setting "$settings17" PRODUCT_NAME
+    write_stubs "$bd17" "$profile_pn_dir" "TESTTEAM99" "$settings17"
     # Build a base IPA first, then add a second .app bundle to it
     local info_pn17
     info_pn17="$(make_info_plist "$ts17" "com.alberta.ChristmasTracker" "500" "5.0" \
@@ -1954,31 +1981,378 @@ STUB17
     fi
 
     echo ""
-    echo "--- install-info npm removal ---"
+    echo "--- install-info policy:set recipe ---"
 
-    # Test 18: install-info: no npm run command in output
-    test_start "install-info: no npm run command in output"
+    # Test 18 (inverted in I6b-1b): this used to assert "no npm run command in output" while
+    # the flag names were unconfirmed. The backend operator doc has since confirmed the recipe,
+    # so the development-database command SHOULD appear.
+    test_start "install-info: development-database policy:set command present"
     local ti18; ti18="${tmpbase}/t-ii18"; mkdir -p "$ti18"
     write_env "$ti18"
-    local bd18="${ti18}/bin"; mkdir -p "$bd18"
-    cat > "${bd18}/xcodebuild" <<'STUB18'
-#!/bin/bash
-if [[ "$*" == *"-showBuildSettings"* ]]; then
-    echo "Build settings for action build and target ChristmasTracker:"
-    echo "    MARKETING_VERSION = 5.0"
-    echo "    PRODUCT_NAME = ChristmasTracker"
-    exit 0
-fi
-exit 0
-STUB18
-    chmod +x "${bd18}/xcodebuild"
+    local bd18="${ti18}/bin"
+    write_stubs "$bd18" "" "TESTTEAM99"
     local iinfo18_out
     iinfo18_out="$(ENV_FILE="${ti18}/release.env" RELEASE_XCODEBUILD="${bd18}/xcodebuild" \
         bash "${RELEASE_SCRIPT}" install-info --build 500 2>&1)"
-    if echo "$iinfo18_out" | grep -q "npm run"; then
-        test_fail "install-info output must not contain 'npm run'; got: $iinfo18_out"
+    if echo "$iinfo18_out" | grep -q "npm run policy:set -- --platform ios"; then
+        test_pass
+    else
+        test_fail "install-info output must contain the npm run policy:set command; got: $iinfo18_out"
+    fi
+
+    test_start "install-info: production-server policy-set.js command present"
+    if echo "$iinfo18_out" | grep -q "compose.sh exec api node dist/scripts/policy-set.js --platform ios"; then
+        test_pass
+    else
+        test_fail "install-info output must contain the compose.sh policy-set.js command; got: $iinfo18_out"
+    fi
+
+    # The two default command lines, isolated from the rest of the output
+    local policy_cmds
+    policy_cmds="$(echo "$iinfo18_out" | grep -E "npm run policy:set -- --platform ios|policy-set.js --platform ios")" || policy_cmds=""
+    local policy_cmd_count
+    policy_cmd_count="$(echo "$policy_cmds" | grep -c "")"
+
+    test_start "install-info: exactly two default command lines"
+    if [ "$policy_cmd_count" -eq 2 ]; then
+        test_pass
+    else
+        test_fail "expected 2 policy:set command lines, got ${policy_cmd_count}: $policy_cmds"
+    fi
+
+    local flag
+    for flag in \
+        "--latest-build 500" \
+        "--latest-version 5.0" \
+        "--recommended-version 5.0" \
+        "--manifest-url https://content.example.com/distribution/tracker/500/manifest.plist" \
+        "--ipa-url https://content.example.com/distribution/tracker/500/ChristmasTracker-5.0-500.ipa" \
+        "--notes"; do
+        test_start "install-info: both commands contain '${flag}'"
+        if [ "$(echo "$policy_cmds" | grep -c -- "$flag")" -eq 2 ]; then
+            test_pass
+        else
+            test_fail "expected '${flag}' on both command lines; got: $policy_cmds"
+        fi
+    done
+
+    test_start "install-info: default commands do not contain --min-build"
+    if echo "$policy_cmds" | grep -q -- "--min-build"; then
+        test_fail "default command lines must not contain --min-build; got: $policy_cmds"
     else
         test_pass
+    fi
+
+    test_start "install-info: default commands do not contain --minimum-version"
+    if echo "$policy_cmds" | grep -q -- "--minimum-version"; then
+        test_fail "default command lines must not contain --minimum-version; got: $policy_cmds"
+    else
+        test_pass
+    fi
+
+    test_start "install-info: cannot-clear sentence present"
+    if echo "$iinfo18_out" | grep -q "cannot be cleared"; then
+        test_pass
+    else
+        test_fail "install-info must state the URLs cannot be cleared; got: $iinfo18_out"
+    fi
+
+    test_start "install-info: force-update warning present and unfilled"
+    if echo "$iinfo18_out" | grep -q "every family phone" \
+        && echo "$iinfo18_out" | grep -q -- "--min-build N --minimum-version X.Y"; then
+        test_pass
+    else
+        test_fail "install-info must print the force-update warning with N / X.Y placeholders; got: $iinfo18_out"
+    fi
+
+    test_start "install-info: script states it never runs policy:set"
+    if echo "$iinfo18_out" | grep -q "never runs policy:set"; then
+        test_pass
+    else
+        test_fail "install-info must say the script never runs policy:set; got: $iinfo18_out"
+    fi
+
+    test_start "install-info: recipe output has no secret-looking values"
+    if echo "$iinfo18_out" | grep -qiE "password|token|secret|access_key"; then
+        test_fail "install-info output must not contain secret-looking values"
+    else
+        test_pass
+    fi
+
+    test_start "install-info: without --build the commands keep the <build> placeholder"
+    local iinfo18b_out
+    iinfo18b_out="$(ENV_FILE="${ti18}/release.env" RELEASE_XCODEBUILD="${bd18}/xcodebuild" \
+        bash "${RELEASE_SCRIPT}" install-info 2>&1)"
+    if echo "$iinfo18b_out" | grep "npm run policy:set" | grep -q -- "--latest-build <build>"; then
+        test_pass
+    else
+        test_fail "install-info without --build should print --latest-build <build>; got: $iinfo18b_out"
+    fi
+
+    echo ""
+    echo "--- anchored build-setting lookups ---"
+
+    local tal; tal="${tmpbase}/t-anchored"; mkdir -p "$tal"
+    write_env "$tal"
+    local profile_al_dir="${tal}/profiles"; mkdir -p "$profile_al_dir"
+    make_ad_hoc_profile "$profile_al_dir" "TestAdHocProfile" "TESTTEAM99" "com.alberta.ChristmasTracker" 30 > /dev/null
+    local profile_al="${profile_al_dir}/TestAdHocProfile.mobileprovision"
+    # Default write_stubs: fixture copy (FULL_PRODUCT_NAME = ChristmasTracker.app precedes PRODUCT_NAME)
+    local bindir_al="${tal}/bin"
+    write_stubs "$bindir_al" "$profile_al_dir" "TESTTEAM99"
+    local info_al
+    info_al="$(make_info_plist "$tal" "com.alberta.ChristmasTracker" "500" "5.0" "https://api.bmalberta.com" "real" "production" "false")"
+    local ipa_al
+    ipa_al="$(make_ipa "$tal" "$info_al" "$profile_al" "anchored.ipa" "TESTTEAM99" "ChristmasTracker.app")"
+    local out_al
+    out_al="$(capture_failing ENV_FILE="${tal}/release.env" \
+        RELEASE_XCODEBUILD="${bindir_al}/xcodebuild" \
+        RELEASE_SECURITY="${bindir_al}/security" \
+        RELEASE_CODESIGN="${bindir_al}/codesign" \
+        bash "${RELEASE_SCRIPT}" verify-ipa --build 500 --ipa "$ipa_al")"
+
+    test_start "anchored lookup: verify-ipa passes a good IPA named from PRODUCT_NAME via the fixture stub"
+    if echo "$out_al" | grep -q "all assertions passed"; then
+        test_pass
+    else
+        test_fail "verify-ipa against the real-shaped fixture should pass; got: $out_al"
+    fi
+
+    test_start "anchored lookup: PRODUCT_NAME resolves to ChristmasTracker, not ChristmasTracker.app"
+    # If FULL_PRODUCT_NAME had won, the payload prefix would be Payload/ChristmasTracker.app.app
+    # and Info.plist extraction would fail; assert both the absence and the success path.
+    if echo "$out_al" | grep -q "ChristmasTracker.app.app"; then
+        test_fail "output mentions ChristmasTracker.app.app — FULL_PRODUCT_NAME leaked into PRODUCT_NAME"
+    elif echo "$out_al" | grep -q "Could not extract Info.plist"; then
+        test_fail "Info.plist extraction failed — app bundle name was not derived from PRODUCT_NAME; got: $out_al"
+    else
+        test_pass
+    fi
+
+    test_start "anchored lookup: MARKETING_VERSION resolves to 5.0 from the fixture"
+    local tmv; tmv="${tmpbase}/t-mv"; mkdir -p "$tmv"
+    write_env "$tmv"
+    local bindir_mv="${tmv}/bin"
+    # The unmodified fixture file itself (no overrides at all)
+    write_stubs "$bindir_mv" "" "TESTTEAM99" "$FIXTURE_SETTINGS"
+    ENV_FILE="${tmv}/release.env" \
+        RELEASE_XCODEBUILD="${bindir_mv}/xcodebuild" \
+        RELEASE_BUILD_ROOT="${tmv}/build/release" \
+        LEDGER_FILE="${tmv}/.release-ledger" \
+        bash "${RELEASE_SCRIPT}" manifest --build 500 > /dev/null 2>&1 || true
+    if grep -q "distribution/tracker/500/ChristmasTracker-5.0-500.ipa" "${tmv}/build/release/500/manifest.plist" 2>/dev/null; then
+        test_pass
+    else
+        test_fail "manifest should name ChristmasTracker-5.0-500.ipa from the fixture's MARKETING_VERSION"
+    fi
+
+    test_start "anchored lookup: install-info names ChristmasTracker-5.0-500.ipa from the unmodified fixture"
+    if ENV_FILE="${tmv}/release.env" RELEASE_XCODEBUILD="${bindir_mv}/xcodebuild" \
+        bash "${RELEASE_SCRIPT}" install-info --build 500 2>&1 | grep -q "ChristmasTracker-5.0-500.ipa"; then
+        test_pass
+    else
+        test_fail "install-info should name ChristmasTracker-5.0-500.ipa"
+    fi
+
+    # CODE_SIGN_IDENTITY must come from CODE_SIGN_IDENTITY, never EXPANDED_CODE_SIGN_IDENTITY.
+    # make_settings_fixture inserts the absent EXPANDED_ key right after the block header,
+    # i.e. BEFORE CODE_SIGN_IDENTITY, so an unanchored grep|head -1 would read it first.
+    test_start "anchored lookup: CODE_SIGN_IDENTITY ignores EXPANDED_CODE_SIGN_IDENTITY (wrong real identity is reported)"
+    local tci1; tci1="${tmpbase}/t-csi1"; mkdir -p "$tci1"
+    local csi_info1
+    csi_info1="$(_make_signing_env "$tci1" \
+        "CODE_SIGN_IDENTITY=iPhone Developer" \
+        "EXPANDED_CODE_SIGN_IDENTITY=Apple Distribution: Test User (TESTTEAM99)")"
+    local bdc1 edc1 fhc1
+    bdc1="$(echo "$csi_info1" | cut -d'|' -f1)"
+    edc1="$(echo "$csi_info1" | cut -d'|' -f2)"
+    fhc1="$(echo "$csi_info1" | cut -d'|' -f3)"
+    local out_csi1
+    out_csi1="$(capture_failing HOME="$fhc1" ENV_FILE="${edc1}/release.env" \
+        RELEASE_XCODEBUILD="${bdc1}/xcodebuild" RELEASE_SECURITY="${bdc1}/security" \
+        RELEASE_GIT="${bdc1}/git" RELEASE_AWS="${bdc1}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out_csi1" | grep -q "CODE_SIGN_IDENTITY is wrong"; then
+        test_pass
+    else
+        test_fail "preflight must report CODE_SIGN_IDENTITY wrong when only EXPANDED_CODE_SIGN_IDENTITY is a distribution identity; got: $out_csi1"
+    fi
+
+    test_start "anchored lookup: CODE_SIGN_IDENTITY ignores EXPANDED_CODE_SIGN_IDENTITY (wrong expanded identity is not reported)"
+    local tci2; tci2="${tmpbase}/t-csi2"; mkdir -p "$tci2"
+    local csi_info2
+    csi_info2="$(_make_signing_env "$tci2" \
+        "CODE_SIGN_IDENTITY=Apple Distribution: Test User (TESTTEAM99)" \
+        "EXPANDED_CODE_SIGN_IDENTITY=iPhone Developer")"
+    local bdc2 edc2 fhc2
+    bdc2="$(echo "$csi_info2" | cut -d'|' -f1)"
+    edc2="$(echo "$csi_info2" | cut -d'|' -f2)"
+    fhc2="$(echo "$csi_info2" | cut -d'|' -f3)"
+    local out_csi2
+    out_csi2="$(capture_failing HOME="$fhc2" ENV_FILE="${edc2}/release.env" \
+        RELEASE_XCODEBUILD="${bdc2}/xcodebuild" RELEASE_SECURITY="${bdc2}/security" \
+        RELEASE_GIT="${bdc2}/git" RELEASE_AWS="${bdc2}/aws" RELEASE_PLUTIL=plutil \
+        bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+    if echo "$out_csi2" | grep -q "CODE_SIGN_IDENTITY is wrong"; then
+        test_fail "preflight must not report CODE_SIGN_IDENTITY wrong when the real key is correct; got: $out_csi2"
+    else
+        test_pass
+    fi
+
+    # App-target block wins over a spliced package block with conflicting values
+    local pos
+    for pos in after before; do
+        local tblk; tblk="${tmpbase}/t-block-${pos}"; mkdir -p "$tblk"
+        local blk_info
+        blk_info="$(_make_signing_env "$tblk")"
+        local bdb edb fhb
+        bdb="$(echo "$blk_info" | cut -d'|' -f1)"
+        edb="$(echo "$blk_info" | cut -d'|' -f2)"
+        fhb="$(echo "$blk_info" | cut -d'|' -f3)"
+        splice_settings_block "${tblk}/settings.txt" "$pos" "TrackerAPI" \
+            "PRODUCT_NAME=TrackerAPI" \
+            "MARKETING_VERSION=9.9" \
+            "CODE_SIGN_STYLE=Automatic"
+
+        test_start "anchored lookup: app-target block wins over a package block spliced ${pos} it (manifest names 5.0)"
+        ENV_FILE="${edb}/release.env" \
+            RELEASE_XCODEBUILD="${bdb}/xcodebuild" \
+            RELEASE_BUILD_ROOT="${tblk}/build/release" \
+            LEDGER_FILE="${tblk}/.release-ledger" \
+            bash "${RELEASE_SCRIPT}" manifest --build 500 > /dev/null 2>&1 || true
+        if grep -q "ChristmasTracker-5.0-500.ipa" "${tblk}/build/release/500/manifest.plist" 2>/dev/null; then
+            test_pass
+        else
+            test_fail "manifest should use the app block's MARKETING_VERSION (5.0), not the ${pos} package block (9.9)"
+        fi
+
+        test_start "anchored lookup: app-target block wins over a package block spliced ${pos} it (preflight CODE_SIGN_STYLE OK)"
+        local out_blk
+        out_blk="$(capture_failing HOME="$fhb" ENV_FILE="${edb}/release.env" \
+            RELEASE_XCODEBUILD="${bdb}/xcodebuild" RELEASE_SECURITY="${bdb}/security" \
+            RELEASE_GIT="${bdb}/git" RELEASE_AWS="${bdb}/aws" RELEASE_PLUTIL=plutil \
+            bash "${RELEASE_SCRIPT}" preflight --skip-verify --allow-unpushed)"
+        if echo "$out_blk" | grep -q "CODE_SIGN_STYLE is wrong"; then
+            test_fail "preflight must read CODE_SIGN_STYLE from the app block, not the ${pos} package block; got: $out_blk"
+        else
+            test_pass
+        fi
+    done
+
+    # Mutation: FULL_PRODUCT_NAME as the very first setting of the block, PRODUCT_NAME last
+    test_start "mutation: stub emitting FULL_PRODUCT_NAME before PRODUCT_NAME still yields ChristmasTracker"
+    local tmu; tmu="${tmpbase}/t-mutation"; mkdir -p "$tmu"
+    write_env "$tmu"
+    local settings_mu="${tmu}/settings.txt"
+    make_manual_settings_fixture "$settings_mu"
+    delete_setting "$settings_mu" FULL_PRODUCT_NAME
+    delete_setting "$settings_mu" PRODUCT_NAME
+    # Re-insert FULL_PRODUCT_NAME directly after the header (first line of the block) ...
+    awk -v hdr="$APP_BLOCK_HEADER" '{ print } $0 == hdr { print "    FULL_PRODUCT_NAME = ChristmasTracker.app" }' \
+        "$settings_mu" > "${settings_mu}.tmp"
+    mv "${settings_mu}.tmp" "$settings_mu"
+    # ... and PRODUCT_NAME as the last line of the (single) block
+    echo "    PRODUCT_NAME = ChristmasTracker" >> "$settings_mu"
+    local bindir_mu="${tmu}/bin"
+    write_stubs "$bindir_mu" "$profile_al_dir" "TESTTEAM99" "$settings_mu"
+    local ipa_mu
+    ipa_mu="$(make_ipa "$tmu" "$info_al" "$profile_al" "mutation.ipa" "TESTTEAM99" "ChristmasTracker.app")"
+    local out_mu
+    out_mu="$(capture_failing ENV_FILE="${tmu}/release.env" \
+        RELEASE_XCODEBUILD="${bindir_mu}/xcodebuild" \
+        RELEASE_SECURITY="${bindir_mu}/security" \
+        RELEASE_CODESIGN="${bindir_mu}/codesign" \
+        bash "${RELEASE_SCRIPT}" verify-ipa --build 500 --ipa "$ipa_mu")"
+    if echo "$out_mu" | grep -q "all assertions passed" && ! echo "$out_mu" | grep -q "ChristmasTracker.app.app"; then
+        test_pass
+    else
+        test_fail "verify-ipa must still resolve PRODUCT_NAME=ChristmasTracker when FULL_PRODUCT_NAME comes first; got: $out_mu"
+    fi
+
+    echo ""
+    echo "--- export IPA discovery ---"
+
+    # Helper: a ready-to-export build dir with env, fixture settings, and a fake xcarchive
+    _make_export_env() {
+        local td="$1"; shift
+        write_env "$td"
+        local bd="${td}/bin"; mkdir -p "$bd"
+        local sf="${td}/settings.txt"
+        make_manual_settings_fixture "$sf"
+        write_export_stub "$bd" "$sf" "$@"
+        mkdir -p "${td}/build/release/500/ChristmasTracker.xcarchive"
+    }
+
+    test_start "export: exactly one exported IPA is renamed to ChristmasTracker-5.0-500.ipa"
+    local tex1; tex1="${tmpbase}/t-export1"; mkdir -p "$tex1"
+    _make_export_env "$tex1" "SomeOtherName.ipa"
+    local export_rc1=0
+    ENV_FILE="${tex1}/release.env" \
+        RELEASE_XCODEBUILD="${tex1}/bin/xcodebuild" \
+        RELEASE_PLUTIL=plutil \
+        RELEASE_BUILD_ROOT="${tex1}/build/release" \
+        LEDGER_FILE="${tex1}/.release-ledger" \
+        bash "${RELEASE_SCRIPT}" export --build 500 > /dev/null 2>&1 || export_rc1=$?
+    if [ "$export_rc1" -eq 0 ] \
+        && [ -f "${tex1}/build/release/500/ChristmasTracker-5.0-500.ipa" ] \
+        && [ ! -f "${tex1}/build/release/500/SomeOtherName.ipa" ]; then
+        test_pass
+    else
+        test_fail "export should exit 0 and rename SomeOtherName.ipa to ChristmasTracker-5.0-500.ipa (rc=${export_rc1})"
+    fi
+
+    test_start "export: zero exported IPAs fails with a clear message"
+    local tex0; tex0="${tmpbase}/t-export0"; mkdir -p "$tex0"
+    _make_export_env "$tex0"
+    local export_rc0=0
+    local out_ex0
+    out_ex0="$(ENV_FILE="${tex0}/release.env" \
+        RELEASE_XCODEBUILD="${tex0}/bin/xcodebuild" \
+        RELEASE_PLUTIL=plutil \
+        RELEASE_BUILD_ROOT="${tex0}/build/release" \
+        LEDGER_FILE="${tex0}/.release-ledger" \
+        bash "${RELEASE_SCRIPT}" export --build 500 2>&1)" || export_rc0=$?
+    if [ "$export_rc0" -ne 0 ] \
+        && echo "$out_ex0" | grep -q "found 0 .ipa" \
+        && echo "$out_ex0" | grep -q "${tex0}/build/release/500"; then
+        test_pass
+    else
+        test_fail "export with no IPA should fail naming the count 0 and the directory (rc=${export_rc0}); got: $out_ex0"
+    fi
+
+    test_start "export: two exported IPAs fails with a clear message"
+    local tex2; tex2="${tmpbase}/t-export2"; mkdir -p "$tex2"
+    _make_export_env "$tex2" "First.ipa" "Second.ipa"
+    local export_rc2=0
+    local out_ex2
+    out_ex2="$(ENV_FILE="${tex2}/release.env" \
+        RELEASE_XCODEBUILD="${tex2}/bin/xcodebuild" \
+        RELEASE_PLUTIL=plutil \
+        RELEASE_BUILD_ROOT="${tex2}/build/release" \
+        LEDGER_FILE="${tex2}/.release-ledger" \
+        bash "${RELEASE_SCRIPT}" export --build 500 2>&1)" || export_rc2=$?
+    if [ "$export_rc2" -ne 0 ] \
+        && echo "$out_ex2" | grep -q "found 2" \
+        && echo "$out_ex2" | grep -q "${tex2}/build/release/500"; then
+        test_pass
+    else
+        test_fail "export with two IPAs should fail naming the count 2 and the directory (rc=${export_rc2}); got: $out_ex2"
+    fi
+
+    test_start "export: an IPA already named ChristmasTracker-5.0-500.ipa is kept without a self-move error"
+    local tex3; tex3="${tmpbase}/t-export3"; mkdir -p "$tex3"
+    _make_export_env "$tex3" "ChristmasTracker-5.0-500.ipa"
+    local export_rc3=0
+    ENV_FILE="${tex3}/release.env" \
+        RELEASE_XCODEBUILD="${tex3}/bin/xcodebuild" \
+        RELEASE_PLUTIL=plutil \
+        RELEASE_BUILD_ROOT="${tex3}/build/release" \
+        LEDGER_FILE="${tex3}/.release-ledger" \
+        bash "${RELEASE_SCRIPT}" export --build 500 > /dev/null 2>&1 || export_rc3=$?
+    if [ "$export_rc3" -eq 0 ] && [ -f "${tex3}/build/release/500/ChristmasTracker-5.0-500.ipa" ]; then
+        test_pass
+    else
+        test_fail "export should succeed when xcodebuild already produced the final name (rc=${export_rc3})"
     fi
 }
 

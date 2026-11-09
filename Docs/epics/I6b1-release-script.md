@@ -195,3 +195,44 @@ Not yet ignored: `scripts/release.env`, `scripts/.release-ledger`, `build/`.
 - `Docs/release-runbook.md` (modified)
 - `Docs/handoffs/2026-11-06-ios-to-brian-i6b1.md` (modified)
 - `Docs/reports/I6b1-1-script-core.md` (modified)
+
+---
+
+## Second fix pass Gate 1 (I6b-1b, branch `fix/i6b1b-release-lookups`, 2026-11-07)
+
+Why: Brian's chat review found (P1) every build-setting read is an unanchored `grep KEY | head -1`, so on real alphabetical xcodebuild output `FULL_PRODUCT_NAME = ChristmasTracker.app` wins over `PRODUCT_NAME` and verify-ipa would look for `ChristmasTracker.app.app`; the test stub hid this because it lacked the look-alike keys. (P2) `cmd_export` assumes xcodebuild writes `ChristmasTracker.ipa`. (P3) install-info prints no policy:set command although the flags are now confirmed by the backend operator doc. (P4) the earlier fix-pass docs corrections (G2) were claimed but not made.
+
+### Facts read from the real capture (2026-11-07, `xcodebuild -showBuildSettings -project ChristmasTracker/ChristmasTracker.xcodeproj -scheme ChristmasTracker -configuration Release`, read-only)
+
+- 637 lines; one `Build settings for action build and target ChristmasTracker:` block preceded by a "Resolve Package Graph / Resolved source packages" preamble. With `-scheme`, xcodebuild prints no package-target or test-target blocks.
+- Look-alike keys present: `FULL_PRODUCT_NAME = ChristmasTracker.app`, `PRODUCT_MODULE_NAME`, `EXECUTABLE_NAME`, `WRAPPER_NAME`, `TARGET_NAME`, `PROJECT_NAME`, `DWARF_DSYM_FILE_NAME = ChristmasTracker.app.dSYM`, `EMBEDDED_PROFILE_NAME`, `PROVISIONING_PROFILE_REQUIRED`, `PROVISIONING_PROFILE_REQUIRED_YES_YES`, `PROVISIONING_PROFILE_SUPPORTED`.
+- Absent: `EXPANDED_CODE_SIGN_IDENTITY`, `PROVISIONING_PROFILE_SPECIFIER` (signing is still Automatic; `CODE_SIGN_IDENTITY = Apple Development`, `CODE_SIGN_STYLE = Automatic`).
+- Sanitized before commit as `scripts/fixtures/showbuildsettings-release.txt`: `DEVELOPMENT_TEAM` value → `TEAMID1234`; every `/Users/<username>` path → `/Users/test`; the bare username in `ALTERNATE_OWNER`, `INSTALL_OWNER`, `USER`, `VERSION_INFO_BUILDER` → `test`. `CODE_SIGN_IDENTITY = Apple Development` is kept as captured: it is a generic Xcode constant, not an identity name. Nothing else was changed or invented.
+- Consequence for the brief's wording: the committed fixture is single-block and has no `EXPANDED_CODE_SIGN_IDENTITY`. Tests that need a conflicting package/test block, an `EXPANDED_CODE_SIGN_IDENTITY` line, or Manual-signing values splice them into a temp copy of the fixture per case.
+
+### Story K1 — anchored lookups, real-shaped fixture, robust export, real policy:set recipe
+
+**Contract slice:** none (local tooling). **Interface introduced:** `setting_value KEY` helper in `scripts/release.sh` (reads one build setting from the selected target block with an anchored pattern: optional leading whitespace, exactly KEY, optional whitespace, `=`). Env var `RELEASE_BUILD_SETTINGS_FIXTURE` is NOT introduced; the xcodebuild stub serves the fixture file by path from the test harness.
+
+**Acceptance criteria:**
+1. Every build-setting read (`PRODUCT_NAME`, `MARKETING_VERSION`, `CODE_SIGN_STYLE`, `DEVELOPMENT_TEAM`, `PROVISIONING_PROFILE_SPECIFIER`, `CODE_SIGN_IDENTITY`, `PRODUCT_BUNDLE_IDENTIFIER`) goes through `setting_value`; `grep -n 'grep "' scripts/release.sh` shows no unanchored grep of a setting name.
+2. `get_app_build_settings` still selects the `target ChristmasTracker:` block when several blocks exist and falls back to the whole output when it does not.
+3. The `write_stubs` xcodebuild stub in `scripts/test-release.sh` serves `scripts/fixtures/showbuildsettings-release.txt` (optionally a per-test temp copy edited with sed) instead of hand-written settings; all 62 earlier tests pass with unchanged meaning (any changed assertion has a stated reason in the report).
+4. New tests (named in the report, arithmetic 62 + N = total): PRODUCT_NAME resolves to exactly `ChristmasTracker`; MARKETING_VERSION resolves to `5.0` from the fixture; CODE_SIGN_IDENTITY resolves from `CODE_SIGN_IDENTITY` and not `EXPANDED_CODE_SIGN_IDENTITY` (differing values in a temp copy); the app-target block wins over a spliced package/test block with conflicting values; verify-ipa passes a good synthetic IPA named from PRODUCT_NAME via the fixture-driven stub; mutation test — a stub that emits `FULL_PRODUCT_NAME` before `PRODUCT_NAME` still yields `ChristmasTracker`.
+5. `cmd_export` (live mode) lists `*.ipa` in the export directory after `-exportArchive`, requires exactly one, moves it to `ChristmasTracker-<version>-<build>.ipa`, and fails with a clear message naming the count for zero or more than one. Tests: one, zero, two IPAs.
+6. `install-info` prints the values block, then two filled-in commands from the confirmed recipe labelled "development database (backend repo)" (`npm run policy:set -- --platform ios ...`) and "production server (run on the server)" (`bash repo/deploy/scripts/compose.sh exec api node dist/scripts/policy-set.js --platform ios ...`) with `--latest-build <build> --latest-version <mv> --recommended-version <mv> --notes "<edit before running>" --manifest-url <url> --ipa-url <url>`; a separate, clearly warned force-update block showing `--min-build N --minimum-version X.Y` unfilled; the sentence that the manifest and ipa URLs cannot be cleared once set. The script never runs policy:set. Tests: both commands present with the right build and version; the six flags present; `--min-build` absent from the two default commands; warning text present; no secret printed. The existing "no npm run" test (T18) is inverted to assert the command IS present — reason: P3 confirmed the flags.
+7. `Docs/release-runbook.md` step 7 and Rollback updated to the recipe, the cannot-clear warning, when to raise `--min-build`, and that rollback only ever points the URLs at another valid pair.
+8. `bash -n` and shellcheck pass on both scripts; `scripts/verify.sh` OK with 677 app and 191 package tests unchanged.
+
+**Weight:** solo implementer plus both Gate 2 reviewers (Brian's prompt). **Scoped files:** `scripts/release.sh`, `scripts/test-release.sh`, `scripts/fixtures/showbuildsettings-release.txt` (new, already sanitized by the Orchestrator), `scripts/release.env.example` (only if needed), `Docs/release-runbook.md`. Report: `Docs/reports/I6b1-5-anchored-lookups-fixture-and-recipe.md`.
+
+### Story K2 — the missing report and handoff corrections (docs only)
+
+**Acceptance criteria:**
+1. `Docs/reports/I6b1-1-script-core.md`: first line `Corrected in the I6b-1 fix passes.`; a Gate 2 section with real verdicts from both reviewers on the final script plus focus-list answers with file and line evidence; "Not done or partial" lists NOT RUN: archive, export, upload, aws, the real certificate lookup in a keychain, the real profile lookup in `~/Library/MobileDevice/Provisioning Profiles`, signing, any on-device install.
+2. `Docs/reports/I6b1-3-signing-and-fixes.md`: same not-run list; file and line evidence added to the Gate 2 answers.
+3. `Docs/handoffs/2026-11-06-ios-to-brian-i6b1.md`: no "grep/PlistBuddy" text (the script uses plutil); a "Not run by the agents" section; the commit list from `git log --oneline master..HEAD` plus a pointer to the earlier merged commits; the fixture, anchored-lookup, export, and policy:set changes in "What changed"; the test count updated; the unverified-assumptions list accurate.
+4. `Docs/reports/I6b1-6-docs-corrections.md` with real Gate 2 verdicts.
+5. No change outside Docs/.
+
+**Weight:** solo plus both reviewers. **Scoped files:** the four files above.

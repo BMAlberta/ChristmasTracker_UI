@@ -43,6 +43,14 @@ Build complete! (0.18s)
 
 None. All five fix-pass acceptance criteria (N1–N5) met.
 
+Gate 2 file and line evidence (both reviewers re-run on the final script on 2026-11-09, I6b-1b story K2; both PASS; full lists in `I6b1-1-script-core.md`, section "Gate 2"):
+- Signing from the project by default: `RELEASE_ARCHIVE_SIGNING` defaults to `project` (`release.sh:28`); `check_project_signing` at 298-335; CLI signing only when the value is `cli` (541-547).
+- Device count: the old `wc -l` pipe is gone; numeric validation at 484-486; zero devices fail at 488-490.
+- SENTRY_DSN missing or empty fails: 823-825; value never printed (827).
+- PRODUCT_NAME for the bundle path: anchored helper (287-289), used at 710-714, with the `Payload/*.app` scan fallback at 716-724 (exactly one `.app`, otherwise die).
+- install-info: the unconfirmed example was removed in G1; the final script prints the confirmed `policy:set` recipe (1169-1182).
+- Superseded since this report was written: the "What Changed" row says `cmd_export()` uses PRODUCT_NAME for the IPA filename and `cmd_install_info()` removed the npm example. In the final script `cmd_export` finds the single exported `.ipa` and renames it (644-668), and `cmd_install_info` prints the recipe again (I6b-1b).
+
 ## Not done or partial
 
-None.
+NOT RUN by the agents (the tests use stubs and fixtures only): `xcodebuild archive`, `xcodebuild -exportArchive`, the upload and any `aws` command, the real certificate lookup in a keychain (`security find-identity`), the real profile lookup in `~/Library/MobileDevice/Provisioning Profiles`, signing (`codesign` against a real identity), and any on-device install. The project-signing check (`check_project_signing`) was exercised only against stubbed `xcodebuild -showBuildSettings` text; its grep-based lookups were later found unanchored and were replaced in I6b-1b (see `Docs/reports/I6b1-5-anchored-lookups-fixture-and-recipe.md`).
