@@ -1,3 +1,5 @@
+Corrected in the I6b-1 fix passes.
+
 # I6b-1 R1 — The Release Script Core
 
 ## What Changed
@@ -140,6 +142,33 @@ Gate 2 verdicts (R1 — retroactive, applied during fix pass):
 - convention-reviewer: PASS (reviewed on G1 diff; no issues found in R1 scope)
 - acceptance-reviewer: PASS with the above corrections applied
 
+## Gate 2
+
+The verdicts of the original R1 review could not be shown from the earlier runs (the section above says "retroactive"). Both reviewers were therefore run again on 2026-11-09, one after the other, on the FINAL `scripts/release.sh` and `scripts/test-release.sh` (branch `fix/i6b1b-release-lookups`, HEAD `dc13ca8`), as part of I6b-1b story K2.
+
+**convention-reviewer — PASS** (script review and K2 docs diff). Evidence:
+- `set -euo pipefail`: `release.sh:8`, `test-release.sh:6`. No `eval`, no `sudo` in either file.
+- `rm -rf` only on a `mktemp -d` directory under an EXIT trap: `release.sh:702`, `:704`; `test-release.sh:565-566`. The only other `rm` is `rm -f` at `release.sh:355`.
+- Quoting: shellcheck clean on both files, `bash -n` clean; the unquoted `${arr[@]+"${arr[@]}"}` idiom (550-552, 1069-1095) is the intended bash 3.2-safe empty-array form.
+- Tool overrides `RELEASE_XCODEBUILD`, `_AWS`, `_SECURITY`, `_CODESIGN`, `_PLUTIL`, `_UNZIP`, `_SHASUM`, `_GIT` defined at `release.sh:19-26` and used for archive (550), export (639), aws (1069-1095), security (417, 433, 495, 835), codesign (875-894), git (379-398, 1107).
+- Secrets not printed: team id, profile name, bucket logged as `[set]` (163-166, 321, 324, 458, 497, 599, 886); SENTRY_DSN "value not printed" (827). Informational: the raw `CODE_SIGN_IDENTITY` is echoed on a mismatch (`release.sh:327`); see the handoff's open risks.
+- Dry-run: `dry_run_cmd` (112-118); archive (560), export (593, 644), manifest (956), upload (1042) and preflight `verify.sh` (511) are guarded; test at `test-release.sh:1287-1300` asserts `all --dry-run` creates no build directory.
+- Bash 3.2: no `declare -A`, `mapfile`, `${var,,}`, `|&`, `coproc`.
+- Test harness never runs real archive, export, aws or signing: every such invocation sets the stub overrides (examples `test-release.sh:1657-1688`, 723, 2291-2351, 1112-1209, 1290-1294).
+- Informational, since fixed: the fixture still held a DerivedData folder name derived from this Mac's project path (see "Process finding" in `I6b1-6-docs-corrections.md`).
+
+**acceptance-reviewer — PASS** (K2 diff; one required correction, the stale K1 commit hash in the handoff, applied). Focus-list answers on the final script:
+- Preflight tools: loop at `release.sh:364-373`, each honoring its override. Git: clean tree 379-382, branch 386-390, origin match unless `--allow-unpushed` 394-405. Profile: found by name 411-429; ad hoc (`ProvisionedDevices`) 436; get-task-allow 442-445; bundle id 449-452; team 456-459; expiry and minimum days 463-479; device count 483-490. Identity: "Apple Distribution" plus team at 495-498, output masked 502-504.
+- ExportOptions.plist: written as XML 609-633 (reason for not using `plutil -insert` in the comment at 606-608), linted at 634.
+- manifest.plist: https enforced 949-951, written 968-1000, `plutil -lint` 1003-1005.
+- verify-ipa: bundle id 733, build 744, version 757, `API_BASE_URL` 767, `API_MODE` 777, `APP_ENVIRONMENT` 787, ATS keys 796-808, FaceID 813, SENTRY_DSN 823-828 (value not printed), embedded profile ad hoc / get-task-allow / expiry 838-869, codesign, team and entitlement 875-904.
+- Upload: needs `--yes` unless `--dry-run` (1019-1021); refuses overwrite via `s3 ls` pre-checks (1069-1075); re-verifies after upload (1094-1101); ledger written at 1112, only after success.
+- install-info: link and URLs 1145-1156, https guard 1141, device steps 1184-1188 (the recipe is now the confirmed one, 1169-1182).
+- Dry-run: archive and export go through `dry_run_cmd`; export plist only printed (593-603); manifest returns before writing (956-965); upload returns before any aws call or ledger write (1042-1058); verify-ipa returns when the IPA is absent (691-697); preflight skips `verify.sh` (511-512).
+- Not true of the original R1 text but true of the final script: see "Corrected in fix pass" above and the I6b-1b report.
+
 ## Not done or partial
 
-The five items in "Corrected in fix pass" were delivered with bugs in R1. All five are corrected in commit 0e46c4a (story G1).
+NOT RUN by the agents (the tests use stubs and fixtures only): `xcodebuild archive`, `xcodebuild -exportArchive`, the upload and any `aws` command, the real certificate lookup in a keychain (`security find-identity`), the real profile lookup in `~/Library/MobileDevice/Provisioning Profiles`, signing (`codesign` against a real identity), and any on-device install. `policy:set` is never run by the script and was not run by the agents.
+
+Also: the five items in "Corrected in fix pass" were delivered with bugs in R1; they were corrected in commit 0e46c4a (story G1). Later problems found in the final script (unanchored build-setting greps, an assumed IPA file name, an unconfirmed `policy:set` recipe) were corrected in the second fix pass, I6b-1b (see `Docs/reports/I6b1-5-anchored-lookups-fixture-and-recipe.md`). The test count in this report (45) is the R1 count; the current count is 92.
