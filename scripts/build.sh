@@ -1,7 +1,8 @@
 #!/bin/bash
 # Build the app for the simulator. Override the destination with DEST="...".
 cd "$(dirname "$0")/.." || exit 1
-DEST="${DEST:-platform=iOS Simulator,name=iPhone 17 Pro,OS=latest}"
+source "scripts/lib/destination.sh"
+DEST="$(resolve_destination)" || exit 1
 CONFIGURATION="${CONFIGURATION:-Debug}"
 LOG="/tmp/ct-build.log"
 xcodebuild build \
