@@ -43,13 +43,15 @@ private func makeSUT(
     repo: any AuthenticationRepository = MockAuthenticationRepository(),
     credentialStore: InMemoryBiometricCredentialStore = InMemoryBiometricCredentialStore(),
     biometricAuthenticator: FakeBiometricAuthenticator = FakeBiometricAuthenticator(),
-    enrollmentHistory: InMemoryEnrollmentHistory = InMemoryEnrollmentHistory()
+    enrollmentHistory enrollmentHistoryOverride: InMemoryEnrollmentHistory? = nil
 ) -> (
     sut: AuthenticationService,
     store: InMemoryBiometricCredentialStore,
     authenticator: FakeBiometricAuthenticator,
     history: InMemoryEnrollmentHistory
 ) {
+    // Built here, not as a default argument: default arguments are evaluated nonisolated.
+    let enrollmentHistory = enrollmentHistoryOverride ?? InMemoryEnrollmentHistory()
     let sessionManager = SessionManager(initialClearables: [])
     let sut = AuthenticationService(
         repository: repo,
