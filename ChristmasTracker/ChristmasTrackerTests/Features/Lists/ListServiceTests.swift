@@ -64,7 +64,7 @@ struct ListServiceTests {
         let service = ListService(repository: mockRepo, dataStore: dataStore)
         await service.loadLists()
         #expect(service.lists.count == 3)
-        #expect(service.isLoading == false)
+        #expect(service.isLoadingLists == false)
         #expect(service.error == nil)
         // Verify cached
         let cached = await dataStore.getLists()
@@ -238,15 +238,16 @@ struct ListServiceTests {
         #expect(service.lists.isEmpty)
     }
 
-    @Test("Failed repository fetch resets isLoading and sets error")
-    func testLoadListsFailureResetsIsLoading() async {
+    // REWRITTEN (I3b-K0): isLoading is replaced by isLoadingLists.
+    @Test("Failed repository fetch resets isLoadingLists and sets error")
+    func testLoadListsFailureResetsIsLoadingLists() async {
         let mockRepo = MockListRepository()
         await mockRepo.setDelay(0)
         await mockRepo.setShouldFail(true)
         let dataStore = ListDataStore()
         let service = ListService(repository: mockRepo, dataStore: dataStore)
         await service.loadLists()
-        #expect(service.isLoading == false)
+        #expect(service.isLoadingLists == false)
         #expect(service.error != nil)
     }
 
@@ -415,7 +416,7 @@ struct ListServiceTests {
         #expect(sut.repo.deleteListCount == 1)
         #expect(sut.repo.fetchListsCount == 1, "delete must not refetch")
         #expect(sut.service.error == nil)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 
     @Test("deleteList clears currentListDetail and the cached detail when it is that list")
@@ -483,7 +484,7 @@ struct ListServiceTests {
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a"])
         #expect(sut.service.error == .forbidden)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 
     // MARK: - ADDED (I3a-L2): create and update use the returned detail
@@ -513,7 +514,7 @@ struct ListServiceTests {
         let cachedDetail = await sut.store.getListDetail(id: "list-new")
         #expect(cachedDetail == created)
         #expect(sut.service.error == nil)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 
     @Test("a failed createList leaves lists unchanged, sets the typed error and rethrows")
@@ -530,7 +531,7 @@ struct ListServiceTests {
 
         #expect(sut.service.lists.map(\.id) == ["list-a"])
         #expect(sut.service.error == .duplicateRecipientYear)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 
     @Test("updateList uses the returned detail: fresh flags in lists, currentListDetail and the cache, no refetch")
@@ -563,7 +564,7 @@ struct ListServiceTests {
         let cachedLists = await sut.store.getLists()
         #expect(cachedLists.first { $0.id == "list-a" } == updated.asGiftList())
         #expect(sut.service.error == nil)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 
     @Test("updateList of a list that is not the current detail leaves currentListDetail alone")
@@ -588,17 +589,18 @@ struct ListServiceTests {
         let currentDetail = ListFixtures.listDetail(id: "list-a", name: "Name of list-a")
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
         sut.repo.enqueueFetchListDetail(.success(currentDetail))
-        sut.repo.enqueueUpdateList(.failure(ListError.archivedReadOnly))
+        // I3b-K0: archivedReadOnly is now a gone-list error (list dropped); forbidden keeps state.
+        sut.repo.enqueueUpdateList(.failure(ListError.forbidden))
         await sut.service.loadLists()
         await sut.service.loadListDetail(id: "list-a")
 
-        await #expect(throws: ListError.archivedReadOnly) {
+        await #expect(throws: ListError.forbidden) {
             try await sut.service.updateList(id: "list-a", UpdateListInput(name: "X", theme: nil, visibility: nil))
         }
 
         #expect(sut.service.currentListDetail == currentDetail)
         #expect(sut.service.lists.map(\.name) == ["Name of list-a"])
-        #expect(sut.service.error == .archivedReadOnly)
+        #expect(sut.service.error == .forbidden)
     }
 
     // MARK: - ADDED (I3a-L2): typed errors become the service error
@@ -619,7 +621,7 @@ struct ListServiceTests {
         #expect(sut.service.error == error)
         #expect(sut.service.error?.userMessage == error.userMessage)
         #expect(sut.service.lists.isEmpty)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isLoadingLists == false)
     }
 
     @Test("a typed repository error on refreshLists becomes the service error and keeps the lists", arguments: ListServiceTests.typedErrors)
@@ -647,7 +649,7 @@ struct ListServiceTests {
         #expect(sut.service.error == error)
         #expect(sut.service.error?.userMessage == error.userMessage)
         #expect(sut.service.currentListDetail == nil)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isLoadingDetail == false)
     }
 
     @Test("a typed repository error on createList, updateList and deleteList becomes the service error", arguments: ListServiceTests.typedErrors)
@@ -669,7 +671,7 @@ struct ListServiceTests {
 
         await #expect(throws: error) { try await sut.service.deleteList(id: "list-a") }
         #expect(sut.service.error == error)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 
     @Test("a successful call clears a previous error")
@@ -697,7 +699,7 @@ struct ListServiceTests {
 
         #expect(sut.service.error == nil)
         #expect(sut.service.lists.isEmpty)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isLoadingLists == false)
     }
 
     @Test("a CancellationError from the repository sets no error on refreshLists")
@@ -720,7 +722,7 @@ struct ListServiceTests {
 
         #expect(sut.service.error == nil)
         #expect(sut.service.currentListDetail == nil)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isLoadingDetail == false)
     }
 
     @Test("a CancellationError from the repository sets no error on create, update and delete")
@@ -736,7 +738,7 @@ struct ListServiceTests {
         _ = try? await sut.service.deleteList(id: "list-a")
 
         #expect(sut.service.error == nil)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isMutating == false)
     }
 }
 

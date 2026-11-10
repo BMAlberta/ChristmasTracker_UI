@@ -62,6 +62,12 @@ struct ListDetailView: View {
             } message: {
                 Text(ListDeleteConfirmation.message)
             }
+            .onChange(of: listService.goneListId) { _, goneId in
+                // This list is gone or read-only: leave. The service has already dropped it.
+                if ListScreenExit.shouldDismissDetail(goneListId: goneId, openListId: listId) {
+                    dismiss()
+                }
+            }
             .refreshable {
                 await load()
             }
@@ -76,7 +82,7 @@ struct ListDetailView: View {
     private func content(detail: ListDetail?, state: ListDetailState?) -> some View {
         if let detail, let state {
             detailContent(detail: detail, state: state)
-        } else if !listService.isLoading, let error = listService.error {
+        } else if !listService.isLoadingDetail, let error = listService.error {
             ListErrorBanner(
                 presentation: ListErrorPresentation(error),
                 onRetry: { Task { await load() } },

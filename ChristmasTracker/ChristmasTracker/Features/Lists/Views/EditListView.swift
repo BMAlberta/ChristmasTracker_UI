@@ -91,6 +91,11 @@ struct EditListView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Edit List")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: listService.goneListId) { _, goneId in
+                if ListScreenExit.shouldDismissEdit(goneListId: goneId, editedListId: list.id) {
+                    dismiss()
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -138,7 +143,12 @@ struct EditListView: View {
         } catch is CancellationError {
             return
         } catch {
-            errorPresentation = ListErrorPresentation((error as? ListError) ?? .server)
+            let listError = (error as? ListError) ?? .server
+            errorPresentation = ListErrorPresentation(listError)
+            // The list is gone or read-only: close the sheet; the detail screen leaves as well.
+            if ListScreenExit.shouldDismissEdit(for: listError) {
+                dismiss()
+            }
         }
     }
 }

@@ -17,7 +17,7 @@ actor NetworkItemRepository: ItemRepository {
     
     // MARK: - ItemRepository
     func fetchItems(listId: String) async throws -> [GiftItem] {
-        LogDebug("Fetching items for list \(listId)", category: .business)
+        LogDebug("Fetching items", category: .business)
         
         do {
             let itemResponse: ItemsResponse = try await apiClient.request(.get,
@@ -26,7 +26,7 @@ actor NetworkItemRepository: ItemRepository {
                                                                          forceRefresh: false,
                                                                          cacheScope: .items)
             
-            LogInfo("Fetched \(itemResponse.data.items.count) items for list \(listId)", category: .business)
+            LogInfo("Fetched \(itemResponse.data.items.count) items", category: .business)
             return itemResponse.data.items
         } catch let apiError as APIError {
             throw mapAPIError(apiError, operation: "fetch items")
@@ -34,7 +34,7 @@ actor NetworkItemRepository: ItemRepository {
     }
     
     func createItem(listId: String, _ request: CreateItemRequest) async throws -> GiftItem {
-        LogDebug("Creating item '\(request.name)' in list \(listId)", category: .business)
+        LogDebug("Creating item", category: .business)
         
         do {
             let itemResponse: ItemResponse = try await apiClient.request(.post,
@@ -43,7 +43,7 @@ actor NetworkItemRepository: ItemRepository {
                                                                          forceRefresh: true,
                                                                          cacheScope: .items)
             
-            LogInfo("Created item '\(itemResponse.data.name)' with ID \(itemResponse.data.id)")
+            LogInfo("Created item")
             return itemResponse.data
         } catch let error as APIError {
             throw mapAPIError(error, operation: "create item")
@@ -60,7 +60,7 @@ actor NetworkItemRepository: ItemRepository {
                                                                          forceRefresh: true,
                                                                          cacheScope: .items)
             
-            LogInfo("Updated item '\(itemResponse.data.name)'", category: .business)
+            LogInfo("Updated item", category: .business)
             return itemResponse.data
         } catch let error as APIError {
             throw mapAPIError(error, operation: "update item")

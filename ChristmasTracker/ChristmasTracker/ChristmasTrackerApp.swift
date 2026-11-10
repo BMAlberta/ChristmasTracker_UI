@@ -86,6 +86,7 @@ struct AppDependencies: Sendable {
     let authRepository: any AuthenticationRepository
     let listRepository: ListRepository
     let itemRepository: ItemRepository
+    let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
     // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
     // Client struct is only constructed in TrackerAPI-linked callers.
@@ -101,6 +102,7 @@ struct AppDependencies: Sendable {
             authRepository: MockAuthenticationRepository(),
             listRepository: MockListRepository(),
             itemRepository: MockItemRepository(),
+            appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
         )
     }
@@ -113,29 +115,45 @@ struct AppDependencies: Sendable {
             authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
             listRepository: GeneratedClientListRepository(client: generatedClient),
             itemRepository: NetworkItemRepository(apiClient: apiClient),
+            appVersionRepository: GeneratedClientAppVersionRepository(
+                client: generatedClient,
+                info: makeClientInfo(from: Bundle.main.infoDictionary)
+            ),
             trackerClient: generatedClient
         )
     }
 
-    /// Legacy entry-point retained for call-sites that have not been updated.
-    static func make() -> AppDependencies {
-        switch AppConfiguration.apiMode {
-        case .mock:
-            return makeMock()
-        case .real:
-            // Real mode requires generatedClient; fall back to mock if unavailable at this call-site.
-            // The composition root in ChristmasTrackerApp.init() builds the client first and calls
-            // makeReal(generatedClient:) directly; this fallback path is only hit by legacy callers.
-            let apiClient = NetworkAPIClient()
-            return AppDependencies(
-                apiClient: apiClient,
-                authRepository: MockAuthenticationRepository(),
-                // No generated client exists on this legacy path (auth is a mock here too), so
-                // it cannot reach the server; the real composition is makeReal(generatedClient:).
-                listRepository: MockListRepository(withMockData: false),
-                itemRepository: NetworkItemRepository(apiClient: apiClient),
-                trackerClient: nil
-            )
+    /// Build inert dependencies for the failed bootstrap: every repository call throws
+    /// ConfigurationError.clientUnavailable and returns nothing. No mock is constructed.
+    static func makeInert() -> AppDependencies {
+        AppDependencies(
+            apiClient: InertAPIClient(),
+            authRepository: InertAuthenticationRepository(),
+            listRepository: InertListRepository(),
+            itemRepository: InertItemRepository(),
+            appVersionRepository: InertAppVersionRepository(),
+            trackerClient: nil
+        )
+    }
+
+    /// Resolves the dependencies for the composition root. Real mode without a generated client
+    /// never falls back to mock data: the state is `.failed`, one category-only report is made,
+    /// and the dependencies are inert. Mock mode is unchanged.
+    static func resolve(
+        mode: APIMode,
+        generatedClient: (any APIProtocol)?,
+        reporter: any BootstrapFailureReporting
+    ) -> (state: BootstrapState, dependencies: AppDependencies) {
+        let state = resolveBootstrap(mode: mode, clientAvailable: generatedClient != nil)
+        switch state {
+        case .failed:
+            reporter.reportClientUnavailable(category: "client_unavailable")
+            return (state, makeInert())
+        case .ready:
+            if mode == .real, let client = generatedClient {
+                return (state, makeReal(generatedClient: client))
+            }
+            return (state, makeMock())
         }
     }
 }
@@ -167,7 +185,8 @@ nonisolated func buildGeneratedClient(
             sessionEndingHandler: sessionEndingHandler
         )
     } catch {
-        LogError("Failed to build TrackerAPI client: \(error)", category: .business)
+        // Constant category only: the thrown error can carry the URL.
+        LogError("Failed to build TrackerAPI client", category: .business)
         return nil
     }
 }
@@ -185,6 +204,7 @@ struct ChristmasTrackerApp: App {
     @State private var versionGate: VersionGate
     @State private var versionService: VersionService
     private let sessionManager: SessionManager
+    private let bootstrapState: BootstrapState
     private let privacyCoverCoordinator: PrivacyCoverCoordinator
     private let lockController: InactivityLockController
     private let lockCoordinator: LockCoordinator
@@ -253,13 +273,15 @@ struct ChristmasTrackerApp: App {
         )
         generatedClient = builtClient
 
-        // Build AppDependencies — real mode uses GeneratedClientAuthenticationRepository.
-        let dependencies: AppDependencies
-        if AppConfiguration.apiMode == .real, let client = builtClient {
-            dependencies = AppDependencies.makeReal(generatedClient: client)
-        } else {
-            dependencies = AppDependencies.makeMock()
-        }
+        // Build AppDependencies. Real mode without a client NEVER falls back to mock data: the
+        // state is .failed and the dependencies are inert (the body shows only the error screen).
+        let resolved = AppDependencies.resolve(
+            mode: AppConfiguration.apiMode,
+            generatedClient: builtClient,
+            reporter: SentryBootstrapFailureReporter()
+        )
+        let dependencies = resolved.dependencies
+        bootstrapState = resolved.state
         apiClient = dependencies.apiClient
 
         // List Service
@@ -302,17 +324,12 @@ struct ChristmasTrackerApp: App {
         seams.box.value = auth  // seam closures can now reach auth
         authService = auth
 
-        let vs = VersionService(repository: MockAppVersionRepository())
+        let vs = VersionService(repository: dependencies.appVersionRepository)
         _versionService = State(initialValue: vs)
 
-        // In real mode, start the version-check launch task.
-        if AppConfiguration.apiMode == .real, let client = builtClient {
-            let realRepo = GeneratedClientAppVersionRepository(
-                client: client,
-                info: makeClientInfo(from: Bundle.main.infoDictionary)
-            )
-            let realVS = VersionService(repository: realRepo)
-            _versionService = State(initialValue: realVS)
+        // In real mode with a client, start the version-check launch task.
+        if AppConfiguration.apiMode == .real, builtClient != nil {
+            let realVS = vs
             Task { @MainActor [weak realVS] in
                 await realVS?.check()
                 if let policy = realVS?.lastPolicy {
@@ -367,7 +384,17 @@ struct ChristmasTrackerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // A failed bootstrap shows ONLY the configuration error: no login, no tabs.
+            if let configurationError = ConfigurationErrorState.state(for: bootstrapState) {
+                ConfigurationErrorView(state: configurationError)
+            } else {
+                appContent
+            }
+        }
+    }
+
+    private var appContent: some View {
+        ContentView()
                 .environment(\.authenticationService, authService)
                 .environment(\.apiClient, apiClient)
                 .environment(\.listService, listService)
@@ -411,6 +438,5 @@ struct ChristmasTrackerApp: App {
                     )
                     .environment(\.authenticationService, authService)
                 }
-        }
     }
 }

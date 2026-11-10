@@ -96,7 +96,7 @@ final class ItemService {
             
             items = fetchedItems
             
-            LogInfo("Loaded \(fetchedItems.count) items for list \(listId)", category: .business)
+            LogInfo("Loaded \(fetchedItems.count) items", category: .business)
             
         } catch let itemError as ItemError {
             error = itemError
@@ -148,7 +148,7 @@ final class ItemService {
             
             items.append(newItem)
             
-            LogInfo("Created item '\(newItem.name)", category: .business)
+            LogInfo("Created item", category: .business)
         } catch {
             self.error = .createFailed
             LogError("Failed to create item: \(error)", category: .business)
@@ -174,7 +174,7 @@ final class ItemService {
                 items[index] = updatedItem
             }
             
-            LogInfo("Updated item '\(updatedItem)'", category: .business)
+            LogInfo("Updated item", category: .business)
         } catch {
             self.error = .updateFailed
             isLoading = false

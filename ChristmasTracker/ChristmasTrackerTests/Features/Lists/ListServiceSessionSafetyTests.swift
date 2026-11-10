@@ -132,7 +132,9 @@ struct ListServiceSessionSafetyTests {
         await task.value
 
         await expectCleared(sut)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isLoadingLists == false)
+        #expect(sut.service.isLoadingDetail == false)
+        #expect(sut.service.isMutating == false)
         #expect(sut.service.isRefreshing == false)
     }
 
@@ -182,7 +184,9 @@ struct ListServiceSessionSafetyTests {
         await task.value
 
         await expectCleared(sut)
-        #expect(sut.service.isLoading == false)
+        #expect(sut.service.isLoadingLists == false)
+        #expect(sut.service.isLoadingDetail == false)
+        #expect(sut.service.isMutating == false)
     }
 
     @Test("after a create held across teardown completes, the store holds no summary or detail and the next load fetches")

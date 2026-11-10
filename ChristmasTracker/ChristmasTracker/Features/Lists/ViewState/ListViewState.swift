@@ -274,6 +274,33 @@ nonisolated struct ListErrorPresentation: Equatable, Sendable {
     }
 }
 
+/// When the detail and edit screens leave because their list is gone or read-only. True exactly
+/// for the errors ListErrorPresentation marks with shouldLeaveScreen.
+nonisolated enum ListScreenExit {
+    static func shouldDismissDetail(for error: ListError?) -> Bool {
+        shouldLeave(error)
+    }
+
+    static func shouldDismissEdit(for error: ListError?) -> Bool {
+        shouldLeave(error)
+    }
+
+    /// The detail screen of `openListId` leaves when that very list was reported gone.
+    static func shouldDismissDetail(goneListId: String?, openListId: String) -> Bool {
+        goneListId == openListId
+    }
+
+    /// The edit sheet of `editedListId` leaves when that very list was reported gone.
+    static func shouldDismissEdit(goneListId: String?, editedListId: String) -> Bool {
+        goneListId == editedListId
+    }
+
+    private static func shouldLeave(_ error: ListError?) -> Bool {
+        guard let error else { return false }
+        return ListErrorPresentation(error).shouldLeaveScreen
+    }
+}
+
 /// Remembers which error the user dismissed. A new operation resets it, so the same failure
 /// after a new attempt is shown again.
 nonisolated struct ListErrorDismissal: Equatable, Sendable {
