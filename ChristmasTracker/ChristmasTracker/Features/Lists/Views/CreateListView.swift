@@ -7,11 +7,12 @@
 
 import SwiftUI
 
-/// Creates a list for yourself. Choosing another recipient belongs to the children package.
+/// Creates a list for yourself or for one of your children.
 struct CreateListView: View {
 
     @Environment(\.listService) private var listService
     @Environment(\.authenticationService) private var authenticationService
+    @Environment(\.childService) private var childService
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String = ""
@@ -19,11 +20,21 @@ struct CreateListView: View {
     @State private var visibility: ListVisibility = .private
     @State private var year: Int = Calendar.current.component(.year, from: Date())
 
+    @State private var selectedRecipientId: String?
+
     @State private var isCreating = false
     @State private var errorPresentation: ListErrorPresentation?
 
     private var validity: CreateFormValidity {
         ListFormValidation.validateCreate(name: name, theme: theme, year: year)
+    }
+
+    private var recipientOptions: CreateListRecipientOptions {
+        CreateListRecipientOptions(
+            currentUserId: authenticationService.currentUser?.id ?? "",
+            children: childService.children,
+            phase: childService.phase
+        )
     }
 
     var body: some View {
@@ -38,6 +49,7 @@ struct CreateListView: View {
                             onDismiss: { self.errorPresentation = nil }
                         )
                     }
+                    recipientCard
                     listDetailsCard
                     visibilityCard
                     yearCard
@@ -47,6 +59,12 @@ struct CreateListView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("New List")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                await childService.loadChildren()
+            }
+            .onChange(of: recipientOptions) { _, options in
+                selectedRecipientId = options.resolvedSelection(current: selectedRecipientId)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -75,6 +93,51 @@ struct CreateListView: View {
     }
 
     // MARK: - Cards
+
+    private var recipientCard: some View {
+        let options = recipientOptions
+        let selection = Binding<String>(
+            get: { options.resolvedSelection(current: selectedRecipientId) },
+            set: { selectedRecipientId = $0 }
+        )
+        return VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Text("Who is it for?")
+                .font(.appHeadline)
+                .foregroundStyle(Color.textPrimaryColor)
+
+            Picker("Recipient", selection: selection) {
+                ForEach(options.options) { option in
+                    Text(option.title).tag(option.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("createList.recipientPicker")
+
+            if options.showsLoading {
+                ProgressView()
+                    .accessibilityLabel("Loading your children")
+            }
+            if let message = options.errorMessage {
+                Text(message)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textMutedColor)
+                Button("Try Again") {
+                    Task { await childService.loadChildren() }
+                }
+                .font(.appHeadline)
+                .frame(minHeight: 44)
+                .accessibilityHint("Loads your children again")
+            }
+            if options.showsEmptyHint {
+                Text("Children you add in your profile can be chosen here.")
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textMutedColor)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
+    }
 
     private var listDetailsCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
@@ -175,12 +238,12 @@ struct CreateListView: View {
     // MARK: - Actions
 
     private func createList() async {
-        // A list is created for yourself: the recipient is the signed-in user.
-        guard let recipientId = authenticationService.currentUser?.id else {
+        guard authenticationService.currentUser?.id != nil else {
             errorPresentation = ListErrorPresentation(.sessionEnded)
             return
         }
         guard validity.isValid else { return }
+        let recipientId = recipientOptions.resolvedSelection(current: selectedRecipientId)
 
         isCreating = true
         errorPresentation = nil

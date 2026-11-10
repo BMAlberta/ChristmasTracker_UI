@@ -54,10 +54,10 @@ nonisolated func mapListSummary(_ summary: Components.Schemas.ListSummary) -> Gi
 }
 
 nonisolated func mapListDetail(_ detail: Components.Schemas.ListDetail) -> ListDetail {
-    mapListSummary(detail.value1).asDetail(members: detail.value2.members.map { $0.map(mapListMember) })
+    mapListSummary(detail.value1).asDetail(members: detail.value2.members.map { $0.map(mapMemberSummary) })
 }
 
-nonisolated private func mapListMember(_ member: Components.Schemas.MemberSummary) -> ListMember {
+nonisolated func mapMemberSummary(_ member: Components.Schemas.MemberSummary) -> ListMember {
     ListMember(
         id: member.id,
         userId: member.userId,

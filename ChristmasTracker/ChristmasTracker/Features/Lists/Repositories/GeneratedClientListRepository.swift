@@ -132,15 +132,22 @@ nonisolated final class GeneratedClientListRepository: ListRepository, Sendable 
     @Instrumented
     func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail {
         do {
-            // Only the non-nil fields are sent; status and coOwnerEmail never are. An all-nil
-            // input therefore sends an empty JSON object body ({}), which the server accepts as a
-            // no-op update.
+            // Only the non-nil fields are sent; status never is. An all-nil input therefore sends
+            // an empty JSON object body ({}), which the server accepts as a no-op update.
+            // The key is only present for .set; clearing is the separate removeCoOwner call.
+            let coOwnerEmail: String?
+            switch input.coOwner {
+            case .unchanged:
+                coOwnerEmail = nil
+            case .set(let email):
+                coOwnerEmail = email
+            }
             let body = Operations.UpdateList.Input.Body.JsonPayload(
                 name: input.name,
                 theme: input.theme,
                 visibility: input.visibility.map(wireVisibility),
                 status: nil,
-                coOwnerEmail: nil
+                coOwnerEmail: coOwnerEmail
             )
             let output = try await client.updateList(
                 Operations.UpdateList.Input(path: .init(id: id), headers: .init(), body: .json(body))
@@ -150,6 +157,39 @@ nonisolated final class GeneratedClientListRepository: ListRepository, Sendable 
                 return mapListDetail(try response.body.json.data)
             case .badRequest(let response):
                 throw validationFailure(response.body)
+            case .unauthorized:
+                throw ListError.unauthorized
+            case .forbidden:
+                throw ListError.forbidden
+            case .notFound(let response):
+                // 404 MEMBER_EMAIL_NOT_FOUND (4009): no account for the co-owner email.
+                throw notFoundFailure(response.body, memberEmailCode: true)
+            case .unprocessableContent:
+                // 422 CANNOT_EDIT_ARCHIVED_LIST: an archived list is read-only.
+                throw ListError.archivedReadOnly
+            case .tooManyRequests:
+                throw ListError.rateLimited(retryAfter: 0)
+            case .internalServerError:
+                throw ListError.server
+            case .undocumented(let statusCode, _):
+                throw undocumentedFailure(statusCode)
+            }
+        } catch {
+            throw listFailure(error)
+        }
+    }
+
+    // MARK: - Remove co-owner
+
+    @Instrumented
+    func removeCoOwner(listId: String) async throws -> ListDetail {
+        do {
+            let output = try await client.removeCoOwner(
+                Operations.RemoveCoOwner.Input(path: .init(id: listId), headers: .init())
+            )
+            switch output {
+            case .ok(let response):
+                return mapListDetail(try response.body.json.data)
             case .unauthorized:
                 throw ListError.unauthorized
             case .forbidden:
@@ -212,22 +252,35 @@ nonisolated private func wireVisibility(_ value: ListVisibility) -> Components.S
 
 // MARK: - Failure mapping
 
+/// 404 on an operation that can also report MEMBER_EMAIL_NOT_FOUND (4009), or on removing a
+/// member that can report MEMBERSHIP_NOT_FOUND (4006). Any other 404 is a plain not-found.
+nonisolated func notFoundFailure(_ body: Components.Responses.NotFoundError.Body, memberEmailCode: Bool) -> ListError {
+    let error = (try? body.json)?.error
+    if memberEmailCode, error?.errorCode == "MEMBER_EMAIL_NOT_FOUND" || error?.code == 4009 {
+        return .memberEmailNotFound
+    }
+    if !memberEmailCode, error?.errorCode == "MEMBERSHIP_NOT_FOUND" || error?.code == 4006 {
+        return .membershipNotFound
+    }
+    return .notFound
+}
+
 /// 400: the documented message text from the envelope, or a plain fallback.
-nonisolated private func validationFailure(_ body: Components.Responses.ValidationError.Body) -> ListError {
+nonisolated func validationFailure(_ body: Components.Responses.ValidationError.Body) -> ListError {
     let message = (try? body.json)?.error.message ?? ""
     return .validation(message: message)
 }
 
 /// A status the contract does not document: 5xx is a server failure, anything else is a
 /// response the app cannot interpret.
-nonisolated private func undocumentedFailure(_ statusCode: Int) -> ListError {
+nonisolated func undocumentedFailure(_ statusCode: Int) -> ListError {
     statusCode >= 500 ? .server : .invalidResponse
 }
 
 /// Turns anything thrown while calling the client into a ListError, except cancellation, which
 /// is passed through unchanged. The OpenAPI runtime wraps transport, middleware and decoding
 /// errors in `ClientError`; the root cause is its `underlyingError`.
-nonisolated private func listFailure(_ error: any Error) -> any Error {
+nonisolated func listFailure(_ error: any Error) -> any Error {
     if let listError = error as? ListError {
         return listError
     }

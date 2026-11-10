@@ -28,6 +28,11 @@ nonisolated protocol ListRepository: Repository {
     /// - Returns: ListDetail
     func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail
 
+    /// Clear the co-owner of a list (DELETE /lists/{id}/co-owner). Idempotent on the server.
+    /// - Parameter listId: ID of the list.
+    /// - Returns: the updated ListDetail with no co-owner.
+    func removeCoOwner(listId: String) async throws -> ListDetail
+
     /// Delete a list
     /// - Parameter id: ID of the list to be deleted.
     func deleteList(id: String) async throws
@@ -51,6 +56,12 @@ nonisolated enum ListError: Error, LocalizedError, Equatable, Sendable {
     case network
     case invalidResponse
     case server
+    /// 404 MEMBER_EMAIL_NOT_FOUND (4009): no account for that email (adding a member or co-owner).
+    case memberEmailNotFound
+    /// 409 MEMBERSHIP_ALREADY_EXISTS (5004).
+    case alreadyMember
+    /// 404 MEMBERSHIP_NOT_FOUND (4006).
+    case membershipNotFound
 
     var userMessage: String {
         switch self {
@@ -83,6 +94,12 @@ nonisolated enum ListError: Error, LocalizedError, Equatable, Sendable {
             return "The server sent a response the app could not read."
         case .server:
             return "Something went wrong on the server. Please try again later."
+        case .memberEmailNotFound:
+            return "No account was found for that email address."
+        case .alreadyMember:
+            return "That person is already a member of this list."
+        case .membershipNotFound:
+            return "That person is no longer a member of this list."
         }
     }
 

@@ -14,6 +14,7 @@ struct ProfileView: View {
 
     @State private var showLogoutConfirmation = false
     @State private var toggleModel: ProfileBiometricToggleModel?
+    @State private var showsChildren = false
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,10 @@ struct ProfileView: View {
                         )
                     }
 
+                    ChildrenSectionView {
+                        showsChildren = true
+                    }
+
                     AboutSectionView(
                         appVersion: appVersion,
                         onHelp: {
@@ -59,6 +64,9 @@ struct ProfileView: View {
             }
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Profile")
+            .navigationDestination(isPresented: $showsChildren) {
+                ChildrenView()
+            }
             .task {
                 authService.refreshBiometricAvailability()
                 if toggleModel == nil {
@@ -188,6 +196,28 @@ private struct SettingsSectionView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+private struct ChildrenSectionView: View {
+
+    let onChildren: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SectionHeaderView(title: "Family")
+
+            CardContainerView {
+                SettingsRowView(
+                    icon: "person.2",
+                    title: "Children",
+                    subtitle: "Manage the children you make lists for",
+                    showChevron: true,
+                    action: onChildren
+                )
+                .accessibilityIdentifier("profile.childrenRow")
             }
         }
     }

@@ -423,6 +423,7 @@ The same capability flags appear on both `ListSummary` and `ListDetail`.
 | Add a member | `POST /lists/{id}/members` | `canManageMembers` | Owner, co-owner | `false`; the server still accepts the call |
 | Remove another member | `DELETE /lists/{id}/members/{userId}` | `canManageMembers` | Owner, co-owner | `false`; the server still accepts the call |
 | Set or clear the co-owner | `PATCH /lists/{id}` with `coOwnerEmail` | `canSetCoOwner` | Owner only | `false`; the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST` |
+| Clear the co-owner (L15) | `DELETE /lists/{id}/co-owner` | `canSetCoOwner` | Owner only | `false`; the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST` |
 | Leave the list | `DELETE /lists/{id}/members/{your userId}` | `canLeaveList` | ACTIVE MEMBER-role or VIEWER-role member | unchanged; allowed on a list of any status |
 
 Archived lists are read-only in the app. The server refuses edits to an archived list with 422, but still accepts delete and member changes, so the flags are deliberately stricter than the server there. Deleting archives, so a deleted list is an ARCHIVED list. The server enforces every action regardless of the flags.  
@@ -544,7 +545,20 @@ Content-Type: application/json
 ```
 
 The server resolves the email to a user ID server-side. If the email is not found, `404 MEMBER_EMAIL_NOT_FOUND`.  
+Sending `coOwnerEmail: null` on `PATCH /lists/{id}` clears the co-owner; clients whose generated code cannot send an explicit null use `DELETE /lists/{id}/co-owner` instead (`canSetCoOwner` is the flag that says whether to show the control).  
 Source: `__tests__/integration/coowner-email.test.ts`
+
+**Clear the co-owner (L15):**
+
+```
+DELETE /tracker/v2/lists/<listId>/co-owner
+Authorization: Bearer <token>
+```
+
+No body. Only the list owner can call it (`canSetCoOwner` is `true`); a co-owner, a member or a PUBLIC non-member gets 403 (a co-owner gets `FORBIDDEN`), and a non-member of a hidden list gets `404 LIST_NOT_FOUND`. It follows the same rules as `PATCH /lists/{id}` with `coOwnerEmail: null`.  
+Response (200): the updated `ListDetail` with `coOwner: null`. When the list has no co-owner the call still returns 200 with the unchanged `ListDetail` and records nothing.  
+On an ARCHIVED list the server refuses with `422 CANNOT_EDIT_ARCHIVED_LIST`.  
+Source: `src/routes/list.routes.ts`, `__tests__/integration/list-remove-co-owner.test.ts`
 
 ### 7.5 Add an Item
 

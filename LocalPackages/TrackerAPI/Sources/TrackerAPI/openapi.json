@@ -4301,6 +4301,78 @@
         }
       }
     },
+    "/tracker/v2/lists/{id}/co-owner": {
+      "delete": {
+        "summary": "Clear the list's co-owner",
+        "operationId": "removeCoOwner",
+        "description": "Clears the list's co-owner. This is the same as PATCH /lists/{id} with coOwnerEmail null. Owner only; succeeds without a change when the list has no co-owner.",
+        "tags": [
+          "Lists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Co-owner cleared (or none was set)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ListDetail"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/tracker/v2/purchases/{id}": {
       "get": {
         "summary": "Get purchase by ID",

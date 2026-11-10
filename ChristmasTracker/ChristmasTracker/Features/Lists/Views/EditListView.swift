@@ -19,8 +19,13 @@ struct EditListView: View {
     @State private var theme: String
     @State private var visibility: ListVisibility
 
+    @State private var coOwnerEmail = ""
+    @State private var showsRemoveConfirmation = false
+    @State private var isRemoving = false
+
     @State private var isSaving = false
     @State private var errorPresentation: ListErrorPresentation?
+    @State private var failedAction: EditFailedAction?
 
     init(list: ListDetail) {
         self.list = list
@@ -33,12 +38,45 @@ struct EditListView: View {
         ListFormValidation.validateEdit(name: name, theme: theme)
     }
 
+    /// The snapshot, or the fresh detail the service holds after a co-owner removal.
+    private var resolvedDetail: ListDetail {
+        EditListDetailSource.resolve(snapshot: list, live: listService.currentListDetail)
+    }
+
+    private var coOwnerState: CoOwnerSectionState {
+        CoOwnerSectionState(detail: resolvedDetail)
+    }
+
+    private var hasCoOwnerEmail: Bool {
+        !coOwnerEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The co-owner part of the one update: a typed address (only when the flag offers the change)
+    /// or a removal (only when offered), otherwise unchanged.
+    private var coOwnerChange: CoOwnerChange {
+        if coOwnerState.showsChange, hasCoOwnerEmail {
+            return CoOwnerFormValidation.makeChange(email: coOwnerEmail) ?? .unchanged
+        }
+        return .unchanged
+    }
+
+    private var coOwnerInputAllowsSave: Bool {
+        guard coOwnerState.showsChange, hasCoOwnerEmail else { return true }
+        return CoOwnerFormValidation.canSubmit(email: coOwnerEmail, isMutating: listService.isMutating)
+    }
+
     private var pendingInput: UpdateListInput? {
-        ListFormValidation.makeUpdateInput(original: list, name: name, theme: theme, visibility: visibility)
+        ListFormValidation.makeUpdateInput(
+            original: list,
+            name: name,
+            theme: theme,
+            visibility: visibility,
+            coOwner: coOwnerChange
+        )
     }
 
     private var canSave: Bool {
-        validity.isValid && pendingInput != nil && !isSaving
+        validity.isValid && coOwnerInputAllowsSave && pendingInput != nil && !isSaving && !listService.isMutating
     }
 
     var body: some View {
@@ -48,9 +86,19 @@ struct EditListView: View {
                     Section {
                         ListErrorBanner(
                             presentation: errorPresentation,
-                            onRetry: { Task { await saveChanges() } },
+                            onRetry: {
+                                Task {
+                                    switch EditRetry.action(after: failedAction) {
+                                    case .removeCoOwner: await removeCoOwner()
+                                    case .save, .none: await saveChanges()
+                                    }
+                                }
+                            },
                             onLeave: { dismiss() },
-                            onDismiss: { self.errorPresentation = nil }
+                            onDismiss: {
+                                self.errorPresentation = nil
+                                failedAction = nil
+                            }
                         )
                     }
                 }
@@ -76,6 +124,7 @@ struct EditListView: View {
                     LabeledContent("Recipient", value: list.recipientName)
                         .foregroundStyle(Color.textMutedColor)
                 }
+                coOwnerSection
                 Section("Privacy") {
                     Picker("Visibility", selection: $visibility) {
                         ForEach(ListFormValidation.selectableVisibilities, id: \.self) { option in
@@ -91,6 +140,23 @@ struct EditListView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Edit List")
             .navigationBarTitleDisplayMode(.inline)
+            .confirmationDialog(
+                CoOwnerRemoveConfirmation.title(displayName: coOwnerState.currentCoOwnerName ?? "co-owner"),
+                isPresented: $showsRemoveConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(CoOwnerRemoveConfirmation.confirmButtonTitle, role: .destructive) {
+                    Task { await removeCoOwner() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(CoOwnerRemoveConfirmation.message(displayName: coOwnerState.currentCoOwnerName ?? "co-owner"))
+            }
+            .onChange(of: listService.goneListId) { _, goneId in
+                if ListScreenExit.shouldDismissEdit(goneListId: goneId, editedListId: list.id) {
+                    dismiss()
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -118,6 +184,43 @@ struct EditListView: View {
         }
     }
 
+    @ViewBuilder
+    private var coOwnerSection: some View {
+        let state = coOwnerState
+        if state.showsChange || state.currentCoOwnerName != nil {
+            Section("Co-owner") {
+                if let name = state.currentCoOwnerName {
+                    LabeledContent("Current co-owner", value: name)
+                        .foregroundStyle(Color.textMutedColor)
+                }
+                if state.showsChange {
+                    TextField("Change co-owner email", text: $coOwnerEmail)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("editList.coOwnerEmailField")
+                    if hasCoOwnerEmail, !CoOwnerFormValidation.isValidEmail(coOwnerEmail) {
+                        problemText("Enter a valid email address.")
+                    }
+                }
+                if state.showsRemove {
+                    Button(role: .destructive) {
+                        showsRemoveConfirmation = true
+                    } label: {
+                        Text("Remove co-owner")
+                    }
+                    .frame(minHeight: 44)
+                    .disabled(!CoOwnerRemoval.canRemove(isMutating: listService.isMutating, isSaving: isSaving || isRemoving))
+                    .accessibilityLabel("Remove co-owner")
+                    .accessibilityHint("Asks you to confirm before removing the co-owner from this list.")
+                    .accessibilityIdentifier("editList.removeCoOwnerButton")
+                }
+            }
+        }
+    }
+
     private func problemText(_ text: String) -> some View {
         Text(text)
             .font(.appCaption1)
@@ -126,10 +229,30 @@ struct EditListView: View {
 
     // MARK: - Actions
 
+    private func removeCoOwner() async {
+        isRemoving = true
+        errorPresentation = nil
+        failedAction = nil
+        defer { isRemoving = false }
+
+        do {
+            try await listService.removeCoOwner(listId: list.id)
+        } catch {
+            guard let presentation = CoOwnerRemoval.presentation(for: error) else { return }
+            errorPresentation = presentation
+            failedAction = .removeCoOwner
+            let listError = (error as? ListError) ?? .server
+            if ListScreenExit.shouldDismissEdit(for: listError) {
+                dismiss()
+            }
+        }
+    }
+
     private func saveChanges() async {
         guard validity.isValid, let input = pendingInput else { return }
         isSaving = true
         errorPresentation = nil
+        failedAction = nil
         defer { isSaving = false }
 
         do {
@@ -138,7 +261,13 @@ struct EditListView: View {
         } catch is CancellationError {
             return
         } catch {
-            errorPresentation = ListErrorPresentation((error as? ListError) ?? .server)
+            let listError = (error as? ListError) ?? .server
+            errorPresentation = ListErrorPresentation(listError)
+            failedAction = .save
+            // The list is gone or read-only: close the sheet; the detail screen leaves as well.
+            if ListScreenExit.shouldDismissEdit(for: listError) {
+                dismiss()
+            }
         }
     }
 }

@@ -33,7 +33,7 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
     // MARK: - C1 Primary Interface
 
     func login(email: String, password: String) async throws -> AuthSession {
-        LogDebug("Mock login: \(email)", category: .auth)
+        LogDebug("Mock login", category: .auth)
 
         try await Task.sleep(for: .seconds(loginDelay))
 
@@ -60,7 +60,7 @@ nonisolated final class MockAuthenticationRepository: AuthenticationRepository, 
     }
 
     func register(email: String, password: String, firstName: String, lastName: String, registrationCode: String) async throws -> AuthSession {
-        LogDebug("Mock register: \(email)", category: .auth)
+        LogDebug("Mock register", category: .auth)
 
         try await Task.sleep(for: .seconds(loginDelay))
 

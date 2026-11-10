@@ -218,7 +218,8 @@ nonisolated enum ListFormValidation {
         original: ListDetail,
         name: String,
         theme: String,
-        visibility: ListVisibility
+        visibility: ListVisibility,
+        coOwner: CoOwnerChange = .unchanged
     ) -> UpdateListInput? {
         let newName = trimmed(name)
         let newTheme = trimmed(theme)
@@ -228,8 +229,10 @@ nonisolated enum ListFormValidation {
         let themeChange: String? = newTheme != oldTheme ? newTheme : nil
         let visibilityChange: ListVisibility? = visibility != original.visibility ? visibility : nil
 
-        guard nameChange != nil || themeChange != nil || visibilityChange != nil else { return nil }
-        return UpdateListInput(name: nameChange, theme: themeChange, visibility: visibilityChange)
+        guard nameChange != nil || themeChange != nil || visibilityChange != nil || coOwner != .unchanged else {
+            return nil
+        }
+        return UpdateListInput(name: nameChange, theme: themeChange, visibility: visibilityChange, coOwner: coOwner)
     }
 
     private static func trimmed(_ text: String) -> String {
@@ -261,16 +264,45 @@ nonisolated struct ListErrorPresentation: Equatable, Sendable {
         case .network, .server, .rateLimited, .invalidResponse:
             isRetryable = true
         case .forbidden, .notFound, .recipientNotFound, .duplicateRecipientYear, .archivedReadOnly,
-             .validation, .unauthorized, .sessionEnded:
+             .validation, .unauthorized, .sessionEnded, .memberEmailNotFound, .alreadyMember,
+             .membershipNotFound:
             isRetryable = false
         }
         switch error {
         case .notFound, .archivedReadOnly:
             shouldLeaveScreen = true
         case .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
-             .unauthorized, .sessionEnded, .network, .invalidResponse, .server:
+             .unauthorized, .sessionEnded, .network, .invalidResponse, .server, .memberEmailNotFound,
+             .alreadyMember, .membershipNotFound:
             shouldLeaveScreen = false
         }
+    }
+}
+
+/// When the detail and edit screens leave because their list is gone or read-only. True exactly
+/// for the errors ListErrorPresentation marks with shouldLeaveScreen.
+nonisolated enum ListScreenExit {
+    static func shouldDismissDetail(for error: ListError?) -> Bool {
+        shouldLeave(error)
+    }
+
+    static func shouldDismissEdit(for error: ListError?) -> Bool {
+        shouldLeave(error)
+    }
+
+    /// The detail screen of `openListId` leaves when that very list was reported gone.
+    static func shouldDismissDetail(goneListId: String?, openListId: String) -> Bool {
+        goneListId == openListId
+    }
+
+    /// The edit sheet of `editedListId` leaves when that very list was reported gone.
+    static func shouldDismissEdit(goneListId: String?, editedListId: String) -> Bool {
+        goneListId == editedListId
+    }
+
+    private static func shouldLeave(_ error: ListError?) -> Bool {
+        guard let error else { return false }
+        return ListErrorPresentation(error).shouldLeaveScreen
     }
 }
 

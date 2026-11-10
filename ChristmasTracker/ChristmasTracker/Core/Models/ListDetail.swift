@@ -114,7 +114,7 @@ nonisolated struct ListDetail: Identifiable, Equatable, Sendable {
 
 // MARK: - Members
 
-nonisolated enum ListMemberRole: String, Equatable, Sendable {
+nonisolated enum ListMemberRole: String, Equatable, Sendable, CaseIterable {
     case member
     case viewer
 
@@ -162,4 +162,13 @@ nonisolated struct UpdateListInput: Equatable, Sendable {
     let name: String?
     let theme: String?
     let visibility: ListVisibility?
+    /// Defaults to `.unchanged`, so existing call sites keep compiling.
+    let coOwner: CoOwnerChange
+
+    init(name: String?, theme: String?, visibility: ListVisibility?, coOwner: CoOwnerChange = .unchanged) {
+        self.name = name
+        self.theme = theme
+        self.visibility = visibility
+        self.coOwner = coOwner
+    }
 }

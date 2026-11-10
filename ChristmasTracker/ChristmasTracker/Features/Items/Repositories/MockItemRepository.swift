@@ -37,7 +37,7 @@ actor MockItemRepository: ItemRepository {
         }
         
         let listItems = items.filter { $0.listId == listId }
-        LogInfo("Mock: Fetched \(listItems.count) items for list \(listId)", category: .business)
+        LogInfo("Mock: Fetched \(listItems.count) items", category: .business)
         return listItems
     }
     
@@ -69,7 +69,7 @@ actor MockItemRepository: ItemRepository {
         nextId += 1
         items.append(newItem)
         
-        LogInfo("Mock: Created item '\(newItem.name)'", category: .business)
+        LogInfo("Mock: Created item", category: .business)
         
         return newItem
     }
@@ -104,7 +104,7 @@ actor MockItemRepository: ItemRepository {
                                purchases: nil,
                                totalQuantityPurchased: nil)
         items[index] = updated
-        LogInfo("Mock: Updated item '\(updated.name)'", category: .business)
+        LogInfo("Mock: Updated item", category: .business)
         return updated
     }
     
@@ -121,7 +121,7 @@ actor MockItemRepository: ItemRepository {
         
         let deleted = items.remove(at: index)
         
-        LogInfo("Mock: Deleted item '\(deleted.name)'", category: .business)
+        LogInfo("Mock: Deleted item", category: .business)
     }
     
     func fetchItemDetail(id: String) async throws -> GiftItem {

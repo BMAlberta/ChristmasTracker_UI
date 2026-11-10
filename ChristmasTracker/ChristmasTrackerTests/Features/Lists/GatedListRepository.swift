@@ -27,6 +27,7 @@ final class GatedListRepository: ListRepository {
         case createList
         case updateList(String)
         case deleteList(String)
+        case removeCoOwner(String)
     }
 
     struct Step<Value: Sendable>: Sendable {
@@ -38,6 +39,9 @@ final class GatedListRepository: ListRepository {
 
     var honorsCancellation = false
 
+    /// I3b-M2: optional shared log so a test can assert the order of calls across repositories.
+    var callLog: RepositoryCallLog?
+
     // MARK: Recorded calls
 
     private(set) var fetchListsCount = 0
@@ -45,6 +49,8 @@ final class GatedListRepository: ListRepository {
     private(set) var createListCount = 0
     private(set) var updateListCount = 0
     private(set) var deleteListCount = 0
+    private(set) var removeCoOwnerCount = 0
+    private(set) var removedCoOwnerListIds: [String] = []
     private(set) var createdInputs: [CreateListInput] = []
     private(set) var updatedInputs: [UpdateListInput] = []
 
@@ -55,6 +61,7 @@ final class GatedListRepository: ListRepository {
     private var createSteps: [Step<ListDetail>] = []
     private var updateSteps: [Step<ListDetail>] = []
     private var deleteSteps: [Step<Void>] = []
+    private var removeCoOwnerSteps: [Step<ListDetail>] = []
 
     func enqueueFetchLists(_ outcome: Result<[GiftList], any Error>, held: Bool = false) {
         listSteps.append(Step(outcome: outcome, held: held))
@@ -74,6 +81,10 @@ final class GatedListRepository: ListRepository {
 
     func enqueueDeleteList(_ outcome: Result<Void, any Error>, held: Bool = false) {
         deleteSteps.append(Step(outcome: outcome, held: held))
+    }
+
+    func enqueueRemoveCoOwner(_ outcome: Result<ListDetail, any Error>, held: Bool = false) {
+        removeCoOwnerSteps.append(Step(outcome: outcome, held: held))
     }
 
     // MARK: Handshake
@@ -149,6 +160,7 @@ final class GatedListRepository: ListRepository {
 
     @MainActor func fetchListDetail(id: String) async throws -> ListDetail {
         fetchListDetailCount += 1
+        callLog?.record("fetchListDetail:\(id)")
         let step = detailSteps.isEmpty
             ? Step<ListDetail>(outcome: .failure(ListError.server), held: false)
             : detailSteps.removeFirst()
@@ -169,6 +181,7 @@ final class GatedListRepository: ListRepository {
     @MainActor func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail {
         updateListCount += 1
         updatedInputs.append(input)
+        callLog?.record("updateList:\(id)")
         let step = updateSteps.isEmpty
             ? Step<ListDetail>(outcome: .failure(ListError.server), held: false)
             : updateSteps.removeFirst()
@@ -183,6 +196,17 @@ final class GatedListRepository: ListRepository {
             : deleteSteps.removeFirst()
         if step.held { try await hold(.deleteList(id)) }
         try step.outcome.get()
+    }
+
+    @MainActor func removeCoOwner(listId: String) async throws -> ListDetail {
+        removeCoOwnerCount += 1
+        removedCoOwnerListIds.append(listId)
+        callLog?.record("removeCoOwner:\(listId)")
+        let step = removeCoOwnerSteps.isEmpty
+            ? Step<ListDetail>(outcome: .failure(ListError.server), held: false)
+            : removeCoOwnerSteps.removeFirst()
+        if step.held { try await hold(.removeCoOwner(listId)) }
+        return try step.outcome.get()
     }
 }
 

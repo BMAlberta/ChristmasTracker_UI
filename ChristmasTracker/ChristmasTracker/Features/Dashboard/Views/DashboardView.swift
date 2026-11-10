@@ -82,7 +82,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var content: some View {
-        if listService.isLoading && listService.lists.isEmpty {
+        if listService.isLoadingLists && listService.lists.isEmpty {
             loadingView
         } else if let error = visibleError, listService.lists.isEmpty {
             ListErrorBanner(

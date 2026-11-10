@@ -173,6 +173,9 @@ struct ListSourceScanTests {
         scoped += sources.files(inDirectory: "Features/Lists")
         scoped += sources.files(inDirectory: "Features/Dashboard")
         scoped += sources.files(inDirectory: "PreviewContent")
+        // Story I3b-M1: the children and profile features are scanned too (added, nothing removed).
+        scoped += sources.files(inDirectory: "Features/Children")
+        scoped += sources.files(inDirectory: "Features/Profile")
         let modelFiles = ["GiftList", "ListDetail", "ListCapabilities", "ListPermissions", "ListRoleBadge"]
         var missing: [String] = []
         for name in modelFiles {

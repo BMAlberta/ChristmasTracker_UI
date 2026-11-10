@@ -13,6 +13,11 @@ actor MockListRepository: ListRepository {
     private var lists: [ListDetail] = []
     private var nextId = 1
 
+    // Shared with MockMemberRepository and MockChildRepository, which work on this one instance.
+    private var children: [Child] = []
+    private var nextChildNumber = 1
+    private var nextMemberNumber = 1
+
     // MARK: - Configuration
     var shouldFail: Bool = false
     var delay: TimeInterval = 0.5
@@ -28,6 +33,9 @@ actor MockListRepository: ListRepository {
             lists = MockListData.allScenarios
         } else if withMockData {
             lists = MockListData.allLists
+        }
+        if !lists.isEmpty {
+            children = [MockListData.seedChild]
         }
     }
 
@@ -74,9 +82,12 @@ actor MockListRepository: ListRepository {
         }
 
         let isSelfList = input.recipientId == MockListData.currentUser.id
+        // A registered child is shown by name; any other id is an unnamed recipient (the mock does
+        // not reject unknown recipients). Only a list for yourself is blind.
+        let knownChild = children.first(where: { $0.id == input.recipientId })
         let recipient = isSelfList
             ? MockListData.currentUser
-            : ListPerson(id: input.recipientId, displayName: "New Recipient")
+            : ListPerson(id: input.recipientId, displayName: knownChild?.shownName ?? "New Recipient")
         let now = Date()
 
         // The creator owns the new list. A list for yourself is blind: no counts, no gift activity.
@@ -120,9 +131,48 @@ actor MockListRepository: ListRepository {
             throw ListError.notFound
         }
 
-        let updated = lists[index].applying(input, at: Date())
+        var updated = lists[index].applying(input, at: Date())
+        if case .set(let email) = input.coOwner {
+            guard updated.capabilities.canSetCoOwner else {
+                throw ListError.forbidden
+            }
+            guard let person = MockListData.person(forEmail: email) else {
+                throw ListError.memberEmailNotFound
+            }
+            // The owner and the recipient cannot be the co-owner.
+            guard person.id != updated.owner.id, person.id != updated.recipient.id else {
+                throw ListError.forbidden
+            }
+            updated = updated.replacing(coOwner: person)
+        }
         lists[index] = updated
 
+        return updated
+    }
+
+    // Mock repository: intentionally uninstrumented.
+    func removeCoOwner(listId: String) async throws -> ListDetail {
+        LogDebug("Mock removeCoOwner", category: .business)
+
+        try await Task.sleep(for: .seconds(delay))
+
+        if shouldFail {
+            throw ListError.server
+        }
+
+        guard let index = lists.firstIndex(where: { $0.id == listId }) else {
+            throw ListError.notFound
+        }
+        let list = lists[index]
+        guard list.capabilities.canSetCoOwner else {
+            throw ListError.forbidden
+        }
+        // Idempotent: with no co-owner the unchanged detail comes back.
+        guard list.coOwner != nil else {
+            return list
+        }
+        let updated = list.replacing(coOwner: nil)
+        lists[index] = updated
         return updated
     }
 
@@ -142,6 +192,121 @@ actor MockListRepository: ListRepository {
 
         lists.remove(at: index)
     }
+
+    // MARK: - Shared state for MockMemberRepository and MockChildRepository
+
+    // Mock helpers: intentionally uninstrumented, like the rest of this test double. They share
+    // this repository's delay and failure switch.
+
+    func addMemberToList(id: String, _ input: AddMemberInput) async throws -> ListMember {
+        try await Task.sleep(for: .seconds(delay))
+        if shouldFail { throw ListError.server }
+
+        guard let index = lists.firstIndex(where: { $0.id == id }) else {
+            throw ListError.notFound
+        }
+        let list = lists[index]
+        guard list.capabilities.canManageMembers else { throw ListError.forbidden }
+        guard let person = MockListData.person(forEmail: input.email) else {
+            throw ListError.memberEmailNotFound
+        }
+        let isOwnerOrCoOwner = person.id == list.owner.id || person.id == list.coOwner?.id
+        let isRosterMember = list.members?.contains(where: { $0.userId == person.id && $0.status == .active }) == true
+        guard !isOwnerOrCoOwner, !isRosterMember else { throw ListError.alreadyMember }
+
+        let now = Date()
+        let member = ListMember(
+            id: "mock-mem-added-\(nextMemberNumber)", userId: person.id, displayName: person.displayName,
+            email: input.email, role: input.role, status: .active, invitedAt: now, acceptedAt: now, expiresAt: nil
+        )
+        nextMemberNumber += 1
+        // The roster is only kept where the viewer may see it; it stays absent otherwise.
+        let roster = list.capabilities.canSeeMembers ? (list.members ?? []) + [member] : list.members
+        lists[index] = list.replacing(memberCount: list.memberCount + 1, members: roster)
+        return member
+    }
+
+    /// Removes another member, or the caller itself (leaving), which drops the list.
+    func removeMemberFromList(id: String, userId: String) async throws {
+        try await Task.sleep(for: .seconds(delay))
+        if shouldFail { throw ListError.server }
+
+        guard let index = lists.firstIndex(where: { $0.id == id }) else {
+            throw ListError.notFound
+        }
+        let list = lists[index]
+        // The owner and the co-owner can never be removed.
+        guard userId != list.owner.id, userId != list.coOwner?.id else { throw ListError.forbidden }
+
+        if userId == MockListData.currentUser.id {
+            guard list.capabilities.canLeaveList else { throw ListError.forbidden }
+            lists.remove(at: index)
+            return
+        }
+        guard list.capabilities.canManageMembers else { throw ListError.forbidden }
+        guard let roster = list.members, roster.contains(where: { $0.userId == userId }) else {
+            throw ListError.membershipNotFound
+        }
+        lists[index] = list.replacing(
+            memberCount: max(list.memberCount - 1, 1),
+            members: roster.filter { $0.userId != userId }
+        )
+    }
+
+    func childrenOfUser() async throws -> [Child] {
+        try await Task.sleep(for: .seconds(delay))
+        if shouldFail { throw ChildError.server }
+        return children
+    }
+
+    func addChild(_ input: CreateChildInput) async throws -> Child {
+        try await Task.sleep(for: .seconds(delay))
+        if shouldFail { throw ChildError.server }
+
+        let child = Child(
+            id: "mock-child-new-\(nextChildNumber)", firstName: input.firstName, lastName: input.lastName,
+            displayName: input.displayName, relationship: input.relationship
+        )
+        nextChildNumber += 1
+        children.append(child)
+        return child
+    }
+
+    func removeChild(id: String) async throws {
+        try await Task.sleep(for: .seconds(delay))
+        if shouldFail { throw ChildError.server }
+
+        guard let index = children.firstIndex(where: { $0.id == id }) else {
+            throw ChildError.childNotFound
+        }
+        // A child that has a list cannot be deleted.
+        guard !lists.contains(where: { $0.recipient.id == id }) else {
+            throw ChildError.childHasLists
+        }
+        children.remove(at: index)
+    }
+}
+
+// MARK: - Mock copies
+
+nonisolated private extension ListDetail {
+    func replacing(coOwner: ListPerson?) -> ListDetail {
+        rebuilt(coOwner: coOwner, memberCount: memberCount, members: members)
+    }
+
+    func replacing(memberCount: Int, members: [ListMember]?) -> ListDetail {
+        rebuilt(coOwner: coOwner, memberCount: memberCount, members: members)
+    }
+
+    private func rebuilt(coOwner: ListPerson?, memberCount: Int, members: [ListMember]?) -> ListDetail {
+        ListDetail(
+            id: id, name: name, theme: theme, year: year, visibility: visibility, status: status,
+            recipient: recipient, owner: owner, coOwner: coOwner, myRole: myRole,
+            capabilities: capabilities, memberCount: memberCount, itemCount: itemCount,
+            purchasedCount: purchasedCount, createdAt: createdAt, updatedAt: updatedAt,
+            members: members
+        )
+    }
 }
 
 // MARK: - Mock Data
@@ -153,8 +318,29 @@ nonisolated enum MockListData {
     static let currentUser = ListPerson(id: "mock-user-me", displayName: "Alex Sample")
 
     private static let otherOwner = ListPerson(id: "mock-user-pat", displayName: "Pat Sample")
-    private static let child = ListPerson(id: "mock-child-charlie", displayName: "Charlie Sample")
+    private static let child = ListPerson(id: "mock-child-charlie", displayName: "Tommy D.")
     private static let otherPerson = ListPerson(id: "mock-user-jordan", displayName: "Jordan Sample")
+
+    /// The child the mock children start with: the recipient of the owner's child list.
+    static let seedChild = Child(
+        id: child.id, firstName: "Tommy", lastName: "D.", displayName: "Tommy D.", relationship: .parent
+    )
+
+    // MARK: Directory
+
+    /// The fake accounts an email can be resolved to (adding a member or a co-owner). Any other
+    /// address is unknown. Fake addresses only.
+    private static let directory: [String: ListPerson] = [
+        "alex.sample@example.com": currentUser,
+        "pat.sample@example.com": otherOwner,
+        "jordan.sample@example.com": otherPerson,
+        "casey.member@example.com": ListPerson(id: "mock-user-casey", displayName: "Casey Member"),
+        "cody.coowner@example.com": ListPerson(id: "mock-user-cody", displayName: "Cody Coowner")
+    ]
+
+    static func person(forEmail email: String) -> ListPerson? {
+        directory[email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
+    }
 
     private static let created = Date(timeIntervalSince1970: 1_767_225_600)
     private static let updated = Date(timeIntervalSince1970: 1_767_312_000)
@@ -228,7 +414,7 @@ nonisolated enum MockListData {
 
     /// Owner of a list for a child: counts present.
     static let ownerOfChildList = ListDetail(
-        id: "mock-list-child", name: "Charlie's Wishes", theme: "Winter Wonderland", year: 2026,
+        id: "mock-list-child", name: "Tommy's Wishes", theme: "Winter Wonderland", year: 2026,
         visibility: .private, status: .active, recipient: child, owner: currentUser, coOwner: nil,
         myRole: .owner, capabilities: ownerCapabilities, memberCount: 2, itemCount: 12, purchasedCount: 8,
         createdAt: created, updatedAt: updated,
