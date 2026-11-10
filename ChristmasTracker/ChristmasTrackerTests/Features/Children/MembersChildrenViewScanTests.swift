@@ -365,6 +365,152 @@ struct MembersChildrenViewScanTests {
         try requireText("resolvedSelection", in: create, label: "CreateListView")
     }
 
+    // MARK: - (h): EditListView, Story I3b-2 R3 (Remove co-owner)
+
+    private func editListCode() throws -> String {
+        let scope = try makeSUT()
+        let edit = try #require(scope.file("EditListView.swift", in: scope.lists), "EditListView.swift is missing")
+        return try code(edit)
+    }
+
+    @Test("(h) EditListView drops the dead removesCoOwner state and calls the removeCoOwner operation")
+    func editViewUsesRemoveOperation() throws {
+        let text = try editListCode()
+        #expect(try Self.matches(#"\bremovesCoOwner\b"#, in: text).isEmpty,
+                "removesCoOwner (the dead toggle state) must be deleted")
+        #expect(try Self.matches(#"\bremoveCoOwnerToggle\b"#, in: text).isEmpty, "The old toggle identifier must go")
+        #expect(try !Self.matches(#"\.removeCoOwner\s*\(\s*listId\s*:"#, in: text).isEmpty,
+                "EditListView must call listService.removeCoOwner(listId:)")
+        #expect(try Self.matches(#"\bCoOwnerChange\.clear\b|coOwner:\s*\.clear\b"#, in: text).isEmpty,
+                "No CoOwnerChange.clear path may remain")
+    }
+
+    @Test("(h) EditListView confirms with a confirmationDialog built from the pure view states")
+    func editViewConfirmsWithDialog() throws {
+        let text = try editListCode()
+        #expect(try !Self.matches(#"\.confirmationDialog\s*\("#, in: text).isEmpty,
+                "EditListView must present a confirmationDialog before removing")
+        try requireText("CoOwnerRemoveConfirmation.title(", in: editListURL(), label: "EditListView")
+        try requireText("CoOwnerRemoveConfirmation.message(", in: editListURL(), label: "EditListView")
+        try requireText("CoOwnerRemoveConfirmation.confirmButtonTitle", in: editListURL(), label: "EditListView")
+        try requireText("role: .destructive", in: editListURL(), label: "EditListView")
+        try requireText("CoOwnerRemoval.presentation(for", in: editListURL(), label: "EditListView")
+        try requireText("CoOwnerRemoval.canRemove(", in: editListURL(), label: "EditListView")
+        try requireText("EditListDetailSource.resolve(", in: editListURL(), label: "EditListView")
+        try requireText("ListScreenExit.shouldDismissEdit", in: editListURL(), label: "EditListView")
+        try requireText("showsRemove", in: editListURL(), label: "EditListView")
+    }
+
+    private func editListURL() throws -> URL? {
+        let scope = try makeSUT()
+        return scope.file("EditListView.swift", in: scope.lists)
+    }
+
+    @Test("(h) EditListView reads no role, permission or capability directly")
+    func editViewReadsNoRole() throws {
+        let text = try editListCode()
+        for entry in [("myRole", #"\bmyRole\b"#), ("ListPermissions", #"\bListPermissions\b"#),
+                      (".capabilities", #"\.capabilities\b"#), ("ListRole", #"\bListRole\b"#),
+                      ("isOwner", #"\bisOwner\b"#), ("canSetCoOwner", #"\bcanSetCoOwner\b"#)] {
+            #expect(try Self.matches(entry.1, in: text).isEmpty, "EditListView must not read \(entry.0)")
+        }
+    }
+
+    @Test("(h) EditListView uses design tokens only and does not log")
+    func editViewTokensAndNoLogging() throws {
+        let scope = try makeSUT()
+        let edit = try #require(scope.file("EditListView.swift", in: scope.lists), "EditListView.swift is missing")
+        let tokens = try offenders(ListViewScanTests.tokenPatterns, in: [edit], scope: scope)
+        #expect(tokens.isEmpty, "Raw styling found:\n\(tokens.joined(separator: "\n"))")
+        let logging = try offenders(Self.loggingPatterns, in: [edit], scope: scope)
+        #expect(logging.isEmpty, "Logging in EditListView:\n\(logging.joined(separator: "\n"))")
+        #expect(try Self.matches(Self.queuePattern, in: try code(edit)).isEmpty)
+    }
+
+    /// The lines of the Remove co-owner button: the 14 lines up to and including the line of its
+    /// accessibility identifier (editList.removeCoOwner...).
+    private func removeButtonWindow() throws -> String {
+        let text = try editListCode()
+        let lines = text.components(separatedBy: "\n")
+        let index = try #require(
+            lines.firstIndex { line in
+                !((try? Self.matches(#"accessibilityIdentifier\(\s*"editList\.removeCoOwner[A-Za-z]*"\s*\)"#, in: line)) ?? []).isEmpty
+            },
+            "EditListView needs a Remove co-owner button with an identifier like editList.removeCoOwnerButton"
+        )
+        let start = max(0, index - 14)
+        return lines[start...index].joined(separator: "\n")
+    }
+
+    @Test("(h) The Remove co-owner button has a 44-point target, a label, a hint and a plain identifier")
+    func removeButtonAccessibility() throws {
+        let window = try removeButtonWindow()
+        #expect(try !Self.matches(#"minHeight:\s*44\b"#, in: window).isEmpty, "Remove needs a 44-point target")
+        #expect(try !Self.matches(#"accessibilityLabel\(\s*"Remove co-owner"\s*\)"#, in: window).isEmpty,
+                "Remove needs the accessibility label \"Remove co-owner\"")
+        #expect(try !Self.matches(#"accessibilityHint\("#, in: window).isEmpty, "Remove needs an accessibility hint")
+        #expect(try !Self.matches(#"role:\s*\.destructive"#, in: window).isEmpty, "Remove is a destructive button")
+    }
+
+    @Test("(h) Every accessibility identifier in EditListView is a constant dotted name without personal data")
+    func editViewIdentifiersCarryNoPersonalData() throws {
+        let text = try editListCode()
+        let regex = try NSRegularExpression(pattern: #"accessibilityIdentifier\(\s*"([^"]*)""#)
+        let whole = NSRange(text.startIndex..., in: text)
+        let ids = regex.matches(in: text, range: whole).compactMap { match -> String? in
+            Range(match.range(at: 1), in: text).map { String(text[$0]) }
+        }
+        #expect(!ids.isEmpty)
+        #expect(ids.contains { $0.hasPrefix("editList.removeCoOwner") }, "The Remove button needs an identifier")
+        for id in ids {
+            #expect(try !Self.matches(#"^editList(?:\.[A-Za-z]+)+$"#, in: id).isEmpty, "Identifier is not a plain constant name: \(id)")
+            #expect(!id.contains("@"))
+        }
+        #expect(try Self.matches(#"accessibilityIdentifier\([^\n]*\\\("#, in: text).isEmpty)
+        #expect(try Self.matches(#"accessibilityIdentifier\([^\n)]*\+"#, in: text).isEmpty)
+    }
+
+    /// The code of one function: from its `func name(` to the next `private func` (or the end).
+    private func functionBody(_ name: String, in text: String) throws -> String {
+        let start = try #require(text.range(of: "func \(name)("), "func \(name)() is missing in EditListView")
+        let rest = text[start.lowerBound...]
+        let afterHeader = rest.index(rest.startIndex, offsetBy: 5)
+        if let next = rest[afterHeader...].range(of: "private func ") {
+            return String(rest[..<next.lowerBound])
+        }
+        return String(rest)
+    }
+
+    @Test("(h) The error banner's Try Again is routed through EditRetry, not hard-wired to saveChanges")
+    func retryIsNotHardWiredToSave() throws {
+        let text = try editListCode()
+        let lines = text.components(separatedBy: "\n")
+        let retryLine = try #require(lines.firstIndex { $0.contains("onRetry:") }, "EditListView has no onRetry")
+        let closure = lines[retryLine...min(retryLine + 8, lines.count - 1)].joined(separator: "\n")
+        #expect(closure.contains("EditRetry.action(after"),
+                "onRetry must ask EditRetry.action(after:) which action failed")
+        #expect(closure.contains("saveChanges()"), "onRetry must still be able to re-run saveChanges()")
+        #expect(closure.contains("removeCoOwner()"), "onRetry must be able to re-run removeCoOwner()")
+        #expect(try Self.matches(#"onRetry:\s*\{\s*Task\s*\{\s*await\s+saveChanges\(\)\s*\}\s*\}"#, in: text).isEmpty,
+                "onRetry must not be hard-wired to saveChanges() alone")
+    }
+
+    @Test("(h) removeCoOwner() records .removeCoOwner as the failed action and saveChanges() records .save")
+    func operationsRecordTheirFailedAction() throws {
+        let text = try editListCode()
+        let removal = try functionBody("removeCoOwner", in: text)
+        let save = try functionBody("saveChanges", in: text)
+        #expect(text.contains("EditFailedAction"), "EditListView must hold an EditFailedAction?")
+        #expect(try !Self.matches(#"=\s*\.removeCoOwner\b"#, in: removal).isEmpty,
+                "removeCoOwner() must record .removeCoOwner when it shows an error")
+        #expect(try Self.matches(#"=\s*\.save\b"#, in: removal).isEmpty,
+                "removeCoOwner() must not record .save")
+        #expect(try !Self.matches(#"=\s*\.save\b"#, in: save).isEmpty,
+                "saveChanges() must record .save when it shows an error")
+        #expect(try Self.matches(#"=\s*\.removeCoOwner\b"#, in: save).isEmpty,
+                "saveChanges() must not record .removeCoOwner")
+    }
+
     @Test("(f) ProfileView references ChildrenView")
     func profileReferencesChildrenView() throws {
         let scope = try makeSUT()

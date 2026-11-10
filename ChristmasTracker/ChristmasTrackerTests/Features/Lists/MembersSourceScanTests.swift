@@ -175,6 +175,44 @@ struct MembersSourceScanTests {
         #expect(offenders.isEmpty, "myRole mentioned in a view-state file:\n\(offenders.joined(separator: "\n"))")
     }
 
+    @Test("The remove-co-owner view-state types exist, never mention myRole and never log")
+    func removeCoOwnerStateFilesAreClean() throws {
+        let sources = try makeSUT()
+        let typeNames = ["CoOwnerRemoveConfirmation", "CoOwnerRemoval", "EditListDetailSource"]
+        var offenders: [String] = []
+        var missing: [String] = []
+        for name in typeNames {
+            let found = try files(declaring: name, in: sources)
+            if found.isEmpty {
+                missing.append(name)
+                continue
+            }
+            for url in found {
+                let code = Self.codeOnly(try String(contentsOf: url, encoding: .utf8))
+                for line in try Self.matches(#"\bmyRole\b"#, in: code) {
+                    offenders.append("\(sources.relative(url)):\(line) myRole (declares \(name))")
+                }
+                for line in try Self.matches(#"\b(?:Log(?:Debug|Info|Warning|Error|Critical)|print|NSLog)\s*\("#, in: code) {
+                    offenders.append("\(sources.relative(url)):\(line) logging (declares \(name))")
+                }
+            }
+        }
+        #expect(missing.isEmpty, "No production file declares: \(missing)")
+        #expect(offenders.isEmpty, "Offence in a remove-co-owner view-state file:\n\(offenders.joined(separator: "\n"))")
+    }
+
+    @Test("CoOwnerSectionState no longer declares clearingSupported")
+    func clearingSupportedIsGone() throws {
+        let sources = try makeSUT()
+        let found = try files(declaring: "CoOwnerSectionState", in: sources)
+        #expect(!found.isEmpty)
+        for url in found {
+            let code = Self.codeOnly(try String(contentsOf: url, encoding: .utf8))
+            #expect(try Self.matches(#"\bclearingSupported\b"#, in: code).isEmpty,
+                    "\(sources.relative(url)) still mentions clearingSupported")
+        }
+    }
+
     // MARK: - Rule 2: no view reads a roster row's membership role
 
     @Test("No view under Features/Lists/Views or Features/Children/Views reads .role")

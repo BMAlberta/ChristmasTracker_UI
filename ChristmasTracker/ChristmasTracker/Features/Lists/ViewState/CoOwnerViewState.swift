@@ -10,12 +10,6 @@ import Foundation
 
 nonisolated struct CoOwnerSectionState: Equatable, Sendable {
 
-    /// Whether the co-owner can be cleared through the generated client. It cannot: the generated
-    /// update payload declares `coOwnerEmail` as a plain `String?` with compiler-synthesized
-    /// Codable, which omits a nil, so an explicit JSON null can never be sent. "Remove co-owner"
-    /// stays hidden until the contract offers an explicit clearing mechanism.
-    static let clearingSupported = false
-
     let currentCoOwnerName: String?
     let showsChange: Bool
     let showsRemove: Bool
@@ -24,7 +18,57 @@ nonisolated struct CoOwnerSectionState: Equatable, Sendable {
         let permissions = ListPermissions(detail.capabilities)
         currentCoOwnerName = detail.coOwner?.displayName
         showsChange = permissions.canSetCoOwner
-        showsRemove = permissions.canSetCoOwner && detail.coOwner != nil && Self.clearingSupported
+        showsRemove = permissions.canSetCoOwner && detail.coOwner != nil
+    }
+}
+
+/// The texts of the "Remove co-owner" confirmation dialog.
+nonisolated enum CoOwnerRemoveConfirmation {
+    static let confirmButtonTitle = "Remove"
+
+    static func title(displayName: String) -> String {
+        "Remove \(displayName) as co-owner?"
+    }
+
+    static func message(displayName: String) -> String {
+        "\(displayName) will no longer be a co-owner of this list."
+    }
+}
+
+nonisolated enum CoOwnerRemoval {
+
+    /// What the screen shows after removeCoOwner threw: nil for a cancellation, otherwise the
+    /// ListError (any other error is shown as the server error).
+    static func presentation(for error: any Error) -> ListErrorPresentation? {
+        if error is CancellationError { return nil }
+        return ListErrorPresentation((error as? ListError) ?? .server)
+    }
+
+    /// The Remove button is enabled only when no mutation or save is in flight.
+    static func canRemove(isMutating: Bool, isSaving: Bool) -> Bool {
+        !isMutating && !isSaving
+    }
+}
+
+/// The Edit List action whose failure the error banner is showing.
+nonisolated enum EditFailedAction: Equatable, Sendable {
+    case save
+    case removeCoOwner
+}
+
+/// Try Again re-runs the action that failed, never a different one.
+nonisolated enum EditRetry {
+    static func action(after failed: EditFailedAction?) -> EditFailedAction? {
+        failed
+    }
+}
+
+nonisolated enum EditListDetailSource {
+
+    /// The live detail when it is the same list as the snapshot, otherwise the snapshot.
+    static func resolve(snapshot: ListDetail, live: ListDetail?) -> ListDetail {
+        if let live, live.id == snapshot.id { return live }
+        return snapshot
     }
 }
 

@@ -65,8 +65,9 @@ struct MembersTruthTableTests {
                     }
 
                     #expect(coOwner.showsChange == flags.canSetCoOwner, "showsChange \(label)")
-                    // Clearing is not possible through the generated client today.
-                    #expect(coOwner.showsRemove == false, "showsRemove \(label)")
+                    // I3b-2 R3 (rewritten, was `showsRemove == false`: that encoded the removed
+                    // clearingSupported constant). Remove follows canSetCoOwner and a present co-owner.
+                    #expect(coOwner.showsRemove == (flags.canSetCoOwner && hasCoOwner), "showsRemove \(label)")
                     #expect(
                         coOwner.currentCoOwnerName == (hasCoOwner ? MembersFixtures.coOwnerName : nil),
                         "coOwner name \(label)"
@@ -113,7 +114,8 @@ struct MembersTruthTableTests {
             flags: flags(true, true, true, false), membersPresent: true, status: "ACTIVE",
             visibility: "PRIVATE", myRole: "owner",
             showsRoster: true, showsAdd: true, removable: [false, false, true, true],
-            showsLeave: false, showsChange: true, showsRemove: false, memberCountText: "4 members"
+            // I3b-2 R3 (rewritten): the owner of a list that has a co-owner is offered Remove.
+            showsLeave: false, showsChange: true, showsRemove: true, memberCountText: "4 members"
         ),
         Persona(
             name: "co-owner",

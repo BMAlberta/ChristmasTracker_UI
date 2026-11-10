@@ -122,5 +122,42 @@ Acceptance (tests):
 
 Scoped files: `Core/Models/MemberInputs.swift`, `Features/Lists/ViewState/CoOwnerViewState.swift` (only `makeChange` doc if needed), `Features/Lists/Repositories/ListRespository.swift`, `GeneratedClientListRepository.swift`, `MockListRepository.swift`, `Features/Lists/Services/ListService.swift`, `Features/Lists/Views/EditListView.swift` (ONLY the minimal edit that deletes the `.clear` path so the app compiles; the screen change is R3), and the matching tests under `ChristmasTrackerTests/` (the files listed in the inventory plus new files `GeneratedClientListRepositoryRemoveCoOwnerTests.swift`, `ListServiceRemoveCoOwnerTests.swift`, `MockListRepositoryRemoveCoOwnerTests.swift`). Test doubles that conform to `ListRepository` get the new method.
 
+---
+
+# Gate 1 spec, story R3 (the screen; full pipeline: capability-flag-driven UI)
+Pure, testable view-state (all `nonisolated`, in `Features/Lists/ViewState/CoOwnerViewState.swift`):
+```swift
+struct CoOwnerSectionState {                       // existing; clearingSupported REMOVED
+    let currentCoOwnerName: String?                // display name only
+    let showsChange: Bool                          // = ListPermissions(detail.capabilities).canSetCoOwner
+    let showsRemove: Bool                          // = canSetCoOwner && detail.coOwner != nil
+    init(detail: ListDetail)
+}
+enum CoOwnerRemoveConfirmation {                   // texts of the confirmation dialog
+    static let confirmButtonTitle = "Remove"
+    static func title(displayName: String) -> String      // "Remove \(displayName) as co-owner?"
+    static func message(displayName: String) -> String    // "\(displayName) will no longer be a co-owner of this list."
+}
+enum CoOwnerRemoval {
+    /// What the screen shows after removeCoOwner threw: nil for CancellationError (show nothing);
+    /// a ListError maps through ListErrorPresentation; any other error is shown as ListError.server.
+    static func presentation(for error: any Error) -> ListErrorPresentation?
+    /// The Remove button is enabled only when no mutation or save is in flight.
+    static func canRemove(isMutating: Bool, isSaving: Bool) -> Bool
+}
+enum EditListDetailSource {
+    /// The edit sheet receives a snapshot; after removeCoOwner the service holds the fresh detail.
+    /// Returns `live` when it has the same id as `snapshot`, otherwise `snapshot`.
+    static func resolve(snapshot: ListDetail, live: ListDetail?) -> ListDetail
+}
+```
+No role is read anywhere: `showsRemove` and `showsChange` follow `canSetCoOwner` only (`myRole` stays badge-only).
+
+Screen (`EditListView`): the co-owner section reads `EditListDetailSource.resolve(snapshot: list, live: listService.currentListDetail)`. It shows the current co-owner's display name; "Change co-owner" (the existing email field, set via the Save path); and, when `showsRemove`, a "Remove co-owner" button (destructive role, 44-point target, accessibility label "Remove co-owner" and a hint, identifier without personal data) that opens a `confirmationDialog` (title and message from `CoOwnerRemoveConfirmation`, confirm button "Remove" with destructive role, Cancel). On confirm: `try await listService.removeCoOwner(listId:)`; success closes the dialog and the section re-renders from the returned detail (the Remove button disappears; the sheet stays open); failure shows `ListErrorBanner` from `CoOwnerRemoval.presentation(for:)`; notFound and archivedReadOnly dismiss the sheet (`ListScreenExit.shouldDismissEdit(for:)`); a cancellation shows nothing. The dead `removesCoOwner` state and toggle are deleted; the email field's `.disabled(removesCoOwner)` goes with it. DesignSystem tokens only; nothing else on the screen changes.
+
+Acceptance (tests): truth table of `showsRemove`/`showsChange` across owner with co-owner, owner without co-owner, co-owner, blind co-owner, MEMBER-role member, VIEWER-role member, PUBLIC non-member, and an archived list (all management flags false), derived from Docs/privacy-matrix.md and the flags in Docs/client-guide.md; the confirmation texts; `CoOwnerRemoval.presentation` for forbidden, notFound, archivedReadOnly, rateLimited, network, server, invalidResponse, a non-ListError error and CancellationError; `canRemove` truth table; `EditListDetailSource.resolve` (same id -> live, different id -> snapshot, nil -> snapshot); source scans of EditListView (no `removesCoOwner`, uses `removeCoOwner`, no `myRole`, no raw colors/fonts/spacing, a confirmationDialog is present, identifiers carry no personal data). Existing tests that encode `clearingSupported == false` are rewritten (named in the report).
+
+Scoped files: `Features/Lists/ViewState/CoOwnerViewState.swift`, `Features/Lists/Views/EditListView.swift`, and tests `CoOwnerSectionStateTests.swift`, `MembersTruthTableTests.swift`, a new `CoOwnerRemoveViewStateTests.swift`, and the source-scan tests (`MembersChildrenViewScanTests.swift`, `MembersSourceScanTests.swift`, `ListViewScanTests.swift`) only for additions that cover the new view code.
+
 ## Contract issue
 `Docs/contract-issues.md` row 2 (filed 2026-11-09, "Open: blocks only clearing a co-owner (I3b)") is resolved in R4.
