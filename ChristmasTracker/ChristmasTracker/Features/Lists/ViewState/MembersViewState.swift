@@ -78,6 +78,24 @@ nonisolated struct MembersSectionState: Equatable, Sendable {
             }
     }
 
+    /// The texts of the remove-member confirmation for a roster row.
+    static func removeConfirmation(for row: MemberRowState) -> (title: String, message: String, confirmButtonTitle: String) {
+        (
+            title: MemberRemoveConfirmation.title(displayName: row.displayName),
+            message: MemberRemoveConfirmation.message(displayName: row.displayName),
+            confirmButtonTitle: MemberRemoveConfirmation.confirmButtonTitle
+        )
+    }
+
+    /// The texts of the leave-list confirmation.
+    static var leaveConfirmation: (title: String, message: String, confirmButtonTitle: String) {
+        (
+            title: LeaveListConfirmation.title,
+            message: LeaveListConfirmation.message,
+            confirmButtonTitle: LeaveListConfirmation.confirmButtonTitle
+        )
+    }
+
     private static func kind(of member: ListMember, in detail: ListDetail) -> MemberRowKind {
         if member.userId == detail.owner.id { return .owner }
         if let coOwner = detail.coOwner, member.userId == coOwner.id { return .coOwner }
@@ -126,6 +144,11 @@ nonisolated enum AddMemberFormValidation {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let invalid = !RegistrationFormValidator.isValidEmail(trimmed) || trimmed.count > emailLimit
         return AddMemberFormValidity(emailInvalid: invalid)
+    }
+
+    /// Valid input and no mutation in flight: a form cannot be submitted twice.
+    static func canSubmit(email: String, role: MemberRole, isMutating: Bool) -> Bool {
+        !isMutating && validate(email: email, role: role).isValid
     }
 
     static func makeInput(email: String, role: MemberRole) -> AddMemberInput {

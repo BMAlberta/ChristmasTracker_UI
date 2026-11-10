@@ -23,10 +23,9 @@ struct MembersSourceScanTests {
 
     // MARK: - Allowlist
 
-    /// Views allowed to match `\.role\b`. TEMPORARY: ListDetailView.swift still shows the old
-    /// roster (`member.role.displayName`) until story M3 rebuilds it on MembersSectionState.
-    /// Story M3 MUST delete this entry; `allowlistEntriesStillNeeded` fails once the entry is dead.
-    private static let roleReadAllowlist: Set<String> = ["Features/Lists/Views/ListDetailView.swift"]
+    /// Views allowed to match `\.role\b`. Empty since story M3: the roster is built on
+    /// MembersSectionState, so no view reads a membership role.
+    private static let roleReadAllowlist: Set<String> = []
 
     // MARK: - Source discovery (same approach as ListSourceScanTests)
 
@@ -197,16 +196,8 @@ struct MembersSourceScanTests {
         #expect(offenders.isEmpty, "A view reads a membership role; use MemberRowState:\n\(offenders.joined(separator: "\n"))")
     }
 
-    @Test("Every allowlist entry is still needed (fails once story M3 rebuilds the roster, so the entry gets deleted)")
-    func allowlistEntriesStillNeeded() throws {
-        let sources = try makeSUT()
-        for name in Self.roleReadAllowlist {
-            let url = sources.root.appendingPathComponent(name)
-            let code = Self.codeOnly(try String(contentsOf: url, encoding: .utf8))
-            let hits = try Self.matches(#"\.role\b"#, in: code)
-            // While the old roster exists the entry is needed. Once the file stops reading
-            // .role, the entry is dead and must be deleted: this test then fails to say so.
-            #expect(!hits.isEmpty, "\(name) no longer reads .role: delete it from roleReadAllowlist")
-        }
+    @Test("The .role allowlist is empty (story M3 rebuilt the roster on MembersSectionState)")
+    func allowlistIsEmpty() {
+        #expect(Self.roleReadAllowlist.isEmpty, "No view may read .role any more: \(Self.roleReadAllowlist)")
     }
 }

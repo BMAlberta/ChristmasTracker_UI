@@ -103,6 +103,11 @@ nonisolated enum ChildFormValidation {
         )
     }
 
+    /// Valid input and no mutation in flight: a form cannot be submitted twice.
+    static func canSubmit(firstName: String, lastName: String, displayName: String, isMutating: Bool) -> Bool {
+        !isMutating && validate(firstName: firstName, lastName: lastName, displayName: displayName).isValid
+    }
+
     static func makeInput(
         firstName: String,
         lastName: String,
@@ -168,6 +173,13 @@ nonisolated struct CreateListRecipientOptions: Equatable, Sendable {
             errorMessage = ChildErrorPresentation(error).message
         }
         options = offered
+    }
+
+    /// The visible selection kept valid: `current` when it is an offered option, otherwise the
+    /// default (so a child that is no longer offered resets the picker to "For me").
+    func resolvedSelection(current: String?) -> String {
+        guard let current, options.contains(where: { $0.id == current }) else { return defaultSelectionId }
+        return current
     }
 
     /// The recipient id for a picker selection: an offered option's id, otherwise the current

@@ -19,6 +19,9 @@ struct EditListView: View {
     @State private var theme: String
     @State private var visibility: ListVisibility
 
+    @State private var coOwnerEmail = ""
+    @State private var removesCoOwner = false
+
     @State private var isSaving = false
     @State private var errorPresentation: ListErrorPresentation?
 
@@ -33,12 +36,41 @@ struct EditListView: View {
         ListFormValidation.validateEdit(name: name, theme: theme)
     }
 
+    private var coOwnerState: CoOwnerSectionState {
+        CoOwnerSectionState(detail: list)
+    }
+
+    private var hasCoOwnerEmail: Bool {
+        !coOwnerEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The co-owner part of the one update: a typed address (only when the flag offers the change)
+    /// or a removal (only when offered), otherwise unchanged.
+    private var coOwnerChange: CoOwnerChange {
+        if coOwnerState.showsRemove, removesCoOwner { return .clear }
+        if coOwnerState.showsChange, hasCoOwnerEmail {
+            return CoOwnerFormValidation.makeChange(email: coOwnerEmail) ?? .unchanged
+        }
+        return .unchanged
+    }
+
+    private var coOwnerInputAllowsSave: Bool {
+        guard coOwnerState.showsChange, hasCoOwnerEmail else { return true }
+        return CoOwnerFormValidation.canSubmit(email: coOwnerEmail, isMutating: listService.isMutating)
+    }
+
     private var pendingInput: UpdateListInput? {
-        ListFormValidation.makeUpdateInput(original: list, name: name, theme: theme, visibility: visibility)
+        ListFormValidation.makeUpdateInput(
+            original: list,
+            name: name,
+            theme: theme,
+            visibility: visibility,
+            coOwner: coOwnerChange
+        )
     }
 
     private var canSave: Bool {
-        validity.isValid && pendingInput != nil && !isSaving
+        validity.isValid && coOwnerInputAllowsSave && pendingInput != nil && !isSaving && !listService.isMutating
     }
 
     var body: some View {
@@ -76,6 +108,7 @@ struct EditListView: View {
                     LabeledContent("Recipient", value: list.recipientName)
                         .foregroundStyle(Color.textMutedColor)
                 }
+                coOwnerSection
                 Section("Privacy") {
                     Picker("Visibility", selection: $visibility) {
                         ForEach(ListFormValidation.selectableVisibilities, id: \.self) { option in
@@ -118,6 +151,37 @@ struct EditListView: View {
                     .frame(minHeight: 44)
                     .disabled(!canSave)
                     .accessibilityIdentifier("editList.saveButton")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var coOwnerSection: some View {
+        let state = coOwnerState
+        if state.showsChange || state.currentCoOwnerName != nil {
+            Section("Co-owner") {
+                if let name = state.currentCoOwnerName {
+                    LabeledContent("Current co-owner", value: name)
+                        .foregroundStyle(Color.textMutedColor)
+                }
+                if state.showsChange {
+                    TextField("Change co-owner email", text: $coOwnerEmail)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .disabled(removesCoOwner)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("editList.coOwnerEmailField")
+                    if hasCoOwnerEmail, !CoOwnerFormValidation.isValidEmail(coOwnerEmail) {
+                        problemText("Enter a valid email address.")
+                    }
+                }
+                if state.showsRemove {
+                    Toggle("Remove co-owner", isOn: $removesCoOwner)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("editList.removeCoOwnerToggle")
                 }
             }
         }

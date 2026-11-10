@@ -36,6 +36,11 @@ nonisolated enum CoOwnerFormValidation {
         RegistrationFormValidator.isValidEmail(email.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    /// A valid address and no mutation in flight.
+    static func canSubmit(email: String, isMutating: Bool) -> Bool {
+        !isMutating && isValidEmail(email)
+    }
+
     /// `.set(email:)` with the trimmed address, or nil when the address is invalid.
     static func makeChange(email: String) -> CoOwnerChange? {
         guard isValidEmail(email) else { return nil }

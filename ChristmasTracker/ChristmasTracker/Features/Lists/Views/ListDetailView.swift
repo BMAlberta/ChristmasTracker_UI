@@ -12,11 +12,23 @@ struct ListDetailView: View {
     @Environment(\.listService) private var listService
     @Environment(\.dismiss) private var dismiss
     @Environment(\.itemService) private var itemService
+    @Environment(\.authenticationService) private var authenticationService
 
     @State private var editingDetail: ListDetail?
     @State private var showDeleteConfirmation = false
     @State private var selectedItemId: String?
     @State private var actionError: ListErrorPresentation?
+    @State private var failedAction: FailedAction?
+    @State private var showsAddMember = false
+    @State private var memberToRemove: MemberRowState?
+    @State private var showLeaveConfirmation = false
+
+    /// The action whose failure is shown in the banner, so Try Again repeats that action.
+    private enum FailedAction {
+        case deleteList
+        case leaveList
+        case removeMember(MemberRowState)
+    }
 
     /// The loaded detail, only when it belongs to this screen's list. A previous list's data
     /// is never shown while this list loads.
@@ -49,6 +61,37 @@ struct ListDetailView: View {
             }
             .sheet(item: $editingDetail) { detail in
                 EditListView(list: detail)
+            }
+            .sheet(isPresented: $showsAddMember) {
+                AddMemberView(listId: listId)
+            }
+            .confirmationDialog(
+                MembersSectionState.leaveConfirmation.title,
+                isPresented: $showLeaveConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(MembersSectionState.leaveConfirmation.confirmButtonTitle, role: .destructive) {
+                    Task { await leaveList() }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text(MembersSectionState.leaveConfirmation.message)
+            }
+            .confirmationDialog(
+                memberToRemove.map { MembersSectionState.removeConfirmation(for: $0).title } ?? "",
+                isPresented: Binding(
+                    get: { memberToRemove != nil },
+                    set: { if !$0 { memberToRemove = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: memberToRemove
+            ) { row in
+                Button(MembersSectionState.removeConfirmation(for: row).confirmButtonTitle, role: .destructive) {
+                    Task { await removeMember(row) }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: { row in
+                Text(MembersSectionState.removeConfirmation(for: row).message)
             }
             .confirmationDialog(
                 ListDeleteConfirmation.title,
@@ -102,13 +145,55 @@ struct ListDetailView: View {
     }
 
     private func deleteList() async {
+        actionError = nil
         do {
             try await listService.deleteList(id: listId)
             dismiss()
         } catch is CancellationError {
             return
         } catch {
+            failedAction = .deleteList
             actionError = ListErrorPresentation((error as? ListError) ?? .server)
+        }
+    }
+
+    private func removeMember(_ row: MemberRowState) async {
+        actionError = nil
+        do {
+            try await listService.removeMember(listId: listId, userId: row.userId)
+        } catch is CancellationError {
+            return
+        } catch {
+            failedAction = .removeMember(row)
+            actionError = ListErrorPresentation((error as? ListError) ?? .server)
+        }
+    }
+
+    /// Leaves the list as the signed-in user. The detail screen pops when the service reports
+    /// the list gone.
+    private func leaveList() async {
+        actionError = nil
+        guard let userId = authenticationService.currentUser?.id else {
+            failedAction = nil
+            actionError = ListErrorPresentation(.sessionEnded)
+            return
+        }
+        do {
+            try await listService.leaveList(id: listId, userId: userId)
+        } catch is CancellationError {
+            return
+        } catch {
+            failedAction = .leaveList
+            actionError = ListErrorPresentation((error as? ListError) ?? .server)
+        }
+    }
+
+    private func retryFailedAction() async {
+        switch failedAction {
+        case .deleteList: await deleteList()
+        case .leaveList: await leaveList()
+        case .removeMember(let row): await removeMember(row)
+        case nil: break
         }
     }
 
@@ -118,7 +203,7 @@ struct ListDetailView: View {
                 if let actionError {
                     ListErrorBanner(
                         presentation: actionError,
-                        onRetry: { Task { await deleteList() } },
+                        onRetry: failedAction == nil ? nil : { Task { await retryFailedAction() } },
                         onLeave: { dismiss() },
                         onDismiss: { self.actionError = nil }
                     )
@@ -136,9 +221,7 @@ struct ListDetailView: View {
                 if showsItemsSection(state: state) {
                     itemsSection(state: state, detail: detail)
                 }
-                if state.showsMembersSection, let members = detail.members {
-                    membersCard(members: members)
-                }
+                membersSection(detail: detail)
                 if state.showsDeleteAction {
                     deleteButton
                 }
@@ -217,48 +300,14 @@ struct ListDetailView: View {
         .listCard()
     }
 
-    private func membersCard(members: [ListMember]) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack {
-                Text("Members")
-                    .font(.appHeadline)
-                    .foregroundStyle(Color.textPrimaryColor)
-                Spacer()
-                Text("\(members.count)")
-                    .font(.appCaption1)
-                    .foregroundStyle(Color.textMutedColor)
-            }
-            ForEach(members) { member in
-                HStack(spacing: AppSpacing.md) {
-                    Circle()
-                        .fill(Color.primaryColor.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                        .overlay {
-                            Text(String(member.displayName.prefix(1)))
-                                .font(.appHeadline)
-                                .foregroundStyle(Color.primaryColor)
-                        }
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                        Text(member.displayName)
-                            .font(.appBody)
-                            .foregroundStyle(Color.textPrimaryColor)
-                        if let email = member.email {
-                            Text(email)
-                                .font(.appCaption1)
-                                .foregroundStyle(Color.textMutedColor)
-                        }
-                    }
-                    Spacer()
-                    Text(member.role.displayName)
-                        .font(.appCaption1)
-                        .foregroundStyle(Color.textMutedColor)
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+    private func membersSection(detail: ListDetail) -> some View {
+        MembersSectionView(
+            state: MembersSectionState(detail: detail),
+            isMutating: listService.isMutating,
+            onAdd: { showsAddMember = true },
+            onRemove: { memberToRemove = $0 },
+            onLeave: { showLeaveConfirmation = true }
+        )
     }
 
     private var deleteButton: some View {
@@ -272,6 +321,7 @@ struct ListDetailView: View {
                 .padding(.vertical, AppSpacing.xs)
                 .background(Color.accentColor, in: .rect(cornerRadius: AppSpacing.md))
         }
+        .disabled(listService.isMutating)
         .accessibilityHint("Removes this list from your lists after you confirm")
         .accessibilityIdentifier("listDetail.deleteButton")
     }
@@ -342,7 +392,7 @@ struct ListDetailView: View {
     }
 }
 
-#Preview("Blind owner") {
+#Preview("Owner of a self list") {
     NavigationStack {
         ListDetailView(listId: MockListData.blindOwnerOfSelfList.id)
             .environment(\.listService, ListService(
