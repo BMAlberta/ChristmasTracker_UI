@@ -85,6 +85,8 @@ struct AppDependencies: Sendable {
     let apiClient: APIClient
     let authRepository: any AuthenticationRepository
     let listRepository: ListRepository
+    let memberRepository: any MemberRepository
+    let childRepository: any ChildRepository
     let itemRepository: ItemRepository
     let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
@@ -97,10 +99,14 @@ struct AppDependencies: Sendable {
     /// Build mock dependencies (used in .mock mode and when generatedClient is unavailable).
     static func makeMock() -> AppDependencies {
         let apiClient = MockAPIClient.withMockData()
+        // One list mock is shared, so members and children act on the lists the app shows.
+        let lists = MockListRepository()
         return AppDependencies(
             apiClient: apiClient,
             authRepository: MockAuthenticationRepository(),
-            listRepository: MockListRepository(),
+            listRepository: lists,
+            memberRepository: MockMemberRepository(listRepository: lists),
+            childRepository: MockChildRepository(listRepository: lists),
             itemRepository: MockItemRepository(),
             appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
@@ -114,6 +120,8 @@ struct AppDependencies: Sendable {
             apiClient: apiClient,
             authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
             listRepository: GeneratedClientListRepository(client: generatedClient),
+            memberRepository: GeneratedClientMemberRepository(client: generatedClient),
+            childRepository: GeneratedClientChildRepository(client: generatedClient),
             itemRepository: NetworkItemRepository(apiClient: apiClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
@@ -130,6 +138,8 @@ struct AppDependencies: Sendable {
             apiClient: InertAPIClient(),
             authRepository: InertAuthenticationRepository(),
             listRepository: InertListRepository(),
+            memberRepository: InertMemberRepository(),
+            childRepository: InertChildRepository(),
             itemRepository: InertItemRepository(),
             appVersionRepository: InertAppVersionRepository(),
             trackerClient: nil
@@ -200,6 +210,7 @@ struct ChristmasTrackerApp: App {
     @State private var apiClient: APIClient
     @State private var listService: ListService
     @State private var itemService: ItemService
+    @State private var childService: ChildService
     @State private var showBiometricSetup = false
     @State private var versionGate: VersionGate
     @State private var versionService: VersionService
@@ -288,9 +299,13 @@ struct ChristmasTrackerApp: App {
         let listDataStore = ListDataStore()
         let ls = ListService(
             repository: dependencies.listRepository,
+            memberRepository: dependencies.memberRepository,
             dataStore: listDataStore
         )
         listService = ls
+
+        let cs = ChildService(repository: dependencies.childRepository)
+        childService = cs
 
         let itemDataStore = ItemDataStore()
         let is_ = ItemService(
@@ -299,14 +314,15 @@ struct ChristmasTrackerApp: App {
         )
         itemService = is_
 
-        // Create session manager with production clearables (6 total; lockController is #6)
+        // Create session manager with production clearables (7 total; childService is appended last)
         let clearables = makeProductionClearables(
             listDataStore: listDataStore,
             itemDataStore: itemDataStore,
             listService: ls,
             itemService: is_,
             networkCache: NetworkCache.shared,
-            lockController: lc
+            lockController: lc,
+            childService: cs
         )
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
@@ -399,6 +415,7 @@ struct ChristmasTrackerApp: App {
                 .environment(\.apiClient, apiClient)
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)
+                .environment(\.childService, childService)
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         lockController.authService = authService

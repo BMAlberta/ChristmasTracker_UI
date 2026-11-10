@@ -38,6 +38,9 @@ final class GatedListRepository: ListRepository {
 
     var honorsCancellation = false
 
+    /// I3b-M2: optional shared log so a test can assert the order of calls across repositories.
+    var callLog: RepositoryCallLog?
+
     // MARK: Recorded calls
 
     private(set) var fetchListsCount = 0
@@ -149,6 +152,7 @@ final class GatedListRepository: ListRepository {
 
     @MainActor func fetchListDetail(id: String) async throws -> ListDetail {
         fetchListDetailCount += 1
+        callLog?.record("fetchListDetail:\(id)")
         let step = detailSteps.isEmpty
             ? Step<ListDetail>(outcome: .failure(ListError.server), held: false)
             : detailSteps.removeFirst()
@@ -169,6 +173,7 @@ final class GatedListRepository: ListRepository {
     @MainActor func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail {
         updateListCount += 1
         updatedInputs.append(input)
+        callLog?.record("updateList:\(id)")
         let step = updateSteps.isEmpty
             ? Step<ListDetail>(outcome: .failure(ListError.server), held: false)
             : updateSteps.removeFirst()

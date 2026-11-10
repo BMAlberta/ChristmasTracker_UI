@@ -27,7 +27,10 @@ internal func makeProductionClearables(
     listService: ListService,
     itemService: ItemService,
     networkCache: NetworkCache,
-    lockController: InactivityLockController
+    lockController: InactivityLockController,
+    childService: ChildService
 ) -> [any SessionClearable] {
-    [listDataStore, itemDataStore, listService, itemService, networkCache, lockController]
+    // New clearables are appended so existing indices never move. The clearables are independent
+    // of each other and SessionManager clears them one after another, so order carries no meaning.
+    [listDataStore, itemDataStore, listService, itemService, networkCache, lockController, childService]
 }

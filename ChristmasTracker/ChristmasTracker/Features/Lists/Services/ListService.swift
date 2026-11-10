@@ -14,6 +14,7 @@ import SwiftUI
 final class ListService {
     // MARK: - Dependencies
     private nonisolated let repository: any ListRepository
+    private nonisolated let memberRepository: any MemberRepository
     private nonisolated let dataStore: ListDataStore
 
     // MARK: - Published State
@@ -70,8 +71,13 @@ final class ListService {
     }
 
     // MARK: - Initialization
-    init(repository: any ListRepository, dataStore: ListDataStore) {
+    init(
+        repository: any ListRepository,
+        memberRepository: any MemberRepository = InertMemberRepository(),
+        dataStore: ListDataStore
+    ) {
         self.repository = repository
+        self.memberRepository = memberRepository
         self.dataStore = dataStore
     }
 
@@ -317,6 +323,107 @@ final class ListService {
         }
     }
 
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No member data goes into the span.
+    /// Adds a member, then refetches the detail: the roster is never built from the add response.
+    /// If the add succeeded but the refetch fails, returns normally with `error` set to the
+    /// refetch error.
+    func addMember(listId: String, _ input: AddMemberInput) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.addMember",
+            operation: "service.lists.addMember"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        isMutating = true
+        defer { if gen == generation { isMutating = false } }
+        error = nil
+
+        do {
+            let members = self.memberRepository
+            _ = try await perform { try await members.addMember(listId: listId, input) }
+            try ensureCurrent(gen)
+            try await refetchDetailAfterMemberChange(listId: listId, generation: gen)
+            LogInfo("Added list member", category: .business)
+        } catch {
+            await dropListIfGone(error, id: listId, generation: gen)
+            throw failure(error, generation: gen, operation: "add member")
+        }
+    }
+
+    // Actor-isolated (@MainActor): manual SentrySDK span, see addMember.
+    /// Removes another member, then refetches the detail. A `membershipNotFound` failure
+    /// (already gone) refetches best-effort so the roster catches up, then rethrows.
+    func removeMember(listId: String, userId: String) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.removeMember",
+            operation: "service.lists.removeMember"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        isMutating = true
+        defer { if gen == generation { isMutating = false } }
+        error = nil
+
+        do {
+            let members = self.memberRepository
+            try await perform { try await members.removeMember(listId: listId, userId: userId) }
+            try ensureCurrent(gen)
+            try await refetchDetailAfterMemberChange(listId: listId, generation: gen)
+            LogInfo("Removed list member", category: .business)
+        } catch {
+            await dropListIfGone(error, id: listId, generation: gen)
+            if gen == generation, (error as? ListError) == .membershipNotFound {
+                try? await refetchDetailAfterMemberChange(listId: listId, generation: gen)
+            }
+            throw failure(error, generation: gen, operation: "remove member")
+        }
+    }
+
+    // Actor-isolated (@MainActor): manual SentrySDK span, see addMember.
+    /// Leaves a list: removes the caller (`userId`) as a member, then drops the list from the
+    /// service and the cache. `membershipNotFound` (already not a member) drops it too.
+    func leaveList(id: String, userId: String) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.leaveList",
+            operation: "service.lists.leaveList"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        isMutating = true
+        defer { if gen == generation { isMutating = false } }
+        error = nil
+
+        do {
+            let members = self.memberRepository
+            try await perform { try await members.removeMember(listId: id, userId: userId) }
+            try ensureCurrent(gen)
+            await dropList(id: id)
+            LogInfo("Left list", category: .business)
+        } catch {
+            if gen == generation, (error as? ListError) == .membershipNotFound {
+                await dropList(id: id)
+            } else {
+                await dropListIfGone(error, id: id, generation: gen)
+            }
+            throw failure(error, generation: gen, operation: "leave list")
+        }
+    }
+
+    /// Sets the co-owner by email through the update-list operation and uses the returned detail
+    /// (flags included), exactly like updateList. Clearing the co-owner is not offered: the
+    /// generated client cannot send it.
+    // Covered by the manual span of updateList, which does all the work.
+    func setCoOwner(listId: String, email: String) async throws {
+        try await updateList(
+            id: listId,
+            UpdateListInput(name: nil, theme: nil, visibility: nil, coOwner: .set(email: email))
+        )
+    }
+
     func clearCurrentDetail() {
         currentListDetail = nil
     }
@@ -390,6 +497,14 @@ final class ListService {
              .alreadyMember, .membershipNotFound:
             return
         }
+        await dropList(id: id)
+    }
+
+    /// Removes a list that is gone for this user (left, not found, read-only) from the lists, the
+    /// cache and the open detail, and remembers the id for this session. Callers check the
+    /// generation first.
+    // Covered by the manual spans of its public callers.
+    private func dropList(id: String) async {
         deletedListIds.insert(id)
         goneListId = id
         lists.removeAll { $0.id == id }
@@ -397,6 +512,37 @@ final class ListService {
             currentListDetail = nil
         }
         await dataStore.removeList(id: id)
+    }
+
+    /// Refetches one list's detail after a member change and writes it to the cache, the open
+    /// detail and the lists entry (member count). A failed refetch records its error and returns;
+    /// only cancellation or an ended session throws.
+    // Covered by the manual spans of its public callers (addMember, removeMember).
+    private func refetchDetailAfterMemberChange(listId: String, generation gen: Int) async throws {
+        do {
+            let repository = self.repository
+            let detail = try await perform { try await repository.fetchListDetail(id: listId) }
+            try ensureCurrent(gen)
+            guard !deletedListIds.contains(listId) else { return }
+            await dataStore.setListDetail(detail)
+            try ensureCurrent(gen)
+            guard !deletedListIds.contains(listId) else {
+                await dataStore.removeList(id: listId)
+                return
+            }
+            let summary = detail.asGiftList()
+            if let index = lists.firstIndex(where: { $0.id == summary.id }) {
+                lists[index] = summary
+            }
+            if currentListDetail?.id == detail.id {
+                currentListDetail = detail
+            }
+        } catch {
+            await dropListIfGone(error, id: listId, generation: gen)
+            if record(error, generation: gen, operation: "refresh list after member change") == nil {
+                throw CancellationError()
+            }
+        }
     }
 
     /// For an id in the deleted-list guard: records notFound through the normal error path,

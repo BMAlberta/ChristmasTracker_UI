@@ -66,6 +66,36 @@ nonisolated final class InertListRepository: ListRepository {
     }
 }
 
+/// A struct so it can be a default argument value of a MainActor initializer.
+nonisolated struct InertMemberRepository: MemberRepository {
+    @Instrumented
+    func addMember(listId: String, _ input: AddMemberInput) async throws -> ListMember {
+        throw ConfigurationError.clientUnavailable
+    }
+
+    @Instrumented
+    func removeMember(listId: String, userId: String) async throws {
+        throw ConfigurationError.clientUnavailable
+    }
+}
+
+nonisolated struct InertChildRepository: ChildRepository {
+    @Instrumented
+    func fetchChildren() async throws -> [Child] {
+        throw ConfigurationError.clientUnavailable
+    }
+
+    @Instrumented
+    func createChild(_ input: CreateChildInput) async throws -> Child {
+        throw ConfigurationError.clientUnavailable
+    }
+
+    @Instrumented
+    func deleteChild(id: String) async throws {
+        throw ConfigurationError.clientUnavailable
+    }
+}
+
 nonisolated final class InertItemRepository: ItemRepository {
     @Instrumented
     func fetchItems(listId: String) async throws -> [GiftItem] {

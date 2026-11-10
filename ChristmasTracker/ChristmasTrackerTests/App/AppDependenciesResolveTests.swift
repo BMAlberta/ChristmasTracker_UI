@@ -149,4 +149,94 @@ struct AppDependenciesResolveTests {
         #expect(!(sut.dependencies.authRepository is MockAuthenticationRepository))
         #expect(sut.reporter.categories.isEmpty)
     }
+
+    // MARK: - I3b-M2: member and child repositories
+
+    @Test("mock mode builds MockMemberRepository and MockChildRepository")
+    func mockModeBuildsMemberAndChildMocks() throws {
+        let deps = try makeSUT(mode: .mock, withClient: false).dependencies
+
+        #expect(deps.memberRepository is MockMemberRepository)
+        #expect(deps.childRepository is MockChildRepository)
+    }
+
+    @Test("mock mode: the member repository shares the list repository's state (a leave removes the list)")
+    func mockModeMemberRepositoryHasTheSameListRepository() async throws {
+        let deps = try makeSUT(mode: .mock, withClient: false).dependencies
+        let lists = try #require(deps.listRepository as? MockListRepository)
+        await lists.setDelay(0)
+        let before = try await deps.listRepository.fetchLists()
+        let leavable = try #require(before.first(where: { $0.capabilities.canLeaveList }), "precondition: a list the user may leave")
+
+        try await deps.memberRepository.removeMember(listId: leavable.id, userId: MockListData.currentUser.id)
+
+        let after = try await deps.listRepository.fetchLists()
+        #expect(after.contains(where: { $0.id == leavable.id }) == false,
+                "the member mock must work on the SAME MockListRepository instance as deps.listRepository")
+    }
+
+    @Test("mock mode: the child repository shares the list repository's state (a list for a new child is not blind)")
+    func mockModeChildRepositoryHasTheSameListRepository() async throws {
+        let deps = try makeSUT(mode: .mock, withClient: false).dependencies
+        let lists = try #require(deps.listRepository as? MockListRepository)
+        await lists.setDelay(0)
+        let child = try await deps.childRepository.createChild(
+            CreateChildInput(firstName: "Eli", lastName: "Example", displayName: nil, relationship: .parent)
+        )
+
+        let detail = try await deps.listRepository.createList(
+            CreateListInput(recipientId: child.id, year: 2031, name: "Eli's Wishes", theme: nil, visibility: .private)
+        )
+
+        #expect(detail.recipient.id == child.id)
+        #expect(detail.capabilities.canSeeGiftActivity)
+        #expect(detail.itemCount != nil)
+    }
+
+    @Test("real mode with a client builds the generated-client member and child repositories")
+    func realModeBuildsGeneratedMemberAndChildRepositories() throws {
+        let deps = try makeSUT(mode: .real, withClient: true).dependencies
+
+        #expect(deps.memberRepository is GeneratedClientMemberRepository)
+        #expect(deps.childRepository is GeneratedClientChildRepository)
+        #expect(!(deps.memberRepository is MockMemberRepository))
+        #expect(!(deps.childRepository is MockChildRepository))
+    }
+
+    @Test("real mode without a client builds inert member and child repositories and no Mock")
+    func failedBuildsInertMemberAndChildRepositories() throws {
+        let deps = try makeSUT(mode: .real, withClient: false).dependencies
+
+        #expect(deps.memberRepository is InertMemberRepository)
+        #expect(deps.childRepository is InertChildRepository)
+        #expect(!(deps.memberRepository is MockMemberRepository))
+        #expect(!(deps.childRepository is MockChildRepository))
+        #expect(!(deps.memberRepository is GeneratedClientMemberRepository))
+        #expect(!(deps.childRepository is GeneratedClientChildRepository))
+    }
+
+    @Test("real mode without a client: every member call throws clientUnavailable")
+    func failedMemberRepositoryThrows() async throws {
+        let repo = try makeSUT(mode: .real, withClient: false).dependencies.memberRepository
+
+        await #expect(throws: ConfigurationError.clientUnavailable) {
+            _ = try await repo.addMember(listId: "list-a", AddMemberInput(email: "friend@example.com", role: .member))
+        }
+        await #expect(throws: ConfigurationError.clientUnavailable) {
+            try await repo.removeMember(listId: "list-a", userId: "user-a")
+        }
+    }
+
+    @Test("real mode without a client: every child call throws clientUnavailable")
+    func failedChildRepositoryThrows() async throws {
+        let repo = try makeSUT(mode: .real, withClient: false).dependencies.childRepository
+
+        await #expect(throws: ConfigurationError.clientUnavailable) { _ = try await repo.fetchChildren() }
+        await #expect(throws: ConfigurationError.clientUnavailable) {
+            _ = try await repo.createChild(
+                CreateChildInput(firstName: "Eli", lastName: "Example", displayName: nil, relationship: .parent)
+            )
+        }
+        await #expect(throws: ConfigurationError.clientUnavailable) { try await repo.deleteChild(id: "child-a") }
+    }
 }

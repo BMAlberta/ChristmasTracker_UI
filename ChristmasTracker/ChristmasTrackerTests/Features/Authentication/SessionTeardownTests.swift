@@ -289,11 +289,14 @@ struct SessionTeardownTests {
             listService: listService,
             itemService: itemService,
             networkCache: NetworkCache.shared,
-            lockController: lockController
+            lockController: lockController,
+            childService: ChildService(repository: GatedChildRepository())
         )
 
         // Updated from 5 → 6 for I2b-1 Story 2 (InactivityLockController added as clearable)
-        #expect(clearables.count == 6, "Factory must return exactly 6 clearables")
+        // Updated from 6 → 7 for I3b-M2. Reason: a new session-scoped store (ChildService) holds the
+        // signed-in user's children and must be cleared at teardown (appended last, no index moves).
+        #expect(clearables.count == 7, "Factory must return exactly 7 clearables")
         #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
         #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
         #expect(clearables[2] is ListService, "clearables[2] must be ListService")
