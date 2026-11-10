@@ -754,4 +754,5 @@ struct ListServiceTests {
     func createList(_ input: CreateListInput) async throws -> ListDetail { throw ListError.server }
     func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail { throw ListError.server }
     func deleteList(id: String) async throws { throw ListError.server }
+    func removeCoOwner(listId: String) async throws -> ListDetail { throw ListError.server }
 }

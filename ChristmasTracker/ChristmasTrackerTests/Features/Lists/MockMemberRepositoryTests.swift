@@ -254,18 +254,6 @@ struct MockMemberRepositoryTests {
         #expect(after.coOwner == before.coOwner)
     }
 
-    @Test("updateList with .clear throws the same validation error as the real repository")
-    func clearCoOwner() async {
-        let sut = await makeSUT()
-
-        await #expect(throws: ListError.validation(message: "Removing the co-owner is not available yet.")) {
-            _ = try await sut.lists.updateList(
-                id: childListId,
-                UpdateListInput(name: nil, theme: nil, visibility: nil, coOwner: .clear)
-            )
-        }
-    }
-
     @Test("updateList with .unchanged leaves the co-owner alone")
     func unchangedCoOwner() async throws {
         let sut = await makeSUT()

@@ -47,7 +47,6 @@ struct EditListView: View {
     /// The co-owner part of the one update: a typed address (only when the flag offers the change)
     /// or a removal (only when offered), otherwise unchanged.
     private var coOwnerChange: CoOwnerChange {
-        if coOwnerState.showsRemove, removesCoOwner { return .clear }
         if coOwnerState.showsChange, hasCoOwnerEmail {
             return CoOwnerFormValidation.makeChange(email: coOwnerEmail) ?? .unchanged
         }

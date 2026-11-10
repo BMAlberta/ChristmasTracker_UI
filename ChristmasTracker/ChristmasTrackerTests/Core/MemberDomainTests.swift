@@ -49,12 +49,22 @@ struct MemberDomainTests {
     @Test("CoOwnerChange cases are distinct and compare on the email")
     func coOwnerChangeEquality() {
         #expect(CoOwnerChange.unchanged == .unchanged)
-        #expect(CoOwnerChange.clear == .clear)
         #expect(CoOwnerChange.set(email: "a@example.com") == .set(email: "a@example.com"))
         #expect(CoOwnerChange.set(email: "a@example.com") != .set(email: "b@example.com"))
-        #expect(CoOwnerChange.unchanged != .clear)
         #expect(CoOwnerChange.unchanged != .set(email: "a@example.com"))
-        #expect(CoOwnerChange.clear != .set(email: "a@example.com"))
+    }
+
+    @Test("CoOwnerChange has exactly two cases: unchanged and set(email:) (no clear case)")
+    func coOwnerChangeHasNoClearCase() {
+        // An exhaustive switch with no default compiles only while these are the only cases.
+        func describe(_ change: CoOwnerChange) -> String {
+            switch change {
+            case .unchanged: "unchanged"
+            case .set(let email): "set:\(email)"
+            }
+        }
+        #expect(describe(.unchanged) == "unchanged")
+        #expect(describe(.set(email: "a@example.com")) == "set:a@example.com")
     }
 
     // MARK: - UpdateListInput
@@ -69,8 +79,6 @@ struct MemberDomainTests {
     func updateInputCarriesCoOwner() {
         let set = UpdateListInput(name: nil, theme: nil, visibility: nil, coOwner: .set(email: "a@example.com"))
         #expect(set.coOwner == .set(email: "a@example.com"))
-        let clear = UpdateListInput(name: nil, theme: nil, visibility: nil, coOwner: .clear)
-        #expect(clear.coOwner == .clear)
     }
 
     @Test("UpdateListInput equality includes the co-owner change")

@@ -61,6 +61,11 @@ nonisolated final class InertListRepository: ListRepository {
     }
 
     @Instrumented
+    func removeCoOwner(listId: String) async throws -> ListDetail {
+        throw ConfigurationError.clientUnavailable
+    }
+
+    @Instrumented
     func deleteList(id: String) async throws {
         throw ConfigurationError.clientUnavailable
     }

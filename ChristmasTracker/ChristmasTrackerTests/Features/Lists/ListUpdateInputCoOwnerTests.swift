@@ -41,12 +41,6 @@ struct ListUpdateInputCoOwnerTests {
         ))
     }
 
-    @Test("Clearing the co-owner alone gives an input that carries .clear")
-    func clearOnly() {
-        let input = makeInput(coOwner: .clear)
-        #expect(input == UpdateListInput(name: nil, theme: nil, visibility: nil, coOwner: .clear))
-    }
-
     // MARK: - Nothing changed
 
     @Test("Nothing changed with an explicit unchanged co-owner is nil")

@@ -34,6 +34,7 @@ import Foundation
     func createList(_ input: CreateListInput) async throws -> ListDetail { throw ListError.server }
     func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail { throw ListError.server }
     func deleteList(id: String) async throws {}
+    func removeCoOwner(listId: String) async throws -> ListDetail { throw ListError.server }
 }
 
 /// A fast MockItemRepository that doesn't sleep.

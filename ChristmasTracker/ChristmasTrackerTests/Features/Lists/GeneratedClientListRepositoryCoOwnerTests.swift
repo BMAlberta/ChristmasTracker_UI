@@ -7,8 +7,8 @@
 //
 //  - `.set(email)` sends `coOwnerEmail` (and only the other fields that were supplied).
 //  - `.unchanged` sends NO `coOwnerEmail` key.
-//  - `.clear` is REFUSED before any request: the generated payload cannot encode an explicit
-//    JSON null, so the repository throws ListError.validation and the transport sees nothing.
+//  - There is no clear case: clearing goes only through removeCoOwner (see
+//    GeneratedClientListRepositoryRemoveCoOwnerTests); this PATCH path only sets.
 //  - 404 MEMBER_EMAIL_NOT_FOUND -> memberEmailNotFound (other 404 -> notFound); 403 -> forbidden;
 //    422 -> archivedReadOnly (still). createList still never sends coOwnerEmail.
 //
@@ -33,7 +33,6 @@ private func makeSUT() throws -> SUT {
 }
 
 private let coOwnerAddress = "spouse@example.com"
-private let clearRefusal = "Removing the co-owner is not available yet."
 
 @Suite("GeneratedClientListRepository co-owner")
 struct GeneratedClientListRepositoryCoOwnerTests {
@@ -109,24 +108,6 @@ struct GeneratedClientListRepositoryCoOwnerTests {
         let body = try #require(recorded.jsonObject)
         #expect(body["coOwnerEmail"] == nil)
         #expect(body["name"] as? String == "New Name")
-    }
-
-    // MARK: .clear
-
-    @Test("updateList with .clear throws the not-available validation error and sends no request", arguments: [
-        UpdateListInput(name: nil, theme: nil, visibility: nil, coOwner: .clear),
-        UpdateListInput(name: "New Name", theme: "New Theme", visibility: .public, coOwner: .clear)
-    ])
-    func clearIsRefusedWithoutARequest(input: UpdateListInput) async throws {
-        let sut = try makeSUT()
-        await sut.transport.enqueue(status: 200, json: try ListWire.detailJSON(ListFixtures.ownerOfChildList()))
-        let repo = sut.repo
-
-        await #expect(throws: ListError.validation(message: clearRefusal)) {
-            _ = try await repo.updateList(id: "list-1", input)
-        }
-
-        #expect(await sut.transport.requestCount == 0, "no request, and in particular no empty PATCH")
     }
 
     // MARK: Errors

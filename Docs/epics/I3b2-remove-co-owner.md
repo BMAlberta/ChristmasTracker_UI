@@ -93,5 +93,34 @@ There is no badRequest and no conflict case. The payload is the same `Components
 - Files: `LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.json` (regenerated), this brief, `Docs/reports/I3b2-1-regenerate.md`.
 - New interface: none.
 
+---
+
+# Gate 1 spec, story R2 (repository and service; full pipeline: new interface, generated-client and repository layer)
+Contract slice: `removeCoOwner` (DELETE /lists/{id}/co-owner), Output cases ok / unauthorized / forbidden / notFound / unprocessableContent / tooManyRequests / internalServerError / undocumented.
+
+New interfaces (signatures):
+```swift
+// ListRepository (protocol, Features/Lists/Repositories/ListRespository.swift)
+func removeCoOwner(listId: String) async throws -> ListDetail
+// GeneratedClientListRepository: @Instrumented; MockListRepository: uninstrumented (like its siblings)
+// ListService (@MainActor)
+func removeCoOwner(listId: String) async throws
+```
+Removed: `CoOwnerChange.clear`, the `case .clear` refusal in `GeneratedClientListRepository.updateList`, the `coOwnerClearUnavailableMessage` constant, and the mock's `.clear` refusal. `CoOwnerChange` keeps `unchanged` and `set(email:)`.
+
+Mapping (same as the other list mutations): ok -> `mapListDetail`; 401 unauthorized; 403 forbidden; 404 notFound (a plain not-found: this operation has no member-email or membership code); 422 archivedReadOnly; 429 rateLimited (a thrown `TrackerAPIError.rateLimited` carries retryAfter through `listFailure`); 500 server; undocumented 5xx server, other invalidResponse; a decoding `ClientError` invalidResponse; transport failures network; cancellation passes through. No blanket default.
+
+Service behavior (like `updateList`): not allowed after the session ended; `isMutating` true during the call; the returned detail replaces `currentListDetail` (when the same id), the matching entry in `lists`, and the cache entry; NO refetch; stale result after teardown or user switch is discarded and writes nothing; the I3b removal-sequence guard (a list dropped while in flight) is honored exactly as in `updateList`; on notFound or archivedReadOnly the list is dropped like the other mutations (`dropListIfGone`); errors are mapped by the existing `failure(...)`.
+
+Mock behavior: returns the detail with `coOwner` nil; idempotent when there is no co-owner (returns the unchanged detail); throws `forbidden` when the stored list's `capabilities.canSetCoOwner` is false; `notFound` for an unknown id; honors `shouldFail`.
+
+Acceptance (tests):
+- Real factory-built client plus a fake `ClientTransport`, literal fixtures from the client guide with the full meta object: 200 with `coOwner` null and flags present; the request is DELETE to `/tracker/v2/lists/{id}/co-owner` with the four client headers (`X-Platform`, `X-Build`, `X-App-Version`, `X-Client-Platform: ios`), the bearer token and no body; 401; 403; 404 LIST_NOT_FOUND; 422 CANNOT_EDIT_ARCHIVED_LIST; 429 with retryAfter; 500; undocumented; transport failure; decoding failure; idempotent 200 with no co-owner.
+- Service tests with fakes and deterministic handshakes (no sleeps, no `Task.yield()` loops): state updated from the returned detail with no refetch (assert the fake's fetch count is unchanged); stale result after teardown and after a user switch writes nothing; cancellation; error mapping; the list is dropped and the screen is left on notFound and archivedReadOnly; `isMutating`; the cache updated; the removal-sequence guard.
+- `CoOwnerChange` has no clear case (exhaustive switch over the two remaining cases compiles in a test) and the PATCH body never carries a `coOwnerEmail` key unless `.set`, never a null.
+- Existing tests that exclusively assert the old "clearing is blocked" behavior are removed or replaced and named in the report.
+
+Scoped files: `Core/Models/MemberInputs.swift`, `Features/Lists/ViewState/CoOwnerViewState.swift` (only `makeChange` doc if needed), `Features/Lists/Repositories/ListRespository.swift`, `GeneratedClientListRepository.swift`, `MockListRepository.swift`, `Features/Lists/Services/ListService.swift`, `Features/Lists/Views/EditListView.swift` (ONLY the minimal edit that deletes the `.clear` path so the app compiles; the screen change is R3), and the matching tests under `ChristmasTrackerTests/` (the files listed in the inventory plus new files `GeneratedClientListRepositoryRemoveCoOwnerTests.swift`, `ListServiceRemoveCoOwnerTests.swift`, `MockListRepositoryRemoveCoOwnerTests.swift`). Test doubles that conform to `ListRepository` get the new method.
+
 ## Contract issue
 `Docs/contract-issues.md` row 2 (filed 2026-11-09, "Open: blocks only clearing a co-owner (I3b)") is resolved in R4.

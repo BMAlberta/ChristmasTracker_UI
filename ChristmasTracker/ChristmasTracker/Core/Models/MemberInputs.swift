@@ -30,6 +30,5 @@ nonisolated enum CoOwnerChange: Equatable, Sendable {
     case unchanged
     /// Set the co-owner to the person with this email.
     case set(email: String)
-    /// Remove the co-owner. Not sendable through the generated client today (see CoOwnerSectionState).
-    case clear
+    // Removing the co-owner is a separate operation: ListRepository.removeCoOwner(listId:).
 }

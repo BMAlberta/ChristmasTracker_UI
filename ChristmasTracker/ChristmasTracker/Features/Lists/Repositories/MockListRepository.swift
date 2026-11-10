@@ -121,11 +121,6 @@ actor MockListRepository: ListRepository {
     func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail {
         LogDebug("Mock updateList", category: .business)
 
-        // Like the real repository, clearing the co-owner is refused before anything happens.
-        if input.coOwner == .clear {
-            throw ListError.validation(message: coOwnerClearUnavailableMessage)
-        }
-
         try await Task.sleep(for: .seconds(delay))
 
         if shouldFail {
@@ -152,6 +147,32 @@ actor MockListRepository: ListRepository {
         }
         lists[index] = updated
 
+        return updated
+    }
+
+    // Mock repository: intentionally uninstrumented.
+    func removeCoOwner(listId: String) async throws -> ListDetail {
+        LogDebug("Mock removeCoOwner", category: .business)
+
+        try await Task.sleep(for: .seconds(delay))
+
+        if shouldFail {
+            throw ListError.server
+        }
+
+        guard let index = lists.firstIndex(where: { $0.id == listId }) else {
+            throw ListError.notFound
+        }
+        let list = lists[index]
+        guard list.capabilities.canSetCoOwner else {
+            throw ListError.forbidden
+        }
+        // Idempotent: with no co-owner the unchanged detail comes back.
+        guard list.coOwner != nil else {
+            return list
+        }
+        let updated = list.replacing(coOwner: nil)
+        lists[index] = updated
         return updated
     }
 
@@ -269,7 +290,7 @@ actor MockListRepository: ListRepository {
 // MARK: - Mock copies
 
 nonisolated private extension ListDetail {
-    func replacing(coOwner: ListPerson) -> ListDetail {
+    func replacing(coOwner: ListPerson?) -> ListDetail {
         rebuilt(coOwner: coOwner, memberCount: memberCount, members: members)
     }
 

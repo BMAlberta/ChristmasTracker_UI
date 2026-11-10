@@ -134,16 +134,13 @@ nonisolated final class GeneratedClientListRepository: ListRepository, Sendable 
         do {
             // Only the non-nil fields are sent; status never is. An all-nil input therefore sends
             // an empty JSON object body ({}), which the server accepts as a no-op update.
-            // Clearing the co-owner needs an explicit JSON null, which the generated payload
-            // cannot encode (a nil optional is omitted), so it is refused before any request.
+            // The key is only present for .set; clearing is the separate removeCoOwner call.
             let coOwnerEmail: String?
             switch input.coOwner {
             case .unchanged:
                 coOwnerEmail = nil
             case .set(let email):
                 coOwnerEmail = email
-            case .clear:
-                throw ListError.validation(message: coOwnerClearUnavailableMessage)
             }
             let body = Operations.UpdateList.Input.Body.JsonPayload(
                 name: input.name,
@@ -167,6 +164,38 @@ nonisolated final class GeneratedClientListRepository: ListRepository, Sendable 
             case .notFound(let response):
                 // 404 MEMBER_EMAIL_NOT_FOUND (4009): no account for the co-owner email.
                 throw notFoundFailure(response.body, memberEmailCode: true)
+            case .unprocessableContent:
+                // 422 CANNOT_EDIT_ARCHIVED_LIST: an archived list is read-only.
+                throw ListError.archivedReadOnly
+            case .tooManyRequests:
+                throw ListError.rateLimited(retryAfter: 0)
+            case .internalServerError:
+                throw ListError.server
+            case .undocumented(let statusCode, _):
+                throw undocumentedFailure(statusCode)
+            }
+        } catch {
+            throw listFailure(error)
+        }
+    }
+
+    // MARK: - Remove co-owner
+
+    @Instrumented
+    func removeCoOwner(listId: String) async throws -> ListDetail {
+        do {
+            let output = try await client.removeCoOwner(
+                Operations.RemoveCoOwner.Input(path: .init(id: listId), headers: .init())
+            )
+            switch output {
+            case .ok(let response):
+                return mapListDetail(try response.body.json.data)
+            case .unauthorized:
+                throw ListError.unauthorized
+            case .forbidden:
+                throw ListError.forbidden
+            case .notFound:
+                throw ListError.notFound
             case .unprocessableContent:
                 // 422 CANNOT_EDIT_ARCHIVED_LIST: an archived list is read-only.
                 throw ListError.archivedReadOnly
@@ -222,9 +251,6 @@ nonisolated private func wireVisibility(_ value: ListVisibility) -> Components.S
 }
 
 // MARK: - Failure mapping
-
-/// Shown when the app is asked to clear the co-owner, which the generated client cannot send.
-nonisolated let coOwnerClearUnavailableMessage = "Removing the co-owner is not available yet."
 
 /// 404 on an operation that can also report MEMBER_EMAIL_NOT_FOUND (4009), or on removing a
 /// member that can report MEMBERSHIP_NOT_FOUND (4006). Any other 404 is a plain not-found.

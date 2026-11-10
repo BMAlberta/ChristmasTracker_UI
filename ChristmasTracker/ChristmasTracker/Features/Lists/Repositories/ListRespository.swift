@@ -28,6 +28,11 @@ nonisolated protocol ListRepository: Repository {
     /// - Returns: ListDetail
     func updateList(id: String, _ input: UpdateListInput) async throws -> ListDetail
 
+    /// Clear the co-owner of a list (DELETE /lists/{id}/co-owner). Idempotent on the server.
+    /// - Parameter listId: ID of the list.
+    /// - Returns: the updated ListDetail with no co-owner.
+    func removeCoOwner(listId: String) async throws -> ListDetail
+
     /// Delete a list
     /// - Parameter id: ID of the list to be deleted.
     func deleteList(id: String) async throws

@@ -300,6 +300,51 @@ final class ListService {
 
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No list data goes into the span.
+    func removeCoOwner(listId: String) async throws {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.removeCoOwner",
+            operation: "service.lists.removeCoOwner"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        let start = operationSequence
+        isMutating = true
+        defer { if gen == generation { isMutating = false } }
+        error = nil
+
+        do {
+            let repository = self.repository
+            let updated = try await perform { try await repository.removeCoOwner(listId: listId) }
+            try ensureCurrent(gen)
+
+            // The returned detail carries fresh flags: use it, do not refetch.
+            // The list was removed while the call was in flight: write nothing back.
+            guard !isRemoved(listId, since: start) else { return }
+            let summary = updated.asGiftList()
+            await dataStore.setListDetail(updated)
+            try ensureCurrent(gen)
+            guard !isRemoved(listId, since: start) else {
+                await dataStore.removeList(id: listId)
+                return
+            }
+
+            if let index = lists.firstIndex(where: { $0.id == summary.id }) {
+                lists[index] = summary
+            }
+            if currentListDetail?.id == updated.id {
+                currentListDetail = updated
+            }
+
+            LogInfo("Removed co-owner", category: .business)
+        } catch {
+            await dropListIfGone(error, id: listId, generation: gen)
+            throw failure(error, generation: gen, operation: "remove co-owner")
+        }
+    }
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
     func deleteList(id: String) async throws {
         let span = SentrySDK.startTransaction(
             name: "service.lists.deleteList",
@@ -425,8 +470,8 @@ final class ListService {
     }
 
     /// Sets the co-owner by email through the update-list operation and uses the returned detail
-    /// (flags included), exactly like updateList. Clearing the co-owner is not offered: the
-    /// generated client cannot send it.
+    /// (flags included), exactly like updateList. Clearing the co-owner is a
+    /// separate operation: see removeCoOwner(listId:).
     // Covered by the manual span of updateList, which does all the work.
     func setCoOwner(listId: String, email: String) async throws {
         try await updateList(

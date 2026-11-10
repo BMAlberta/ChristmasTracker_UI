@@ -46,10 +46,10 @@ struct CoOwnerFormValidationTests {
         #expect(CoOwnerFormValidation.makeChange(email: email) == nil)
     }
 
-    @Test("makeChange never produces clear or unchanged")
+    @Test("makeChange only ever produces set(email:), never unchanged")
     func makeChangeOnlySets() {
         let change = CoOwnerFormValidation.makeChange(email: "casey@example.com")
-        #expect(change != .clear)
+        #expect(change == .set(email: "casey@example.com"))
         #expect(change != .unchanged)
     }
 }
