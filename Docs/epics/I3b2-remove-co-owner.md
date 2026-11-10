@@ -68,7 +68,30 @@ Preconditions: P1 clean tree, newest commit ce80457 (Brian's contract sync), bel
 - `ChristmasTrackerTests/Features/Children/MembersChildrenViewScanTests.swift:359` and `Lists/MembersSourceScanTests.swift:155`: source scans that name `CoOwnerSectionState`.
 
 ## Generated signatures of `Operations.RemoveCoOwner`
-Pending: the generated sources are read AFTER the R1 regeneration (the plugin generates from the derived spec, which is stale until R1). R1 fills this section in.
+Read after the R1 regeneration from `GeneratedSources/Types+Operations.swift:8903` (signatures only; the generated sources are the truth):
+```swift
+Operations.RemoveCoOwner.Input(path: .init(id: Swift.String), headers: .init())   // no body
+// Output (frozen enum), cases:
+//   ok(Operations.RemoveCoOwner.Output.Ok)               // 200
+//   unauthorized(Components.Responses.UnauthorizedError)  // 401
+//   forbidden(Components.Responses.ForbiddenError)        // 403
+//   notFound(Components.Responses.NotFoundError)          // 404
+//   unprocessableContent(Components.Responses.UnprocessableEntityError) // 422
+//   tooManyRequests(Components.Responses.RateLimitError)  // 429
+//   internalServerError(Components.Responses.InternalError) // 500
+//   undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+// Output.Ok.Body.json -> JsonPayload { success: Swift.Bool; data: Components.Schemas.ListDetail; meta: Components.Schemas.Meta }
+// Client: func removeCoOwner(_ input: Operations.RemoveCoOwner.Input) async throws -> Operations.RemoveCoOwner.Output
+```
+There is no badRequest and no conflict case. The payload is the same `Components.Schemas.ListDetail` that getList and updateList return, so the existing `mapListDetail` applies.
+
+---
+
+# Gate 1 spec, story R1 (regenerate; no new interface, solo-weight, regeneration only)
+- Contract slice: the derived spec gains `/tracker/v2/lists/{id}/co-owner` (DELETE, `removeCoOwner`); nothing else.
+- Acceptance: `scripts/make-client-spec.sh` prints "Transformed 5 null-schema properties."; the derived-spec diff has only insertions for the new path; package tests 212 pass unchanged (including the public-operation pin test); the app builds; `scripts/verify.sh` is green.
+- Files: `LocalPackages/TrackerAPI/Sources/TrackerAPI/openapi.json` (regenerated), this brief, `Docs/reports/I3b2-1-regenerate.md`.
+- New interface: none.
 
 ## Contract issue
 `Docs/contract-issues.md` row 2 (filed 2026-11-09, "Open: blocks only clearing a co-owner (I3b)") is resolved in R4.
