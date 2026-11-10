@@ -304,8 +304,10 @@ struct ListServiceMemberTests {
         #expect(cached.map(\.id) == [H.otherListId])
     }
 
-    @Test("a later refreshLists that still returns the left list does not bring it back")
-    func leaveListGuardsLaterRefresh() async throws {
+    // I3b-6 replaces leaveListGuardsLaterRefresh: the product decision changes the guard from
+    // session-long to in-flight only (a member who left and is re-added sees the list again).
+    @Test("a refreshLists that starts after the leave completed and returns the list shows it again")
+    func leaveListLaterRefreshShowsListAgain() async throws {
         let sut = await H.make()
         try await sut.loadInitial(try H.detail(flags: H.memberFlags))
         sut.members.enqueueRemoveMember(.success(()))
@@ -314,24 +316,82 @@ struct ListServiceMemberTests {
         try await sut.service.leaveList(id: H.listId, userId: "user-me")
         await sut.service.refreshLists()
 
-        #expect(sut.service.lists.map(\.id) == [H.otherListId])
+        #expect(sut.service.lists.map(\.id) == [H.listId, H.otherListId])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == [H.otherListId])
+        #expect(cached.map(\.id) == [H.listId, H.otherListId])
     }
 
-    @Test("loadListDetail of a left list does not show it and reports notFound")
-    func leaveListGuardsDetailLoad() async throws {
+    @Test("a loadLists that starts after the leave completed and returns the list shows it again")
+    func leaveListLaterLoadListsShowsListAgain() async throws {
         let sut = await H.make()
         try await sut.loadInitial(try H.detail(flags: H.memberFlags))
         sut.members.enqueueRemoveMember(.success(()))
-        sut.lists.enqueueFetchListDetail(.success(try H.detail(flags: H.memberFlags)))
+        sut.lists.enqueueFetchLists(.success([giftList(H.listId), giftList(H.otherListId)]))
+
+        try await sut.service.leaveList(id: H.listId, userId: "user-me")
+        await sut.service.loadLists()
+
+        #expect(sut.service.lists.map(\.id) == [H.listId, H.otherListId])
+        let cached = await sut.store.getLists()
+        #expect(cached.map(\.id) == [H.listId, H.otherListId])
+    }
+
+    // I3b-6 replaces leaveListGuardsDetailLoad: the product decision changes the guard from
+    // session-long to in-flight only.
+    @Test("a loadListDetail that starts after the leave completed shows the detail again")
+    func leaveListLaterDetailLoadShowsDetail() async throws {
+        let sut = await H.make()
+        try await sut.loadInitial(try H.detail(flags: H.memberFlags))
+        sut.members.enqueueRemoveMember(.success(()))
+        let again = try H.detail(flags: H.memberFlags)
+        sut.lists.enqueueFetchListDetail(.success(again))
 
         try await sut.service.leaveList(id: H.listId, userId: "user-me")
         await sut.service.loadListDetail(id: H.listId)
 
-        #expect(sut.service.currentListDetail == nil)
-        #expect(sut.service.error == .notFound)
-        #expect(sut.service.goneListId == H.listId)
+        #expect(sut.service.currentListDetail == again)
+        #expect(sut.service.error == nil)
+        let cachedDetail = await sut.store.getListDetail(id: H.listId)
+        #expect(cachedDetail == again)
+    }
+
+    @Test("two loads in flight, one started before and one after the leave completed: only the earlier one is filtered")
+    func leaveListOnlyEarlierLoadIsFiltered() async throws {
+        let sut = await H.make()
+        try await sut.loadInitial(try H.detail(flags: H.memberFlags))
+        sut.lists.enqueueFetchLists(.success([giftList(H.listId), giftList(H.otherListId)]), held: true)
+        sut.lists.enqueueFetchLists(.success([giftList(H.listId), giftList(H.otherListId)]), held: true)
+        sut.members.enqueueRemoveMember(.success(()))
+        let earlier = Task { await sut.service.refreshLists() }
+        await sut.lists.nextHeldCall()
+        try await sut.service.leaveList(id: H.listId, userId: "user-me")
+        let later = Task { await sut.service.loadLists() }
+        await sut.lists.nextHeldCall()
+
+        sut.lists.release(at: 0)
+        await earlier.value
+        #expect(sut.service.lists.map(\.id) == [H.otherListId])
+
+        sut.lists.release(at: 1)
+        await later.value
+        #expect(sut.service.lists.map(\.id) == [H.listId, H.otherListId])
+    }
+
+    @Test("after a leave and a teardown the new session starts with no guard record")
+    func leaveListRecordClearedAtTeardown() async throws {
+        let sut = await H.make()
+        try await sut.loadInitial(try H.detail(flags: H.memberFlags))
+        sut.members.enqueueRemoveMember(.success(()))
+        try await sut.service.leaveList(id: H.listId, userId: "user-me")
+        await sut.manager.teardown(reason: .userLogout)
+
+        sut.lists.enqueueFetchLists(.success([giftList(H.listId)]), held: true)
+        let load = Task { await sut.service.loadLists() }
+        await sut.lists.nextHeldCall()
+        sut.lists.releaseAll()
+        await load.value
+
+        #expect(sut.service.lists.map(\.id) == [H.listId])
     }
 
     @Test("leaveList failing with membershipNotFound drops the list locally and rethrows")
@@ -459,11 +519,13 @@ struct ListServiceMemberTests {
         #expect(sut.service.isMutating == false)
     }
 
+    // I3b-6 replaces goneListIsNotResurrected: the product decision changes the guard from
+    // session-long to in-flight only.
     @Test(
-        "a list dropped by the gone-list path is not resurrected by a later load",
+        "a list dropped by the gone-list path is shown again by a load that starts after the drop",
         arguments: [MemberServiceOp.addMember, .removeMember, .setCoOwner]
     )
-    func goneListIsNotResurrected(op: MemberServiceOp) async throws {
+    func goneListIsShownAgainByLaterLoad(op: MemberServiceOp) async throws {
         let sut = await H.make()
         try await sut.loadInitial()
         try op.script(sut, failing: .notFound, held: false)
@@ -472,7 +534,7 @@ struct ListServiceMemberTests {
 
         await sut.service.refreshLists()
 
-        #expect(sut.service.lists.map(\.id) == [H.otherListId])
+        #expect(sut.service.lists.map(\.id) == [H.listId, H.otherListId])
     }
 
     // MARK: - isMutating

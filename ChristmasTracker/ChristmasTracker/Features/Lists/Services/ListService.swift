@@ -44,10 +44,16 @@ final class ListService {
     /// Cancel handles of the repository calls that are in flight, keyed by call.
     private var inFlight: [UUID: () -> Void] = [:]
 
-    /// Ids of lists that are gone in this session (deleted, or reported not found or read-only
-    /// by the server). Results of loads that were already in flight are filtered through it so
-    /// a gone list does not come back. Cleared with the rest of the session state.
-    private var deletedListIds: Set<String> = []
+    /// Session-local, monotonic counter of list removals. Every load, refresh, detail load,
+    /// update and member refetch captures it at its start.
+    private var operationSequence = 0
+
+    /// For each list removed in this session (deleted, left, or reported not found or read-only
+    /// by the server), the counter value recorded when the removal completed. A result is
+    /// filtered only when its list was removed after the operation started, so a load that
+    /// starts after the removal (for example after the member was re-added) is never filtered.
+    /// Reset with the rest of the session state.
+    private var removalSequence: [String: Int] = [:]
 
     // MARK: - Filtering
 
@@ -91,6 +97,7 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
+        let start = operationSequence
         isLoadingLists = true
         defer { if gen == generation { isLoadingLists = false } }
         error = nil
@@ -100,7 +107,7 @@ final class ListService {
             let cached = await dataStore.getLists()
             guard gen == generation else { return }
             if !cached.isEmpty {
-                lists = visibleLists(cached)
+                lists = visibleLists(cached, since: start)
 
                 // Background refresh
                 if await dataStore.shouldRefresh(), gen == generation {
@@ -111,13 +118,13 @@ final class ListService {
 
             // Fetch from repository
             let repository = self.repository
-            let fetched = visibleLists(try await perform { try await repository.fetchLists() })
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
             guard gen == generation else { return }
 
             // Update cache
             await dataStore.setLists(fetched)
             guard gen == generation else { return }
-            lists = visibleLists(fetched)
+            lists = visibleLists(fetched, since: start)
             lastUpdated = Date()
 
             LogInfo("Loaded \(fetched.count) lists", category: .business)
@@ -136,17 +143,18 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
+        let start = operationSequence
         isRefreshing = true
         defer { if gen == generation { isRefreshing = false } }
         error = nil
 
         do {
             let repository = self.repository
-            let fetched = visibleLists(try await perform { try await repository.fetchLists() })
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
             guard gen == generation else { return }
             await dataStore.setLists(fetched)
             guard gen == generation else { return }
-            lists = visibleLists(fetched)
+            lists = visibleLists(fetched, since: start)
             lastUpdated = Date()
 
             LogInfo("Refreshed \(fetched.count) lists", category: .business)
@@ -164,6 +172,7 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
+        let start = operationSequence
         isLoadingDetail = true
         defer { if gen == generation { isLoadingDetail = false } }
         error = nil
@@ -172,36 +181,37 @@ final class ListService {
         if currentListDetail?.id != id {
             currentListDetail = nil
         }
+        var shownCached = false
 
         do {
-            // A list that is gone in this session is never loaded or served from the cache.
-            guard !reportGuarded(id, generation: gen) else { return }
-
             // Show the cached detail right away, then always revalidate with the server: the
             // flags and the roster must be fresh, and a gone list must be noticed.
             let cached = await dataStore.getListDetail(id: id)
             guard gen == generation else { return }
-            guard !reportGuarded(id, generation: gen) else { return }
+            guard await !reportGuarded(id, since: start, generation: gen) else { return }
             if let cached {
                 currentListDetail = cached
+                shownCached = true
             }
 
             let repository = self.repository
             let detail = try await perform { try await repository.fetchListDetail(id: id) }
             guard gen == generation else { return }
-            guard !reportGuarded(id, generation: gen) else { return }
+            guard await !reportGuarded(id, since: start, generation: gen) else { return }
 
             await dataStore.setListDetail(detail)
             guard gen == generation else { return }
-            guard !reportGuarded(id, generation: gen) else {
-                await dataStore.removeList(id: id)
-                return
-            }
+            guard await !reportGuarded(id, since: start, generation: gen) else { return }
             currentListDetail = detail
 
             LogInfo("Loaded list detail", category: .business)
         } catch {
-            await dropListIfGone(error, id: id, generation: gen)
+            if shownCached, (error as? ListError) == .forbidden {
+                // Revalidating a cached detail: access is gone, so the cached copy must go too.
+                if gen == generation { await dropList(id: id) }
+            } else {
+                await dropListIfGone(error, id: id, generation: gen)
+            }
             _ = record(error, generation: gen, operation: "load list details")
         }
     }
@@ -253,6 +263,7 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
+        let start = operationSequence
         isMutating = true
         defer { if gen == generation { isMutating = false } }
         error = nil
@@ -263,12 +274,12 @@ final class ListService {
             try ensureCurrent(gen)
 
             // The returned detail carries fresh flags: use it, do not refetch.
-            // The list was deleted while the update was in flight: write nothing back.
-            guard !deletedListIds.contains(id) else { return }
+            // The list was removed while the update was in flight: write nothing back.
+            guard !isRemoved(id, since: start) else { return }
             let summary = updated.asGiftList()
             await dataStore.setListDetail(updated)
             try ensureCurrent(gen)
-            guard !deletedListIds.contains(id) else {
+            guard !isRemoved(id, since: start) else {
                 await dataStore.removeList(id: id)
                 return
             }
@@ -305,10 +316,10 @@ final class ListService {
             let repository = self.repository
             try await perform { try await repository.deleteList(id: id) }
             try ensureCurrent(gen)
-            deletedListIds.insert(id)
+            recordRemoval(id)
 
             // The server archives the list; remove it locally without refetching. Later
-            // refreshes drop it because it comes back ARCHIVED.
+            // loads drop it because it comes back ARCHIVED.
             await dataStore.removeList(id: id)
             try ensureCurrent(gen)
 
@@ -463,7 +474,8 @@ final class ListService {
         lists = []
         currentListDetail = nil
         error = nil
-        deletedListIds = []
+        operationSequence = 0
+        removalSequence = [:]
         goneListId = nil
         isLoadingLists = false
         isLoadingDetail = false
@@ -477,14 +489,26 @@ final class ListService {
         await dataStore.clear()
     }
 
-    /// ARCHIVED lists are hidden everywhere; DRAFT behaves like ACTIVE. Lists that are gone in
-    /// this session are hidden too, even when a load that started earlier still returns them.
-    private func visibleLists(_ fetched: [GiftList]) -> [GiftList] {
-        fetched.filter { $0.status != .archived && !deletedListIds.contains($0.id) }
+    /// ARCHIVED lists are hidden everywhere; DRAFT behaves like ACTIVE. Lists removed after the
+    /// operation started (`start`) are hidden too, even when that load still returns them.
+    private func visibleLists(_ fetched: [GiftList], since start: Int) -> [GiftList] {
+        fetched.filter { $0.status != .archived && !isRemoved($0.id, since: start) }
+    }
+
+    /// True when the list was removed after an operation that captured `start` began.
+    private func isRemoved(_ id: String, since start: Int) -> Bool {
+        guard let recorded = removalSequence[id] else { return false }
+        return recorded > start
+    }
+
+    /// Records a completed removal: bumps the counter and stores the new value for the id.
+    private func recordRemoval(_ id: String) {
+        operationSequence += 1
+        removalSequence[id] = operationSequence
     }
 
     /// When a call failed because the list is gone (not found) or read-only (archived), removes
-    /// it from the lists, the cache and the open detail and remembers the id for this session.
+    /// it from the lists, the cache and the open detail and records the removal for this session.
     /// Does nothing for any other error or after the session ended.
     // Covered by the manual spans of its public callers (loadListDetail, updateList).
     private func dropListIfGone(_ error: any Error, id: String, generation gen: Int) async {
@@ -501,11 +525,11 @@ final class ListService {
     }
 
     /// Removes a list that is gone for this user (left, not found, read-only) from the lists, the
-    /// cache and the open detail, and remembers the id for this session. Callers check the
+    /// cache and the open detail, and records the removal for this session. Callers check the
     /// generation first.
     // Covered by the manual spans of its public callers.
     private func dropList(id: String) async {
-        deletedListIds.insert(id)
+        recordRemoval(id)
         goneListId = id
         lists.removeAll { $0.id == id }
         if currentListDetail?.id == id {
@@ -519,14 +543,15 @@ final class ListService {
     /// only cancellation or an ended session throws.
     // Covered by the manual spans of its public callers (addMember, removeMember).
     private func refetchDetailAfterMemberChange(listId: String, generation gen: Int) async throws {
+        let start = operationSequence
         do {
             let repository = self.repository
             let detail = try await perform { try await repository.fetchListDetail(id: listId) }
             try ensureCurrent(gen)
-            guard !deletedListIds.contains(listId) else { return }
+            guard !isRemoved(listId, since: start) else { return }
             await dataStore.setListDetail(detail)
             try ensureCurrent(gen)
-            guard !deletedListIds.contains(listId) else {
+            guard !isRemoved(listId, since: start) else {
                 await dataStore.removeList(id: listId)
                 return
             }
@@ -545,13 +570,18 @@ final class ListService {
         }
     }
 
-    /// For an id in the deleted-list guard: records notFound through the normal error path,
-    /// marks the list gone and returns true. Returns false when the id is not guarded.
+    /// For a list removed after the load started (`start`): drops any cached or open copy,
+    /// records notFound through the normal error path, marks the list gone and returns true.
+    /// Returns false when the list was not removed after the load started.
     // Covered by the manual span of its public caller (loadListDetail).
-    private func reportGuarded(_ id: String, generation gen: Int) -> Bool {
-        guard deletedListIds.contains(id) else { return false }
+    private func reportGuarded(_ id: String, since start: Int, generation gen: Int) async -> Bool {
+        guard isRemoved(id, since: start) else { return false }
         goneListId = id
+        if currentListDetail?.id == id {
+            currentListDetail = nil
+        }
         _ = record(ListError.notFound, generation: gen, operation: "load list details")
+        await dataStore.removeList(id: id)
         return true
     }
 
