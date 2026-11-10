@@ -6,85 +6,101 @@
 //
 
 import Foundation
-import SwiftUI
 
-/// List summary returned by GET /lists
-/// Matches backend ListSummary schema
-nonisolated struct GiftList: Codable, Identifiable, Sendable {
+/// Domain model of a list in the list of lists. Built from the generated ListSummary at the
+/// repository boundary (see mapListSummary); it carries no wire concerns.
+nonisolated struct GiftList: Identifiable, Equatable, Sendable {
     // MARK: - Basic Info
     let id: String
     let name: String
     let theme: String?
     let year: Int
-    
+
     // MARK: - Settings
     let visibility: ListVisibility
     let status: ListStatus
-    
-    // MARK: - Nested Objects
+
+    // MARK: - People
     let recipient: ListPerson
     let owner: ListPerson
     let coOwner: ListPerson?
-    
-    // MARK: - Current User's Role
+
+    /// Display only (badge). Never used to decide what the viewer may do.
     let myRole: ListRole
-    
+
+    // MARK: - Capabilities
+    let capabilities: ListCapabilities
+
     // MARK: - Statistics
-    /// Note: Omitted for list owners to prevent revealing surprise gifts
+    let memberCount: Int
+    /// Absent for blind viewers, viewer-role members and public non-members.
     let itemCount: Int?
-    
-    /// Note: Omitted for list owners
     let purchasedCount: Int?
-    
+
     // MARK: - Metadata
     let createdAt: Date
     let updatedAt: Date
-    
+
     // MARK: - Computed Properties
-    
-    var progress: Double {
-        guard let itemCount = itemCount,
-              let purchasedCount = purchasedCount,
-              itemCount > 0 else {
-            return 0
-        }
-        return Double(purchasedCount) / Double(itemCount)
+
+    /// Purchased over items, only when both counts are present and there is at least one item.
+    var progress: Double? {
+        listProgress(itemCount: itemCount, purchasedCount: purchasedCount)
     }
-    
-    var isOwner: Bool {
-        myRole == .owner
-    }
-    
-    var canEdit: Bool {
-        myRole == .owner || myRole == .coOwner
-    }
-    
-    /// Display name for recipient
+
     var recipientName: String {
         recipient.displayName
     }
-    
-    /// Display name for owner
+
     var ownerName: String {
         owner.displayName
     }
+
+    /// The detail form of this list with the given members (nil when the viewer may not see them).
+    func asDetail(members: [ListMember]?) -> ListDetail {
+        ListDetail(
+            id: id,
+            name: name,
+            theme: theme,
+            year: year,
+            visibility: visibility,
+            status: status,
+            recipient: recipient,
+            owner: owner,
+            coOwner: coOwner,
+            myRole: myRole,
+            capabilities: capabilities,
+            memberCount: memberCount,
+            itemCount: itemCount,
+            purchasedCount: purchasedCount,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            members: members
+        )
+    }
+}
+
+/// Shared by GiftList and ListDetail so both follow the same rule.
+nonisolated func listProgress(itemCount: Int?, purchasedCount: Int?) -> Double? {
+    guard let itemCount, let purchasedCount, itemCount > 0 else { return nil }
+    return Double(purchasedCount) / Double(itemCount)
 }
 
 // MARK: - ListPerson (Nested Object)
 
-struct ListPerson: Codable, Sendable, Identifiable {
+nonisolated struct ListPerson: Identifiable, Equatable, Sendable {
     let id: String
     let displayName: String
 }
 
 // MARK: - Enums
 
-enum ListRole: String, Codable, Sendable {
+nonisolated enum ListRole: String, Equatable, Sendable {
     case owner = "owner"
     case coOwner = "co-owner"
     case member = "member"
     case viewer = "viewer"
-    
+
     var displayName: String {
         switch self {
         case .owner: return "Owner"
@@ -93,24 +109,16 @@ enum ListRole: String, Codable, Sendable {
         case .viewer: return "Viewer"
         }
     }
-    
-    @MainActor var color: Color {
-        switch self {
-        case .owner: return .primaryColor
-        case .coOwner: return .accentColor
-        case .member: return Color.blue
-        case .viewer: return Color.gray
-        }
-    }
 }
 
-enum ListVisibility: String, Codable, Sendable {
+nonisolated enum ListVisibility: String, Equatable, Hashable, Sendable {
     case `private` = "PRIVATE"
     case inviteOnly = "INVITE_ONLY"
+    case friendsOnly = "FRIENDS_ONLY"
     case `public` = "PUBLIC"
 }
 
-enum ListStatus: String, Codable, Sendable {
+nonisolated enum ListStatus: String, Equatable, Hashable, Sendable {
     case draft = "DRAFT"
     case active = "ACTIVE"
     case archived = "ARCHIVED"

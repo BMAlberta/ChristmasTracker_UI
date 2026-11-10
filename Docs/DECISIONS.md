@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 24 (2026-11-06)
+**Revision:** 26 (2026-11-07)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,16 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 26
+
+- **P22 (new)** [B W I]: ListDetail.members is returned only to callers who may call GET /lists/{id}/members, and a new canSeeMembers flag says so; this closes the deferral in C14.
+- **C17 (new)** [B W I]: USER_NOT_FOUND (4002) means only that the account behind the authenticated token no longer exists; GET /users/{id} returns PERSON_NOT_FOUND for a stranger or an unknown id.
+- **P23 (new)** [B W I]: ListSummary and ListDetail carry the required booleans canEditList, canDeleteList, canManageMembers, canSetCoOwner and canLeaveList, which say what the server accepts for the caller on that list now (false on an archived list except canLeaveList).
+
+### Changes in revision 25
+
+- **A16 (new)** [B W]: POST /auth/register accepts an optional rememberMe (default true) with the same meaning as on login.
 
 ### Changes in revision 24
 
@@ -173,6 +183,7 @@
 | C14 | List summaries (GET /lists) carry memberCount (the number of ACTIVE members, always present) and no members array. List detail carries members as an optional field. Gating detail members by L9 is deferred. | B, W, I |
 | C15 | Every operation documents the statuses that shared middleware can produce: 429 and 500 on every operation, and on every operation that requires authentication also 401, 403 (`ACCOUNT_DISABLED`) and 404 (`USER_NOT_FOUND`); operations with a request body also document 400. A static check enforces it. | B, W, I |
 | C16 | In responses about the authenticated user themselves (login, register, refresh, GET /auth/me, GET /users/me), `User.email` is required and never null. Login, register and refresh return `expiresIn`, the access token lifetime in seconds, derived from `JWT_EXPIRY` and equal to the token's `exp` minus `iat`. | B, W, I |
+| C17 | `USER_NOT_FOUND` (4002, HTTP 404) is returned only when the account behind the authenticated token no longer exists, so clients may end the session on it. `GET /users/{id}` returns `PERSON_NOT_FOUND` (HTTP 404) for a stranger or an unknown id, with the identical body for both (P19). | B, W, I |
 
 ## 2. Auth and sessions
 
@@ -193,6 +204,7 @@
 | A13 | Accounts are created fresh in v2 through registration with the shared code. No migration from the v1 system. | B |
 | A14 | `rememberMe: false` on login gives a session cookie (no `Max-Age`). `true` or omitted gives a persistent cookie with `maxAge` derived from `REFRESH_TOKEN_EXPIRY`. The choice is a signed claim in the refresh JWT and is preserved on every rotation. Tokens issued without the claim count as persistent. | B |
 | A15 | iOS keeps its Keychain refresh token across an explicit logout and sends neither a cookie nor a refresh token to POST /auth/logout, so the server session is not revoked. The handler revokes the chain for a refresh token sent in the cookie or, with no cookie, in the JSON body, so clients must never send one. Interim until the biometric credential (A9). | B, I |
+| A16 | `POST /auth/register` accepts an optional `rememberMe` boolean in the request body, with the same meaning and default as on login: `true` or omitted sets the persistent refresh cookie (7 days), `false` sets a session cookie. | B, W |
 
 ## 3. Version enforcement (API-based)
 
@@ -254,6 +266,8 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | P19 (new) | `GET /users/{id}` is tiered by relationship: self gets the full profile; caller's own child gets id/firstName/lastName/displayName; a user who shares any active list (as owner, co-owner, member, or recipient) gets PersonSummary (id, firstName, displayName); anyone else gets the identical 404 as a nonexistent id. Adding fields to PersonSummary later is non-breaking. | B |
 | P20 (updated rev 13) | `canCreateItem` is returned in `ListSummary` and `ListDetail`. It is `true` for owners, co-owners, and members (including blind owners on their own lists), `false` for viewers and non-members. Clients use it to show the add-item button; the resulting item type depends on the caller's role (P21). | B, W, I |
 | P21 (new) | Item type is derived from who adds it: owners and co-owners create normal items; members create off-list items. `POST /lists/:id/items` carries no `offList` flag; the server derives the type from the caller's role and ignores an `offList` field if sent. | B |
+| P22 | `ListSummary` and `ListDetail` carry the required boolean `canSeeMembers`: `true` for the owner, the co-owner and MEMBER-role members (the callers who may call `GET /lists/{id}/members`), `false` for VIEWER-role members and PUBLIC non-members. `ListDetail.members` is returned only when `canSeeMembers` is `true` and is absent otherwise; `memberCount` is returned to everyone (C14). | B, W, I |
+| P23 | `ListSummary` and `ListDetail` carry five required booleans that say what the server accepts for the caller on this list now: `canEditList` (`PATCH /lists/{id}`), `canDeleteList` (`DELETE /lists/{id}`, L14) and `canManageMembers` (adding members and removing other members, L8), each `true` for the owner and the co-owner (blind or not) while the list is not ARCHIVED; `canSetCoOwner` (`coOwnerEmail`, L12), `true` for the owner only while the list is not ARCHIVED; and `canLeaveList` (removing yourself, L9), `true` for an ACTIVE MEMBER-role or VIEWER-role member on a list of any status and `false` for the owner, the co-owner and every non-member. On an ARCHIVED list `canEditList` and `canSetCoOwner` are `false` because the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST`; `canDeleteList` and `canManageMembers` are also `false` so that clients treat archived lists as read-only, although the server still accepts those calls. The server enforces every action regardless of the flags. | B, W, I |
 
 ## 6. Purchases, shipping, and budgets
 

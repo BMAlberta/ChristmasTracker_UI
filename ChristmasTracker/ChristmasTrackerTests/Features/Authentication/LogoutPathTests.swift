@@ -76,22 +76,17 @@ struct LogoutPathTests {
     // MARK: - Helpers
 
     private func makeSampleList() -> GiftList {
-        let person = ListPerson(id: "u1", displayName: "Alice")
-        return GiftList(
+        // I3a-L1: built through the shared fixture so the new GiftList shape (capabilities,
+        // memberCount) is constructed in one place.
+        ListFixtures.giftList(
             id: "list-1",
             name: "Test List",
             theme: "christmas",
             year: 2026,
-            visibility: .private,
-            status: .active,
-            recipient: person,
-            owner: person,
-            coOwner: nil,
             myRole: .owner,
+            flags: ListFixtures.Flags(canSeeGiftActivity: true, canEditList: true, canDeleteList: true),
             itemCount: 1,
-            purchasedCount: 0,
-            createdAt: Date(),
-            updatedAt: Date()
+            purchasedCount: 0
         )
     }
 

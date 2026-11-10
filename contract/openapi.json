@@ -492,6 +492,12 @@
               "owner",
               "coOwner",
               "myRole",
+              "canSeeMembers",
+              "canEditList",
+              "canDeleteList",
+              "canManageMembers",
+              "canSetCoOwner",
+              "canLeaveList",
               "memberCount",
               "createdAt",
               "updatedAt"
@@ -538,6 +544,30 @@
               "myRole": {
                 "$ref": "#/components/schemas/ListRole"
               },
+              "canSeeMembers": {
+                "type": "boolean",
+                "description": "True for the owner, the co-owner and MEMBER-role members, the callers who may call GET /lists/{id}/members. False for VIEWER-role members and PUBLIC non-members (P22)"
+              },
+              "canEditList": {
+                "type": "boolean",
+                "description": "True for the owner and the co-owner (blind or not) while the list is not ARCHIVED, the callers who may call PATCH /lists/{id}. False for everyone else, and false on an ARCHIVED list, where the server refuses with 422 CANNOT_EDIT_ARCHIVED_LIST (P23, L14)"
+              },
+              "canDeleteList": {
+                "type": "boolean",
+                "description": "True for the owner and the co-owner (blind or not), while the list is not ARCHIVED, the callers who may call DELETE /lists/{id}, which archives the list. False for everyone else, and false on an ARCHIVED list so that clients treat archived lists as read-only, although the server still accepts the call (P23, L14)"
+              },
+              "canManageMembers": {
+                "type": "boolean",
+                "description": "True for the owner and the co-owner (blind or not), while the list is not ARCHIVED, the callers who may call POST /lists/{id}/members and remove other members via DELETE /lists/{id}/members/{userId}. False for everyone else, and false on an ARCHIVED list so that clients treat archived lists as read-only, although the server still accepts those calls (P23, L8)"
+              },
+              "canSetCoOwner": {
+                "type": "boolean",
+                "description": "True for the owner only while the list is not ARCHIVED, the caller who may send coOwnerEmail on PATCH /lists/{id}. False for the co-owner and everyone else, and false on an ARCHIVED list, where the server refuses with 422 CANNOT_EDIT_ARCHIVED_LIST (P23, L12)"
+              },
+              "canLeaveList": {
+                "type": "boolean",
+                "description": "True for an ACTIVE MEMBER-role or VIEWER-role member, the callers who may remove themselves with DELETE /lists/{id}/members/{own userId}. True on a list of any status, including ARCHIVED. False for the owner, the co-owner and every non-member, including PUBLIC non-members (P23, L9)"
+              },
               "itemCount": {
                 "type": "integer",
                 "description": "Omitted for blind viewers to prevent revealing surprise gifts (P3)"
@@ -577,6 +607,7 @@
             "properties": {
               "members": {
                 "type": "array",
+                "description": "Present only when canSeeMembers is true; absent otherwise (P22). Use memberCount when absent",
                 "items": {
                   "$ref": "#/components/schemas/MemberSummary"
                 }
@@ -1871,6 +1902,11 @@
                   "registrationCode": {
                     "type": "string",
                     "description": "Required registration code"
+                  },
+                  "rememberMe": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "true (or omitted) sets a persistent refresh cookie whose Max-Age follows REFRESH_TOKEN_EXPIRY. false sets a session cookie with no Max-Age. The choice carries through token rotation.\n"
                   }
                 }
               }
@@ -4211,6 +4247,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimitError"

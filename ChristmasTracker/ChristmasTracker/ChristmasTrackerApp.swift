@@ -111,7 +111,7 @@ struct AppDependencies: Sendable {
         return AppDependencies(
             apiClient: apiClient,
             authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
-            listRepository: NetworkListRepository(apiClient: apiClient),
+            listRepository: GeneratedClientListRepository(client: generatedClient),
             itemRepository: NetworkItemRepository(apiClient: apiClient),
             trackerClient: generatedClient
         )
@@ -130,7 +130,9 @@ struct AppDependencies: Sendable {
             return AppDependencies(
                 apiClient: apiClient,
                 authRepository: MockAuthenticationRepository(),
-                listRepository: NetworkListRepository(apiClient: apiClient),
+                // No generated client exists on this legacy path (auth is a mock here too), so
+                // it cannot reach the server; the real composition is makeReal(generatedClient:).
+                listRepository: MockListRepository(withMockData: false),
                 itemRepository: NetworkItemRepository(apiClient: apiClient),
                 trackerClient: nil
             )

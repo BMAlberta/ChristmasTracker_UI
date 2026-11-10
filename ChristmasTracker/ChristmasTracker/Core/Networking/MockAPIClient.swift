@@ -65,18 +65,8 @@ final class MockAPIClient: APIClient {
 // MARK: - Convenience Initializer
 extension MockAPIClient {
     static func withMockData() -> MockAPIClient {
-        let client = MockAPIClient()
-        // Mock lists data
-        let mockLists = [
-            MockData.sampleGiftList,
-            MockData.sampleOwnedList
-        ]
-        let listsResponse = DashboardListsResponse(
-            success: true,
-            data: ListsData(lists: mockLists)
-        )
-        try? client.setMockResponse(listsResponse, for: "/lists")
-        return client
+        // Lists no longer travel through this client; they come from ListRepository.
+        MockAPIClient()
     }
 }
 

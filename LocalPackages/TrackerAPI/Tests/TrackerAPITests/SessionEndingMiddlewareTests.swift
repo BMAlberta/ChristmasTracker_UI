@@ -730,4 +730,150 @@ struct SessionEndingMiddlewareTests {
         #expect(await transport.recordedRequests.first?.request.headerFields[.authorization] == "Bearer T1")
         #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: "T2")])
     }
+
+    // MARK: - 10. PERSON_NOT_FOUND (4011) is not a session-ending 404 (I3a-H1)
+
+    private var personNotFound: String {
+        envelopeString(code: 4011, errorCode: "PERSON_NOT_FOUND", message: "Person not found")
+    }
+
+    @Test(
+        "404 PERSON_NOT_FOUND on an authenticated operation does not call the handler and the body is byte-identical",
+        arguments: ["getUser", "getCurrentUser", "getList", "listLists"]
+    )
+    func personNotFoundDoesNotCallHandler(operationID: String) async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        let original = personNotFound
+        await transport.enqueue(.status(404), body: HTTPBody(original))
+        let sut = makeSUT(handler: handler)
+
+        let (response, body) = try await callMiddleware(
+            sut, transport: transport, operationID: operationID, authorization: "Bearer T1"
+        )
+
+        #expect(response.status.code == 404)
+        #expect(try await collect(body) == Data(original.utf8))
+        #expect(await handler.callCount == 0)
+    }
+
+    @Test(
+        "404 USER_NOT_FOUND still calls the handler once on getUser and on a list operation",
+        arguments: ["getUser", "getList"]
+    )
+    func userNotFoundStillCallsHandlerOnListAndUserOperations(operationID: String) async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(404), body: HTTPBody(userNotFound))
+        let sut = makeSUT(handler: handler)
+
+        _ = try await callMiddleware(sut, transport: transport, operationID: operationID, authorization: "Bearer T1")
+
+        #expect(await handler.calls == [.init(reason: .userNotFound, requestToken: "T1")])
+    }
+
+    @Test(
+        "403 ACCOUNT_DISABLED still calls the handler once on getUser and on a list operation",
+        arguments: ["getUser", "getList"]
+    )
+    func accountDisabledStillCallsHandlerOnListAndUserOperations(operationID: String) async throws {
+        let handler = RecordingSessionEndingHandler()
+        let transport = FakeTransport()
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+        let sut = makeSUT(handler: handler)
+
+        _ = try await callMiddleware(sut, transport: transport, operationID: operationID, authorization: "Bearer T1")
+
+        #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: "T1")])
+    }
+
+    @Test("Factory client: getUser 404 PERSON_NOT_FOUND does not call the handler and decodes as .notFound")
+    func factoryGetUser404PersonNotFoundDoesNotCallHandler() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue(.status(404), body: HTTPBody(personNotFound))
+
+        let output = try await client.getUser(
+            .init(path: .init(id: "00000000-0000-0000-0000-000000000077"))
+        )
+
+        guard case let .notFound(notFoundOutput) = output else {
+            Issue.record("Expected .notFound but got \(output)")
+            return
+        }
+        let envelope = try notFoundOutput.body.json
+        #expect(envelope.error.code == 4011)
+        #expect(envelope.error.errorCode == "PERSON_NOT_FOUND")
+        #expect(await handler.callCount == 0)
+        #expect(await transport.requestCount == 1)
+    }
+
+    @Test("Factory client: getUser 404 USER_NOT_FOUND calls the handler once")
+    func factoryGetUser404UserNotFoundCallsHandler() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue(.status(404), body: HTTPBody(userNotFound))
+
+        let output = try await client.getUser(
+            .init(path: .init(id: "00000000-0000-0000-0000-000000000077"))
+        )
+
+        guard case .notFound = output else {
+            Issue.record("Expected .notFound but got \(output)")
+            return
+        }
+        #expect(await handler.calls == [.init(reason: .userNotFound, requestToken: "T1")])
+    }
+
+    @Test("Factory client: getUser 403 ACCOUNT_DISABLED calls the handler once")
+    func factoryGetUser403AccountDisabledCallsHandler() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue(.status(403), body: HTTPBody(accountDisabled))
+
+        let output = try await client.getUser(
+            .init(path: .init(id: "00000000-0000-0000-0000-000000000077"))
+        )
+
+        guard case .forbidden = output else {
+            Issue.record("Expected .forbidden but got \(output)")
+            return
+        }
+        #expect(await handler.calls == [.init(reason: .accountDisabled, requestToken: "T1")])
+    }
+
+    @Test("Factory client: getList 404 PERSON_NOT_FOUND does not call the handler")
+    func factoryGetList404PersonNotFoundDoesNotCallHandler() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue(.status(404), body: HTTPBody(personNotFound))
+
+        let output = try await client.getList(
+            .init(path: .init(id: "00000000-0000-0000-0000-000000000078"))
+        )
+
+        guard case .notFound = output else {
+            Issue.record("Expected .notFound but got \(output)")
+            return
+        }
+        #expect(await handler.callCount == 0)
+    }
+
+    @Test("Factory client: getList 404 USER_NOT_FOUND and 403 ACCOUNT_DISABLED each call the handler once")
+    func factoryGetListSessionEndingCodesCallHandler() async throws {
+        let handler = RecordingSessionEndingHandler()
+        let (client, transport) = try makeFactoryClient(sessionEndingHandler: handler, token: "T1")
+        await transport.enqueue([
+            (.status(404), HTTPBody(userNotFound)),
+            (.status(403), HTTPBody(accountDisabled))
+        ])
+
+        _ = try await client.getList(.init(path: .init(id: "00000000-0000-0000-0000-000000000078")))
+        _ = try await client.getList(.init(path: .init(id: "00000000-0000-0000-0000-000000000078")))
+
+        #expect(await handler.calls == [
+            .init(reason: .userNotFound, requestToken: "T1"),
+            .init(reason: .accountDisabled, requestToken: "T1")
+        ])
+    }
 }

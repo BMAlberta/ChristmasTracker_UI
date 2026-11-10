@@ -62,6 +62,7 @@ Required body fields:
 | `lastName` | string | |
 | `registrationCode` | string | Shared server-side secret; compared via SHA-256 constant-time comparison to prevent timing attacks |
 | `displayName` | string (optional) | Defaults to `firstName + " " + lastName` |
+| `rememberMe` | boolean (optional, default `true`) | Same meaning as on login (A16): `true` or omitted sets the persistent refresh cookie (7 days), `false` sets a session cookie. |
 
 Password rules source: `src/utils/password.ts:48-88`  
 Registration code check: `src/services/auth.service.ts:38-55`
@@ -116,7 +117,7 @@ Source: `__tests__/integration/auth-remember-me.test.ts`
 **Error responses:**
 - `400 VALIDATION_ERROR` — malformed or oversized request body.
 - `401 UNAUTHORIZED` — wrong password or unknown email.
-- `403 ACCOUNT_DISABLED` — account exists but has been deactivated by an administrator. The client must redirect to the login screen and discard stored tokens; re-attempting will continue to fail until an administrator re-enables the account.
+- `403 ACCOUNT_DISABLED` — account exists but has been deactivated by an administrator. No session is created: show the user a message (the client is already on the login screen). Discard any stored refresh token for this account, because a refresh would also return 403; re-attempting continues to fail until an administrator re-enables the account. On an authenticated call, a 403 `ACCOUNT_DISABLED` ends the session (see §4).
 - `426 UPGRADE_REQUIRED` — iOS only; build/version is below the enforced minimum (see §3.6).
 - `429 RATE_LIMIT_EXCEEDED` — too many login attempts; respect `Retry-After`.
 
@@ -184,7 +185,7 @@ Source: `__tests__/integration/auth-session-cap.test.ts`
 **Web CORS configuration:** CORS is controlled by `CORS_ORIGIN` only — a comma-separated list of allowed origins. Each entry must be scheme, host and optional port with no trailing slash (e.g. `http://localhost:5173` or `https://tracker.bmalberta.com`); entries with a trailing slash, path, query string or fragment are rejected at startup. Origin matching is an exact string comparison. In production every origin must use https and localhost is not permitted. For a matching origin, the server echoes exactly that origin in `Access-Control-Allow-Origin` and never responds with `*`. Credentials (`credentials: "include"`) are always allowed. Allowed request headers are `Content-Type`, `Authorization`, `X-Request-Id`, `X-Session-Id`, `sentry-trace` and `baggage`. Allowed methods are `GET`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS`. Preflight results are cached for 600 seconds. Readable response headers (exposed to JavaScript via `access-control-expose-headers`) are `X-Request-Id`, `X-Session-Id`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and `Retry-After`.  
 Source: `src/app.ts` (CORS block), `src/config/env.ts` (CORS_ORIGIN rules)
 
-**Refresh cookie attributes (web):** The refresh token cookie is HttpOnly, SameSite=Strict, Secure only in production, host-only (no `Domain` attribute), with `Path=/tracker/v2/auth` so that both `/auth/refresh` and `/auth/logout` receive it automatically. When `rememberMe: true` the cookie has a 7-day Max-Age renewed on every rotation; when `rememberMe: false` the cookie is a session cookie with no Max-Age and the browser discards it on close.  
+**Refresh cookie attributes (web):** The refresh token cookie is HttpOnly, SameSite=Strict, Secure only in production, host-only (no `Domain` attribute), with `Path=/tracker/v2/auth` so that both `/auth/refresh` and `/auth/logout` receive it automatically. When `rememberMe: true` the cookie has a 7-day Max-Age renewed on every rotation; when `rememberMe: false` the cookie is a session cookie with no Max-Age and the browser discards it on close. Register honors `rememberMe` exactly like login, so a web client with "Keep me signed in" off should send `rememberMe: false` on register as well.  
 Source: `src/utils/refreshCookie.ts`
 
 **Single-flight refresh:** If multiple requests receive a 401 simultaneously, only one should call `/auth/refresh`. Others should queue and resume once the new access token is available. The 45-second grace window is designed to absorb natural races between concurrent requests sharing the same token.
@@ -277,11 +278,13 @@ Every operation in the OpenAPI spec documents a `500` response using this same `
 | Status | ErrorCode | Cause |
 |--------|-----------|-------|
 | 401 | see §3.6 | Missing, expired, or invalid access token |
-| 403 | `ACCOUNT_DISABLED` | Account is deactivated; redirect to login |
-| 404 | `USER_NOT_FOUND` | Valid token but account has since been deleted; redirect to login |
+| 403 | `ACCOUNT_DISABLED` | Account is deactivated; end the session (clear the tokens and show the login screen) |
+| 404 | `USER_NOT_FOUND` | Means only that the account behind the token no longer exists (C17); end the session and redirect to login. `PERSON_NOT_FOUND` is a normal not-found (for example `GET /users/{id}`); do not end the session on it |
 | 429 | `RATE_LIMIT_EXCEEDED` | General rate limit exceeded; respect `Retry-After` |
 | 500 | `INTERNAL_ERROR` | Unexpected server error |
 | 400 (body ops) | `INVALID_INPUT` or `VALIDATION_ERROR` | Operations with a request body: 400 INVALID_INPUT or VALIDATION_ERROR, including an oversized or malformed body; the envelope carries requestId and sessionId like every other error |
+
+**Which of these end the session.** On an authenticated call, a `403 ACCOUNT_DISABLED` or a `404 USER_NOT_FOUND` ends the session: clear the tokens and show the login screen (client action `re-login`). On the login endpoint itself, `ACCOUNT_DISABLED` is shown to the user as a message, because there is no session to end. A `404 PERSON_NOT_FOUND` is a normal not-found (client action `treat as not found`) and never ends the session.
 
 Clients must handle all five on every call to a `bearerAuth` endpoint. Public endpoints (register, login, refresh, version-check) can still return 429 and 500 from their own rate limiters and the global error handler.
 
@@ -396,6 +399,12 @@ Every `ListSummary` response includes per-viewer boolean flags:
 | `canAddOffList` | ACTIVE MEMBER-role member only |
 | `canSeeOffList` | Non-blind owner/co-owner or ACTIVE MEMBER-role member |
 | `canCreateItem` | Owner, co-owner (blind or not), or ACTIVE MEMBER-role member |
+| `canSeeMembers` | Owner, co-owner (blind or not), or ACTIVE MEMBER-role member; false for VIEWER-role members and PUBLIC non-members (P22) |
+| `canEditList` | Owner or co-owner (blind or not): `PATCH /lists/{id}` (P23, L14) |
+| `canDeleteList` | Owner or co-owner (blind or not): `DELETE /lists/{id}`, which archives the list (P23, L14) |
+| `canManageMembers` | Owner or co-owner (blind or not): add members and remove other members (P23, L8) |
+| `canSetCoOwner` | Owner only: send `coOwnerEmail` on `PATCH /lists/{id}` (P23, L12) |
+| `canLeaveList` | ACTIVE MEMBER-role or VIEWER-role member; false for the owner, co-owner and every non-member (P23, L9) |
 | `myRole` | `"owner"` · `"co-owner"` · `"member"` · `"viewer"` |
 | `isRecipient` | True when the viewer is the list's recipient |
 
@@ -403,6 +412,21 @@ Every `ListSummary` response includes per-viewer boolean flags:
 The same capability flags appear on both `ListSummary` and `ListDetail`.
 
 **C14 — memberCount vs members:** `ListSummary` (returned by `GET /lists`) carries `memberCount: number` — the count of ACTIVE memberships — not a `members` array. `ListDetail` (returned by `GET /lists/{id}` and `POST /lists`) carries the full `members` array AND `memberCount`. Clients that previously accessed `ListSummary.members` must switch to `GET /lists/{id}` to retrieve the full member list.  
+**P22 — members only when `canSeeMembers` is true:** `ListDetail.members` is present only when `canSeeMembers` is `true` and is absent otherwise (the key is not sent, and it is never an empty array). Use `memberCount` when `canSeeMembers` is `false`, and call `GET /lists/{id}/members` only when it is `true` (the endpoint returns 403 otherwise).  
+
+**List management rights (P23):**
+
+| Action | Endpoint | Flag | Who | On an ARCHIVED list |
+|--------|----------|------|-----|---------------------|
+| Edit name, theme, visibility or status | `PATCH /lists/{id}` | `canEditList` | Owner, co-owner | `false`; the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST` |
+| Delete (archives the list) | `DELETE /lists/{id}` | `canDeleteList` | Owner, co-owner | `false`; the server still accepts the call |
+| Add a member | `POST /lists/{id}/members` | `canManageMembers` | Owner, co-owner | `false`; the server still accepts the call |
+| Remove another member | `DELETE /lists/{id}/members/{userId}` | `canManageMembers` | Owner, co-owner | `false`; the server still accepts the call |
+| Set or clear the co-owner | `PATCH /lists/{id}` with `coOwnerEmail` | `canSetCoOwner` | Owner only | `false`; the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST` |
+| Leave the list | `DELETE /lists/{id}/members/{your userId}` | `canLeaveList` | ACTIVE MEMBER-role or VIEWER-role member | unchanged; allowed on a list of any status |
+
+Archived lists are read-only in the app. The server refuses edits to an archived list with 422, but still accepts delete and member changes, so the flags are deliberately stricter than the server there. Deleting archives, so a deleted list is an ARCHIVED list. The server enforces every action regardless of the flags.  
+`POST /lists/{id}/members` returns only the new `MemberSummary`, and `DELETE /lists/{id}/members/{userId}` and `DELETE /lists/{id}` return only a message, so refetch `GET /lists/{id}` or adjust `memberCount` yourself after these calls.  
 Source: `src/utils/privacy.ts`, `src/types/responses.ts:71-104`, `src/services/list.service.ts`, `__tests__/integration/contract-c11-c14.test.ts`
 
 ### 6.2 Blind Viewers
@@ -773,6 +797,8 @@ The response shape depends on the caller's relationship to the target:
 | Own child | `ChildProfile` | `id`, `firstName`, `lastName`, `displayName` — email is absent |
 | Shared-list connection | `PersonSummary` | `id`, `firstName`, `displayName` only |
 | Stranger (no shared list) | 404 | Indistinguishable from nonexistent ID |
+
+A stranger or an unknown id returns `404 PERSON_NOT_FOUND` with an identical body for both. It must NOT be treated as session-ending; only `USER_NOT_FOUND` (4002) means the token's account is gone (C17).
 
 Source: `src/routes/user.routes.ts:484-494`, `src/services/user.service.ts`, `Docs/privacy-matrix.md` (`GET /users/{id}` rows)
 
