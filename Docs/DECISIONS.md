@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 26 (2026-11-07)
+**Revision:** 28 (2026-11-10)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,14 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 28
+
+- **L15 (new)** [B W I]: DELETE /lists/{id}/co-owner clears the co-owner with the same rules as setting it; PATCH with coOwnerEmail null keeps working.
+
+### Changes in revision 27
+
+- **D9 (new)** [B]: the api container runs without no-new-privileges and without init on the production host (snap Docker); the compensating controls are dropped capabilities, a read-only root, a non-root user and no published port.
 
 ### Changes in revision 26
 
@@ -241,6 +249,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | L12 (rev 5) | The co-owner is set by `coOwnerEmail` on `POST /lists` and `PATCH /lists/:id`, resolved case-insensitively. Only the owner may set it. Setting when one exists replaces it. If the new co-owner is currently a member, that membership is deleted in the same transaction. `null` clears the co-owner. `coOwnerId` is removed from all write bodies (stays in responses). An unknown email or a no-login user returns `MEMBER_EMAIL_NOT_FOUND`. | B |
 | L13 | The membership route rejects the recipient, the owner, and the co-owner as members. | B |
 | L14 (new) | Co-owners may delete a list (same as owners). `deleteList` accepts `ownerId OR coOwnerId`. | B |
+| L15 | `DELETE /lists/{id}/co-owner` clears the list's co-owner and returns the updated `ListDetail`. It applies the same rules as clearing the co-owner through `PATCH /lists/{id}` with `coOwnerEmail: null` (it delegates to it): owner only (L12), 422 `CANNOT_EDIT_ARCHIVED_LIST` on an archived list, the P14 404 for a hidden list, and it succeeds without a change when there is no co-owner. `PATCH` with `coOwnerEmail: null` keeps working; clients whose generated code cannot send an explicit null use the `DELETE` operation. | B, W, I |
 
 ## 5. Privacy
 
@@ -313,6 +322,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | D6 | The refresh cookie is `SameSite=Strict`, so web and API must share a registrable domain (for example `app.example.com` and `api.example.com`). Never run the seed script in production. | B, W |
 | D7 | Behind the Cloudflare Tunnel the client IP comes from the `CF-Connecting-IP` header (`CLIENT_IP_SOURCE=cf-connecting-ip`), trusted only when the connecting address is inside `TRUSTED_PROXY_CIDRS`; Express `trust proxy` is not used. The auth rate limiter keys on the client IP plus the normalized email, so several people registering from one IP are not affected; the general limiter keys on the verified user id, otherwise on the client IP. | B |
 | D8 | v2 runs as a Docker Compose stack (the API and PostgreSQL 18) on the production host. The Cloudflare Tunnel connector reaches the API over a shared Docker network for the path `^/tracker/v2` of `api.bmalberta.com`, ahead of the existing v1 rule; the API publishes no host port and Traefik is not in the API path. Migrations run as an explicit deploy step, never at container start. Backups are nightly `pg_dump` files encrypted with `age` and stored in R2. | B |
+| D9 | On the production host Docker is the snap package, and under its AppArmor confinement every exec fails with `operation not permitted` when `no-new-privileges` is set (`init: true` hits the same failure because it execs the injected `docker-init`). The api container therefore runs without `no-new-privileges` and without `init`. The compensating controls are all capabilities dropped (`cap_drop: ALL`), a read-only root filesystem, the non-root `node` user, no published port and a private network. Revisit if Docker is replaced by Docker Engine from the apt repository. | B |
 
 ## 9. Deferred
 
