@@ -386,7 +386,8 @@ final class ListService {
         case .notFound, .archivedReadOnly:
             break
         case .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
-             .unauthorized, .sessionEnded, .network, .invalidResponse, .server:
+             .unauthorized, .sessionEnded, .network, .invalidResponse, .server, .memberEmailNotFound,
+             .alreadyMember, .membershipNotFound:
             return
         }
         deletedListIds.insert(id)

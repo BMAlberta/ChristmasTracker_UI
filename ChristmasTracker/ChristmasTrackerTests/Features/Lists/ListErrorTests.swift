@@ -32,13 +32,17 @@ struct ListErrorTests {
         .sessionEnded,
         .network,
         .invalidResponse,
-        .server
+        .server,
+        .memberEmailNotFound,
+        .alreadyMember,
+        .membershipNotFound
     ]
 
     /// Cases whose message is fixed text with no server data.
     nonisolated static let fixedCases: [ListError] = [
         .forbidden, .notFound, .recipientNotFound, .duplicateRecipientYear, .archivedReadOnly,
-        .unauthorized, .sessionEnded, .network, .invalidResponse, .server
+        .unauthorized, .sessionEnded, .network, .invalidResponse, .server,
+        .memberEmailNotFound, .alreadyMember, .membershipNotFound
     ]
 
     @Test("every case has a non-empty user message", arguments: ListErrorTests.allCases)
@@ -83,10 +87,25 @@ struct ListErrorTests {
     func fixedMessagesAreDistinct() {
         let distinct: [ListError] = [
             .forbidden, .notFound, .recipientNotFound, .duplicateRecipientYear,
-            .archivedReadOnly, .network, .invalidResponse, .server
+            .archivedReadOnly, .network, .invalidResponse, .server,
+            .memberEmailNotFound, .alreadyMember, .membershipNotFound
         ]
         let messages = Set(distinct.map(\.userMessage))
         #expect(messages.count == distinct.count)
+    }
+
+    @Test("Story I3b-M1: the member cases have their exact plain text")
+    func memberCaseTexts() {
+        #expect(ListError.memberEmailNotFound.userMessage == "No account was found for that email address.")
+        #expect(ListError.alreadyMember.userMessage == "That person is already a member of this list.")
+        #expect(ListError.membershipNotFound.userMessage == "That person is no longer a member of this list.")
+    }
+
+    @Test("Story I3b-M1: the member cases keep errorDescription equal to the user message")
+    func memberCaseDescriptions() {
+        for error in [ListError.memberEmailNotFound, .alreadyMember, .membershipNotFound] {
+            #expect(error.errorDescription == error.userMessage)
+        }
     }
 
     @Test("rateLimited has a message for any wait, including zero")

@@ -51,6 +51,12 @@ nonisolated enum ListError: Error, LocalizedError, Equatable, Sendable {
     case network
     case invalidResponse
     case server
+    /// 404 MEMBER_EMAIL_NOT_FOUND (4009): no account for that email (adding a member or co-owner).
+    case memberEmailNotFound
+    /// 409 MEMBERSHIP_ALREADY_EXISTS (5004).
+    case alreadyMember
+    /// 404 MEMBERSHIP_NOT_FOUND (4006).
+    case membershipNotFound
 
     var userMessage: String {
         switch self {
@@ -83,6 +89,12 @@ nonisolated enum ListError: Error, LocalizedError, Equatable, Sendable {
             return "The server sent a response the app could not read."
         case .server:
             return "Something went wrong on the server. Please try again later."
+        case .memberEmailNotFound:
+            return "No account was found for that email address."
+        case .alreadyMember:
+            return "That person is already a member of this list."
+        case .membershipNotFound:
+            return "That person is no longer a member of this list."
         }
     }
 

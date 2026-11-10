@@ -20,7 +20,8 @@ struct ListScreenExitTests {
         case .notFound, .archivedReadOnly:
             return true
         case .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
-             .unauthorized, .sessionEnded, .network, .invalidResponse, .server:
+             .unauthorized, .sessionEnded, .network, .invalidResponse, .server,
+             .memberEmailNotFound, .alreadyMember, .membershipNotFound:
             return false
         }
     }
@@ -28,7 +29,8 @@ struct ListScreenExitTests {
     nonisolated static let allCases: [ListError] = [
         .forbidden, .notFound, .recipientNotFound, .duplicateRecipientYear, .archivedReadOnly,
         .validation(message: "Name must be between 1 and 200 characters"),
-        .rateLimited(retryAfter: 3), .unauthorized, .sessionEnded, .network, .invalidResponse, .server
+        .rateLimited(retryAfter: 3), .unauthorized, .sessionEnded, .network, .invalidResponse, .server,
+        .memberEmailNotFound, .alreadyMember, .membershipNotFound
     ]
 
     /// Fails when `allCases` misses a case: the exhaustive switch below must produce the same
@@ -47,14 +49,17 @@ struct ListScreenExitTests {
         case .network: 9
         case .invalidResponse: 10
         case .server: 11
+        case .memberEmailNotFound: 12
+        case .alreadyMember: 13
+        case .membershipNotFound: 14
         }
     }
 
     @Test("the local case list covers every ListError case exactly once")
     func caseListIsComplete() {
         let kinds = Set(Self.allCases.map(Self.kind))
-        #expect(kinds == Set(0...11))
-        #expect(Self.allCases.count == 12)
+        #expect(kinds == Set(0...14))
+        #expect(Self.allCases.count == 15)
     }
 
     @Test("shouldDismissDetail is true exactly for notFound and archivedReadOnly", arguments: ListScreenExitTests.allCases)

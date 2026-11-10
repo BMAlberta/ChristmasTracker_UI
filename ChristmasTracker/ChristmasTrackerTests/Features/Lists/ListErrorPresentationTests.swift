@@ -29,7 +29,10 @@ struct ListErrorPresentationTests {
         (.sessionEnded, false, false),
         (.network, true, false),
         (.invalidResponse, true, false),
-        (.server, true, false)
+        (.server, true, false),
+        (.memberEmailNotFound, false, false),
+        (.alreadyMember, false, false),
+        (.membershipNotFound, false, false)
     ]
 
     @Test("The message is the error's user message for every case", arguments: table.map(\.0))
