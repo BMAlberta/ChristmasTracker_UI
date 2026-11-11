@@ -145,7 +145,9 @@ actor MockItemRepository: ItemRepository {
 
 // MARK: - Item Errors
 
-enum ItemError: Error, LocalizedError {
+nonisolated enum ItemError: Error, LocalizedError, Equatable, Sendable {
+    // Legacy cases: fetchFailed, createFailed, updateFailed, deleteFailed are removed in Story C
+    // together with their last readers; purchaseFailed stays until the purchase package (I4).
     case fetchFailed
     case notFound
     case createFailed
@@ -153,6 +155,56 @@ enum ItemError: Error, LocalizedError {
     case deleteFailed
     case purchaseFailed
     case unauthorized
+    // New cases (I3c-B). Messages come from `userMessage`; no payload is ever interpolated.
+    case forbidden
+    case validation(message: String)
+    case invalidPrice
+    case cannotDeleteWithPurchases
+    case rateLimited(retryAfter: TimeInterval)
+    case sessionEnded
+    case network
+    case invalidResponse
+    case server
+
+    /// A plain, user-facing message. Never interpolates a payload, an id or a raw error.
+    var userMessage: String {
+        switch self {
+        case .forbidden:
+            return "You don't have permission to do that."
+        case .notFound:
+            return "This item no longer exists."
+        case .validation(let message):
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "Please check the item details and try again." : message
+        case .invalidPrice:
+            return "Enter a price from 0 to 999,999.99 with at most two decimals."
+        case .cannotDeleteWithPurchases:
+            return "This item has purchases and can't be deleted."
+        case .rateLimited:
+            return "Too many requests. Please wait a moment and try again."
+        case .unauthorized:
+            return "Your session has expired. Please sign in again."
+        case .sessionEnded:
+            return "You were signed out. Please sign in again."
+        case .network:
+            return "Couldn't reach the server. Check your connection and try again."
+        case .invalidResponse:
+            return "The server sent a response the app couldn't read."
+        case .server:
+            return "Something went wrong on the server. Please try again later."
+        case .fetchFailed:
+            return "Failed to load items"
+        case .createFailed:
+            return "Failed to create item"
+        case .updateFailed:
+            return "Failed to update item"
+        case .deleteFailed:
+            return "Failed to delete item"
+        case .purchaseFailed:
+            return "Failed to update purchase status"
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .fetchFailed:
@@ -169,6 +221,9 @@ enum ItemError: Error, LocalizedError {
             return "Failed to update purchase status"
         case .unauthorized:
             return "You don't have permission to perform this action"
+        case .forbidden, .validation, .invalidPrice, .cannotDeleteWithPurchases, .rateLimited,
+             .sessionEnded, .network, .invalidResponse, .server:
+            return userMessage
         }
     }
 }

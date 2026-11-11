@@ -201,6 +201,22 @@ struct ListSourceScanTests {
             for line in try Self.matches(#"\bcanEdit\b"#, in: code) { offenders.append("\(name):\(line) canEdit") }
         }
         #expect(offenders.isEmpty, "Role-based reads found:\n\(offenders.joined(separator: "\n"))")
+
+        // Story I3c-B: the scope is EXTENDED (nothing removed above) to the item feature and the new
+        // item model file for `.myRole`. Only `.myRole` is scanned there: ItemPermissions legitimately
+        // declares a `canEdit` function, which is a flag-derived rule, not a role read.
+        var itemScoped = sources.files(inDirectory: "Features/Items")
+        let itemModel = sources.file("Core/Models/ListItem.swift")
+        #expect(FileManager.default.fileExists(atPath: itemModel.path), "Core/Models/ListItem.swift is missing")
+        if FileManager.default.fileExists(atPath: itemModel.path) { itemScoped.append(itemModel) }
+        var itemOffenders: [String] = []
+        for url in itemScoped {
+            let code = Self.codeOnly(try String(contentsOf: url, encoding: .utf8))
+            for line in try Self.matches(#"\.myRole\b"#, in: code) {
+                itemOffenders.append("\(relativePath(url, root: sources.root)):\(line) .myRole")
+            }
+        }
+        #expect(itemOffenders.isEmpty, "Role-based reads in item code:\n\(itemOffenders.joined(separator: "\n"))")
     }
 
     @Test("ListPermissions and ListCapabilities exist and never mention myRole at all")

@@ -33,7 +33,17 @@ Test run with 212 tests in 16 suites passed after 0.018 seconds.      (inside ve
 swift test --package-path "LocalPackages/TrackerAPI":
 Test run with 212 tests in 16 suites passed after 0.019 seconds.
 ```
-After the commit: see the end of this report (filled after the commit, from a command).
+After the commit (4f323b2, taken from commands I ran; this line was added in the next commit because commits are never amended):
+```
+--- tests: 1619 passed, 0 failed, 0 skipped ---
+Test run with 212 tests in 16 suites passed after 0.021 seconds.      (inside verify)
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+swift test --package-path "LocalPackages/TrackerAPI":
+Test run with 212 tests in 16 suites passed after 0.020 seconds.
+```
+`git status` after the commit was clean.
 
 ## Gate 2 (real verdicts, written after the reviews)
 - Convention-reviewer, first review: APPROVE with 4 warnings (ListService.swift over the 600-line error threshold: 676 at HEAD, 829 after the fix pass, existing debt that grew; raw SF Symbol strings "archivebox" x3 because no AppIcons file exists; a stray indent in DashboardView; a comment-order nit above deleteList). Re-check of the fix pass: APPROVE; `reloadAfterArchive` body is about 46 lines (over the 40 warning, under 60). Orchestrator notes: split ListService in a later story; add AppIcons in the theme pass.
