@@ -68,6 +68,9 @@ final class ListService {
     /// Number of loadListDetail calls in flight per list id.
     private var detailLoadsInFlight: [String: Int] = [:]
 
+    /// Monotonic token handed to each refreshListDetail; only the newest one applies.
+    private var detailRefreshToken = 0
+
     /// Number of mutations in flight; isMutating is true while it is above zero.
     private var mutationCount = 0
 
@@ -255,6 +258,55 @@ final class ListService {
                 await dropListIfGone(error, id: id, generation: gen)
             }
             _ = record(error, generation: gen, operation: "load list details")
+        }
+    }
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
+    /// Always fetches. Returns the failure (it is not stored); nil on success, when the list is
+    /// gone (goneListId is set), when superseded by a newer refresh, or when the session ended.
+    @discardableResult
+    func refreshListDetail(id: String) async -> ListError? {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.refreshListDetail",
+            operation: "service.lists.refreshListDetail"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        let start = operationSequence
+        let epoch = archivedListEpoch[id, default: 0]
+        detailRefreshToken += 1
+        let token = detailRefreshToken
+
+        do {
+            let repository = self.repository
+            let detail = try await perform { try await repository.fetchListDetail(id: id) }
+            guard gen == generation, token == detailRefreshToken, epoch == archivedListEpoch[id, default: 0],
+                  await !reportGuarded(id, since: start, generation: gen) else { return nil }
+            await dataStore.setListDetail(detail)
+            guard gen == generation, token == detailRefreshToken, epoch == archivedListEpoch[id, default: 0],
+                  await !reportGuarded(id, since: start, generation: gen) else { return nil }
+            if currentListDetail == nil || currentListDetail?.id == id {
+                currentListDetail = detail
+            }
+            LogInfo("Refreshed list detail", category: .business)
+            return nil
+        } catch {
+            guard gen == generation, token == detailRefreshToken, !(error is CancellationError),
+                  epoch == archivedListEpoch[id, default: 0] else { return nil }
+            let listError = (error as? ListError) ?? .server
+            if listError == .notFound {
+                await dropListIfGone(error, id: id, generation: gen)
+                return nil
+            }
+            if listError == .forbidden, currentListDetail?.id == id {
+                await dropList(id: id)
+                return nil
+            }
+            // Only the operation name is logged: no ids, names, emails or server text.
+            LogError("refresh list details failed", category: .business)
+            return listError
         }
     }
 
@@ -593,6 +645,7 @@ final class ListService {
         mutationCount = 0
         archivedListEpoch = [:]
         detailLoadsInFlight = [:]
+        detailRefreshToken = 0
         isRefreshing = false
         lastUpdated = nil
         currentFilter = .all

@@ -23,6 +23,7 @@ struct ListDetailView: View {
     @State private var memberToRemove: MemberRowState?
     @State private var showLeaveConfirmation = false
     @State private var showsAddItem = false
+    @State private var refreshError: ListError?
 
     /// The action whose failure is shown in the banner, so Try Again repeats that action.
     private enum FailedAction {
@@ -108,12 +109,13 @@ struct ListDetailView: View {
                 }
             }
             .refreshable {
-                await load()
+                await refresh()
             }
             .task {
                 await load()
             }
             .onDisappear {
+                refreshError = nil
                 itemService.clearListLoadError()
             }
     }
@@ -141,6 +143,16 @@ struct ListDetailView: View {
         actionError = nil
         await listService.loadListDetail(id: listId)
         await itemService.loadItems(listId: listId)
+    }
+
+    /// Pull to refresh: always fetches the detail and the items, and reports a detail failure.
+    private func refresh() async {
+        refreshError = nil
+        refreshError = await listService.refreshListDetail(id: listId)
+        switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
+        case .refresh: await itemService.refreshItems()
+        case .load: await itemService.loadItems(listId: listId)
+        }
     }
 
     private func archiveList() async {
@@ -207,6 +219,13 @@ struct ListDetailView: View {
     private func detailContent(detail: ListDetail, state: ListDetailState) -> some View {
         ScrollView {
             VStack(spacing: AppSpacing.xl) {
+                if let refreshBanner = ListDetailRefresh.banner(for: refreshError) {
+                    InlineErrorBanner(
+                        state: refreshBanner,
+                        onTryAgain: { Task { await refresh() } },
+                        onDismiss: { refreshError = nil }
+                    )
+                }
                 if let actionError {
                     ListErrorBanner(
                         presentation: actionError,
