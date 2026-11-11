@@ -10,8 +10,9 @@ import Sentry
 import SwiftUI
 
 /// Session-safe item service. Mutations throw their typed `ItemError` to the initiating view and
-/// publish nothing; `loadError` is set only by the loads. No item id, name, url, price or raw
-/// error value is ever logged.
+/// publish nothing. Load failures are kept per screen: `listLoadError` is set only by the list
+/// loads and `detailLoadError` only by the detail load, so one screen never clears or shows the
+/// other's error. No item id, name, url, price or raw error value is ever logged.
 @MainActor
 @Observable
 final class ItemService {
@@ -32,8 +33,12 @@ final class ItemService {
     private(set) var isLoadingDetail: Bool = false
     /// True while any create, update or delete runs.
     private(set) var isMutating: Bool = false
-    /// Set only by a failed load; cleared at the start of every load and by `clearLoadError()`.
-    private(set) var loadError: ItemError?
+    /// Set only by a failed loadItems or refreshItems; cleared at the start of each, by
+    /// `clearListLoadError()` and at session end.
+    private(set) var listLoadError: ItemError?
+    /// Set only by a failed loadItemDetail; cleared at the start of each, by
+    /// `clearDetailLoadError()` and at session end.
+    private(set) var detailLoadError: ItemError?
     /// The id of the item the server reported gone. Only the session reset clears it.
     private(set) var goneItemId: String?
 
@@ -48,6 +53,9 @@ final class ItemService {
 
     /// Identifies the newest list load or refresh (see `beginListLoad`).
     private var listLoadToken = 0
+
+    /// Identifies the newest item detail load.
+    private var detailLoadToken = 0
 
     /// Number of mutations in flight; isMutating is true while it is above zero.
     private var mutationCount = 0
@@ -73,7 +81,7 @@ final class ItemService {
             items = []
         }
         currentListId = listId
-        loadError = nil
+        listLoadError = nil
         isLoadingItems = true
         defer { endListLoad(token: token, generation: gen) }
 
@@ -104,7 +112,7 @@ final class ItemService {
 
         let gen = generation
         let token = beginListLoad()
-        loadError = nil
+        listLoadError = nil
         isLoadingItems = true
         defer { endListLoad(token: token, generation: gen) }
 
@@ -124,9 +132,11 @@ final class ItemService {
         defer { span.finish() }
 
         let gen = generation
-        loadError = nil
+        detailLoadToken += 1
+        let token = detailLoadToken
+        detailLoadError = nil
         isLoadingDetail = true
-        defer { if gen == generation { isLoadingDetail = false } }
+        defer { if gen == generation, token == detailLoadToken { isLoadingDetail = false } }
         // Another item's detail is never shown while this one loads.
         if currentItem?.id != id {
             currentItem = nil
@@ -136,15 +146,21 @@ final class ItemService {
             let repository = self.itemRepository
             let detail = try await perform { try await repository.fetchItemDetail(id: id) }
             try ensureCurrent(gen)
+            // A newer detail load owns currentItem now.
+            guard token == detailLoadToken else { return }
             currentItem = detail
         } catch {
             await dropIfGone(error, id: id, generation: gen)
-            recordLoadError(error, generation: gen, token: nil, operation: "load item detail")
+            recordDetailLoadError(error, generation: gen, token: token)
         }
     }
 
-    func clearLoadError() {
-        loadError = nil
+    func clearListLoadError() {
+        listLoadError = nil
+    }
+
+    func clearDetailLoadError() {
+        detailLoadError = nil
     }
 
     func clearItemDetail() {
@@ -270,7 +286,8 @@ final class ItemService {
         items = []
         currentItem = nil
         currentListId = nil
-        loadError = nil
+        listLoadError = nil
+        detailLoadError = nil
         goneItemId = nil
         isLoadingItems = false
         isLoadingDetail = false
@@ -342,7 +359,7 @@ final class ItemService {
     }
 
     /// Starts a list load or refresh and returns its token. Only the newest list load may set
-    /// `loadError` or clear `isLoadingItems`, so a load of list A that ends after list B started
+    /// `listLoadError` or clear `isLoadingItems`, so a load of list A that ends after list B started
     /// (same session) never touches B's state.
     private func beginListLoad() -> Int {
         listLoadToken += 1
@@ -353,14 +370,23 @@ final class ItemService {
         if gen == generation, token == listLoadToken { isLoadingItems = false }
     }
 
-    /// Records a load failure. Nothing for cancellation, a session that has ended, or (for a list
-    /// load, token not nil) a load that a newer list load has replaced.
-    private func recordLoadError(_ error: any Error, generation gen: Int, token: Int?, operation: String) {
+    /// Records a list load failure. Nothing for cancellation, a session that has ended, or a load
+    /// that a newer list load has replaced.
+    private func recordLoadError(_ error: any Error, generation gen: Int, token: Int, operation: String) {
         if error is CancellationError || gen != generation { return }
-        if let token, token != listLoadToken { return }
+        if token != listLoadToken { return }
         // Only the operation name is logged: no ids, names or server text.
         LogError("\(operation) failed", category: .business)
-        loadError = (error as? ItemError) ?? .server
+        listLoadError = (error as? ItemError) ?? .server
+    }
+
+    /// Records a detail load failure. Nothing for cancellation, a session that has ended, or a
+    /// load that a newer detail load has replaced.
+    private func recordDetailLoadError(_ error: any Error, generation gen: Int, token: Int) {
+        if error is CancellationError || gen != generation { return }
+        if token != detailLoadToken { return }
+        LogError("load item detail failed", category: .business)
+        detailLoadError = (error as? ItemError) ?? .server
     }
 
     /// The error a mutation rethrows: the typed ItemError, or CancellationError when the call was

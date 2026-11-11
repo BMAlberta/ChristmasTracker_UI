@@ -158,9 +158,10 @@ struct SessionTeardownTests {
 
         #expect(service.items.isEmpty, "ItemService.items must be empty after teardown")
         #expect(service.currentListId == nil, "ItemService.currentListId must be nil after teardown")
-        // EDITED (I3c-C): the rebuilt service also clears the detail, the load error and the cache.
+        // EDITED (I3c-C): the rebuilt service also clears the detail, the load errors and the cache.
         #expect(service.currentItem == nil, "ItemService.currentItem must be nil after teardown")
-        #expect(service.loadError == nil, "ItemService.loadError must be nil after teardown")
+        #expect(service.listLoadError == nil, "ItemService.listLoadError must be nil after teardown")
+        #expect(service.detailLoadError == nil, "ItemService.detailLoadError must be nil after teardown")
         let cached = await dataStore.getItems(listId: listId)
         #expect(cached.isEmpty, "the item cache must be empty after the service is torn down")
     }

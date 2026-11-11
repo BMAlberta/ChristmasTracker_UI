@@ -21,6 +21,7 @@ struct ItemDetailView: View {
     @State private var sheet: DetailSheet?
     @State private var showDeleteConfirmation = false
     @State private var deleteError: ItemError?
+    @State private var hasStartedLoading = false
 
     private enum DetailSheet: Identifiable {
         case edit
@@ -68,34 +69,62 @@ struct ItemDetailView: View {
                 }
             }
             .task {
+                hasStartedLoading = true
                 await itemService.loadItemDetail(id: itemId)
             }
             .onDisappear {
                 deleteError = nil
                 itemService.clearItemDetail()
-                itemService.clearLoadError()
+                itemService.clearDetailLoadError()
             }
     }
 
     // MARK: - Content
 
+    private var screenState: ItemDetailScreenState {
+        ItemDetailScreenState.resolve(
+            item: currentItem,
+            isLoading: itemService.isLoadingDetail,
+            hasStartedLoading: hasStartedLoading,
+            error: itemService.detailLoadError
+        )
+    }
+
     @ViewBuilder
     private var content: some View {
-        if let item = currentItem {
+        switch screenState {
+        case .loaded(let item):
             detailContent(item: item, state: state(for: item))
-        } else if let banner = itemService.loadError.flatMap({
-            ItemErrorPresentation.banner(for: $0, hasRetryAction: true)
-        }) {
+        case .loading:
+            LoadingView(message: "Loading item...")
+        case .error(let banner):
             InlineErrorBanner(
                 state: banner,
                 onTryAgain: { Task { await itemService.loadItemDetail(id: itemId) } },
-                onDismiss: { itemService.clearLoadError() }
+                onDismiss: { itemService.clearDetailLoadError() }
             )
             .padding(EdgeInsets.appScreenPadding)
             .frame(maxHeight: .infinity, alignment: .top)
-        } else {
-            LoadingView(message: "Loading item...")
+        case .notLoaded:
+            notLoadedContent
         }
+    }
+
+    private var notLoadedContent: some View {
+        VStack(spacing: AppSpacing.md) {
+            Text(ItemDetailScreenState.notLoadedMessage)
+                .font(.appBody)
+                .foregroundStyle(Color.textMutedColor)
+                .multilineTextAlignment(.center)
+            Button("Try Again") {
+                Task { await itemService.loadItemDetail(id: itemId) }
+            }
+            .buttonStyle(.bordered)
+            .tint(Color.primaryColor)
+            .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
+        }
+        .padding(EdgeInsets.appScreenPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func detailContent(item: ListItem, state: ItemDetailState) -> some View {

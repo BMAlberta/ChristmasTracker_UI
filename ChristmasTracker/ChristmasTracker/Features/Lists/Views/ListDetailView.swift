@@ -114,7 +114,7 @@ struct ListDetailView: View {
                 await load()
             }
             .onDisappear {
-                itemService.clearLoadError()
+                itemService.clearListLoadError()
             }
     }
 
@@ -336,7 +336,7 @@ struct ListDetailView: View {
     }
 
     /// The items, driven by `ItemListState` (flags through ItemPermissions). The load error is the
-    /// item service's separate `loadError`; Try Again refreshes, and it clears when this screen
+    /// item service's separate `listLoadError`; Try Again refreshes, and it clears when this screen
     /// disappears.
     private func itemsSection(detail: ListDetail) -> some View {
         let listState = ItemListState(
@@ -344,7 +344,7 @@ struct ListDetailView: View {
             context: ItemListContext(detail: detail),
             currentUserId: authenticationService.currentUser?.id
         )
-        let banner = itemService.loadError.flatMap {
+        let banner = itemService.listLoadError.flatMap {
             ItemErrorPresentation.banner(for: $0, hasRetryAction: true)
         }
         return ItemsSectionView(
@@ -354,7 +354,7 @@ struct ListDetailView: View {
             onSelect: { selectedItemId = $0 },
             onAdd: { showsAddItem = true },
             onTryAgain: { Task { await itemService.refreshItems() } },
-            onDismissError: { itemService.clearLoadError() }
+            onDismissError: { itemService.clearListLoadError() }
         )
         .listCard()
     }

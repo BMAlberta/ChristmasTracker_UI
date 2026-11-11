@@ -6,12 +6,13 @@
 //  that only loads set, the cache, a list change, refresh, and the detail load.
 //
 //  Rules under test (Gate 1 addendum):
-//   - `loadError` is set only by loadItems / refreshItems / loadItemDetail failures; it is cleared
-//     at the start of every load and by `clearLoadError()`.
+//   - `listLoadError` is set only by loadItems / refreshItems failures and `detailLoadError` only by
+//     loadItemDetail failures; each is cleared
+//     at the start of its own loads and by `clearListLoadError()` / `clearDetailLoadError()`.
 //   - showing the cached items of the same list first is kept; success replaces items,
-//     currentListId and the cache; a list change empties `items` and clears `loadError` first.
+//     currentListId and the cache; a list change empties `items` and clears `listLoadError` first.
 //   - a 404 on the detail load means the item is gone: it is dropped from items / currentItem /
-//     the cache, `goneItemId` is set and `loadError` is `.notFound`.
+//     the cache, `goneItemId` is set and `detailLoadError` is `.notFound`.
 //
 
 import Foundation
@@ -37,7 +38,7 @@ struct ItemServiceLoadTests {
 
         #expect(sut.service.items == [item("item-1"), item("item-2")])
         #expect(sut.service.currentListId == "list-1")
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
         #expect(sut.service.isLoadingItems == false)
         let cached = await sut.store.getItems(listId: "list-1")
         #expect(cached == [item("item-1"), item("item-2")])
@@ -59,7 +60,7 @@ struct ItemServiceLoadTests {
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("loadItems failure sets loadError to the typed error and leaves no items", arguments: [
+    @Test("loadItems failure sets listLoadError to the typed error and leaves no items", arguments: [
         ItemError.forbidden, .notFound, .network, .server, .rateLimited(retryAfter: 3), .invalidResponse
     ])
     func loadItemsFailure(error: ItemError) async {
@@ -68,46 +69,46 @@ struct ItemServiceLoadTests {
 
         await sut.service.loadItems(listId: "list-1")
 
-        #expect(sut.service.loadError == error)
+        #expect(sut.service.listLoadError == error)
         #expect(sut.service.items.isEmpty)
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("a new load clears the previous loadError at its start")
-    func newLoadClearsLoadError() async {
+    @Test("a new load clears the previous listLoadError at its start")
+    func newLoadClearsListLoadError() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.failure(ItemError.network))
         await sut.service.loadItems(listId: "list-1")
-        #expect(sut.service.loadError == .network, "precondition")
+        #expect(sut.service.listLoadError == .network, "precondition")
         sut.repo.enqueueFetchItems(.success([item("item-1")]), held: true)
         let task = Task { await sut.service.loadItems(listId: "list-1") }
         await sut.repo.gate.nextHeldCall()
 
-        #expect(sut.service.loadError == nil, "cleared as soon as the new load starts, not only when it succeeds")
+        #expect(sut.service.listLoadError == nil, "cleared as soon as the new load starts, not only when it succeeds")
 
         sut.repo.gate.releaseAll()
         await task.value
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
         #expect(sut.service.items == [item("item-1")])
     }
 
-    @Test("clearLoadError clears the load error and nothing else")
-    func clearLoadError() async {
+    @Test("clearDetailLoadError clears the detail load error and nothing else")
+    func clearDetailLoadError() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.success([item("item-1")]))
         await sut.service.loadItems(listId: "list-1")
         sut.repo.enqueueFetchItemDetail(.failure(ItemError.server))
         await sut.service.loadItemDetail(id: "item-1")
-        #expect(sut.service.loadError == .server, "precondition")
+        #expect(sut.service.detailLoadError == .server, "precondition")
 
-        sut.service.clearLoadError()
+        sut.service.clearDetailLoadError()
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.currentListId == "list-1")
         #expect(sut.service.goneItemId == nil)
     }
 
-    @Test("a load that fails again replaces the previous loadError")
+    @Test("a load that fails again replaces the previous listLoadError")
     func secondFailureReplaces() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.failure(ItemError.network))
@@ -116,7 +117,7 @@ struct ItemServiceLoadTests {
         await sut.service.loadItems(listId: "list-1")
         await sut.service.loadItems(listId: "list-1")
 
-        #expect(sut.service.loadError == .forbidden)
+        #expect(sut.service.listLoadError == .forbidden)
     }
 
     // MARK: - Cache
@@ -132,7 +133,7 @@ struct ItemServiceLoadTests {
         #expect(sut.service.currentListId == "list-1")
         #expect(sut.repo.fetchItemsCount == 0)
         #expect(sut.service.isLoadingItems == false)
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
     }
 
     @Test("a second load of the same list is served from the cache")
@@ -161,21 +162,24 @@ struct ItemServiceLoadTests {
 
     // MARK: - List change
 
-    @Test("a list change empties items and clears loadError before the new load finishes")
-    func listChangeEmptiesItemsAndLoadError() async {
+    @Test("a list change empties items and clears listLoadError before the new load finishes")
+    func listChangeEmptiesItemsAndListLoadError() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.success([item("item-a", listId: "list-a")]))
         await sut.service.loadItems(listId: "list-a")
         sut.repo.enqueueFetchItemDetail(.failure(ItemError.network))
         await sut.service.loadItemDetail(id: "item-a")
-        #expect(sut.service.loadError == .network, "precondition")
+        #expect(sut.service.detailLoadError == .network, "precondition")
         #expect(sut.service.items.isEmpty == false, "precondition")
+        sut.repo.enqueueFetchItems(.failure(ItemError.server))
+        await sut.service.refreshItems()
+        #expect(sut.service.listLoadError == .server, "precondition")
         sut.repo.enqueueFetchItems(.success([item("item-b", listId: "list-b")]), held: true)
         let task = Task { await sut.service.loadItems(listId: "list-b") }
         await sut.repo.gate.nextHeldCall()
 
         #expect(sut.service.items.isEmpty, "list A's items must never show under list B")
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
 
         sut.repo.gate.releaseAll()
         await task.value
@@ -193,7 +197,7 @@ struct ItemServiceLoadTests {
         await sut.service.loadItems(listId: "list-b")
 
         #expect(sut.service.items.isEmpty)
-        #expect(sut.service.loadError == .forbidden)
+        #expect(sut.service.listLoadError == .forbidden)
     }
 
     // MARK: - refreshItems
@@ -221,31 +225,31 @@ struct ItemServiceLoadTests {
         await sut.service.refreshItems()
 
         #expect(sut.repo.fetchItemsCount == 0)
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("refreshItems sets isLoadingItems while in flight and clears the old loadError at its start")
+    @Test("refreshItems sets isLoadingItems while in flight and clears the old listLoadError at its start")
     func refreshFlagAndErrorClear() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.success([item("item-1")]))
         await sut.service.loadItems(listId: "list-1")
-        sut.repo.enqueueFetchItemDetail(.failure(ItemError.server))
-        await sut.service.loadItemDetail(id: "item-1")
-        #expect(sut.service.loadError == .server, "precondition")
+        sut.repo.enqueueFetchItems(.failure(ItemError.server))
+        await sut.service.refreshItems()
+        #expect(sut.service.listLoadError == .server, "precondition")
         sut.repo.enqueueFetchItems(.success([item("item-1")]), held: true)
         let task = Task { await sut.service.refreshItems() }
         await sut.repo.gate.nextHeldCall()
 
         #expect(sut.service.isLoadingItems == true)
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
 
         sut.repo.gate.releaseAll()
         await task.value
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("refreshItems failure sets loadError")
+    @Test("refreshItems failure sets listLoadError")
     func refreshFailure() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.success([item("item-1")]))
@@ -254,7 +258,7 @@ struct ItemServiceLoadTests {
 
         await sut.service.refreshItems()
 
-        #expect(sut.service.loadError == .rateLimited(retryAfter: 2))
+        #expect(sut.service.listLoadError == .rateLimited(retryAfter: 2))
         #expect(sut.service.isLoadingItems == false)
     }
 
@@ -274,11 +278,11 @@ struct ItemServiceLoadTests {
         await task.value
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.service.currentItem == item("item-1", name: "Detail"))
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.repo.detailIds == ["item-1"])
     }
 
-    @Test("loadItemDetail failure sets loadError (it does not throw) and publishes no item", arguments: [
+    @Test("loadItemDetail failure sets detailLoadError (it does not throw) and publishes no item", arguments: [
         ItemError.forbidden, .network, .server, .invalidResponse
     ])
     func detailFailure(error: ItemError) async {
@@ -287,29 +291,29 @@ struct ItemServiceLoadTests {
 
         await sut.service.loadItemDetail(id: "item-1")
 
-        #expect(sut.service.loadError == error)
+        #expect(sut.service.detailLoadError == error)
         #expect(sut.service.currentItem == nil)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.service.goneItemId == nil)
     }
 
-    @Test("loadItemDetail clears the previous loadError at its start")
-    func detailClearsLoadError() async {
+    @Test("loadItemDetail clears the previous detailLoadError at its start")
+    func detailClearsDetailLoadError() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItemDetail(.failure(ItemError.network))
         await sut.service.loadItemDetail(id: "item-1")
-        #expect(sut.service.loadError == .network, "precondition")
+        #expect(sut.service.detailLoadError == .network, "precondition")
         sut.repo.enqueueFetchItemDetail(.success(item("item-1")), held: true)
         let task = Task { await sut.service.loadItemDetail(id: "item-1") }
         await sut.repo.gate.nextHeldCall()
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.detailLoadError == nil)
 
         sut.repo.gate.releaseAll()
         await task.value
     }
 
-    @Test("a 404 on the detail load means gone: dropped from items, currentItem and cache, goneItemId set, loadError notFound")
+    @Test("a 404 on the detail load means gone: dropped from items, currentItem and cache, goneItemId set, detailLoadError notFound")
     func detailNotFoundDropsItem() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.success([item("item-1"), item("item-2")]))
@@ -321,7 +325,7 @@ struct ItemServiceLoadTests {
 
         await sut.service.loadItemDetail(id: "item-1")
 
-        #expect(sut.service.loadError == .notFound)
+        #expect(sut.service.detailLoadError == .notFound)
         #expect(sut.service.goneItemId == "item-1")
         #expect(sut.service.currentItem == nil)
         #expect(sut.service.items == [item("item-2")])
@@ -367,7 +371,8 @@ struct ItemServiceLoadTests {
         #expect(sut.service.isLoadingItems == false)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.service.isMutating == false)
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.goneItemId == nil)
     }
 }

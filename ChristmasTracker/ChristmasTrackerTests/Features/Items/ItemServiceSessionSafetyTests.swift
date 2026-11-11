@@ -8,11 +8,11 @@
 //
 //  Rules under test (Gate 1 addendum, rule 5):
 //   - every operation captures a generation before its first await; after `clearForSession()`
-//     an in-flight operation writes NOTHING, sets no error (no loadError, no goneItemId) and, for
+//     an in-flight operation writes NOTHING, sets no error (no listLoadError or detailLoadError, no goneItemId) and, for
 //     a mutation, throws CancellationError;
-//   - Task cancellation sets no loadError;
+//   - Task cancellation sets no list or detail load error;
 //   - loading flags are only reset by the same generation;
-//   - `clearForSession()` empties items, currentItem, currentListId, loadError, goneItemId, the
+//   - `clearForSession()` empties items, currentItem, currentListId, listLoadError, detailLoadError, goneItemId, the
 //     mutation counter and the cache.
 //
 //  Teardown is driven the way the app does it: the service is registered with a SessionManager
@@ -36,7 +36,8 @@ struct ItemServiceSessionSafetyTests {
         #expect(sut.service.items.isEmpty, "items must stay empty", sourceLocation: sourceLocation)
         #expect(sut.service.currentItem == nil, "currentItem must stay nil", sourceLocation: sourceLocation)
         #expect(sut.service.currentListId == nil, "currentListId must stay nil", sourceLocation: sourceLocation)
-        #expect(sut.service.loadError == nil, "no error may be set after the session ended", sourceLocation: sourceLocation)
+        #expect(sut.service.listLoadError == nil, "no error may be set after the session ended", sourceLocation: sourceLocation)
+        #expect(sut.service.detailLoadError == nil, "no error may be set after the session ended", sourceLocation: sourceLocation)
         #expect(sut.service.goneItemId == nil, sourceLocation: sourceLocation)
         #expect(sut.service.isLoadingItems == false, sourceLocation: sourceLocation)
         #expect(sut.service.isLoadingDetail == false, sourceLocation: sourceLocation)
@@ -194,7 +195,8 @@ struct ItemServiceSessionSafetyTests {
         #expect(sut.service.items.map(\.id) == ["item-b1"], "A's data must not replace or join B's")
         let cached = await sut.store.getItems(listId: "list-1")
         #expect(cached.map(\.id) == ["item-b1"])
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.currentListId == "list-1")
     }
 
@@ -211,7 +213,8 @@ struct ItemServiceSessionSafetyTests {
         sut.repo.gate.releaseAll()
         await userA.value
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.items.map(\.id) == ["item-b1"])
     }
 
@@ -233,7 +236,8 @@ struct ItemServiceSessionSafetyTests {
         let cached = await sut.store.getItems(listId: "list-1")
         #expect(cached == [item("item-1"), item("item-2")])
         #expect(sut.service.goneItemId == nil)
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
     }
 
     @Test("user switch: A's 404 on a mutation does not mark B's item as gone")
@@ -323,7 +327,7 @@ struct ItemServiceSessionSafetyTests {
 
     // MARK: - Cancellation
 
-    @Test("cancelling the caller during a load sets no loadError and leaves no flag set")
+    @Test("cancelling the caller during a load sets no list or detail load error and leaves no flag set")
     func cancellationDuringLoad() async {
         let sut = await makeItemServiceSUT(honorsCancellation: true)
         sut.repo.enqueueFetchItems(.success([item("item-1")]), held: true)
@@ -334,11 +338,12 @@ struct ItemServiceSessionSafetyTests {
         sut.repo.gate.releaseAll()
         await task.value
 
-        #expect(sut.service.loadError == nil, "cancellation is not shown to the user")
+        #expect(sut.service.listLoadError == nil, "cancellation is not shown to the user")
+        #expect(sut.service.detailLoadError == nil, "cancellation is not shown to the user")
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("cancelling the caller during a refresh sets no loadError")
+    @Test("cancelling the caller during a refresh sets no list or detail load error")
     func cancellationDuringRefresh() async {
         let sut = await makeLoadedSUT(honorsCancellation: true)
         sut.repo.enqueueFetchItems(.success([item("item-9")]), held: true)
@@ -349,11 +354,12 @@ struct ItemServiceSessionSafetyTests {
         sut.repo.gate.releaseAll()
         await task.value
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("cancelling the caller during a detail load sets no loadError and does not mark the item gone")
+    @Test("cancelling the caller during a detail load sets no list or detail load error and does not mark the item gone")
     func cancellationDuringDetail() async {
         let sut = await makeItemServiceSUT(honorsCancellation: true)
         sut.repo.enqueueFetchItemDetail(.success(item("item-1")), held: true)
@@ -364,12 +370,13 @@ struct ItemServiceSessionSafetyTests {
         sut.repo.gate.releaseAll()
         await task.value
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.goneItemId == nil)
         #expect(sut.service.isLoadingDetail == false)
     }
 
-    @Test("cancelling the caller during a mutation throws CancellationError, sets no loadError and resets isMutating", arguments: ItemMutationOp.allCases)
+    @Test("cancelling the caller during a mutation throws CancellationError, sets no list or detail load error and resets isMutating", arguments: ItemMutationOp.allCases)
     func cancellationDuringMutation(op: ItemMutationOp) async {
         let sut = await makeLoadedSUT(honorsCancellation: true)
         op.enqueueSuccess(on: sut.repo, held: true)
@@ -381,30 +388,33 @@ struct ItemServiceSessionSafetyTests {
         let error = await task.value
 
         #expect(error is CancellationError)
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.items == [item("item-1"), item("item-2")], "a cancelled mutation writes nothing")
     }
 
-    @Test("a repository that fails a load with CancellationError sets no loadError")
+    @Test("a repository that fails a load with CancellationError sets no list or detail load error")
     func repositoryCancellationOnLoad() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.failure(CancellationError()))
 
         await sut.service.loadItems(listId: "list-1")
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("a repository that fails a detail load with CancellationError sets no loadError")
+    @Test("a repository that fails a detail load with CancellationError sets no list or detail load error")
     func repositoryCancellationOnDetail() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItemDetail(.failure(CancellationError()))
 
         await sut.service.loadItemDetail(id: "item-1")
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isLoadingDetail == false)
     }
 
@@ -415,14 +425,15 @@ struct ItemServiceSessionSafetyTests {
 
         await #expect(throws: CancellationError.self) { try await op.run(sut.service) }
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.items == [item("item-1"), item("item-2")])
     }
 
     // MARK: - clearForSession
 
-    @Test("clearForSession empties everything: items, detail, list id, load error, gone id, counter and cache")
+    @Test("clearForSession empties everything: items, detail, list id, load errors, gone id, counter and cache")
     func clearForSessionEmptiesEverything() async throws {
         let sut = await makeLoadedSUT()
         sut.repo.enqueueFetchItemDetail(.success(item("item-1")))
@@ -435,7 +446,7 @@ struct ItemServiceSessionSafetyTests {
         let held = startOutcome { _ = try await sut.service.updateItem(id: "item-2", UpdateItemInput(name: "Updated")) }
         await sut.repo.gate.nextHeldCall()
         #expect(sut.service.items.isEmpty == false, "precondition")
-        #expect(sut.service.loadError == .network, "precondition")
+        #expect(sut.service.detailLoadError == .network, "precondition")
         #expect(sut.service.goneItemId == "item-1", "precondition")
         #expect(sut.service.isMutating == true, "precondition")
 
@@ -469,7 +480,8 @@ struct ItemServiceSessionSafetyTests {
 
         #expect(sut.repo.fetchItemsCount == 2, "the cache of the ended session must not answer")
         #expect(sut.service.items == [item("item-3")])
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
     }
 
     @Test("a mutation after teardown works normally in the new session")

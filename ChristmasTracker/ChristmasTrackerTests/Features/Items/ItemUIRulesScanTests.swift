@@ -12,7 +12,8 @@
 //   2. no raw red: `.red`, `Color.red`, `Color(.red)`
 //   3. every `role: .destructive` Button has `destructiveColor` in the same button declaration
 //      (the Button call, its trailing closure and the modifier chain that follows it)
-//   4. any file that reads `loadError` also calls `clearLoadError()`
+//   4. any file that reads `listLoadError` also calls `clearListLoadError()`, and any file that
+//      reads `detailLoadError` also calls `clearDetailLoadError()`
 //   5. no `.alert(` in the Items views and components
 //
 
@@ -183,10 +184,21 @@ nonisolated enum ItemUIRules {
         return lines
     }
 
-    /// True when the code reads `loadError` but never calls `clearLoadError()`.
-    static func readsLoadErrorWithoutClearing(_ code: String) -> Bool {
-        let reads = (try? ItemSourceScan.matchingLines(#"\bloadError\b"#, in: code))?.isEmpty == false
-        return reads && !code.contains("clearLoadError()")
+    /// True when the code reads `property` (for example `listLoadError`) but never calls `clearCall`
+    /// (for example `clearListLoadError()`).
+    static func readsWithoutClearing(_ code: String, property: String, clearCall: String) -> Bool {
+        let reads = (try? ItemSourceScan.matchingLines("\\b\(property)\\b", in: code))?.isEmpty == false
+        return reads && !code.contains(clearCall)
+    }
+
+    /// Rule 4 for the list pair.
+    static func readsListLoadErrorWithoutClearing(_ code: String) -> Bool {
+        readsWithoutClearing(code, property: "listLoadError", clearCall: "clearListLoadError()")
+    }
+
+    /// Rule 4 for the detail pair.
+    static func readsDetailLoadErrorWithoutClearing(_ code: String) -> Bool {
+        readsWithoutClearing(code, property: "detailLoadError", clearCall: "clearDetailLoadError()")
     }
 
     static func alertLines(in code: String) -> [Int] {
@@ -284,23 +296,48 @@ struct ItemUIRulesScanTests {
         #expect(ItemUIRules.destructiveWithoutToken(in: code("Button(\"Save\", role: .cancel) { }")).isEmpty)
     }
 
-    // MARK: Rule 4: loadError needs clearLoadError()
+    // MARK: Rule 4: each load error needs its own clear call
 
-    @Test("Reading loadError without clearLoadError() fires")
-    func loadErrorWithoutClearFires() {
-        #expect(ItemUIRules.readsLoadErrorWithoutClearing(code("if let e = itemService.loadError { Text(e.userMessage) }")))
+    @Test("Reading listLoadError without clearListLoadError() fires")
+    func listLoadErrorWithoutClearFires() {
+        #expect(ItemUIRules.readsListLoadErrorWithoutClearing(code("if let e = itemService.listLoadError { Text(e.userMessage) }")))
     }
 
-    @Test("Reading loadError together with clearLoadError() does not fire")
-    func loadErrorWithClearDoesNotFire() {
-        let source = "if let e = itemService.loadError { Text(e.userMessage) }\n.onDisappear { itemService.clearLoadError() }"
-        #expect(!ItemUIRules.readsLoadErrorWithoutClearing(code(source)))
+    @Test("Reading listLoadError together with clearListLoadError() does not fire")
+    func listLoadErrorWithClearDoesNotFire() {
+        let source = "if let e = itemService.listLoadError { Text(e.userMessage) }\n.onDisappear { itemService.clearListLoadError() }"
+        #expect(!ItemUIRules.readsListLoadErrorWithoutClearing(code(source)))
     }
 
-    @Test("A file that never reads loadError does not fire; a comment about it is ignored")
-    func noLoadErrorDoesNotFire() {
-        #expect(!ItemUIRules.readsLoadErrorWithoutClearing(code("Text(\"a\")")))
-        #expect(!ItemUIRules.readsLoadErrorWithoutClearing(code("// shows loadError\nText(\"a\")")))
+    @Test("A file that never reads listLoadError does not fire; a comment about it is ignored")
+    func noListLoadErrorDoesNotFire() {
+        #expect(!ItemUIRules.readsListLoadErrorWithoutClearing(code("Text(\"a\")")))
+        #expect(!ItemUIRules.readsListLoadErrorWithoutClearing(code("// shows listLoadError\nText(\"a\")")))
+    }
+
+    @Test("Reading detailLoadError without clearDetailLoadError() fires")
+    func detailLoadErrorWithoutClearFires() {
+        #expect(ItemUIRules.readsDetailLoadErrorWithoutClearing(code("if let e = itemService.detailLoadError { Text(e.userMessage) }")))
+    }
+
+    @Test("Reading detailLoadError together with clearDetailLoadError() does not fire")
+    func detailLoadErrorWithClearDoesNotFire() {
+        let source = "if let e = itemService.detailLoadError { Text(e.userMessage) }\n.onDisappear { itemService.clearDetailLoadError() }"
+        #expect(!ItemUIRules.readsDetailLoadErrorWithoutClearing(code(source)))
+    }
+
+    @Test("A file that never reads detailLoadError does not fire; a comment about it is ignored")
+    func noDetailLoadErrorDoesNotFire() {
+        #expect(!ItemUIRules.readsDetailLoadErrorWithoutClearing(code("Text(\"a\")")))
+        #expect(!ItemUIRules.readsDetailLoadErrorWithoutClearing(code("// shows detailLoadError\nText(\"a\")")))
+    }
+
+    @Test("Clearing the other screen's error does not satisfy the rule")
+    func wrongPairDoesNotSatisfy() {
+        let listRead = "if let e = itemService.listLoadError { Text(e.userMessage) }\n.onDisappear { itemService.clearDetailLoadError() }"
+        #expect(ItemUIRules.readsListLoadErrorWithoutClearing(code(listRead)))
+        let detailRead = "if let e = itemService.detailLoadError { Text(e.userMessage) }\n.onDisappear { itemService.clearListLoadError() }"
+        #expect(ItemUIRules.readsDetailLoadErrorWithoutClearing(code(detailRead)))
     }
 
     // MARK: Rule 5: no .alert(
@@ -348,13 +385,24 @@ struct ItemUIRulesScanTests {
         #expect(found.isEmpty, "\(found.joined(separator: "\n"))")
     }
 
-    @Test("Features/Items: a file that reads loadError also calls clearLoadError()")
-    func realLoadError() throws {
+    @Test("Features/Items: a file that reads listLoadError also calls clearListLoadError()")
+    func realListLoadError() throws {
         let (tree, files) = try itemFiles()
         var offenders: [String] = []
         for url in files {
             let source = ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8))
-            if ItemUIRules.readsLoadErrorWithoutClearing(source) { offenders.append(tree.relativePath(url)) }
+            if ItemUIRules.readsListLoadErrorWithoutClearing(source) { offenders.append(tree.relativePath(url)) }
+        }
+        #expect(offenders.isEmpty, "\(offenders.joined(separator: "\n"))")
+    }
+
+    @Test("Features/Items: a file that reads detailLoadError also calls clearDetailLoadError()")
+    func realDetailLoadError() throws {
+        let (tree, files) = try itemFiles()
+        var offenders: [String] = []
+        for url in files {
+            let source = ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8))
+            if ItemUIRules.readsDetailLoadErrorWithoutClearing(source) { offenders.append(tree.relativePath(url)) }
         }
         #expect(offenders.isEmpty, "\(offenders.joined(separator: "\n"))")
     }

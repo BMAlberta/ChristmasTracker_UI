@@ -6,7 +6,7 @@
 //
 //  Rules under test (Gate 1 addendum):
 //   - a mutation THROWS the typed ItemError (the initiating view holds it) and never touches
-//     `loadError`, `isLoadingItems` or `isLoadingDetail`;
+//     `listLoadError`, `detailLoadError`, `isLoadingItems` or `isLoadingDetail`;
 //   - create appends the returned item to `items` when `currentListId` matches, and caches it;
 //     update replaces the matching entry in `items`, `currentItem` and the cache; delete removes
 //     the item from `items`, `currentItem` and the cache on success;
@@ -79,7 +79,8 @@ struct ItemServiceMutationTests {
         }
 
         #expect(sut.service.items == [item("item-1"), item("item-2")])
-        #expect(sut.service.loadError == nil, "a mutation error is never published")
+        #expect(sut.service.listLoadError == nil, "a mutation error is never published")
+        #expect(sut.service.detailLoadError == nil, "a mutation error is never published")
         #expect(sut.service.isMutating == false)
         #expect(sut.service.goneItemId == nil)
     }
@@ -129,12 +130,13 @@ struct ItemServiceMutationTests {
 
         #expect(sut.service.items == [item("item-1"), item("item-2")])
         #expect(sut.service.currentItem == item("item-1"))
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.goneItemId == nil)
     }
 
-    @Test("updateItem 404 means gone: dropped everywhere, goneItemId set, notFound thrown, loadError untouched")
+    @Test("updateItem 404 means gone: dropped everywhere, goneItemId set, notFound thrown, load errors untouched")
     func updateNotFound() async throws {
         let sut = await makeLoadedSUT()
         sut.repo.enqueueUpdateItem(.failure(ItemError.notFound))
@@ -148,7 +150,8 @@ struct ItemServiceMutationTests {
         let cached = await sut.store.getItems(listId: "list-1")
         #expect(cached == [item("item-2")])
         #expect(sut.service.goneItemId == "item-1")
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -197,7 +200,8 @@ struct ItemServiceMutationTests {
         #expect(sut.service.currentItem == item("item-1"))
         let cached = await sut.store.getItems(listId: "list-1")
         #expect(cached == [item("item-1"), item("item-2")])
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.goneItemId == nil)
     }
@@ -216,26 +220,27 @@ struct ItemServiceMutationTests {
         let cached = await sut.store.getItems(listId: "list-1")
         #expect(cached == [item("item-2")])
         #expect(sut.service.goneItemId == "item-1")
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
+        #expect(sut.service.detailLoadError == nil)
     }
 
     // MARK: - A mutation never touches the load state
 
-    @Test("a mutation error never changes the loadError set by an earlier load", arguments: ItemMutationOp.allCases)
-    func mutationErrorLeavesLoadErrorAlone(op: ItemMutationOp) async throws {
+    @Test("a mutation error never changes the detailLoadError set by an earlier detail load", arguments: ItemMutationOp.allCases)
+    func mutationErrorLeavesDetailLoadErrorAlone(op: ItemMutationOp) async throws {
         let sut = await makeLoadedSUT()
         sut.repo.enqueueFetchItemDetail(.failure(ItemError.network))
         await sut.service.loadItemDetail(id: "item-1")
-        #expect(sut.service.loadError == .network, "precondition")
+        #expect(sut.service.detailLoadError == .network, "precondition")
         op.enqueueFailure(ItemError.server, on: sut.repo)
 
         await #expect(throws: ItemError.server) { try await op.run(sut.service) }
 
-        #expect(sut.service.loadError == .network, "the load error of the other screen is not overwritten")
+        #expect(sut.service.detailLoadError == .network, "the load error of the other screen is not overwritten")
     }
 
-    @Test("a successful mutation does not clear a loadError either", arguments: ItemMutationOp.allCases)
-    func mutationSuccessLeavesLoadErrorAlone(op: ItemMutationOp) async throws {
+    @Test("a successful mutation does not clear a detailLoadError either", arguments: ItemMutationOp.allCases)
+    func mutationSuccessLeavesDetailLoadErrorAlone(op: ItemMutationOp) async throws {
         let sut = await makeLoadedSUT()
         sut.repo.enqueueFetchItemDetail(.failure(ItemError.network))
         await sut.service.loadItemDetail(id: "item-1")
@@ -243,7 +248,7 @@ struct ItemServiceMutationTests {
 
         try await op.run(sut.service)
 
-        #expect(sut.service.loadError == .network)
+        #expect(sut.service.detailLoadError == .network)
     }
 
     @Test("a mutation moves only isMutating, never the load flags", arguments: ItemMutationOp.allCases)
@@ -325,7 +330,7 @@ struct ItemServiceMutationTests {
 
     // MARK: - goneItemId lifecycle
 
-    @Test("goneItemId is cleared only by clearForSession, not by later loads, clearLoadError or clearItemDetail")
+    @Test("goneItemId is cleared only by clearForSession, not by later loads, clearListLoadError or clearItemDetail")
     func goneItemIdLifecycle() async throws {
         let sut = await makeLoadedSUT()
         sut.repo.enqueueDeleteItem(.failure(ItemError.notFound))
@@ -334,7 +339,8 @@ struct ItemServiceMutationTests {
 
         sut.repo.enqueueFetchItems(.success([item("item-2")]))
         await sut.service.refreshItems()
-        sut.service.clearLoadError()
+        sut.service.clearListLoadError()
+        sut.service.clearDetailLoadError()
         sut.service.clearItemDetail()
         sut.service.clearItems()
         #expect(sut.service.goneItemId == "item-1")

@@ -4,7 +4,7 @@
 //
 //  Story I3c-D, carried Story C finding (a): a load of list A that fails or finishes after a
 //  load of list B started (same session generation) must not touch B's state. Specifically it
-//  must not set `loadError`, clear `isLoadingItems`, or write items / currentListId.
+//  must not set `listLoadError`, clear `isLoadingItems`, or write items / currentListId.
 //
 //  Determinism: gated fake with the arrival-index handshake (release(at:)); no sleeps.
 //  Arrival index 0 is always the load of list A, index 1 the load of list B.
@@ -37,7 +37,7 @@ struct ItemServiceListSwitchTests {
         return (sut, taskA, taskB)
     }
 
-    @Test("A fails while B is still loading: loadError stays nil and isLoadingItems stays true")
+    @Test("A fails while B is still loading: listLoadError stays nil and isLoadingItems stays true")
     func staleFailureDoesNotTouchB() async {
         let (sut, taskA, taskB) = await makeSUT(
             aOutcome: .failure(ItemError.network),
@@ -47,14 +47,14 @@ struct ItemServiceListSwitchTests {
         sut.repo.gate.release(at: 0)
         await taskA.value
 
-        #expect(sut.service.loadError == nil, "list A's failure must not be shown on list B")
+        #expect(sut.service.listLoadError == nil, "list A's failure must not be shown on list B")
         #expect(sut.service.isLoadingItems == true, "B is still loading")
         #expect(sut.service.currentListId == "list-b")
 
         sut.repo.gate.release(at: 1)
         await taskB.value
         #expect(sut.service.items == [item("item-b", listId: "list-b")])
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
         #expect(sut.service.isLoadingItems == false)
     }
 
@@ -93,11 +93,11 @@ struct ItemServiceListSwitchTests {
 
         #expect(sut.service.items == [item("item-b", listId: "list-b")])
         #expect(sut.service.currentListId == "list-b")
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("A fails late after B succeeded: loadError stays nil")
+    @Test("A fails late after B succeeded: listLoadError stays nil")
     func staleFailureAfterBSucceeded() async {
         let (sut, taskA, taskB) = await makeSUT(
             aOutcome: .failure(ItemError.forbidden),
@@ -109,13 +109,13 @@ struct ItemServiceListSwitchTests {
         sut.repo.gate.release(at: 0)
         await taskA.value
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
         #expect(sut.service.items == [item("item-b", listId: "list-b")])
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("B's own failure still sets loadError")
-    func bFailureSetsLoadError() async {
+    @Test("B's own failure still sets listLoadError")
+    func bFailureSetsListLoadError() async {
         let (sut, taskA, taskB) = await makeSUT(
             aOutcome: .success([item("item-a", listId: "list-a")]),
             bOutcome: .failure(ItemError.server)
@@ -126,7 +126,7 @@ struct ItemServiceListSwitchTests {
         sut.repo.gate.release(at: 1)
         await taskB.value
 
-        #expect(sut.service.loadError == .server)
+        #expect(sut.service.listLoadError == .server)
         #expect(sut.service.items.isEmpty)
         #expect(sut.service.isLoadingItems == false)
     }
@@ -140,25 +140,25 @@ struct ItemServiceListSwitchTests {
 
         sut.repo.gate.release(at: 1)
         await taskB.value
-        #expect(sut.service.loadError == .server, "precondition")
+        #expect(sut.service.listLoadError == .server, "precondition")
         sut.repo.gate.release(at: 0)
         await taskA.value
 
-        #expect(sut.service.loadError == .server)
+        #expect(sut.service.listLoadError == .server)
         #expect(sut.service.isLoadingItems == false)
     }
 
-    @Test("A starting a new load clears an earlier loadError at its start")
+    @Test("A starting a new load clears an earlier listLoadError at its start")
     func newLoadClearsEarlierError() async {
         let sut = await makeItemServiceSUT()
         sut.repo.enqueueFetchItems(.failure(ItemError.server))
         await sut.service.loadItems(listId: "list-a")
-        #expect(sut.service.loadError == .server, "precondition")
+        #expect(sut.service.listLoadError == .server, "precondition")
         sut.repo.enqueueFetchItems(.success([item("item-b", listId: "list-b")]), held: true)
         let task = Task { await sut.service.loadItems(listId: "list-b") }
         await sut.repo.gate.nextHeldCall()
 
-        #expect(sut.service.loadError == nil)
+        #expect(sut.service.listLoadError == nil)
 
         sut.repo.gate.releaseAll()
         await task.value
