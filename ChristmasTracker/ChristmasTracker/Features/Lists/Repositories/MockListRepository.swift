@@ -131,6 +131,11 @@ actor MockListRepository: ListRepository {
             throw ListError.notFound
         }
 
+        // Like the server: an archived list rejects every update with the 422.
+        guard lists[index].status != .archived else {
+            throw ListError.archivedReadOnly
+        }
+
         var updated = lists[index].applying(input, at: Date())
         if case .set(let email) = input.coOwner {
             guard updated.capabilities.canSetCoOwner else {
@@ -164,6 +169,9 @@ actor MockListRepository: ListRepository {
             throw ListError.notFound
         }
         let list = lists[index]
+        guard list.status != .archived else {
+            throw ListError.archivedReadOnly
+        }
         guard list.capabilities.canSetCoOwner else {
             throw ListError.forbidden
         }
@@ -190,7 +198,8 @@ actor MockListRepository: ListRepository {
             throw ListError.notFound
         }
 
-        lists.remove(at: index)
+        // Archiving keeps the list: the status becomes ARCHIVED and the management flags go false.
+        lists[index] = lists[index].archived()
     }
 
     // MARK: - Shared state for MockMemberRepository and MockChildRepository
@@ -298,11 +307,33 @@ nonisolated private extension ListDetail {
         rebuilt(coOwner: coOwner, memberCount: memberCount, members: members)
     }
 
-    private func rebuilt(coOwner: ListPerson?, memberCount: Int, members: [ListMember]?) -> ListDetail {
+    /// What the server sends after archiving: status ARCHIVED, the four management flags false,
+    /// every other flag unchanged.
+    func archived() -> ListDetail {
+        let flags = ListCapabilities(
+            isRecipient: capabilities.isRecipient, canSeeGiftActivity: capabilities.canSeeGiftActivity,
+            canPurchase: capabilities.canPurchase, canAddOffList: capabilities.canAddOffList,
+            canSeeOffList: capabilities.canSeeOffList, canCreateItem: capabilities.canCreateItem,
+            canSeeMembers: capabilities.canSeeMembers, canEditList: false, canDeleteList: false,
+            canManageMembers: false, canSetCoOwner: false, canLeaveList: capabilities.canLeaveList
+        )
+        return rebuilt(
+            coOwner: coOwner, memberCount: memberCount, members: members,
+            status: .archived, capabilities: flags
+        )
+    }
+
+    private func rebuilt(
+        coOwner: ListPerson?,
+        memberCount: Int,
+        members: [ListMember]?,
+        status: ListStatus? = nil,
+        capabilities: ListCapabilities? = nil
+    ) -> ListDetail {
         ListDetail(
-            id: id, name: name, theme: theme, year: year, visibility: visibility, status: status,
+            id: id, name: name, theme: theme, year: year, visibility: visibility, status: status ?? self.status,
             recipient: recipient, owner: owner, coOwner: coOwner, myRole: myRole,
-            capabilities: capabilities, memberCount: memberCount, itemCount: itemCount,
+            capabilities: capabilities ?? self.capabilities, memberCount: memberCount, itemCount: itemCount,
             purchasedCount: purchasedCount, createdAt: createdAt, updatedAt: updatedAt,
             members: members
         )

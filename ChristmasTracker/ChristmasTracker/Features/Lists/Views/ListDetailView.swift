@@ -15,7 +15,7 @@ struct ListDetailView: View {
     @Environment(\.authenticationService) private var authenticationService
 
     @State private var editingDetail: ListDetail?
-    @State private var showDeleteConfirmation = false
+    @State private var showArchiveConfirmation = false
     @State private var selectedItemId: String?
     @State private var actionError: ListErrorPresentation?
     @State private var failedAction: FailedAction?
@@ -25,7 +25,7 @@ struct ListDetailView: View {
 
     /// The action whose failure is shown in the banner, so Try Again repeats that action.
     private enum FailedAction {
-        case deleteList
+        case archiveList
         case leaveList
         case removeMember(MemberRowState)
     }
@@ -93,20 +93,8 @@ struct ListDetailView: View {
             } message: { row in
                 Text(MembersSectionState.removeConfirmation(for: row).message)
             }
-            .confirmationDialog(
-                ListDeleteConfirmation.title,
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(ListDeleteConfirmation.confirmButtonTitle, role: .destructive) {
-                    Task { await deleteList() }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text(ListDeleteConfirmation.message)
-            }
             .onChange(of: listService.goneListId) { _, goneId in
-                // This list is gone or read-only: leave. The service has already dropped it.
+                // This list is gone: leave. The service has already dropped it.
                 if ListScreenExit.shouldDismissDetail(goneListId: goneId, openListId: listId) {
                     dismiss()
                 }
@@ -144,15 +132,23 @@ struct ListDetailView: View {
         await itemService.loadItems(listId: listId)
     }
 
-    private func deleteList() async {
+    private func archiveList() async {
         actionError = nil
         do {
             try await listService.deleteList(id: listId)
-            dismiss()
+            // A failed reload still archived the list but leaves the error for the screen to show.
+            switch ListArchiveCompletion.after(serviceError: listService.error) {
+            case .dismiss:
+                dismiss()
+            case .showError(let presentation):
+                // No retry: repeating the action would archive again.
+                failedAction = nil
+                actionError = presentation
+            }
         } catch is CancellationError {
             return
         } catch {
-            failedAction = .deleteList
+            failedAction = .archiveList
             actionError = ListErrorPresentation((error as? ListError) ?? .server)
         }
     }
@@ -190,7 +186,7 @@ struct ListDetailView: View {
 
     private func retryFailedAction() async {
         switch failedAction {
-        case .deleteList: await deleteList()
+        case .archiveList: await archiveList()
         case .leaveList: await leaveList()
         case .removeMember(let row): await removeMember(row)
         case nil: break
@@ -223,7 +219,7 @@ struct ListDetailView: View {
                 }
                 membersSection(detail: detail)
                 if state.showsDeleteAction {
-                    deleteButton
+                    archiveButton
                 }
             }
             .padding(EdgeInsets.appScreenPadding)
@@ -263,7 +259,12 @@ struct ListDetailView: View {
                         .foregroundStyle(Color.textMutedColor)
                 }
                 Spacer(minLength: AppSpacing.sm)
-                ListBadge(title: state.badgeTitle, tone: state.badgeTone)
+                VStack(alignment: .trailing, spacing: AppSpacing.xs) {
+                    ListBadge(title: state.badgeTitle, tone: state.badgeTone)
+                    if state.showsArchivedBadge {
+                        ListArchivedBadgeView()
+                    }
+                }
             }
             if let theme = state.theme, !theme.isEmpty {
                 Label(theme, systemImage: "sparkles")
@@ -310,11 +311,12 @@ struct ListDetailView: View {
         )
     }
 
-    private var deleteButton: some View {
+    /// The confirmation dialog is attached to this trigger, not to the screen.
+    private var archiveButton: some View {
         Button(role: .destructive) {
-            showDeleteConfirmation = true
+            showArchiveConfirmation = true
         } label: {
-            Label("Delete List", systemImage: "trash")
+            Label(ListArchiveConfirmation.actionTitle, systemImage: "archivebox")
                 .font(.appHeadline)
                 .foregroundStyle(Color.surfaceColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -322,8 +324,20 @@ struct ListDetailView: View {
                 .background(Color.accentColor, in: .rect(cornerRadius: AppSpacing.md))
         }
         .disabled(listService.isMutating)
-        .accessibilityHint("Removes this list from your lists after you confirm")
-        .accessibilityIdentifier("listDetail.deleteButton")
+        .accessibilityHint("Moves this list to Archived after you confirm")
+        .accessibilityIdentifier("listDetail.archiveButton")
+        .confirmationDialog(
+            ListArchiveConfirmation.title,
+            isPresented: $showArchiveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
+                Task { await archiveList() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(ListArchiveConfirmation.message)
+        }
     }
 
     private func itemsSection(state: ListDetailState, detail: ListDetail) -> some View {
@@ -387,6 +401,16 @@ struct ListDetailView: View {
         ListDetailView(listId: MockListData.ownerOfChildList.id)
             .environment(\.listService, ListService(
                 repository: MockListRepository(),
+                dataStore: ListDataStore()
+            ))
+    }
+}
+
+#Preview("Archived list") {
+    NavigationStack {
+        ListDetailView(listId: MockListData.archivedList.id)
+            .environment(\.listService, ListService(
+                repository: MockListRepository(includeAllScenarios: true),
                 dataStore: ListDataStore()
             ))
     }

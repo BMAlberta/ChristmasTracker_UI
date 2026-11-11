@@ -63,11 +63,7 @@ actor ListDataStore {
     
     func setListDetail(_ detail: ListDetail) {
         listDetails[detail.id] = detail
-        
-        // An archived detail fetched by id never touches the summary cache (archived lists are hidden).
-        if detail.status != .archived {
-            updateListSummary(detail.asGiftList())
-        }
+        updateListSummary(detail.asGiftList())
     }
     
     // MARK: - Cache Management

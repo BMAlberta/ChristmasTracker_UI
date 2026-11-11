@@ -68,10 +68,14 @@ struct CoOwnerRemoveViewStateTests {
         #expect(!presentation.shouldLeaveScreen)
     }
 
-    @Test("notFound and archivedReadOnly leave the screen")
+    // CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): archivedReadOnly
+    // no longer leaves the screen (it showed the plain archived message and stays).
+    @Test("notFound leaves the screen; archivedReadOnly stays with its plain message")
     func leavingErrors() throws {
         #expect(try #require(CoOwnerRemoval.presentation(for: ListError.notFound)).shouldLeaveScreen)
-        #expect(try #require(CoOwnerRemoval.presentation(for: ListError.archivedReadOnly)).shouldLeaveScreen)
+        let archived = try #require(CoOwnerRemoval.presentation(for: ListError.archivedReadOnly))
+        #expect(!archived.shouldLeaveScreen)
+        #expect(archived.message == "This list is archived and can't be edited.")
     }
 
     @Test("rateLimited, network, server and invalidResponse are retryable and stay")

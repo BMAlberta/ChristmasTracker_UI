@@ -47,6 +47,21 @@ struct ListBadge: View {
     }
 }
 
+/// Marks an archived list. Shown only when the view state says so (`showsArchivedBadge`).
+struct ListArchivedBadgeView: View {
+    var body: some View {
+        Text(ListArchivedBadge.title)
+            .font(.appCaption1)
+            .foregroundStyle(Color.textMutedColor)
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.xs)
+            .overlay {
+                RoundedRectangle(cornerRadius: AppSpacing.xs)
+                    .stroke(Color.borderColor)
+            }
+    }
+}
+
 // MARK: - Counts
 
 /// Item and purchased counts with optional progress. Only built when the state shows counts.

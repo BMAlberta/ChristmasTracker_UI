@@ -15,11 +15,13 @@ struct ListScreenExitTests {
 
     /// Every ListError case with its expected answer. The switch has no default, so adding a
     /// ListError case without classifying it here is a compile error in this test.
+    /// CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): archivedReadOnly
+    /// moved from the exit group to the stay group.
     nonisolated static func expectsExit(_ error: ListError) -> Bool {
         switch error {
-        case .notFound, .archivedReadOnly:
+        case .notFound:
             return true
-        case .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
+        case .archivedReadOnly, .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
              .unauthorized, .sessionEnded, .network, .invalidResponse, .server,
              .memberEmailNotFound, .alreadyMember, .membershipNotFound:
             return false
@@ -62,14 +64,23 @@ struct ListScreenExitTests {
         #expect(Self.allCases.count == 15)
     }
 
-    @Test("shouldDismissDetail is true exactly for notFound and archivedReadOnly", arguments: ListScreenExitTests.allCases)
+    @Test("shouldDismissDetail is true exactly for notFound", arguments: ListScreenExitTests.allCases)
     func detailExit(error: ListError) {
         #expect(ListScreenExit.shouldDismissDetail(for: error) == Self.expectsExit(error))
     }
 
-    @Test("shouldDismissEdit is true exactly for notFound and archivedReadOnly", arguments: ListScreenExitTests.allCases)
+    @Test("shouldDismissEdit is true exactly for notFound", arguments: ListScreenExitTests.allCases)
     func editExit(error: ListError) {
         #expect(ListScreenExit.shouldDismissEdit(for: error) == Self.expectsExit(error))
+    }
+
+    // ADDED (I3c-A): the archived-read-only 422 keeps the user on the screen.
+    @Test("archivedReadOnly dismisses neither the detail nor the edit screen; notFound dismisses both")
+    func archivedStaysNotFoundLeaves() {
+        #expect(ListScreenExit.shouldDismissDetail(for: .archivedReadOnly) == false)
+        #expect(ListScreenExit.shouldDismissEdit(for: .archivedReadOnly) == false)
+        #expect(ListScreenExit.shouldDismissDetail(for: .notFound) == true)
+        #expect(ListScreenExit.shouldDismissEdit(for: .notFound) == true)
     }
 
     @Test("a nil error never dismisses")

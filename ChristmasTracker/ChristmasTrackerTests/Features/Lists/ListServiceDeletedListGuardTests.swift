@@ -15,6 +15,17 @@
 //
 //  Determinism: gated fakes with the nextHeldCall() handshake. No sleeps, no yield loops.
 //
+//  Story I3c-A changes (named; reason for each: decision "archived lists stay visible and archive
+//  reloads from the server" - an archive records NO removal in the guard, which still records
+//  leaves and gone-list drops):
+//  - The tests that used deleteList as the removal that feeds the guard now use leaveList (the
+//    other removal that feeds it), through the member repository fake. Their assertions are
+//    unchanged. Marked "CHANGED (I3c-A)".
+//  - The two "returns the list ARCHIVED stays hidden" tests are rewritten: an archived list stays
+//    visible (under archivedLists).
+//  - `goneErrors` is now only notFound: a 422 archivedReadOnly is not "list gone". The archived
+//    422 behavior is tested in ListServiceArchivedReadOnlyTests.
+//
 
 import Foundation
 import Testing
@@ -31,15 +42,18 @@ struct ListServiceDeletedListGuardTests {
         let repo: GatedListRepository
         let store: ListDataStore
         let manager: SessionManager
+        /// CHANGED (I3c-A): the leave goes through the member repository (the removal that feeds the guard).
+        let members: GatedMemberRepository
     }
 
     private func makeSUT() async -> SUT {
         let repo = GatedListRepository()
+        let members = GatedMemberRepository()
         let store = ListDataStore()
-        let service = ListService(repository: repo, dataStore: store)
+        let service = ListService(repository: repo, memberRepository: members, dataStore: store)
         let manager = SessionManager(initialClearables: [])
         await manager.register(service)
-        return SUT(service: service, repo: repo, store: store, manager: manager)
+        return SUT(service: service, repo: repo, store: store, manager: manager, members: members)
     }
 
     private func list(_ id: String) -> GiftList {
@@ -60,11 +74,11 @@ struct ListServiceDeletedListGuardTests {
     func inFlightLoadListsDoesNotResurrect() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         let load = Task { await sut.service.loadLists() }
         await sut.repo.nextHeldCall()
 
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await load.value
 
@@ -79,12 +93,12 @@ struct ListServiceDeletedListGuardTests {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
         let refresh = Task { await sut.service.refreshLists() }
         await sut.repo.nextHeldCall()
 
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await refresh.value
 
@@ -99,12 +113,12 @@ struct ListServiceDeletedListGuardTests {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueFetchListDetail(.success(detail("list-a")), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
         let load = Task { await sut.service.loadListDetail(id: "list-a") }
         await sut.repo.nextHeldCall()
 
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await load.value
 
@@ -121,9 +135,9 @@ struct ListServiceDeletedListGuardTests {
     func guardClearedAtTeardown() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         await sut.manager.teardown(reason: .userLogout)
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))   // a different user
 
@@ -152,7 +166,9 @@ struct ListServiceDeletedListGuardTests {
 
     // MARK: - Gone lists (loadListDetail and updateList)
 
-    nonisolated static let goneErrors: [ListError] = [.notFound, .archivedReadOnly]
+    /// CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): archivedReadOnly
+    /// left this list. It no longer drops the list or sets goneListId (see ListServiceArchivedReadOnlyTests).
+    nonisolated static let goneErrors: [ListError] = [.notFound]
     nonisolated static let otherErrors: [ListError] = [
         .forbidden, .recipientNotFound, .duplicateRecipientYear,
         .validation(message: "Name must be between 1 and 200 characters"),
@@ -172,7 +188,7 @@ struct ListServiceDeletedListGuardTests {
         return sut
     }
 
-    @Test("loadListDetail failing with notFound or archivedReadOnly drops the list everywhere (a later refresh may show it again)", arguments: ListServiceDeletedListGuardTests.goneErrors)
+    @Test("loadListDetail failing with notFound drops the list everywhere (a later refresh may show it again)", arguments: ListServiceDeletedListGuardTests.goneErrors)
     func detailGoneDropsList(error: ListError) async {
         let sut = await loadedSUT()
         sut.repo.enqueueFetchListDetail(.failure(error))
@@ -196,7 +212,7 @@ struct ListServiceDeletedListGuardTests {
         #expect(recached.map(\.id) == ["list-a", "list-b"])
     }
 
-    @Test("updateList failing with notFound or archivedReadOnly drops the list everywhere (a later refresh may show it again)", arguments: ListServiceDeletedListGuardTests.goneErrors)
+    @Test("updateList failing with notFound drops the list everywhere (a later refresh may show it again)", arguments: ListServiceDeletedListGuardTests.goneErrors)
     func updateGoneDropsList(error: ListError) async {
         let sut = await loadedSUT()
         sut.repo.enqueueUpdateList(.failure(error))
@@ -268,10 +284,10 @@ struct ListServiceDeletedListGuardTests {
     func laterDetailLoadAfterDeleteShowsDetail() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         sut.repo.enqueueFetchListDetail(.success(detail("list-a")))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
 
         await sut.service.loadListDetail(id: "list-a")
 
@@ -289,10 +305,10 @@ struct ListServiceDeletedListGuardTests {
     func cachedDetailAfterDeleteIsShownAndRevalidated() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         sut.repo.enqueueFetchListDetail(.success(detail("list-a")))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         await sut.store.setListDetail(detail("list-a"))
 
         await sut.service.loadListDetail(id: "list-a")
@@ -308,12 +324,12 @@ struct ListServiceDeletedListGuardTests {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueFetchListDetail(.success(detail("list-a")), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
         let load = Task { await sut.service.loadListDetail(id: "list-a") }
         await sut.repo.nextHeldCall()
 
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await load.value
 
@@ -327,46 +343,53 @@ struct ListServiceDeletedListGuardTests {
 
     // MARK: - I3b-6 (F1): the guard covers only operations that started before the removal
 
-    @Test("a loadLists that starts after the delete completed and returns the list ARCHIVED still hides it")
-    func laterLoadListsReturningArchivedStaysHidden() async throws {
+    // CHANGED (I3c-A, decision "archived lists stay visible"): was "a loadLists that starts after the
+    // delete completed and returns the list ARCHIVED still hides it". A leave drops the list; a later
+    // load that starts after it and returns the list ARCHIVED now shows it (under archivedLists).
+    @Test("a loadLists that starts after the leave completed and returns the list ARCHIVED shows it as archived")
+    func laterLoadListsReturningArchivedIsShown() async throws {
         let sut = await makeSUT()
-        sut.repo.enqueueFetchLists(.success([list("list-a")]))   // the only list, so the delete empties the cache and loadLists must fetch
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.repo.enqueueFetchLists(.success([list("list-a")]))   // the only list, so the leave empties the cache and loadLists must fetch
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.enqueueFetchLists(.success([archivedList("list-a"), list("list-b")]))
 
         await sut.service.loadLists()
 
         #expect(sut.repo.fetchListsCount == 2, "the second load really fetched")
-        #expect(sut.service.lists.map(\.id) == ["list-b"])
+        #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
+        #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == ["list-b"])
+        #expect(cached.map(\.id) == ["list-a", "list-b"])
     }
 
-    @Test("a refreshLists that starts after the delete completed and returns the list ARCHIVED still hides it")
-    func laterRefreshReturningArchivedStaysHidden() async throws {
+    // CHANGED (I3c-A): was "a refreshLists that starts after the delete completed and returns the
+    // list ARCHIVED still hides it".
+    @Test("a refreshLists that starts after the leave completed and returns the list ARCHIVED shows it as archived")
+    func laterRefreshReturningArchivedIsShown() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.enqueueFetchLists(.success([archivedList("list-a"), list("list-b")]))
 
         await sut.service.refreshLists()
 
-        #expect(sut.service.lists.map(\.id) == ["list-b"])
+        #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
+        #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == ["list-b"])
+        #expect(cached.map(\.id) == ["list-a", "list-b"])
     }
 
     @Test("a loadLists that starts after the delete completed and returns the list non-archived shows it")
     func laterLoadListsAfterDeleteShowsList() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a")]))   // the only list, so the delete empties the cache and loadLists must fetch
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
 
         await sut.service.loadLists()
@@ -382,11 +405,11 @@ struct ListServiceDeletedListGuardTests {
         sut.repo.enqueueFetchLists(.success([list("list-a")]))   // the only list, so the delete leaves none
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]), held: true)   // started before
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]), held: true)   // started after
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
         let earlier = Task { await sut.service.refreshLists() }
         await sut.repo.nextHeldCall()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         let later = Task { await sut.service.loadLists() }
         await sut.repo.nextHeldCall()
 
@@ -405,9 +428,9 @@ struct ListServiceDeletedListGuardTests {
     func recordsClearedAtTeardownNewSessionStartsEmpty() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         await sut.manager.teardown(reason: .userLogout)
 
         // New session, another user who also sees list-a. Their load starts at the beginning of the
@@ -427,18 +450,18 @@ struct ListServiceDeletedListGuardTests {
     func newSessionInFlightGuardStillWorks() async throws {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         await sut.manager.teardown(reason: .userLogout)
 
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
         let refresh = Task { await sut.service.refreshLists() }
         await sut.repo.nextHeldCall()
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await refresh.value
 
@@ -452,14 +475,14 @@ struct ListServiceDeletedListGuardTests {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueUpdateList(.success(detail("list-a")), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         await sut.service.loadLists()
         let update = Task {
             _ = try? await sut.service.updateList(id: "list-a", UpdateListInput(name: "X", theme: nil, visibility: nil))
         }
         await sut.repo.nextHeldCall()
 
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await update.value
 

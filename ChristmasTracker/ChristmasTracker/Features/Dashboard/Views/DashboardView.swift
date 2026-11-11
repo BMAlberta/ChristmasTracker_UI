@@ -11,7 +11,8 @@ struct DashboardView: View {
     @Environment(\.listService) private var listService
     @State private var selectedListId: String?
     @State private var showCreateSheet = false
-    @State private var listToDelete: GiftList?
+    @State private var listToArchive: GiftList?
+    @State private var segment = ListSegment.active
     @State private var searchText = ""
     @State private var errorDismissal = ListErrorDismissal()
     @State private var lastOperation = Operation.load
@@ -20,14 +21,17 @@ struct DashboardView: View {
     private enum Operation {
         case load
         case refresh
-        case delete
+        case archive
         case create
     }
 
     var body: some View {
         NavigationStack {
-            content
-                .background(Color.backgroundPrimaryColor)
+            VStack(spacing: AppSpacing.sm) {
+                segmentPicker
+                content
+            }
+            .background(Color.backgroundPrimaryColor)
                 .navigationTitle("Dashboard")
                 .navigationDestination(item: $selectedListId) { listId in
                     ListDetailView(listId: listId)
@@ -55,20 +59,6 @@ struct DashboardView: View {
                 .sheet(isPresented: $showCreateSheet) {
                     CreateListView()
                 }
-                .confirmationDialog(
-                    ListDeleteConfirmation.title,
-                    isPresented: deleteDialogBinding,
-                    titleVisibility: .visible
-                ) {
-                    Button(ListDeleteConfirmation.confirmButtonTitle, role: .destructive) {
-                        confirmDelete()
-                    }
-                    Button("Cancel", role: .cancel) {
-                        listToDelete = nil
-                    }
-                } message: {
-                    Text(ListDeleteConfirmation.message)
-                }
                 .task {
                     if listService.lists.isEmpty {
                         begin(.load)
@@ -92,14 +82,19 @@ struct DashboardView: View {
             )
             .padding(EdgeInsets.appScreenPadding)
             .frame(maxHeight: .infinity, alignment: .top)
-        } else if displayedLists.isEmpty {
+        } else if segmentState.lists.isEmpty {
             emptyStateView
         } else {
             listsView
         }
     }
 
-    private var displayedLists: [GiftList] {
+    /// The lists of the selected segment. The search is applied first, then the segment.
+    private var segmentState: ListSegmentState {
+        ListSegmentState(segment: segment, lists: searchedLists, isSearching: !searchText.isEmpty)
+    }
+
+    private var searchedLists: [GiftList] {
         let filtered = listService.filteredLists
         guard !searchText.isEmpty else { return filtered }
         return filtered.filter { list in
@@ -133,7 +128,7 @@ struct DashboardView: View {
                 begin(.refresh)
                 Task { await listService.refreshLists() }
             }
-        case .delete, .create:
+        case .archive, .create:
             return nil
         }
     }
@@ -143,19 +138,20 @@ struct DashboardView: View {
         showCreateSheet = true
     }
 
-    private var deleteDialogBinding: Binding<Bool> {
+    /// True while the archive confirmation of this very row is shown.
+    private func archiveDialogBinding(for list: GiftList) -> Binding<Bool> {
         Binding(
-            get: { listToDelete != nil },
+            get: { listToArchive?.id == list.id },
             set: { isPresented in
-                if !isPresented { listToDelete = nil }
+                if !isPresented, listToArchive?.id == list.id { listToArchive = nil }
             }
         )
     }
 
-    private func confirmDelete() {
-        guard let list = listToDelete else { return }
-        listToDelete = nil
-        begin(.delete)
+    private func confirmArchive() {
+        guard let list = listToArchive else { return }
+        listToArchive = nil
+        begin(.archive)
         Task {
             // A failure is kept by the service as its typed error and shown in the banner.
             try? await listService.deleteList(id: list.id)
@@ -163,6 +159,17 @@ struct DashboardView: View {
     }
 
     // MARK: - Subviews
+
+    private var segmentPicker: some View {
+        Picker("Lists", selection: $segment) {
+            ForEach(ListSegment.allCases, id: \.self) { segment in
+                Text(segment.title).tag(segment)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, AppSpacing.lg)
+        .accessibilityIdentifier("dashboard.segmentPicker")
+    }
 
     private var filterMenu: some View {
         let binding = Binding(
@@ -203,21 +210,22 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var emptyStateView: some View {
+        let state = segmentState
         if searchText.isEmpty {
-            EmptyStateView(
-                icon: "gift.fill",
-                title: "No Lists Yet",
-                message: "Create your first gift list to get started",
-                actionTitle: "Create List"
-            ) {
-                openCreate()
+            if state.showsCreateAction {
+                EmptyStateView(
+                    icon: "gift.fill",
+                    title: state.emptyTitle,
+                    message: state.emptyMessage,
+                    actionTitle: "Create List"
+                ) {
+                    openCreate()
+                }
+            } else {
+                EmptyStateView(icon: "archivebox", title: state.emptyTitle, message: state.emptyMessage)
             }
         } else {
-            EmptyStateView(
-                icon: "magnifyingglass",
-                title: "No Results",
-                message: "No lists match '\(searchText)'"
-            )
+            EmptyStateView(icon: "magnifyingglass", title: state.emptyTitle, message: state.emptyMessage)
         }
     }
 
@@ -235,7 +243,7 @@ struct DashboardView: View {
                 lastUpdatedView(date: lastUpdated)
                     .dashboardRow()
             }
-            ForEach(displayedLists) { list in
+            ForEach(segmentState.lists) { list in
                 row(for: list)
                     .dashboardRow()
             }
@@ -249,18 +257,44 @@ struct DashboardView: View {
         return Button {
             selectedListId = list.id
         } label: {
-            ListPreviewCard(state: state)
+            rowLabel(state: state)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("dashboard.listRow")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if state.showsDeleteAction {
                 Button(role: .destructive) {
-                    listToDelete = list
+                    listToArchive = list
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label("Archive", systemImage: "archivebox")
                 }
             }
+        }
+        // Attached to the row's own trigger, not to the stack or the list.
+        .confirmationDialog(
+            ListArchiveConfirmation.title,
+            isPresented: archiveDialogBinding(for: list),
+            titleVisibility: .visible
+        ) {
+            Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
+                confirmArchive()
+            }
+            Button("Cancel", role: .cancel) {
+                listToArchive = nil
+            }
+        } message: {
+            Text(ListArchiveConfirmation.message)
+        }
+    }
+
+    private func rowLabel(state: ListRowState) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            if state.showsArchivedBadge {
+                // The row's accessibility label already says Archived.
+                ListArchivedBadgeView()
+                    .accessibilityHidden(true)
+            }
+            ListPreviewCard(state: state)
         }
     }
 
@@ -296,6 +330,14 @@ private extension View {
     DashboardView()
         .environment(\.listService, ListService(
             repository: MockListRepository(),
+            dataStore: ListDataStore()
+        ))
+}
+
+#Preview("With an archived list") {
+    DashboardView()
+        .environment(\.listService, ListService(
+            repository: MockListRepository(includeAllScenarios: true),
             dataStore: ListDataStore()
         ))
 }

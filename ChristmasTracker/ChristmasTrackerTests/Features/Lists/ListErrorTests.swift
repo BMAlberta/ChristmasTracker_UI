@@ -108,6 +108,13 @@ struct ListErrorTests {
         }
     }
 
+    // ADDED (I3c-A): the archived message is the plain text of the 422, with the contraction.
+    @Test("Story I3c-A: archivedReadOnly has its exact plain text and keeps errorDescription equal to it")
+    func archivedReadOnlyText() {
+        #expect(ListError.archivedReadOnly.userMessage == "This list is archived and can't be edited.")
+        #expect(ListError.archivedReadOnly.errorDescription == ListError.archivedReadOnly.userMessage)
+    }
+
     @Test("rateLimited has a message for any wait, including zero")
     func rateLimitedMessageForAnyWait() {
         for wait in [0.0, 1.0, 30.0, 600.0] {

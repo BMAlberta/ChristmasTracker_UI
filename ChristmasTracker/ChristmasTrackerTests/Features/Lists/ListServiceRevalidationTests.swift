@@ -11,6 +11,13 @@
 //
 //  Determinism: gated fakes with the nextHeldCall() handshake. No sleeps, no yield loops.
 //
+//  Story I3c-A changes (named; reason: decision "archived lists stay visible and archive reloads
+//  from the server" and "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"):
+//  - revalidationErrors no longer contains archivedReadOnly (notFound and forbidden-with-cache
+//    still mean gone).
+//  - cachedDetailRevalidationRacingDeleteReportsNotFound now races a LEAVE (a removal) instead of
+//    an archive, because an archive records no removal.
+//
 
 import Foundation
 import Testing
@@ -27,15 +34,17 @@ struct ListServiceRevalidationTests {
         let repo: GatedListRepository
         let store: ListDataStore
         let manager: SessionManager
+        let members: GatedMemberRepository
     }
 
     private func makeSUT() async -> SUT {
         let repo = GatedListRepository()
+        let members = GatedMemberRepository()
         let store = ListDataStore()
-        let service = ListService(repository: repo, dataStore: store)
+        let service = ListService(repository: repo, memberRepository: members, dataStore: store)
         let manager = SessionManager(initialClearables: [])
         await manager.register(service)
-        return SUT(service: service, repo: repo, store: store, manager: manager)
+        return SUT(service: service, repo: repo, store: store, manager: manager, members: members)
     }
 
     private func list(_ id: String) -> GiftList {
@@ -56,11 +65,12 @@ struct ListServiceRevalidationTests {
         return sut
     }
 
-    nonisolated static let revalidationErrors: [ListError] = [.notFound, .archivedReadOnly, .forbidden]
+    /// CHANGED (I3c-A): archivedReadOnly removed; a 422 is not "list gone".
+    nonisolated static let revalidationErrors: [ListError] = [.notFound, .forbidden]
 
     // MARK: - (f) revalidation failure with a cached detail
 
-    @Test("a cached detail whose revalidation fails with notFound, archivedReadOnly or forbidden is removed and reported",
+    @Test("a cached detail whose revalidation fails with notFound or forbidden is removed and reported",
           arguments: ListServiceRevalidationTests.revalidationErrors)
     func revalidationFailureRemovesCachedDetail(error: ListError) async {
         let sut = await loadedSUT()
@@ -116,15 +126,16 @@ struct ListServiceRevalidationTests {
         #expect(sut.service.isLoadingDetail == false)
     }
 
-    @Test("a cached detail whose list is deleted while it revalidates is removed and reported as notFound")
-    func cachedDetailRevalidationRacingDeleteReportsNotFound() async throws {
+    // CHANGED (I3c-A): the removal is a leave (was a delete); an archive records no removal.
+    @Test("a cached detail whose list is left while it revalidates is removed and reported as notFound")
+    func cachedDetailRevalidationRacingLeaveReportsNotFound() async throws {
         let sut = await loadedSUT()
         sut.repo.enqueueFetchListDetail(.success(detail("list-a", name: "Fresh")), held: true)
-        sut.repo.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         let reopen = Task { await sut.service.loadListDetail(id: "list-a") }
         await sut.repo.nextHeldCall()
 
-        try await sut.service.deleteList(id: "list-a")
+        try await sut.service.leaveList(id: "list-a", userId: "user-me")
         sut.repo.releaseAll()
         await reopen.value
 

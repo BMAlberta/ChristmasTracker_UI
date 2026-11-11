@@ -28,7 +28,7 @@ nonisolated final class GeneratedClientListRepository: ListRepository, Sendable 
     func fetchLists() async throws -> [GiftList] {
         do {
             // No query parameters at all: the server has no multi-value status filter and no
-            // default, so archived lists are dropped by the service instead.
+            // default, so every non-removed list comes back and the service splits active from archived.
             let output = try await client.listLists(Operations.ListLists.Input(query: .init(), headers: .init()))
             switch output {
             case .ok(let response):
