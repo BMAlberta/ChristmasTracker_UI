@@ -20,6 +20,22 @@ private nonisolated func itemQuantityText(_ quantity: Int) -> String { "Qty \(qu
 
 private nonisolated func itemPriorityText(_ priority: Int) -> String { "Priority \(priority)" }
 
+// MARK: - Context
+
+/// The list-level flags the item screens need, taken from the open list. The screens hand this
+/// value on; they never look inside it for a role.
+nonisolated struct ItemListContext: Equatable, Sendable {
+    let capabilities: ListCapabilities
+
+    init(capabilities: ListCapabilities) {
+        self.capabilities = capabilities
+    }
+
+    init(detail: ListDetail) {
+        self.capabilities = detail.capabilities
+    }
+}
+
 // MARK: - Row
 
 nonisolated struct ItemRowState: Equatable, Identifiable, Sendable {
@@ -100,6 +116,10 @@ nonisolated struct ItemListState: Equatable, Sendable {
 
     var isEmpty: Bool { sections.isEmpty }
 
+    init(items: [ListItem], context: ItemListContext, currentUserId: String?) {
+        self.init(items: items, capabilities: context.capabilities, currentUserId: currentUserId)
+    }
+
     init(
         items: [ListItem],
         capabilities: ListCapabilities,
@@ -158,6 +178,12 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
     let showsEdit: Bool
     let showsDelete: Bool
     let showsPurchaseEntry: Bool
+    /// The product link, only for an absolute http or https URL.
+    let linkURL: URL?
+
+    init(item: ListItem, context: ItemListContext, currentUserId: String?, now: Date) {
+        self.init(item: item, capabilities: context.capabilities, currentUserId: currentUserId, now: now)
+    }
 
     init(
         item: ListItem,
@@ -185,7 +211,8 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
         } else {
             progress = nil
         }
-        remainingQuantity = purchased.map { item.quantityRequested - $0 }
+        // Never negative: an over-purchase leaves nothing remaining.
+        remainingQuantity = purchased.map { max(0, item.quantityRequested - $0) }
         purchases = showsActivity
             ? (item.purchases ?? []).map { purchase in
                 PurchaseRowState(
@@ -208,5 +235,9 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
         showsEdit = permissions.canEdit(item)
         showsDelete = permissions.canDelete(item)
         showsPurchaseEntry = permissions.canPurchase
+        linkURL = item.url.flatMap(URL.init(string:)).flatMap { link in
+            let scheme = link.scheme?.lowercased()
+            return (scheme == "http" || scheme == "https") && link.host() != nil ? link : nil
+        }
     }
 }

@@ -26,13 +26,16 @@ struct LegacyGiftItemScanTests {
     private static let allowlist: [Entry] = [
         Entry(path: "Features/Purchases/", reason: "Purchase screens take GiftItem until package I4 (D1)."),
         Entry(path: "Core/Models/GiftItem.swift", reason: "The legacy type and the ListItem bridge live here until I4."),
-        // TRANSITIONAL: deleted or rewritten by Story D.
-        // EDITED (I3c-C): removed "App/InertRepositories.swift" (InertItemRepository is on ListItem now)
-        // and "PreviewContent/" (no file in it references GiftItem any more). Features/Items/ stays
-        // because ItemRow, ItemDetailView, EditItemView and MockItemData still use it until Story D;
-        // ListDetailView stays until its item section is rewritten in Story D.
-        Entry(path: "Features/Items/", reason: "TRANSITIONAL: the old item screens (ItemRow, ItemDetailView, EditItemView) and MockItemData still use it until Story D. New files are checked separately below."),
-        Entry(path: "Features/Lists/Views/ListDetailView.swift", reason: "TRANSITIONAL: its item section is rewritten in Story D.")
+        // EDITED (I3c-D): the TRANSITIONAL entries ("Features/Items/" and ListDetailView.swift) are
+        // removed because Story D rewrites those screens. The final allowlist is exactly the three
+        // entries in this list; MockItemData keeps the legacy mock list for the purchase previews.
+        Entry(path: "Features/Items/Repositories/MockItemData.swift", reason: "Legacy mock GiftItem data still feeds the purchase previews until I4.")
+    ]
+
+    private static let finalAllowlistPaths: Set<String> = [
+        "Features/Purchases/",
+        "Core/Models/GiftItem.swift",
+        "Features/Items/Repositories/MockItemData.swift"
     ]
 
     private static let newFiles = [
@@ -45,7 +48,11 @@ struct LegacyGiftItemScanTests {
         "Features/Items/Repositories/ItemRepository.swift",
         "Features/Items/Repositories/GeneratedClientItemRepository.swift",
         "Features/Items/Services/ItemService.swift",
-        "Features/Items/DataStores/ItemDataStore.swift"
+        "Features/Items/DataStores/ItemDataStore.swift",
+        // EDITED (I3c-D): Story D files.
+        "Features/Items/ViewState/ItemErrorPresentation.swift",
+        "DesignSystem/Components/InlineErrorBannerState.swift",
+        "DesignSystem/Components/InlineErrorBanner.swift"
     ]
 
     private func makeSUT(file: String = #filePath) throws -> ItemSourceTree {
@@ -74,6 +81,25 @@ struct LegacyGiftItemScanTests {
         for entry in Self.allowlist {
             #expect(!entry.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(entry.path)")
         }
+    }
+
+    @Test("The final allowlist is exactly Purchases, GiftItem.swift and MockItemData.swift (Story D)")
+    func allowlistIsFinal() {
+        #expect(Set(Self.allowlist.map(\.path)) == Self.finalAllowlistPaths)
+        #expect(Self.allowlist.count == Self.finalAllowlistPaths.count)
+    }
+
+    @Test("The old item screens and ListDetailView no longer name GiftItem (Story D)")
+    func rewrittenScreensAreClean() throws {
+        let tree = try makeSUT()
+        let files = tree.all.filter { url in
+            let relative = tree.relativePath(url)
+            return relative.hasPrefix("Features/Items/") && relative != "Features/Items/Repositories/MockItemData.swift"
+                || relative == "Features/Lists/Views/ListDetailView.swift"
+        }
+        #expect(!files.isEmpty)
+        let found = try offenders(in: tree, files: files)
+        #expect(found.isEmpty, "GiftItem still named:\n\(found.joined(separator: "\n"))")
     }
 
     @Test("The scanner finds the token and ignores comments")

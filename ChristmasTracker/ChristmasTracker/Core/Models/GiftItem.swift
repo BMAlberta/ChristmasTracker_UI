@@ -41,56 +41,8 @@ nonisolated struct GiftItem: Identifiable, Codable, Sendable, Hashable {
     let purchases: [PurchaseSummary]?
     let totalQuantityPurchased: Int?
     
-    // MARK: - Computed Properties
-    var totalPrice: Double? {
-        guard let price = expectedUnitPrice else { return nil }
-        return price * Double(quantityRequested)
-    }
-    
-    var isPurchased: Bool {
-        status == .purchased || status == .wrapped || status == .gifted
-    }
-    
-    var isAvailable: Bool {
-        status == .available
-    }
-    
-    var canEdit: Bool {
-        // Can edit if available or partial
-        status == .available || status == .partial
-    }
-    
-//    var totalPurchasedQuantity: Int {
-//        purchases?.reduce(0) { $0 + $1.quantity } ?? 0
-//    }
-    
-    var totalSpent: Double {
-        purchases?.reduce(0) { $0 + $1.totalCost } ?? 0
-    }
-    
-    var remainingQuantity: Int {
-        quantityRequested - (totalQuantityPurchased ?? 0)
-    }
-    
-    var isPartiallyPurchased: Bool {
-        guard let totalQuantityPurchased else {
-            return false
-        }
-        return totalQuantityPurchased > 0 && totalQuantityPurchased < quantityRequested
-    }
-    
-    var isFullyPurchased: Bool {
-        guard let totalQuantityPurchased else {
-            return false
-        }
-        return totalQuantityPurchased >= quantityRequested
-    }
-    
-    var purchaseProgress: Double {
-        
-        guard quantityRequested > 0, let totalQuantityPurchased else { return 0 }
-        return Double(totalQuantityPurchased) / Double(quantityRequested)
-    }
+    // The purchase screens read only id, listId, name, quantityRequested, totalQuantityPurchased
+    // and expectedUnitPrice. The computed members the old item screens used are deleted.
 }
 struct PurchaseSummary: Codable, Identifiable, Sendable, Equatable, Hashable {
     let id: String

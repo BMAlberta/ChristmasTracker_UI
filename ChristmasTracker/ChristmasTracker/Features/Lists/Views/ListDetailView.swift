@@ -22,6 +22,7 @@ struct ListDetailView: View {
     @State private var showsAddMember = false
     @State private var memberToRemove: MemberRowState?
     @State private var showLeaveConfirmation = false
+    @State private var showsAddItem = false
 
     /// The action whose failure is shown in the banner, so Try Again repeats that action.
     private enum FailedAction {
@@ -45,7 +46,9 @@ struct ListDetailView: View {
             .navigationTitle("List Details")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $selectedItemId) { itemId in
-                ItemDetailView(itemId: itemId)
+                if let detail {
+                    ItemDetailView(itemId: itemId, context: ItemListContext(detail: detail))
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +67,11 @@ struct ListDetailView: View {
             }
             .sheet(isPresented: $showsAddMember) {
                 AddMemberView(listId: listId)
+            }
+            .sheet(isPresented: $showsAddItem) {
+                if let detail {
+                    AddItemView(listId: listId, context: ItemListContext(detail: detail))
+                }
             }
             .confirmationDialog(
                 MembersSectionState.leaveConfirmation.title,
@@ -104,6 +112,9 @@ struct ListDetailView: View {
             }
             .task {
                 await load()
+            }
+            .onDisappear {
+                itemService.clearLoadError()
             }
     }
 
@@ -214,9 +225,7 @@ struct ListDetailView: View {
                         progress: state.progress
                     )
                 }
-                if showsItemsSection(state: state) {
-                    itemsSection(state: state, detail: detail)
-                }
+                itemsSection(detail: detail)
                 membersSection(detail: detail)
                 if state.showsDeleteAction {
                     archiveButton
@@ -226,20 +235,9 @@ struct ListDetailView: View {
         }
     }
 
-    /// Viewers who may not see counts get no items section unless items were actually returned,
-    /// so an empty section never hints at whether items exist.
-    private func showsItemsSection(state: ListDetailState) -> Bool {
-        state.showsStatsCard || !scopedItems.isEmpty
-    }
-
     /// Items render only under the list they were loaded for.
     private var scopedItems: [ListItem] {
         ListItemsScope.itemsToShow(itemService.items, currentListId: itemService.currentListId, listId: listId)
-    }
-
-    /// The rows as before: off-list items are not listed here.
-    private var scopedFilteredItems: [ListItem] {
-        scopedItems.filter { !$0.offList }
     }
 
     // MARK: - Cards
@@ -337,58 +335,27 @@ struct ListDetailView: View {
         }
     }
 
-    private func itemsSection(state: ListDetailState, detail: ListDetail) -> some View {
-        let items = scopedFilteredItems
-        let hasItems = !scopedItems.isEmpty
-        let firstItemId = items.first?.id
-        return VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack {
-                Text("Items")
-                    .font(.appHeadline)
-                    .foregroundStyle(Color.textPrimaryColor)
-                Spacer()
-                if state.showsStatsCard, hasItems {
-                    Text("\(items.count)")
-                        .font(.appCaption1)
-                        .foregroundStyle(Color.textMutedColor)
-                }
-            }
-            if itemService.isLoadingItems && !hasItems {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.xl)
-            } else if !hasItems {
-                VStack(spacing: AppSpacing.md) {
-                    Image(systemName: "gift.fill")
-                        .font(.appTitle1)
-                        .foregroundStyle(Color.textMutedColor)
-                        .accessibilityHidden(true)
-                    Text("No items yet")
-                        .font(.appBody)
-                        .foregroundStyle(Color.textMutedColor)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.xl)
-            } else {
-                ForEach(items) { item in
-                    Button {
-                        selectedItemId = item.id
-                    } label: {
-                        ItemRow(item: item, detail: detail)
-                            .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .overlay(alignment: .top) {
-                        if item.id != firstItemId {
-                            Divider()
-                                .padding(.leading, AppSpacing.xxxl)
-                                .offset(y: -AppSpacing.md / 2)
-                        }
-                    }
-                }
-            }
+    /// The items, driven by `ItemListState` (flags through ItemPermissions). The load error is the
+    /// item service's separate `loadError`; Try Again refreshes, and it clears when this screen
+    /// disappears.
+    private func itemsSection(detail: ListDetail) -> some View {
+        let listState = ItemListState(
+            items: scopedItems,
+            context: ItemListContext(detail: detail),
+            currentUserId: authenticationService.currentUser?.id
+        )
+        let banner = itemService.loadError.flatMap {
+            ItemErrorPresentation.banner(for: $0, hasRetryAction: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        return ItemsSectionView(
+            state: listState,
+            isLoading: itemService.isLoadingItems,
+            errorBanner: banner,
+            onSelect: { selectedItemId = $0 },
+            onAdd: { showsAddItem = true },
+            onTryAgain: { Task { await itemService.refreshItems() } },
+            onDismissError: { itemService.clearLoadError() }
+        )
         .listCard()
     }
 }

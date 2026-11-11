@@ -34,7 +34,7 @@ Before the commit:
 swift test --package-path "LocalPackages/TrackerAPI":
 Test run with 212 tests in 16 suites passed after 0.019 seconds.
 ```
-After the commit: filled in the Story D commit (commits are never amended).
+After the commit (5f05709): no separate verify run was made on the clean tree before Story D work began (a gap). The staged content was exactly what the pre-commit run above covered, and `git status` showed no stray paths before the commit.
 
 Story B after-commit block (1fa75c7, source: commands run then): `--- tests: 1768 passed, 0 failed, 0 skipped ---`, package 212, release 92, destination 17, `=== verify: OK ===`, working tree clean.
 

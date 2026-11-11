@@ -46,6 +46,9 @@ final class ItemService {
     /// Cancel handles of the repository calls that are in flight.
     private var inFlight: [UUID: () -> Void] = [:]
 
+    /// Identifies the newest list load or refresh (see `beginListLoad`).
+    private var listLoadToken = 0
+
     /// Number of mutations in flight; isMutating is true while it is above zero.
     private var mutationCount = 0
 
@@ -65,13 +68,14 @@ final class ItemService {
         defer { span.finish() }
 
         let gen = generation
+        let token = beginListLoad()
         if currentListId != listId {
             items = []
         }
         currentListId = listId
         loadError = nil
         isLoadingItems = true
-        defer { if gen == generation { isLoadingItems = false } }
+        defer { endListLoad(token: token, generation: gen) }
 
         do {
             let cached = await dataStore.getItems(listId: listId)
@@ -85,7 +89,7 @@ final class ItemService {
             }
             try await fetchAndStore(listId: listId, generation: gen)
         } catch {
-            recordLoadError(error, generation: gen, operation: "load items")
+            recordLoadError(error, generation: gen, token: token, operation: "load items")
         }
     }
 
@@ -99,14 +103,15 @@ final class ItemService {
         defer { span.finish() }
 
         let gen = generation
+        let token = beginListLoad()
         loadError = nil
         isLoadingItems = true
-        defer { if gen == generation { isLoadingItems = false } }
+        defer { endListLoad(token: token, generation: gen) }
 
         do {
             try await fetchAndStore(listId: listId, generation: gen)
         } catch {
-            recordLoadError(error, generation: gen, operation: "refresh items")
+            recordLoadError(error, generation: gen, token: token, operation: "refresh items")
         }
     }
 
@@ -134,7 +139,7 @@ final class ItemService {
             currentItem = detail
         } catch {
             await dropIfGone(error, id: id, generation: gen)
-            recordLoadError(error, generation: gen, operation: "load item detail")
+            recordLoadError(error, generation: gen, token: nil, operation: "load item detail")
         }
     }
 
@@ -336,9 +341,23 @@ final class ItemService {
         if gen != generation { throw CancellationError() }
     }
 
-    /// Records a load failure. Nothing for cancellation or a session that has ended.
-    private func recordLoadError(_ error: any Error, generation gen: Int, operation: String) {
+    /// Starts a list load or refresh and returns its token. Only the newest list load may set
+    /// `loadError` or clear `isLoadingItems`, so a load of list A that ends after list B started
+    /// (same session) never touches B's state.
+    private func beginListLoad() -> Int {
+        listLoadToken += 1
+        return listLoadToken
+    }
+
+    private func endListLoad(token: Int, generation gen: Int) {
+        if gen == generation, token == listLoadToken { isLoadingItems = false }
+    }
+
+    /// Records a load failure. Nothing for cancellation, a session that has ended, or (for a list
+    /// load, token not nil) a load that a newer list load has replaced.
+    private func recordLoadError(_ error: any Error, generation gen: Int, token: Int?, operation: String) {
         if error is CancellationError || gen != generation { return }
+        if let token, token != listLoadToken { return }
         // Only the operation name is logged: no ids, names or server text.
         LogError("\(operation) failed", category: .business)
         loadError = (error as? ItemError) ?? .server
