@@ -17,7 +17,6 @@ struct AddItemView: View {
     @State private var priceText: String = ""
     @State private var quantityRequested: Int = 1
     @State private var priority: Int = 5
-    @State private var offList: Bool = false
     @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
@@ -27,7 +26,7 @@ struct AddItemView: View {
                 Section("Item Details") {
                     TextField("Item Name", text: $name)
                         .autocorrectionDisabled()
-                    TextField("Description (optional)", text: $description, axis: .vertical)
+                    TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 Section("Link") {
@@ -60,14 +59,6 @@ struct AddItemView: View {
                     Text("1 = Low priority, 10 = High priority")
                         .font(.appCaption1)
                         .foregroundColor(.textMutedColor)
-                }
-                Section("Special Options") {
-                    Toggle("Surprise Gift", isOn: $offList)
-                    if offList {
-                        Text("This item will be hidden from the list owner")
-                            .font(.appCaption1)
-                            .foregroundColor(.orange)
-                    }
                 }
             }
             .navigationTitle("Add Item")
@@ -103,31 +94,31 @@ struct AddItemView: View {
     }
     
     private var isFormValid: Bool {
-        !name.isEmpty
+        makeInput() != nil
     }
-    
-    private var parsedPrice: Double? {
-        guard !priceText.isEmpty else { return nil }
-        return Double(priceText)
-    }
-    
-    private func createItem() async {
-        isCreating = true
-        let request = CreateItemRequest(
-            name: name.trimmingCharacters(in: .whitespaces),
-            description: description.trimmingCharacters(in: .whitespaces), // Required, can be
-            url: url.isEmpty ? nil : url.trimmingCharacters(in: .whitespaces),
-            expectedUnitPrice: parsedPrice,
-            quantityRequested: quantityRequested,
-            priority: priority,
-            offList: offList,
-            imageUrl: nil
+
+    private func makeInput() -> CreateItemInput? {
+        ItemFormValidation.makeCreateInput(
+            name: name,
+            description: description,
+            url: url,
+            imageUrl: "",
+            priceText: priceText,
+            quantity: quantityRequested,
+            priority: priority
         )
+    }
+
+    private func createItem() async {
+        guard let input = makeInput() else { return }
+        isCreating = true
         do {
-            try await itemService.createItem(listId: listId, request)
+            try await itemService.createItem(listId: listId, input)
             dismiss()
+        } catch is CancellationError {
+            // The session ended or the task was cancelled: nothing to show.
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = (error as? ItemError)?.userMessage ?? ItemError.server.userMessage
             showError = true
         }
         isCreating = false

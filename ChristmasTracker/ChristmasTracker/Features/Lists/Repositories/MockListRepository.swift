@@ -39,6 +39,12 @@ actor MockListRepository: ListRepository {
         }
     }
 
+    /// The flags the mock shows for one of its scenario lists, or nil for an unknown id. The item
+    /// mock reads this so mock mode never disagrees with itself.
+    nonisolated static func capabilities(forListId id: String) -> ListCapabilities? {
+        MockListData.allScenarios.first { $0.id == id }?.capabilities
+    }
+
     // MARK: - List Repository
 
     // Mock repository: intentionally uninstrumented.

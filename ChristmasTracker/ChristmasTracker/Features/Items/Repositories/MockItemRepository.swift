@@ -7,558 +7,234 @@
 
 import Foundation
 
+/// Deterministic in-memory item repository for mock mode and previews. It mirrors the server's
+/// privacy rules for the capability flags returned for the list a call is about (privacy matrix,
+/// client guide 6.2 to 6.4): no gift activity hides status, updatedAt and purchases; no off-list
+/// visibility omits off-list items; create derives offList from canAddOffList; edit and delete
+/// follow the same rights as `ItemPermissions`.
+// Mock repository: intentionally uninstrumented.
 actor MockItemRepository: ItemRepository {
-    
-    // MARK: - Mock Data Storage
-    
-    private var items: [GiftItem] = []
+
+    // MARK: - Defaults
+
+    nonisolated static let ownerCapabilities = MockListData.ownerCapabilities
+    nonisolated static let defaultUser = ListItemPerson(
+        id: MockListData.currentUser.id,
+        displayName: MockListData.currentUser.displayName
+    )
+
+    // MARK: - State
+
+    private let capabilitiesForList: @Sendable (_ listId: String) -> ListCapabilities
+    private let currentUser: ListItemPerson
+    private var items: [ListItem]
     private var nextId = 1
-    
+
     // MARK: - Configuration
-    
-    var shouldFail = false
+
     var delay: TimeInterval = 0.5
-    
+
     // MARK: - Initialization
-    
-    init(withMockData: Bool = true) {
-        if withMockData {
-            items = MockItemData.allItems
-            nextId = 100
-        }
+
+    init(
+        capabilities: @escaping @Sendable (_ listId: String) -> ListCapabilities = { _ in
+            MockItemRepository.ownerCapabilities
+        },
+        currentUser: ListItemPerson = MockItemRepository.defaultUser
+    ) {
+        self.capabilitiesForList = capabilities
+        self.currentUser = currentUser
+        self.items = MockItemSeed.items
     }
-    
-    // MARK: - ItemRepository Implementation
-    func fetchItems(listId: String) async throws -> [GiftItem] {
+
+    // MARK: - ItemRepository
+
+    func fetchItems(listId: String) async throws -> [ListItem] {
         try await Task.sleep(for: .seconds(delay))
-        
-        if shouldFail {
-            throw ItemError.fetchFailed
-        }
-        
-        let listItems = items.filter { $0.listId == listId }
-        LogInfo("Mock: Fetched \(listItems.count) items", category: .business)
-        return listItems
+        let caps = capabilitiesForList(listId)
+        let visible = items
+            .filter { $0.listId == listId && (!$0.offList || caps.canSeeOffList) }
+            .map { hidden($0, caps, keepingPurchases: false) }
+        LogDebug("Mock: Fetched \(visible.count) items", category: .business)
+        return visible
     }
-    
-    func createItem(listId: String, _ request: CreateItemRequest) async throws -> GiftItem {
+
+    func fetchItemDetail(id: String) async throws -> ListItem {
         try await Task.sleep(for: .seconds(delay))
-        
-        if shouldFail {
-            throw ItemError.createFailed
-        }
-        
-        let newItem = GiftItem(id: "\(nextId)",
-                               listId: listId,
-                               name: request.name,
-                               description: request.description,
-                               url: request.url,
-                               imageUrl: request.imageUrl,
-                               expectedUnitPrice: request.expectedUnitPrice,
-                               quantityRequested: request.quantityRequested,
-                               priority: request.priority,
-                               status: .available,
-                               offList: request.offList,
-                               createdBy: ItemPerson(id: "current-user", displayName: "Current User"),
-                               createdAt: Date(),
-                               updatedAt: Date(),
-                               purchases: nil,
-                               totalQuantityPurchased: nil
+        guard let item = items.first(where: { $0.id == id }) else { throw ItemError.notFound }
+        let caps = capabilitiesForList(item.listId)
+        guard !item.offList || caps.canSeeOffList else { throw ItemError.notFound }
+        return hidden(item, caps, keepingPurchases: true)
+    }
+
+    func createItem(listId: String, _ input: CreateItemInput) async throws -> ListItem {
+        try await Task.sleep(for: .seconds(delay))
+        let caps = capabilitiesForList(listId)
+        guard caps.canCreateItem else { throw ItemError.forbidden }
+
+        let now = Date()
+        let created = ListItem(
+            id: "mock-item-new-\(nextId)",
+            listId: listId,
+            name: input.name,
+            description: input.description,
+            url: input.url,
+            imageUrl: input.imageUrl,
+            expectedUnitPrice: input.expectedUnitPrice,
+            quantityRequested: input.quantityRequested,
+            priority: input.priority,
+            status: .available,
+            offList: caps.canAddOffList,
+            createdBy: currentUser,
+            createdAt: now,
+            updatedAt: now
         )
-        
         nextId += 1
-        items.append(newItem)
-        
-        LogInfo("Mock: Created item", category: .business)
-        
-        return newItem
+        items.append(created)
+        LogDebug("Mock: Created item", category: .business)
+        return hidden(created, caps, keepingPurchases: true)
     }
-    
-    func updateItem(id: String, _ request: UpdateItemRequest) async throws -> GiftItem {
+
+    func updateItem(id: String, _ input: UpdateItemInput) async throws -> ListItem {
         try await Task.sleep(for: .seconds(delay))
-        
-        if shouldFail {
-            throw ItemError.updateFailed
-        }
-        
-        guard let index = items.firstIndex(where: { $0.id == id }) else {
-            throw ItemError.notFound
-        }
-        
+        guard let index = items.firstIndex(where: { $0.id == id }) else { throw ItemError.notFound }
         let existing = items[index]
-        
-        let updated = GiftItem(id: existing.id,
-                               listId: existing.listId,
-                               name: request.name ?? existing.name,
-                               description: request.description ?? existing.description,
-                               url: request.url ?? existing.url,
-                               imageUrl: request.imageUrl ?? existing.url,
-                               expectedUnitPrice: request.expectedUnitPrice ?? existing.expectedUnitPrice,
-                               quantityRequested: request.quantityRequested ?? existing.quantityRequested,
-                               priority: request.priority ?? existing.priority,
-                               status: existing.status,
-                               offList: existing.offList,
-                               createdBy: existing.createdBy,
-                               createdAt: existing.createdAt,
-                               updatedAt: Date(),
-                               purchases: nil,
-                               totalQuantityPurchased: nil)
+        let caps = capabilitiesForList(existing.listId)
+        guard mayChange(existing, caps) else { throw ItemError.forbidden }
+
+        let updated = ListItem(
+            id: existing.id,
+            listId: existing.listId,
+            name: input.name ?? existing.name,
+            description: input.description ?? existing.description,
+            url: input.url ?? existing.url,
+            imageUrl: input.imageUrl ?? existing.imageUrl,
+            expectedUnitPrice: input.expectedUnitPrice ?? existing.expectedUnitPrice,
+            quantityRequested: input.quantityRequested ?? existing.quantityRequested,
+            priority: input.priority ?? existing.priority,
+            status: existing.status,
+            offList: existing.offList,
+            createdBy: existing.createdBy,
+            createdAt: existing.createdAt,
+            updatedAt: Date(),
+            purchases: existing.purchases,
+            totalQuantityPurchased: existing.totalQuantityPurchased
+        )
         items[index] = updated
-        LogInfo("Mock: Updated item", category: .business)
-        return updated
+        LogDebug("Mock: Updated item", category: .business)
+        return hidden(updated, caps, keepingPurchases: true)
     }
-    
+
     func deleteItem(id: String) async throws {
         try await Task.sleep(for: .seconds(delay))
-        
-        if shouldFail {
-            throw ItemError.deleteFailed
-        }
-        
-        guard let index = items.firstIndex(where: { $0.id == id }) else {
-            throw ItemError.notFound
-        }
-        
-        let deleted = items.remove(at: index)
-        
-        LogInfo("Mock: Deleted item", category: .business)
-    }
-    
-    func fetchItemDetail(id: String) async throws -> GiftItem {
-        try await Task.sleep(for: .seconds(delay))
-        
-        if shouldFail {
-            throw ItemError.fetchFailed
-        }
-        
-        guard let index = items.firstIndex(where: { $0.id == id }) else {
-            throw ItemError.notFound
-        }
-        
-        guard let index = items.firstIndex(where: { $0.id == id }) else {
-            throw ItemError.notFound
-        }
-        
-        return items[index]
-    }
-}
-
-// MARK: - Item Errors
-
-nonisolated enum ItemError: Error, LocalizedError, Equatable, Sendable {
-    // Legacy cases: fetchFailed, createFailed, updateFailed, deleteFailed are removed in Story C
-    // together with their last readers; purchaseFailed stays until the purchase package (I4).
-    case fetchFailed
-    case notFound
-    case createFailed
-    case updateFailed
-    case deleteFailed
-    case purchaseFailed
-    case unauthorized
-    // New cases (I3c-B). Messages come from `userMessage`; no payload is ever interpolated.
-    case forbidden
-    case validation(message: String)
-    case invalidPrice
-    case cannotDeleteWithPurchases
-    case rateLimited(retryAfter: TimeInterval)
-    case sessionEnded
-    case network
-    case invalidResponse
-    case server
-
-    /// A plain, user-facing message. Never interpolates a payload, an id or a raw error.
-    var userMessage: String {
-        switch self {
-        case .forbidden:
-            return "You don't have permission to do that."
-        case .notFound:
-            return "This item no longer exists."
-        case .validation(let message):
-            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "Please check the item details and try again." : message
-        case .invalidPrice:
-            return "Enter a price from 0 to 999,999.99 with at most two decimals."
-        case .cannotDeleteWithPurchases:
-            return "This item has purchases and can't be deleted."
-        case .rateLimited:
-            return "Too many requests. Please wait a moment and try again."
-        case .unauthorized:
-            return "Your session has expired. Please sign in again."
-        case .sessionEnded:
-            return "You were signed out. Please sign in again."
-        case .network:
-            return "Couldn't reach the server. Check your connection and try again."
-        case .invalidResponse:
-            return "The server sent a response the app couldn't read."
-        case .server:
-            return "Something went wrong on the server. Please try again later."
-        case .fetchFailed:
-            return "Failed to load items"
-        case .createFailed:
-            return "Failed to create item"
-        case .updateFailed:
-            return "Failed to update item"
-        case .deleteFailed:
-            return "Failed to delete item"
-        case .purchaseFailed:
-            return "Failed to update purchase status"
-        }
+        guard let index = items.firstIndex(where: { $0.id == id }) else { throw ItemError.notFound }
+        guard mayChange(items[index], capabilitiesForList(items[index].listId)) else { throw ItemError.forbidden }
+        items.remove(at: index)
+        LogDebug("Mock: Deleted item", category: .business)
     }
 
-    var errorDescription: String? {
-        switch self {
-        case .fetchFailed:
-            return "Failed to load items"
-        case .notFound:
-            return "Item not found"
-        case .createFailed:
-            return "Failed to create item"
-        case .updateFailed:
-            return "Failed to update item"
-        case .deleteFailed:
-            return "Failed to delete item"
-        case .purchaseFailed:
-            return "Failed to update purchase status"
-        case .unauthorized:
-            return "You don't have permission to perform this action"
-        case .forbidden, .validation, .invalidPrice, .cannotDeleteWithPurchases, .rateLimited,
-             .sessionEnded, .network, .invalidResponse, .server:
-            return userMessage
+    // MARK: - Rules
+
+    /// A regular item: canCreateItem and not canAddOffList. An off-list item: its creator only.
+    private func mayChange(_ item: ListItem, _ caps: ListCapabilities) -> Bool {
+        if item.offList {
+            return item.createdBy.id == currentUser.id
         }
+        return caps.canCreateItem && !caps.canAddOffList
     }
-}
 
-// MARK: - Mock Data
-
-//enum MockItemData {
-//    static let allItems: [GiftItem] = [
-//        // Items for List "1" (Christmas 2024 - Tommy)
-//        GiftItem(
-//            id: "1",
-//            listId: "1",
-//            name: "LEGO Star Wars Millennium Falcon",
-//            description: "Ultimate Collector's Edition - 7,541 pieces",
-//            url: "https://www.lego.com/en-us/product/millennium-falcon-75192",
-//            imageUrl: nil,
-//            expectedUnitPrice: 849.99,
-//            quantityRequested: 1,
-//            priority: 10,
-//            status: .purchased,
-//            offList: false,
-//            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-//            createdAt: Date().addingTimeInterval(-30 * 24 * 60 * 60),
-//            updatedAt: Date().addingTimeInterval(-2 * 24 * 60 * 60),
-//            purchases: nil
-//        ),
-//        GiftItem(
-//            id: "2",
-//            listId: "1",
-//            name: "Nintendo Switch OLED",
-//            description: "With Mario Kart 8 Deluxe bundle",
-//            url: nil,
-//            imageUrl: nil,
-//            expectedUnitPrice: 349.99,
-//            quantityRequested: 1,
-//            priority: 9,
-//            status: .available,
-//            offList: false,
-//            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-//            createdAt: Date().addingTimeInterval(-25 * 24 * 60 * 60),
-//            updatedAt: Date().addingTimeInterval(-25 * 24 * 60 * 60),
-//            purchases: nil
-//        ),
-//        GiftItem(
-//            id: "3",
-//            listId: "1",
-//            name: "AirPods Pro",
-//            description: "2nd Generation with MagSafe charging",
-//            url: "https://www.apple.com/airpods-pro/",
-//            imageUrl: nil,
-//            expectedUnitPrice: 249.00,
-//            quantityRequested: 1,
-//            priority: 8,
-//            status: .wrapped,
-//            offList: false,
-//            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-//            createdAt: Date().addingTimeInterval(-20 * 24 * 60 * 60),
-//            updatedAt: Date().addingTimeInterval(-5 * 24 * 60 * 60),
-//            purchases: nil
-//        ),
-//        // Items for List "2" (My Birthday List)
-//        GiftItem(
-//            id: "10",
-//            listId: "2",
-//            name: "Surprise Gift",
-//            description: "Something special!",
-//            url: nil,
-//            imageUrl: nil,
-//            expectedUnitPrice: 150.00,
-//            quantityRequested: 1,
-//            priority: 5,
-//            status: .gifted,
-//            offList: true, // Hidden from list owner
-//            createdBy: ItemPerson(id: "friend-1", displayName: "Best Friend"),
-//            createdAt: Date().addingTimeInterval(-10 * 24 * 60 * 60),
-//            updatedAt: Date().addingTimeInterval(-1 * 24 * 60 * 60),
-//            purchases: nil
-//        ),
-//        // Items for List "3" (Holiday Shopping - Mom)
-//        GiftItem(
-//            id: "20",
-//            listId: "3",
-//            name: "Kindle Paperwhite",
-//            description: "16GB, with special offers",
-//            url: "https://www.amazon.com/dp/B08KTZ8249",
-//            imageUrl: nil,
-//            expectedUnitPrice: 139.99,
-//            quantityRequested: 1,
-//            priority: 7,
-//            status: .purchased,
-//            offList: false,
-//            createdBy: ItemPerson(id: "o2", displayName: "Dad"),
-//            createdAt: Date().addingTimeInterval(-60 * 24 * 60 * 60),
-//            updatedAt: Date().addingTimeInterval(-14 * 24 * 60 * 60),
-//            purchases: nil
-//        )
-//    ]
-//}
-
-
-enum MockItemData {
-    static let allItems: [GiftItem] = [
-        // Items for List "1" (Christmas 2024 - Tommy)
-        GiftItem(
-            id: "1",
-            listId: "1",
-            name: "LEGO Star Wars Millennium Falcon",
-            description: "Ultimate Collector's Edition - 7,541 pieces",
-            url: "https://www.lego.com/en-us/product/millennium-falcon-75192",
-            imageUrl: nil,
-            expectedUnitPrice: 849.99,
-            quantityRequested: 1,
-            priority: 10,
-            status: .purchased,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-            createdAt: Date().addingTimeInterval(-30 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-2 * 24 * 60 * 60),
-            // ✅ NEW - Purchase data
-            purchases: [
-                PurchaseSummary(
-                    id: "purchase-1",
-                    quantity: 1,
-                    totalCost: 849.99,
-                    purchaser: PurchasePerson(id: "user-2", displayName: "John Smith"),
-                    shippingStatus: .shipped,
-                    purchasedAt: Date().addingTimeInterval(-5 * 24 * 60 * 60)
-                )
-            ],
-            totalQuantityPurchased: 1
-        ),
-        
-        GiftItem(
-            id: "2",
-            listId: "1",
-            name: "Nintendo Switch OLED",
-            description: "With Mario Kart 8 Deluxe bundle",
-            url: nil,
-            imageUrl: nil,
-            expectedUnitPrice: 349.99,
-            quantityRequested: 1,
-            priority: 9,
-            status: .available,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-            createdAt: Date().addingTimeInterval(-25 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-25 * 24 * 60 * 60),
-            // ✅ No purchases yet
-            purchases: nil,
-            totalQuantityPurchased: nil
-        ),
-        
-        GiftItem(
-            id: "3",
-            listId: "1",
-            name: "AirPods Pro",
-            description: "2nd Generation with MagSafe charging",
-            url: "https://www.apple.com/airpods-pro/",
-            imageUrl: nil,
-            expectedUnitPrice: 249.00,
-            quantityRequested: 1,
-            priority: 8,
-            status: .wrapped,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-            createdAt: Date().addingTimeInterval(-20 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-5 * 24 * 60 * 60),
-            // ✅ Purchased and wrapped
-            purchases: [
-                PurchaseSummary(
-                    id: "purchase-3",
-                    quantity: 1,
-                    totalCost: 249.00,
-                    purchaser: PurchasePerson(id: "user-3", displayName: "Sarah Johnson"),
-                    shippingStatus: .delivered,
-                    purchasedAt: Date().addingTimeInterval(-10 * 24 * 60 * 60)
-                )
-            ],
-            totalQuantityPurchased: 1
-        ),
-        
-        // ✅ NEW - Item with PARTIAL purchases (demonstrating multiple purchases)
-        GiftItem(
-            id: "4",
-            listId: "1",
-            name: "Magic: The Gathering Booster Packs",
-            description: "Latest set booster boxes",
-            url: nil,
-            imageUrl: nil,
-            expectedUnitPrice: 4.99,
-            quantityRequested: 5,
-            priority: 6,
-            status: .partial,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-            createdAt: Date().addingTimeInterval(-15 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-3 * 24 * 60 * 60),
-            // ✅ Two partial purchases
-            purchases: [
-                PurchaseSummary(
-                    id: "purchase-4a",
-                    quantity: 2,
-                    totalCost: 9.98,
-                    purchaser: PurchasePerson(id: "user-2", displayName: "John Smith"),
-                    shippingStatus: .notShipped,
-                    purchasedAt: Date().addingTimeInterval(-7 * 24 * 60 * 60)
-                ),
-                PurchaseSummary(
-                    id: "purchase-4b",
-                    quantity: 1,
-                    totalCost: 4.99,
-                    purchaser: PurchasePerson(id: "user-3", displayName: "Sarah Johnson"),
-                    shippingStatus: .shipped,
-                    purchasedAt: Date().addingTimeInterval(-3 * 24 * 60 * 60)
-                )
-            ],
-            totalQuantityPurchased: 3  // 2 + 1 = 3 of 5 requested
-        ),
-        
-        // ✅ NEW - Item with OVER-purchase (optimistic concurrency example)
-        GiftItem(
-            id: "5",
-            listId: "1",
-            name: "Pokémon Cards - Rare Charizard",
-            description: "Holographic first edition",
-            url: nil,
-            imageUrl: nil,
-            expectedUnitPrice: 200.00,
-            quantityRequested: 1,
-            priority: 9,
-            status: .purchased,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-1", displayName: "Jane Doe"),
-            createdAt: Date().addingTimeInterval(-18 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-1 * 24 * 60 * 60),
-            // ✅ TWO purchases (both bought it!) - optimistic concurrency
-            purchases: [
-                PurchaseSummary(
-                    id: "purchase-5a",
-                    quantity: 1,
-                    totalCost: 200.00,
-                    purchaser: PurchasePerson(id: "user-2", displayName: "John Smith"),
-                    shippingStatus: .shipped,
-                    purchasedAt: Date().addingTimeInterval(-2 * 24 * 60 * 60)
-                ),
-                PurchaseSummary(
-                    id: "purchase-5b",
-                    quantity: 1,
-                    totalCost: 195.00,
-                    purchaser: PurchasePerson(id: "user-3", displayName: "Sarah Johnson"),
-                    shippingStatus: .delivered,
-                    purchasedAt: Date().addingTimeInterval(-1 * 24 * 60 * 60)
-                )
-            ],
-            totalQuantityPurchased: 2  // Over-purchased! (requested 1, got 2)
-        ),
-        
-        // Items for List "2" (My Birthday List)
-        GiftItem(
-            id: "10",
-            listId: "2",
-            name: "Surprise Gift",
-            description: "Something special!",
-            url: nil,
-            imageUrl: nil,
-            expectedUnitPrice: 150.00,
-            quantityRequested: 1,
-            priority: 5,
-            status: .gifted,
-            offList: true,  // Hidden from list owner
-            createdBy: ItemPerson(id: "friend-1", displayName: "Best Friend"),
-            createdAt: Date().addingTimeInterval(-10 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-1 * 24 * 60 * 60),
-            // ✅ Already gifted
-            purchases: [
-                PurchaseSummary(
-                    id: "purchase-10",
-                    quantity: 1,
-                    totalCost: 150.00,
-                    purchaser: PurchasePerson(id: "friend-1", displayName: "Best Friend"),
-                    shippingStatus: .delivered,
-                    purchasedAt: Date().addingTimeInterval(-8 * 24 * 60 * 60)
-                )
-            ],
-            totalQuantityPurchased: 1
-        ),
-        
-        // Items for List "3" (Holiday Shopping - Mom)
-        GiftItem(
-            id: "20",
-            listId: "3",
-            name: "Kindle Paperwhite",
-            description: "16GB, with special offers",
-            url: "https://www.amazon.com/dp/B08KTZ8249",
-            imageUrl: nil,
-            expectedUnitPrice: 139.99,
-            quantityRequested: 1,
-            priority: 7,
-            status: .purchased,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-2", displayName: "Dad"),
-            createdAt: Date().addingTimeInterval(-60 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-14 * 24 * 60 * 60),
-            // ✅ Purchased by Dad
-            purchases: [
-                PurchaseSummary(
-                    id: "purchase-20",
-                    quantity: 1,
-                    totalCost: 139.99,
-                    purchaser: PurchasePerson(id: "owner-2", displayName: "Dad"),
-                    shippingStatus: .notShipped,
-                    purchasedAt: Date().addingTimeInterval(-14 * 24 * 60 * 60)
-                )
-            ],
-            totalQuantityPurchased: 1
-        ),
-        
-        // ✅ NEW - Item with no price (optional field)
-        GiftItem(
-            id: "21",
-            listId: "3",
-            name: "Handmade Scarf",
-            description: "Custom knitted scarf in mom's favorite colors",
-            url: nil,
-            imageUrl: nil,
-            expectedUnitPrice: nil,  // No price set
-            quantityRequested: 1,
-            priority: 10,
-            status: .available,
-            offList: false,
-            createdBy: ItemPerson(id: "owner-2", displayName: "Dad"),
-            createdAt: Date().addingTimeInterval(-45 * 24 * 60 * 60),
-            updatedAt: Date().addingTimeInterval(-45 * 24 * 60 * 60),
-            purchases: nil,
-            totalQuantityPurchased: nil
+    /// What the server sends: without gift activity every item is AVAILABLE with no updatedAt and
+    /// no purchases. The list endpoint never carries purchase summaries.
+    private func hidden(_ item: ListItem, _ caps: ListCapabilities, keepingPurchases: Bool) -> ListItem {
+        let seesActivity = caps.canSeeGiftActivity
+        let keep = seesActivity && keepingPurchases
+        return ListItem(
+            id: item.id,
+            listId: item.listId,
+            name: item.name,
+            description: item.description,
+            url: item.url,
+            imageUrl: item.imageUrl,
+            expectedUnitPrice: item.expectedUnitPrice,
+            quantityRequested: item.quantityRequested,
+            priority: item.priority,
+            status: seesActivity ? item.status : .available,
+            offList: item.offList,
+            createdBy: item.createdBy,
+            createdAt: item.createdAt,
+            updatedAt: seesActivity ? item.updatedAt : nil,
+            purchases: keep ? item.purchases : nil,
+            totalQuantityPurchased: keep ? item.totalQuantityPurchased : nil
         )
+    }
+}
+
+// MARK: - Seed
+
+/// Fake items on the `MockListData` lists. Fake ids and names only; fixed dates.
+nonisolated enum MockItemSeed {
+
+    private static let created = Date(timeIntervalSince1970: 1_767_225_600)
+    private static let updated = Date(timeIntervalSince1970: 1_767_312_000)
+
+    private static let me = MockItemRepository.defaultUser
+    private static let casey = ListItemPerson(id: "mock-user-casey", displayName: "Casey Member")
+    private static let pat = ListItemPerson(id: "mock-user-pat", displayName: "Pat Sample")
+
+    private static func money(_ cents: Int) -> Decimal { Decimal(cents) / 100 }
+
+    private static func item(
+        _ id: String, _ listId: String, _ name: String, cents: Int?, quantity: Int = 1, priority: Int = 5,
+        status: ItemStatus = .available, offList: Bool = false, by creator: ListItemPerson = me,
+        purchasedBy buyer: ListItemPerson? = nil, purchased: Int = 0
+    ) -> ListItem {
+        let purchases = buyer.map { person in
+            [ListItemPurchaseSummary(
+                id: "\(id)-purchase", quantity: purchased, totalCost: money((cents ?? 0) * purchased),
+                purchaser: person, purchasedAt: updated
+            )]
+        }
+        return ListItem(
+            id: id, listId: listId, name: name, description: "A fake description for \(name)",
+            url: nil, imageUrl: nil, expectedUnitPrice: cents.map(money),
+            quantityRequested: quantity, priority: priority, status: status, offList: offList,
+            createdBy: creator, createdAt: created, updatedAt: updated,
+            purchases: purchases, totalQuantityPurchased: buyer == nil ? nil : purchased
+        )
+    }
+
+    static let items: [ListItem] = [
+        // Owner of a list for a child: full visibility, one member's surprise item.
+        item("mock-item-child-1", "mock-list-child", "Toy Rocket", cents: 2499, priority: 9,
+             status: .purchased, purchasedBy: casey, purchased: 1),
+        item("mock-item-child-2", "mock-list-child", "Picture Book", cents: 1299, quantity: 3, priority: 6,
+             status: .partial, purchasedBy: casey, purchased: 1),
+        item("mock-item-child-3", "mock-list-child", "Building Blocks", cents: 3999, priority: 8),
+        item("mock-item-child-4", "mock-list-child", "Surprise Scooter", cents: 5999, status: .wrapped,
+             offList: true, by: casey),
+        // Blind owner of a self list: the raw status is hidden from the caller.
+        item("mock-item-self-1", "mock-list-self", "Warm Scarf", cents: 2999, priority: 8,
+             status: .purchased, purchasedBy: casey, purchased: 1),
+        item("mock-item-self-2", "mock-list-self", "Coffee Grinder", cents: 4500, priority: 7),
+        item("mock-item-self-3", "mock-list-self", "Hidden Surprise", cents: 1500, status: .gifted,
+             offList: true, by: casey),
+        // MEMBER of someone else's list: own surprise item and another member's.
+        item("mock-item-member-1", "mock-list-member", "Garden Gloves", cents: 1899, priority: 6),
+        item("mock-item-member-2", "mock-list-member", "Cookbook", cents: 3200, priority: 7,
+             status: .purchased, purchasedBy: pat, purchased: 1),
+        item("mock-item-member-3", "mock-list-member", "My Surprise Gift", cents: 4000, offList: true, by: me),
+        item("mock-item-member-4", "mock-list-member", "Casey's Surprise Gift", cents: 2500, status: .wrapped,
+             offList: true, by: casey),
+        // VIEWER, PUBLIC and blind co-owner lists.
+        item("mock-item-viewer-1", "mock-list-viewer", "Desk Lamp", cents: 3500, status: .purchased,
+             purchasedBy: casey, purchased: 1),
+        item("mock-item-viewer-2", "mock-list-viewer", "Notebook Set", cents: 1200),
+        item("mock-item-public-1", "mock-list-public", "Board Game", cents: 4400, status: .partial),
+        item("mock-item-coowner-1", "mock-list-coowner", "Tea Sampler", cents: 2200, status: .gifted),
+        item("mock-item-coowner-2", "mock-list-coowner", "Surprise Candle", cents: 1800, offList: true, by: casey),
+        // Archived list: items are still recorded there.
+        item("mock-item-archived-1", "mock-list-archived", "Winter Hat", cents: 1900, status: .purchased,
+             purchasedBy: casey, purchased: 1),
+        item("mock-item-archived-2", "mock-list-archived", "Puzzle", cents: 2700, status: .gifted)
     ]
 }

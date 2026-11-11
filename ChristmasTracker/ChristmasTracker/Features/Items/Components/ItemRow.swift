@@ -8,8 +8,13 @@
 import SwiftUI
 
 struct ItemRow: View {
-    let item: GiftItem
+    let item: ListItem
     let detail: ListDetail
+
+    private var isPurchased: Bool {
+        item.status == .purchased || item.status == .wrapped || item.status == .gifted
+    }
+
     var body: some View {
         HStack(spacing: AppSpacing.md) {
             // Status icon
@@ -18,10 +23,10 @@ struct ItemRow: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 Text(item.name)
                     .font(.appBody)
-                    .foregroundColor(item.isPurchased ? .textMutedColor : .textPrimaryColor)
-                    .strikethrough(item.isPurchased)
+                    .foregroundStyle(isPurchased ? Color.textMutedColor : Color.textPrimaryColor)
+                    .strikethrough(isPurchased)
                 if let price = item.expectedUnitPrice {
-                    Text("$\(String(format: "%.2f", price))")
+                    Text(price.formatted(.currency(code: "USD")))
                         .font(.appCaption1)
                         .foregroundColor(.textMutedColor)
                 }
@@ -88,12 +93,12 @@ struct ItemRow: View {
 #Preview {
     VStack {
         ItemRow(
-            item: MockItemData.allItems[0],
+            item: MockItemSeed.items[0],
             detail: MockListData.allLists[0]
         )
         Divider()
         ItemRow(
-            item: MockItemData.allItems[1],
+            item: MockItemSeed.items[1],
             detail: MockListData.allLists[0]
         )
     }

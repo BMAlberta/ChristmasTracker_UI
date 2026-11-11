@@ -149,45 +149,6 @@ enum ItemStatus: String, Codable, Sendable, Hashable {
 
 }
 
-// MARK: - Request Types
-
-nonisolated struct CreateItemRequest: Codable, Sendable {
-    let name: String
-    let description: String
-    let url: String?
-    let expectedUnitPrice: Double?
-    let quantityRequested: Int
-    let priority: Int
-    let offList: Bool
-    let imageUrl: String?
-}
-
-nonisolated struct UpdateItemRequest: Codable, Sendable {
-    let name: String?
-    let description: String?
-    let url: String?
-    let expectedUnitPrice: Double?
-    let quantityRequested: Int?
-    let priority: Int?
-    let imageUrl: String?
-}
-
-// MARK: - Response Types
-
-nonisolated struct ItemsResponse: Codable, Sendable {
-    let success: Bool
-    let data: ItemData
-}
-
-struct ItemData: Codable, Sendable {
-    let items: [GiftItem]
-}
-
-nonisolated struct ItemResponse: Codable, Sendable {
-    let success: Bool
-    let data: GiftItem
-}
-
 // MARK: - LEGACY bridge from ListItem
 
 // LEGACY: delete in package I4 together with GiftItem. This is the only Double money path left

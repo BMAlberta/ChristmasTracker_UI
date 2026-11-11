@@ -233,16 +233,13 @@ struct ListDetailView: View {
     }
 
     /// Items render only under the list they were loaded for.
-    private var scopedItems: [GiftItem] {
+    private var scopedItems: [ListItem] {
         ListItemsScope.itemsToShow(itemService.items, currentListId: itemService.currentListId, listId: listId)
     }
 
-    private var scopedFilteredItems: [GiftItem] {
-        ListItemsScope.itemsToShow(
-            itemService.filteredItems,
-            currentListId: itemService.currentListId,
-            listId: listId
-        )
+    /// The rows as before: off-list items are not listed here.
+    private var scopedFilteredItems: [ListItem] {
+        scopedItems.filter { !$0.offList }
     }
 
     // MARK: - Cards
@@ -356,7 +353,7 @@ struct ListDetailView: View {
                         .foregroundStyle(Color.textMutedColor)
                 }
             }
-            if itemService.isLoading && !hasItems {
+            if itemService.isLoadingItems && !hasItems {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.xl)

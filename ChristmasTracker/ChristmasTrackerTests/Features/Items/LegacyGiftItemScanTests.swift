@@ -26,11 +26,13 @@ struct LegacyGiftItemScanTests {
     private static let allowlist: [Entry] = [
         Entry(path: "Features/Purchases/", reason: "Purchase screens take GiftItem until package I4 (D1)."),
         Entry(path: "Core/Models/GiftItem.swift", reason: "The legacy type and the ListItem bridge live here until I4."),
-        // TRANSITIONAL: deleted or rewritten by Stories C and D.
-        Entry(path: "App/InertRepositories.swift", reason: "TRANSITIONAL: InertItemRepository moves to ListItem in Story C."),
-        Entry(path: "Features/Items/", reason: "TRANSITIONAL: the old item stack (service, store, views, old repositories) is rewritten in Stories C and D. New files are checked separately below."),
-        Entry(path: "Features/Lists/Views/ListDetailView.swift", reason: "TRANSITIONAL: its item section is rewritten in Story D."),
-        Entry(path: "PreviewContent/", reason: "TRANSITIONAL: preview fixtures, if any, follow the item stack.")
+        // TRANSITIONAL: deleted or rewritten by Story D.
+        // EDITED (I3c-C): removed "App/InertRepositories.swift" (InertItemRepository is on ListItem now)
+        // and "PreviewContent/" (no file in it references GiftItem any more). Features/Items/ stays
+        // because ItemRow, ItemDetailView, EditItemView and MockItemData still use it until Story D;
+        // ListDetailView stays until its item section is rewritten in Story D.
+        Entry(path: "Features/Items/", reason: "TRANSITIONAL: the old item screens (ItemRow, ItemDetailView, EditItemView) and MockItemData still use it until Story D. New files are checked separately below."),
+        Entry(path: "Features/Lists/Views/ListDetailView.swift", reason: "TRANSITIONAL: its item section is rewritten in Story D.")
     ]
 
     private static let newFiles = [
@@ -38,7 +40,12 @@ struct LegacyGiftItemScanTests {
         "Features/Items/ViewState/ItemPermissions.swift",
         "Features/Items/ViewState/ItemViewState.swift",
         "Features/Items/ViewState/ItemFormValidation.swift",
-        "Features/Items/Repositories/ItemMapping.swift"
+        "Features/Items/Repositories/ItemMapping.swift",
+        // EDITED (I3c-C): the rebuilt repository protocol, generated repository, service and store.
+        "Features/Items/Repositories/ItemRepository.swift",
+        "Features/Items/Repositories/GeneratedClientItemRepository.swift",
+        "Features/Items/Services/ItemService.swift",
+        "Features/Items/DataStores/ItemDataStore.swift"
     ]
 
     private func makeSUT(file: String = #filePath) throws -> ItemSourceTree {

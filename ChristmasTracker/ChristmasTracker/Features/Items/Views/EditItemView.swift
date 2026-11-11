@@ -11,8 +11,8 @@ import SwiftUI
 
 struct EditItemView: View {
     
-    let item: GiftItem
-    
+    let item: ListItem
+
     @Environment(\.itemService) private var itemService
     @Environment(\.dismiss) private var dismiss
     
@@ -28,12 +28,12 @@ struct EditItemView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     
-    init(item: GiftItem) {
+    init(item: ListItem) {
         self.item = item
         _name = State(initialValue: item.name)
-        _description = State(initialValue: item.description ?? "")
+        _description = State(initialValue: item.description)
         _url = State(initialValue: item.url ?? "")
-        _priceText = State(initialValue: item.expectedUnitPrice != nil ? String(format: "%.2f", item.expectedUnitPrice!) : "")
+        _priceText = State(initialValue: item.expectedUnitPrice.map { "\($0)" } ?? "")
         _quantityRequested = State(initialValue: item.quantityRequested)
         _priority = State(initialValue: item.priority)
     }
@@ -45,7 +45,7 @@ struct EditItemView: View {
                     TextField("Item Name", text: $name)
                         .autocorrectionDisabled()
                     
-                    TextField("Description (optional)", text: $description, axis: .vertical)
+                    TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 
@@ -121,51 +121,48 @@ struct EditItemView: View {
         }
     }
     
-    private var isFormValid: Bool {
-        !name.isEmpty
-    }
-    
-    private var hasChanges: Bool {
-        name != item.name ||
-        description != item.description ||
-        url != (item.url ?? "") ||
-        priceText != (item.expectedUnitPrice != nil ? String(format: "%.2f", item.expectedUnitPrice!) : "") ||
-        quantityRequested != item.quantityRequested ||
-        priority != item.priority
-    }
-    
-    private var parsedPrice: Double? {
-        guard !priceText.isEmpty else { return nil }
-        return Double(priceText)
-    }
-    
-    private func saveChanges() async {
-        isSaving = true
-        
-        let request = UpdateItemRequest(
-            name: name != item.name ? name.trimmingCharacters(in: .whitespaces) : nil,
-            description: description != item.description ? description.trimmingCharacters(in: .whitespaces) : nil,
-            url: url != (item.url ?? "") ? (url.isEmpty ? nil : url.trimmingCharacters(in: .whitespaces)) : nil,
-            expectedUnitPrice: parsedPrice != item.expectedUnitPrice ? parsedPrice : nil,
-            quantityRequested: quantityRequested != item.quantityRequested ? quantityRequested : nil,
-            priority: priority != item.priority ? priority : nil,
-            imageUrl: nil
+    /// The changed fields, or nil when the form is invalid or nothing changed.
+    private func makeInput() -> UpdateItemInput? {
+        ItemFormValidation.makeUpdateInput(
+            original: item,
+            name: name,
+            description: description,
+            url: url,
+            imageUrl: item.imageUrl ?? "",
+            priceText: priceText,
+            quantity: quantityRequested,
+            priority: priority
         )
-        
+    }
+
+    private var isFormValid: Bool {
+        makeInput() != nil
+    }
+
+    private var hasChanges: Bool {
+        makeInput() != nil
+    }
+
+    private func saveChanges() async {
+        guard let input = makeInput() else { return }
+        isSaving = true
+
         do {
-            try await itemService.updateItem(id: item.id, request)
+            try await itemService.updateItem(id: item.id, input)
             dismiss()
+        } catch is CancellationError {
+            // The session ended or the task was cancelled: nothing to show.
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = (error as? ItemError)?.userMessage ?? ItemError.server.userMessage
             showError = true
         }
-        
+
         isSaving = false
     }
 }
 
 #Preview {
-    EditItemView(item: MockItemData.allItems[0])
+    EditItemView(item: MockItemSeed.items[0])
         .environment(\.itemService, ItemService(
             repository: MockItemRepository(),
             dataStore: ItemDataStore()

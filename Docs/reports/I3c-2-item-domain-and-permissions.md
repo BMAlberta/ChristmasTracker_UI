@@ -36,7 +36,15 @@ Test run with 212 tests in 16 suites passed after 0.019 seconds.      (inside ve
 swift test --package-path "LocalPackages/TrackerAPI":
 Test run with 212 tests in 16 suites passed after 0.017 seconds.
 ```
-After the commit: filled in below (added in the Story C commit, since commits are never amended).
+After the commit (1fa75c7; added in the Story C commit, since commits are never amended):
+```
+--- tests: 1768 passed, 0 failed, 0 skipped ---
+Test run with 212 tests in 16 suites passed
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+```
+Working tree clean at 1fa75c7.
 
 ## Gate 2 (real verdicts, written after the reviews)
 - Convention-reviewer: APPROVE, no hard blocks. Warnings: `ItemDetailState.init` body about 41 lines (one over the 40 warning); lines over 120 characters in ItemMapping.swift (:35, :68) and several test files (all under 160); stale "fails today" comments in ItemErrorTests.swift and GiftItemLegacyBridgeTests.swift; `import TrackerAPI` in GiftItem.swift only for the LEGACY bridge (acceptable, deleted in I4); new top-level declarations rely on the internal default like the existing code. Carried to Story C: `.validation(message:)` surfaces a server message, so the repository must feed it only the contract's validation message (never a raw error, id, or email).

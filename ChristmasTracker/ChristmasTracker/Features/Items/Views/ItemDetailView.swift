@@ -22,8 +22,16 @@ struct ItemDetailView: View {
     @State private var showPurchaseConfirmation = false
     @State private var showPurchaseHistorySheet = false
     
-    private var item: GiftItem? {
+    private var item: ListItem? {
         itemService.items.first { $0.id == itemId }
+    }
+
+    private func isPurchased(_ item: ListItem) -> Bool {
+        item.status == .purchased || item.status == .wrapped || item.status == .gifted
+    }
+
+    private func canEdit(_ item: ListItem) -> Bool {
+        item.status == .available || item.status == .partial
     }
     
     var body: some View {
@@ -38,7 +46,7 @@ struct ItemDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if let item = item, item.canEdit {
+                if let item = item, canEdit(item) {
                     Button("Edit") {
                         showEditSheet = true
                     }
@@ -52,30 +60,30 @@ struct ItemDetailView: View {
         }
         .sheet(isPresented: $showRecordPurchaseSheet) {
             if let item = item {
-                RecordPurchaseView(item: item)
+                RecordPurchaseView(item: item.legacyPurchaseItem)
             }
         }
         .sheet(isPresented: $showPurchaseHistorySheet) {
             if let item = item {
-                PurchaseHistoryView(item: item)
+                PurchaseHistoryView(item: item.legacyPurchaseItem)
             }
         }
         .task {
-            try? await itemService.loadItemDetail(id: itemId)
+            await itemService.loadItemDetail(id: itemId)
         }
         .onDisappear {
             itemService.clearItemDetail()
         }
     }
     
-    private func detailContent(item: GiftItem) -> some View {
+    private func detailContent(item: ListItem) -> some View {
         ScrollView {
             VStack(spacing: AppSpacing.xl) {
                 // Header card
                 headerCard(item: item)
-                
+
                 // Purchase status card
-                if item.isPurchased {
+                if isPurchased(item) {
                     purchaseSummaryCard(item: item)
                 }
                 
@@ -101,11 +109,11 @@ struct ItemDetailView: View {
             Text("This action cannot be undone.")
         }
         .confirmationDialog(
-            item.isPurchased ? "Mark as not purchased?" : "Mark as purchased?",
+            isPurchased(item) ? "Mark as not purchased?" : "Mark as purchased?",
             isPresented: $showPurchaseConfirmation,
             titleVisibility: .visible
         ) {
-            if item.isPurchased {
+            if isPurchased(item) {
                 Button("Undo Purchase") {
                     Task {
                         //                        try? await itemService.undoPurchase(id: item.id)
@@ -122,13 +130,13 @@ struct ItemDetailView: View {
         }
     }
     
-    private func headerCard(item: GiftItem) -> some View {
+    private func headerCard(item: ListItem) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             Text(item.name)
                 .font(.appTitle1)
                 .foregroundColor(.textPrimaryColor)
-            
-            Text(item.description ?? "")
+
+            Text(item.description)
                 .font(.appBody)
                 .foregroundColor(.textMutedColor)
             
@@ -137,7 +145,7 @@ struct ItemDetailView: View {
                     Text("Expected Price:")
                         .font(.appHeadline)
                         .foregroundColor(.textMutedColor)
-                    Text("$\(String(format: "%.2f", price))")
+                    Text(price.formatted(.currency(code: "USD")))
                         .font(.appHeadline)
                         .foregroundColor(.textPrimaryColor)
                     
@@ -149,12 +157,12 @@ struct ItemDetailView: View {
                 }
             }
             
-            if item.quantityRequested > 1, let totalPrice = item.totalPrice {
+            if item.quantityRequested > 1, let unitPrice = item.expectedUnitPrice {
                 HStack {
                     Text("Total:")
                         .font(.appHeadline)
                         .foregroundColor(.textMutedColor)
-                    Text("$\(String(format: "%.2f", totalPrice))")
+                    Text((unitPrice * Decimal(item.quantityRequested)).formatted(.currency(code: "USD")))
                         .font(.appTitle3)
                         .foregroundColor(.primaryColor)
                 }
@@ -176,8 +184,8 @@ struct ItemDetailView: View {
                 }
             }
             
-            if let url = item.url {
-                Link(destination: URL(string: url)!) {
+            if let url = item.url, let destination = URL(string: url) {
+                Link(destination: destination) {
                     HStack {
                         Image(systemName: "link")
                         Text("View Product")
@@ -215,7 +223,7 @@ struct ItemDetailView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
     
-    private func purchaseSummaryCard(item: GiftItem) -> some View {
+    private func purchaseSummaryCard(item: ListItem) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: AppSpacing.xs) {
@@ -256,10 +264,10 @@ struct ItemDetailView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
     
-    private func actionsSection(item: GiftItem) -> some View {
+    private func actionsSection(item: ListItem) -> some View {
         VStack(spacing: AppSpacing.md) {
             // Record Purchase button
-            if !item.isPurchased || item.status == .partial {
+            if !isPurchased(item) || item.status == .partial {
                 Button {
                     showRecordPurchaseSheet = true
                 } label: {
@@ -295,7 +303,7 @@ struct ItemDetailView: View {
             }
             
             // Delete button (if can edit)
-            if item.canEdit {
+            if canEdit(item) {
                 Button {
                     showDeleteConfirmation = true
                 } label: {

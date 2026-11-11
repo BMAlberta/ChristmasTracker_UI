@@ -107,7 +107,9 @@ struct AppDependencies: Sendable {
             listRepository: lists,
             memberRepository: MockMemberRepository(listRepository: lists),
             childRepository: MockChildRepository(listRepository: lists),
-            itemRepository: MockItemRepository(),
+            itemRepository: MockItemRepository(
+                capabilities: { MockListRepository.capabilities(forListId: $0) ?? MockItemRepository.ownerCapabilities }
+            ),
             appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
         )
@@ -122,7 +124,7 @@ struct AppDependencies: Sendable {
             listRepository: GeneratedClientListRepository(client: generatedClient),
             memberRepository: GeneratedClientMemberRepository(client: generatedClient),
             childRepository: GeneratedClientChildRepository(client: generatedClient),
-            itemRepository: NetworkItemRepository(apiClient: apiClient),
+            itemRepository: GeneratedClientItemRepository(client: generatedClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)

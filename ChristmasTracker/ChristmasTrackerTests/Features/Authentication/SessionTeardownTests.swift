@@ -38,11 +38,23 @@ import Foundation
 }
 
 /// A fast MockItemRepository that doesn't sleep.
+// EDITED (I3c-C): the item repository protocol moved from GiftItem / CreateItemRequest /
+// UpdateItemRequest to ListItem / CreateItemInput / UpdateItemInput, and ItemError.createFailed /
+// .updateFailed were removed (both now throw .server). The fixed items replace MockItemData
+// (legacy GiftItem) so this file no longer touches the legacy type.
+private func teardownItems(listId: String) -> [ListItem] {
+    guard listId == "1" else { return [] }
+    return [
+        ItemFixtures.item(id: "t-item-1", listId: "1", name: "Teardown Item One"),
+        ItemFixtures.item(id: "t-item-2", listId: "1", name: "Teardown Item Two")
+    ]
+}
+
 @MainActor private final class FastMockItemRepository: ItemRepository {
-    func fetchItems(listId: String) async throws -> [GiftItem] { MockItemData.allItems.filter { $0.listId == listId } }
-    func fetchItemDetail(id: String) async throws -> GiftItem { throw ItemError.notFound }
-    func createItem(listId: String, _ request: CreateItemRequest) async throws -> GiftItem { throw ItemError.createFailed }
-    func updateItem(id: String, _ request: UpdateItemRequest) async throws -> GiftItem { throw ItemError.updateFailed }
+    func fetchItems(listId: String) async throws -> [ListItem] { teardownItems(listId: listId) }
+    func fetchItemDetail(id: String) async throws -> ListItem { throw ItemError.notFound }
+    func createItem(listId: String, _ input: CreateItemInput) async throws -> ListItem { throw ItemError.server }
+    func updateItem(id: String, _ input: UpdateItemInput) async throws -> ListItem { throw ItemError.server }
     func deleteItem(id: String) async throws {}
 }
 
@@ -92,7 +104,8 @@ struct SessionTeardownTests {
         let listId = "1"
 
         // Seed items for list "1"
-        let items = MockItemData.allItems.filter { $0.listId == listId }
+        // EDITED (I3c-C): ItemDataStore stores ListItem now; a fixed ListItem fixture replaces MockItemData.
+        let items = teardownItems(listId: listId)
         await dataStore.setItems(items, listId: listId)
 
         let before = await dataStore.getItems(listId: listId)
@@ -145,6 +158,11 @@ struct SessionTeardownTests {
 
         #expect(service.items.isEmpty, "ItemService.items must be empty after teardown")
         #expect(service.currentListId == nil, "ItemService.currentListId must be nil after teardown")
+        // EDITED (I3c-C): the rebuilt service also clears the detail, the load error and the cache.
+        #expect(service.currentItem == nil, "ItemService.currentItem must be nil after teardown")
+        #expect(service.loadError == nil, "ItemService.loadError must be nil after teardown")
+        let cached = await dataStore.getItems(listId: listId)
+        #expect(cached.isEmpty, "the item cache must be empty after the service is torn down")
     }
 
     // MARK: - Test 5: AuthenticationService is signed out after teardown
