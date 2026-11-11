@@ -50,3 +50,17 @@ After the commit: see the closing block at the end of this file (added in a fina
 - No simulator or screenshot verification of any new screen (see the I3c-4 report).
 - Banked, not fixed: the items listed under Open risks in the handoff (including the `.notFound` close without a list message, the old-screen UI-rule gaps, ListService.swift size, and the scanner limits above).
 - Purchases and Core/Networking raw-error log lines are carried to I4 unchanged.
+
+## Closing block (added in the final docs commit; source: commands I ran on commit a921775 with a clean tree)
+```
+--- xcodebuild exit status: 0 ---
+--- tests: 1985 passed, 0 failed, 0 skipped ---
+Test run with 212 tests in 16 suites passed after 0.018 seconds.   (inside verify)
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+swift test --package-path "LocalPackages/TrackerAPI":
+Test run with 212 tests in 16 suites passed after 0.019 seconds.
+```
+This run also serves as the after-commit verification for Stories C and D (their content is in a921775; no separate clean-tree run was made at 5f05709 or 2d22686).
+`git diff --stat master...HEAD` at Tue Nov 10 22:25 EST 2026 (six commits, before this docs commit): `105 files changed, 13215 insertions(+), 1810 deletions(-)`. The re-run after this docs commit is pasted in the final message to Brian.
