@@ -15,6 +15,7 @@ struct ItemDetailView: View {
     let context: ItemListContext
 
     @Environment(\.itemService) private var itemService
+    @Environment(\.listService) private var listService
     @Environment(\.authenticationService) private var authenticationService
     @Environment(\.dismiss) private var dismiss
 
@@ -26,7 +27,6 @@ struct ItemDetailView: View {
     private enum DetailSheet: Identifiable {
         case edit
         case recordPurchase
-        case purchaseHistory
 
         var id: Self { self }
     }
@@ -234,7 +234,6 @@ struct ItemDetailView: View {
     private func actionsSection(item: ListItem, state: ItemDetailState) -> some View {
         VStack(spacing: AppSpacing.md) {
             if state.showsPurchaseEntry {
-                // The purchase screens still run on the old stack until package I4.
                 Button {
                     sheet = .recordPurchase
                 } label: {
@@ -244,17 +243,6 @@ struct ItemDetailView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.primaryColor)
-                if state.statusMarker != nil {
-                    Button {
-                        sheet = .purchaseHistory
-                    } label: {
-                        Label("View Purchase History", systemImage: "clock.arrow.circlepath")
-                            .font(.appHeadline)
-                            .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(Color.primaryColor)
-                }
             }
             if state.showsDelete {
                 deleteButton(item: item)
@@ -298,9 +286,41 @@ struct ItemDetailView: View {
             case .edit:
                 EditItemView(item: item)
             case .recordPurchase:
-                RecordPurchaseView(item: item.legacyPurchaseItem)
-            case .purchaseHistory:
-                PurchaseHistoryView(item: item.legacyPurchaseItem)
+                RecordPurchaseView(item: item, context: context, onFinish: { finish in
+                    handleRecordPurchaseFinish(finish, item: item)
+                })
+            }
+        }
+    }
+
+    // MARK: - Record purchase
+
+    /// The sheet closes in every case. A recorded purchase refreshes the screens (the server decides
+    /// what changed); a 404 means the item is gone, so this screen leaves too.
+    private func handleRecordPurchaseFinish(_ finish: RecordPurchaseFinish, item: ListItem) {
+        sheet = nil
+        switch finish {
+        case .recorded:
+            Task { await refreshAfterPurchase(item) }
+        case .itemGone:
+            dismiss()
+        case .cancelled:
+            break
+        }
+    }
+
+    /// Runs the refresh plan in order. A failed refresh never turns the recorded purchase into an
+    /// error: the screens' own banners apply.
+    private func refreshAfterPurchase(_ item: ListItem) async {
+        let steps = PurchaseRefreshPlan.steps(
+            itemId: item.id, listId: item.listId, currentItemsListId: itemService.currentListId
+        )
+        for step in steps {
+            switch step {
+            case .itemDetail(let id): await itemService.loadItemDetail(id: id)
+            case .itemsRefresh: await itemService.refreshItems()
+            case .itemsLoad(let listId): await itemService.loadItems(listId: listId)
+            case .listDetail(let id): _ = await listService.refreshListDetail(id: id)
             }
         }
     }

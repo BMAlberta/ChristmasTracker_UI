@@ -25,7 +25,7 @@ struct LegacyGiftItemScanTests {
 
     private static let allowlist: [Entry] = [
         Entry(path: "Features/Purchases/", reason: "Purchase screens take GiftItem until package I4 (D1)."),
-        Entry(path: "Core/Models/GiftItem.swift", reason: "The legacy type and the ListItem bridge live here until I4."),
+        Entry(path: "Core/Models/GiftItem.swift", reason: "The legacy type lives here until I4b (the ListItem bridge was deleted in I4a-C)."),
         // EDITED (I3c-D): the TRANSITIONAL entries ("Features/Items/" and ListDetailView.swift) are
         // removed because Story D rewrites those screens. The final allowlist is exactly the three
         // entries in this list; MockItemData keeps the legacy mock list for the purchase previews.

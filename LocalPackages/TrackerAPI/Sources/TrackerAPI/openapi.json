@@ -742,6 +742,16 @@
             ],
             "format": "date-time",
             "description": "Omitted when canSeeGiftActivity is false (P17)"
+          },
+          "quantityPurchased": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sum of quantity over all purchases of the item. Present only when the caller can see gift activity; omitted otherwise (P24, P3)."
+          },
+          "quantityRemaining": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "max(0, quantityRequested - quantityPurchased). Present only when the caller can see gift activity; omitted otherwise (P24, P3)."
           }
         }
       },
@@ -4228,7 +4238,7 @@
       "delete": {
         "summary": "Delete list",
         "operationId": "deleteList",
-        "description": "Archive a list (soft delete, owner only)",
+        "description": "Archive a list (soft delete, owner or co-owner)",
         "tags": [
           "Lists"
         ],
@@ -5305,7 +5315,7 @@
       "delete": {
         "summary": "Delete a child user",
         "operationId": "deleteChild",
-        "description": "Remove a child user (soft delete). Cannot delete if child has lists.",
+        "description": "Remove a child user (soft delete). Returns 422 CANNOT_DELETE_RESOURCE when the child has a list that is not archived (ACTIVE or DRAFT); a child with no lists, or only archived lists, can be deleted.",
         "tags": [
           "Users"
         ],

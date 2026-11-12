@@ -128,6 +128,17 @@ nonisolated final class InertItemRepository: ItemRepository {
     }
 }
 
+nonisolated final class InertPurchaseRecorder: PurchaseRecording {
+    @Instrumented
+    func createPurchase(
+        itemId: String,
+        draft: PurchaseDraft,
+        confirmationToken: String?
+    ) async throws -> PurchaseOutcome {
+        throw ConfigurationError.clientUnavailable
+    }
+}
+
 /// The API client of the failed state: no request is ever sent.
 nonisolated final class InertAPIClient: APIClient {
     func request<T: Decodable & Sendable>(

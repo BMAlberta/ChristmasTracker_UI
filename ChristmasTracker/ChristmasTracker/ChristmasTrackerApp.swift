@@ -88,6 +88,7 @@ struct AppDependencies: Sendable {
     let memberRepository: any MemberRepository
     let childRepository: any ChildRepository
     let itemRepository: ItemRepository
+    let purchaseRecorder: any PurchaseRecording
     let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
     // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
@@ -110,6 +111,7 @@ struct AppDependencies: Sendable {
             itemRepository: MockItemRepository(
                 capabilities: { MockListRepository.capabilities(forListId: $0) ?? MockItemRepository.ownerCapabilities }
             ),
+            purchaseRecorder: MockPurchaseRecorder(access: { MockPurchaseAccess.fromMockSeed(itemId: $0) }),
             appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
         )
@@ -125,6 +127,7 @@ struct AppDependencies: Sendable {
             memberRepository: GeneratedClientMemberRepository(client: generatedClient),
             childRepository: GeneratedClientChildRepository(client: generatedClient),
             itemRepository: GeneratedClientItemRepository(client: generatedClient),
+            purchaseRecorder: GeneratedClientPurchaseRepository(client: generatedClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)
@@ -143,6 +146,7 @@ struct AppDependencies: Sendable {
             memberRepository: InertMemberRepository(),
             childRepository: InertChildRepository(),
             itemRepository: InertItemRepository(),
+            purchaseRecorder: InertPurchaseRecorder(),
             appVersionRepository: InertAppVersionRepository(),
             trackerClient: nil
         )
@@ -213,6 +217,7 @@ struct ChristmasTrackerApp: App {
     @State private var listService: ListService
     @State private var itemService: ItemService
     @State private var childService: ChildService
+    @State private var purchaseService: PurchaseService
     @State private var showBiometricSetup = false
     @State private var versionGate: VersionGate
     @State private var versionService: VersionService
@@ -316,7 +321,10 @@ struct ChristmasTrackerApp: App {
         )
         itemService = is_
 
-        // Create session manager with production clearables (7 total; childService is appended last)
+        let ps = PurchaseService(repository: dependencies.purchaseRecorder)
+        purchaseService = ps
+
+        // Create session manager with production clearables (8 total; purchaseService is appended last)
         let clearables = makeProductionClearables(
             listDataStore: listDataStore,
             itemDataStore: itemDataStore,
@@ -324,7 +332,8 @@ struct ChristmasTrackerApp: App {
             itemService: is_,
             networkCache: NetworkCache.shared,
             lockController: lc,
-            childService: cs
+            childService: cs,
+            purchaseService: ps
         )
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
@@ -418,6 +427,7 @@ struct ChristmasTrackerApp: App {
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)
                 .environment(\.childService, childService)
+                .environment(\.purchaseService, purchaseService)
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         lockController.authService = authService

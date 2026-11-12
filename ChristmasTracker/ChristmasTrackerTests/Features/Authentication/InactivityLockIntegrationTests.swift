@@ -59,13 +59,22 @@ struct InactivityLockIntegrationTests {
         ChildService(repository: GatedChildRepository())
     }
 
+    /// I4a-B: makeProductionClearables gained `purchaseService:` (appended as the 8th clearable).
+    /// Mechanical call-site argument only; no existing assertion except the pinned count changes.
+    private func makePurchaseService() -> PurchaseService {
+        PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown }))
+    }
+
     // MARK: - Tests
 
     // I3b-M2: pinned count 6 -> 7. Reason: a new session-scoped store (ChildService) holds the
     // signed-in user's children and must be cleared at teardown. It is appended LAST, so every
     // index test below is unchanged.
-    @Test("makeProductionClearables(lockController:) returns exactly 7 clearables")
-    func productionClearablesReturnsSevenItems() {
+    // I4a-B: pinned count 7 -> 8. Reason: the PurchaseService clearable is appended last (it holds
+    // the signed-in user's in-flight purchase call and must end at teardown), so every index test
+    // below is unchanged.
+    @Test("makeProductionClearables(lockController:) returns exactly 8 clearables")
+    func productionClearablesReturnsEightItems() {
         let (listDataStore, itemDataStore, listService, itemService, networkCache, lockController) = makeSUT()
 
         let clearables = makeProductionClearables(
@@ -75,11 +84,12 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
-        #expect(clearables.count == 7,
-                "makeProductionClearables(lockController:) must return exactly 7 clearables (6 + ChildService)")
+        #expect(clearables.count == 8,
+                "makeProductionClearables(lockController:) must return exactly 8 clearables (7 + PurchaseService)")
     }
 
     @Test("makeProductionClearables(lockController:) — clearables[0] is ListDataStore")
@@ -93,7 +103,8 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
         #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
@@ -110,7 +121,8 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
         #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
@@ -127,7 +139,8 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
         #expect(clearables[2] is ListService, "clearables[2] must be ListService")
@@ -144,7 +157,8 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
         #expect(clearables[3] is ItemService, "clearables[3] must be ItemService")
@@ -161,7 +175,8 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
         #expect(clearables[4] is NetworkCache, "clearables[4] must be NetworkCache")
@@ -178,7 +193,8 @@ struct InactivityLockIntegrationTests {
             itemService: itemService,
             networkCache: networkCache,
             lockController: lockController,
-            childService: makeChildService()
+            childService: makeChildService(),
+            purchaseService: makePurchaseService()
         )
 
         #expect(clearables[5] is InactivityLockController,

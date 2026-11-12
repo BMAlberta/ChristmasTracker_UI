@@ -61,7 +61,9 @@ private nonisolated func buildListItem(
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         purchases: purchases,
-        totalQuantityPurchased: totalQuantityPurchased
+        totalQuantityPurchased: totalQuantityPurchased,
+        quantityPurchased: item.quantityPurchased,
+        quantityRemaining: item.quantityRemaining
     )
 }
 

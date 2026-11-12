@@ -83,3 +83,11 @@
 | `GET /users/{id} (own child)` | N/A (no own child in fixture) | N/A (no own child in fixture) | 200 (P19) — child fields | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (no own child in fixture) | N/A (P9) | 401 |
 | `GET /users/{id} (shared-list member)` | N/A (representative tested via childListOwner) | N/A (representative tested via childListOwner) | 200 (P19) — PersonSummary only | N/A (representative tested via childListOwner) | 200 (P19) — PersonSummary only | N/A (representative tested via childListOwner) | N/A (representative tested via childListOwner) | N/A (representative tested via childListOwner) | N/A (representative tested via childListOwner) | N/A (representative tested via childListOwner) | N/A (representative tested via childListOwner) | N/A (P9) | 401 |
 | `GET /users/{id} (stranger)` | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | 404 (P19) — identical to nonexistent id | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (representative tested via privateNonMember) | N/A (P9) | 401 |
+
+## Notes
+
+Outcomes the role grid cannot show:
+
+- `PATCH /lists/{id}`: 422 CANNOT_EDIT_ARCHIVED_LIST (6402) for an owner or co-owner when the list is ARCHIVED, including un-archiving (L16).
+- `POST /lists/{id}/members`: 409 MEMBERSHIP_ALREADY_EXISTS (5004) for an owner or co-owner when the target user already has an ACTIVE membership on the list.
+- `DELETE /users/me/children/{id}`: 422 CANNOT_DELETE_RESOURCE (6501) when the child has a list that is not ARCHIVED (L17).

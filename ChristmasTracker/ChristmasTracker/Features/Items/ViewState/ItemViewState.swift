@@ -211,8 +211,8 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
         } else {
             progress = nil
         }
-        // Never negative: an over-purchase leaves nothing remaining.
-        remainingQuantity = purchased.map { max(0, item.quantityRequested - $0) }
+        // The server's own count, never computed here; hidden when the caller cannot see activity.
+        remainingQuantity = showsActivity ? item.quantityRemaining : nil
         purchases = showsActivity
             ? (item.purchases ?? []).map { purchase in
                 PurchaseRowState(

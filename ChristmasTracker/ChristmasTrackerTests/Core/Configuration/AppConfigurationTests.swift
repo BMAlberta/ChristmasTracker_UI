@@ -174,7 +174,7 @@ struct ReadConfigurationBaseURLTests {
 
     @Test("Valid API_BASE_URL produces a non-nil apiBaseURL")
     func validURLProducesNonNil() {
-        let config = readConfiguration(from: ["API_BASE_URL": "https://api.bmalberta.com"])
+        let config = readConfiguration(from: ["API_BASE_URL": "https://api.bmalberta.com"], apiModeOverride: nil)
         #expect(config.apiBaseURL != nil)
         #expect(config.apiBaseURL?.scheme == "https")
         #expect(config.apiBaseURL?.host == "api.bmalberta.com")
@@ -182,13 +182,13 @@ struct ReadConfigurationBaseURLTests {
 
     @Test("Missing API_BASE_URL key produces nil apiBaseURL")
     func missingKeyProducesNil() {
-        let config = readConfiguration(from: [:])
+        let config = readConfiguration(from: [:], apiModeOverride: nil)
         #expect(config.apiBaseURL == nil)
     }
 
     @Test("Invalid API_BASE_URL produces nil apiBaseURL")
     func invalidURLProducesNil() {
-        let config = readConfiguration(from: ["API_BASE_URL": "ftp://x"])
+        let config = readConfiguration(from: ["API_BASE_URL": "ftp://x"], apiModeOverride: nil)
         #expect(config.apiBaseURL == nil)
     }
 }

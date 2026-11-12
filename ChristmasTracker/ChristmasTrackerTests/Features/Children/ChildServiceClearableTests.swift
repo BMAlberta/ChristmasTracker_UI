@@ -43,7 +43,9 @@ struct ChildServiceClearableTests {
             itemService: ItemService(repository: MockItemRepository(), dataStore: ItemDataStore()),
             networkCache: NetworkCache(),
             lockController: lockController,
-            childService: childService
+            childService: childService,
+            // EDITED (I4a-B): the new final parameter of makeProductionClearables.
+            purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown }))
         )
         return SUT(
             clearables: clearables, childService: childService, repo: repo,
@@ -51,18 +53,25 @@ struct ChildServiceClearableTests {
         )
     }
 
-    @Test("makeProductionClearables(childService:) returns 7 clearables with the ChildService appended last")
-    func childServiceIsSeventhAndLast() {
+    // EDITED (I4a-B): count 7 -> 8 and the name no longer says "last". Reason: the PurchaseService
+    // clearable is appended last (index 7); the ChildService keeps index 6.
+    @Test("makeProductionClearables(childService:) returns 8 clearables and the ChildService keeps index 6")
+    func childServiceKeepsIndexSix() {
         let sut = makeSUT()
 
-        #expect(sut.clearables.count == 7)
+        #expect(sut.clearables.count == 8)
         #expect(sut.clearables[6] is ChildService, "the ChildService must come after the lock controller")
         #expect(sut.clearables[6] === sut.childService, "the registered clearable is the very instance passed in")
+        #expect(sut.clearables[7] is PurchaseService, "the PurchaseService clearable is appended last")
     }
 
-    @Test("the existing six clearables keep their indices")
+    // EDITED (I4a-B): the title said "the existing six"; the ChildService (index 6) is now also pinned
+    // here because the PurchaseService clearable is appended after it.
+    @Test("the existing seven clearables keep their indices")
     func existingIndicesUnchanged() {
         let sut = makeSUT()
+        #expect(sut.clearables[6] is ChildService)
+        #expect(sut.clearables[6] === sut.childService)
 
         #expect(sut.clearables[0] is ListDataStore)
         #expect(sut.clearables[1] is ItemDataStore)

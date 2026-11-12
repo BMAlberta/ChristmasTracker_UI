@@ -6,11 +6,9 @@
 //
 import SwiftUI
 import Foundation
-import TrackerAPI
 
-// LEGACY: this type exists only because the purchase screens still take it. It is deleted in
-// package I4 together with the `ListItem.legacyPurchaseItem` bridge at the end of this file.
-// New code uses `ListItem`.
+// LEGACY: this type exists only because the legacy purchase screens still take it. It is deleted
+// in package I4b. New code uses `ListItem`.
 nonisolated struct GiftItem: Identifiable, Codable, Sendable, Hashable {
 
     // MARK: - Basic Info
@@ -99,32 +97,4 @@ enum ItemStatus: String, Codable, Sendable, Hashable {
         }
     }
 
-}
-
-// MARK: - LEGACY bridge from ListItem
-
-// LEGACY: delete in package I4 together with GiftItem. This is the only Double money path left
-// in the app. The purchase screens still take a GiftItem; the new item screens open them
-// through this property.
-extension ListItem {
-    nonisolated var legacyPurchaseItem: GiftItem {
-        GiftItem(
-            id: id,
-            listId: listId,
-            name: name,
-            description: description,
-            url: url,
-            imageUrl: imageUrl,
-            expectedUnitPrice: expectedUnitPrice.map(decimalToDouble),
-            quantityRequested: quantityRequested,
-            priority: priority,
-            status: status,
-            offList: offList,
-            createdBy: ItemPerson(id: createdBy.id, displayName: createdBy.displayName),
-            createdAt: createdAt,
-            updatedAt: updatedAt ?? createdAt,
-            purchases: nil,
-            totalQuantityPurchased: totalQuantityPurchased
-        )
-    }
 }

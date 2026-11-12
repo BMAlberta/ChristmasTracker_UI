@@ -40,6 +40,9 @@ nonisolated struct ListItem: Identifiable, Equatable, Hashable, Sendable {
     let updatedAt: Date?
     let purchases: [ListItemPurchaseSummary]?
     let totalQuantityPurchased: Int?
+    /// The server's own counts; nil when the server omits them (viewers who cannot see activity).
+    let quantityPurchased: Int?
+    let quantityRemaining: Int?
 
     init(
         id: String,
@@ -57,7 +60,9 @@ nonisolated struct ListItem: Identifiable, Equatable, Hashable, Sendable {
         createdAt: Date,
         updatedAt: Date? = nil,
         purchases: [ListItemPurchaseSummary]? = nil,
-        totalQuantityPurchased: Int? = nil
+        totalQuantityPurchased: Int? = nil,
+        quantityPurchased: Int? = nil,
+        quantityRemaining: Int? = nil
     ) {
         self.id = id
         self.listId = listId
@@ -75,6 +80,8 @@ nonisolated struct ListItem: Identifiable, Equatable, Hashable, Sendable {
         self.updatedAt = updatedAt
         self.purchases = purchases
         self.totalQuantityPurchased = totalQuantityPurchased
+        self.quantityPurchased = quantityPurchased
+        self.quantityRemaining = quantityRemaining
     }
 }
 

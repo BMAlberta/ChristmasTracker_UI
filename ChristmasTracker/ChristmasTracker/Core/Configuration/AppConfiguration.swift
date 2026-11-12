@@ -83,7 +83,7 @@ nonisolated func makeClientInfo(from info: [String: Any]?) -> AppClientInfo {
 
 /// Reads typed configuration values from an Info.plist dictionary.
 /// Pure and nonisolated — injectable for tests; never reads Bundle.main directly.
-nonisolated func readConfiguration(from info: [String: Any]?) -> (
+nonisolated func readConfiguration(from info: [String: Any]?, apiModeOverride: String?) -> (
     apiMode: APIMode,
     sentryDSN: String?,
     appEnvironment: String,
@@ -107,7 +107,7 @@ nonisolated func readConfiguration(from info: [String: Any]?) -> (
     return (
         apiMode: resolveAPIMode(
             infoValue: string("API_MODE"),
-            override: UserDefaults.standard.string(forKey: "apiModeOverride"),
+            override: apiModeOverride,
             environment: string("APP_ENVIRONMENT") ?? "production"
         ),
         sentryDSN: rawDSN.isEmpty ? nil : rawDSN,
@@ -124,7 +124,10 @@ nonisolated func readConfiguration(from info: [String: Any]?) -> (
 struct AppConfiguration {
     // nonisolated so cacheDuration and logFlushInterval (called from Task.detached) can
     // access it without crossing an actor boundary.
-    nonisolated private static let config = readConfiguration(from: Bundle.main.infoDictionary)
+    nonisolated private static let config = readConfiguration(
+        from: Bundle.main.infoDictionary,
+        apiModeOverride: UserDefaults.standard.string(forKey: "apiModeOverride")
+    )
 
     // MARK: - URL Validation
 

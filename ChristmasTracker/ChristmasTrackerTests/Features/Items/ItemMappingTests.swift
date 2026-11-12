@@ -85,6 +85,51 @@ struct ItemMappingTests {
         #expect(item.totalQuantityPurchased == nil)
     }
 
+    // MARK: - Gift-activity quantities (P24)
+
+    @Test("quantityPurchased and quantityRemaining map one to one when the server sends them")
+    func quantitiesPresentMap() throws {
+        let item = try makeSUT(ItemFixtures.wireItem(
+            quantity: 5, status: .partial, updatedAt: ItemFixtures.updatedDate,
+            quantityPurchased: 2, quantityRemaining: 3
+        ))
+        #expect(item.quantityPurchased == 2)
+        #expect(item.quantityRemaining == 3)
+    }
+
+    @Test("Absent quantities stay nil (unknown), never zero, and are not computed from the requested quantity")
+    func quantitiesAbsentStayNil() throws {
+        let item = try makeSUT(ItemFixtures.wireItem(quantity: 5, status: .available, updatedAt: nil))
+        #expect(item.quantityPurchased == nil)
+        #expect(item.quantityRemaining == nil)
+    }
+
+    @Test("Zero quantities are kept as zero, distinct from absent")
+    func zeroQuantitiesStayZero() throws {
+        let item = try makeSUT(ItemFixtures.wireItem(
+            quantity: 2, status: .purchased, updatedAt: ItemFixtures.updatedDate,
+            quantityPurchased: 2, quantityRemaining: 0
+        ))
+        #expect(item.quantityRemaining == 0)
+        let fresh = try makeSUT(ItemFixtures.wireItem(
+            quantity: 2, updatedAt: ItemFixtures.updatedDate, quantityPurchased: 0, quantityRemaining: 2
+        ))
+        #expect(fresh.quantityPurchased == 0)
+    }
+
+    @Test("The detail mapping inherits both quantities from value1, present and absent")
+    func detailInheritsQuantities() throws {
+        let present = try makeDetail(
+            ItemFixtures.wireItem(quantity: 4, quantityPurchased: 1, quantityRemaining: 3),
+            purchases: [], totalQuantityPurchased: 1
+        )
+        #expect(present.quantityPurchased == 1)
+        #expect(present.quantityRemaining == 3)
+        let absent = try makeDetail(ItemFixtures.wireItem(quantity: 4))
+        #expect(absent.quantityPurchased == nil)
+        #expect(absent.quantityRemaining == nil)
+    }
+
     // MARK: - Privacy scenarios
 
     @Test("Owner: real status, updatedAt and an off-list item the owner may see all map")
