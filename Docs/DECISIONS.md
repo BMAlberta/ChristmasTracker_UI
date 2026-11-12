@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 32 (2026-11-11)
+**Revision:** 33 (2026-11-11)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,10 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 33
+
+- **S14 (new)** [B W I]: a purchaser can delete their own purchase; the item status, the counts and the buyer's spend follow.
 
 ### Changes in revision 32
 
@@ -315,6 +319,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | S11 | Money amounts in requests carry at most two decimal places; otherwise 400 INVALID_PRICE. Applies to `totalCost`, `expectedUnitPrice`, `totalBudget`, and `maxSpend`. The internal `toCents` rounding is unchanged. | B, W, I |
 | S12 | The budget confirmation token (S6) is also bound to the buyer's recorded spend for the list's year at the time of the warning, both the amount spent on that recipient and the total, so a valid token only confirms the exact purchase against the exact spend it was shown for. Once another purchase changes either figure, the old token is ignored and the client receives a fresh `confirmation_required` response with a new token. | B, W, I |
 | S13 | A purchase never changes the status of an item that is `WRAPPED` or `GIFTED`. The purchase and the `quantityPurchased` and `quantityRemaining` counts (P24) are still recorded; only items that are `AVAILABLE`, `PARTIAL` or `PURCHASED` have their status recomputed from the purchases. | B, W, I |
+| S14 | A purchaser can delete their own purchase with `DELETE /purchases/{id}`. Anyone else gets 404 `PURCHASE_NOT_FOUND`, identical to a nonexistent id (P11). The core fields stay immutable (PRD 5.2): to correct a purchase, delete it and record a new one. Deleting removes the purchase and its shipping data, recomputes the item status from the remaining purchases (an item that is `WRAPPED` or `GIFTED` keeps its status, S13), and lowers the buyer's recorded spend, so `quantityPurchased`, `quantityRemaining` (P24) and the budget checks (S6, S12) follow. It works whether or not the purchaser can still see the item (for example after leaving the list or after the recipient removed the item). An audit event `PURCHASE_DELETED` records the ids, the quantity and the amount in cents. The response is the deleted purchase, as `GET /purchases/{id}` returns it; clients refetch the item as they do after creating a purchase. | B, W, I |
 
 ## 7. Statistics and purchase history
 

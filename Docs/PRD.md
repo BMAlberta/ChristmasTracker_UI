@@ -388,7 +388,7 @@ Amended in v2.1: P12
   - Can overlap in time (optimistic concurrency)
   - Can exceed requested quantity
   - Can be at different prices
-  - Are immutable financial records
+  - Have immutable core fields; the purchaser can delete a purchase (S14)
 
 ### 5.2 Purchase Attributes
 
@@ -412,9 +412,10 @@ Each purchase records:
 
 **Immutability:**
 - Core fields (quantity, total_cost, item_id, recipient_id) are **immutable**
+- The purchaser can delete their own purchase (S14); to correct a core field, delete the purchase and record a new one
 - Metadata fields (notes, tracking, shipping status) can be updated
 
-Amended in v2.1: S1, S2, S3, S11
+Amended in v2.1: S1, S2, S3, S11, S14
 
 ### 5.3 Shipping Status Tracking
 

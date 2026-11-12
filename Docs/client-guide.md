@@ -666,8 +666,20 @@ The token is ignored as soon as another purchase changes the buyer's spend. A re
 
 **Quantity and item status (P24).** `POST /items/{itemId}/purchases` accepts any `quantity` of at least 1. It does not compare the quantity with the item's remaining quantity and does not check the item status: a PARTIAL or PURCHASED item can still receive purchases, including from someone who already bought part of it. After each purchase the server recomputes the item status from the sum of all purchase quantities (0 is `AVAILABLE`, below `quantityRequested` is `PARTIAL`, `quantityRequested` or more is `PURCHASED`). Clients use `quantityRemaining` (see §7.5) to cap the quantity in the purchase form or to warn before an over-purchase.
 
-**Purchases on WRAPPED and GIFTED items (S13).** A purchase on a `WRAPPED` or `GIFTED` item is recorded and counted in `quantityPurchased` and `quantityRemaining`, but it never changes that status. The status of `AVAILABLE`, `PARTIAL` and `PURCHASED` items is recomputed from the purchases as described above.  
-Source: `__tests__/integration/purchase-budget.test.ts`, `__tests__/integration/budget-token-spend-binding.test.ts`, `src/utils/budgetConfirmationToken.ts`, `src/services/purchase.service.ts` (`createPurchase`, `checkBudget`)
+**Purchases on WRAPPED and GIFTED items (S13).** A purchase on a `WRAPPED` or `GIFTED` item is recorded and counted in `quantityPurchased` and `quantityRemaining`, but it never changes that status. The status of `AVAILABLE`, `PARTIAL` and `PURCHASED` items is recomputed from the purchases as described above.
+
+**Deleting a purchase (S14).** `DELETE /tracker/v2/purchases/<purchaseId>` with a bearer token removes a purchase. Only the purchaser can do it. Anyone else (another member, the list owner or co-owner, an admin-role user, a stranger) and any id that does not exist get the same `404 PURCHASE_NOT_FOUND`, so a client cannot tell them apart. A second delete of the same id is also a 404. A malformed id is a 400. An archived list does not block the delete. It also works when the purchaser can no longer see the item, for example after leaving the list or being removed from it, or after the recipient removed the item.
+
+The response is `200` with the deleted purchase, in the same shape `GET /purchases/{id}` returns. It does not include the item. Refetch the item (`GET /items/{id}` or the list's items) to show the new status and counts, as you do after creating a purchase; the refetch can be a 404 if the item is no longer visible to the user.
+
+Effects:
+- **Status.** An `AVAILABLE`, `PARTIAL` or `PURCHASED` item has its status recomputed from the remaining purchases (deleting the only purchase of a `PARTIAL` item gives `AVAILABLE`; deleting one of two purchases of a `PURCHASED` item can give `PARTIAL`). A `WRAPPED` or `GIFTED` item keeps its status (S13).
+- **Counts.** `quantityPurchased` goes down and `quantityRemaining` goes up (§7.5).
+- **Spend.** The purchase no longer counts toward the buyer's recorded spend, so the budget check on the next purchase (S6, S12) starts from the lower figure. A budget confirmation token issued before the delete is ignored (the spend it was bound to has changed), and the client gets a fresh `confirmation_required` response if the purchase is still over budget.
+- **Shipping.** The purchase's shipping status and tracking number are removed with it.
+
+The core fields of a purchase (quantity, total cost, item) stay immutable. To correct a purchase's quantity or cost, delete it and record a new one with `POST /items/{itemId}/purchases`; the new purchase runs the budget confirmation again.  
+Source: `__tests__/integration/purchase-budget.test.ts`, `__tests__/integration/budget-token-spend-binding.test.ts`, `__tests__/integration/purchase-delete.test.ts`, `src/utils/budgetConfirmationToken.ts`, `src/services/purchase.service.ts` (`createPurchase`, `checkBudget`, `deletePurchase`)
 
 ### 7.7 Shipping Update
 
