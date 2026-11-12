@@ -60,8 +60,11 @@ The after-commit runs for this commit are recorded in the Story B report (a repo
 - Rejections: none. Stuck-detector log: no triggers (the implementer's first test run failed only to compile because of the missing `import Testing`; fixed, then green).
 - Reviewer note carried forward: `PendingConfirmation` is Equatable and holds the token, so any future `String(describing:)` or log of the flow state would include it. No such use exists; Stories B and C must not log or describe the state.
 
+## Addendum (written with the Story B commit, per Brian's decisions)
+After Story A was committed, Brian decided: (1) the name `RecordPurchaseError` is approved and never renamed (package I4b removes the legacy `PurchaseError`); (2) the cost parser accepts ".50" (0.50) and "12." (12) and the comma variants for a comma-decimal locale, while still rejecting three decimals, grouping separators, multiple separators, signs, exponents, symbols and the lone separator, and zero; each case is now pinned by a test (the rejection of ".50" and "12." recorded in deviation 4 and in "Not done or partial" below is SUPERSEDED by this decision; the change and its 16 tests are in the Story B commit, see Docs/reports/I4a-3-repository-and-service.md); (3) the extra state `expired` and the event `dismissError` are accepted; (4) every type that stores a confirmation token (PendingConfirmation, the flow state, event, effect and flow, and PurchaseOutcome) redacts it from `String(describing:)`, `String(reflecting:)`, `dump` and interpolation (the reviewer's note about `PendingConfirmation` holding the token is resolved in the Story B commit, with 14 tests). The after-commit `scripts/verify.sh` for the Story A commit (05be1e0) is recorded in the Story B report: 2209 app tests, 212 package tests, `verify: OK`.
+
 ## Not done or partial
-- No view, repository, service, composition, or real-mode check exists yet (Stories B to D).
+- No view, repository, service, composition, or real-mode check exists yet (Stories B to D). (Repository, service and composition were added in Story B.)
 - No test pins ".50" or "12." either way beyond the documented rejection; if Brian wants ".50" accepted, it is a one-line parser change.
 - Name `RecordPurchaseError` awaits Brian's confirmation (deviation 1).
 - `scripts/verify.sh` after the commit is not in this report (see above).

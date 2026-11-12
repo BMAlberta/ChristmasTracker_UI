@@ -98,7 +98,8 @@ nonisolated struct RecordPurchaseFormState: Equatable, Sendable {
 
     /// Parses the typed total cost. The text is trimmed and may hold only ASCII digits and the
     /// locale's decimal separator: grouping separators, signs, exponents, currency symbols and
-    /// any other character are rejected. At most two fraction digits; the value must be above 0
+    /// any other character are rejected. The digits before or after the separator may be left out
+    /// (".50", "12."), but not both (the lone separator). At most two fraction digits; the value must be above 0
     /// and at most 999999.99. The result is exact (no Double on the way).
     static func parseTotalCost(_ text: String, locale: Locale) -> Decimal? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -108,9 +109,11 @@ nonisolated struct RecordPurchaseFormState: Equatable, Sendable {
         let whole = parts[0]
         let fraction = parts.count == 2 ? parts[1] : ""
         let isDigits: (Substring) -> Bool = { $0.allSatisfy { ("0"..."9").contains($0) } }
-        guard !whole.isEmpty, isDigits(whole), isDigits(fraction) else { return nil }
-        guard fraction.count <= 2, parts.count == 1 || !fraction.isEmpty else { return nil }
-        let canonical = fraction.isEmpty ? String(whole) : "\(whole).\(fraction)"
+        guard isDigits(whole), isDigits(fraction), fraction.count <= 2 else { return nil }
+        // ".50" and "12." are accepted; an empty text and the lone separator are not.
+        guard !whole.isEmpty || !fraction.isEmpty else { return nil }
+        let integerPart = whole.isEmpty ? "0" : String(whole)
+        let canonical = fraction.isEmpty ? integerPart : "\(integerPart).\(fraction)"
         guard let value = Decimal(string: canonical, locale: Locale(identifier: "en_US_POSIX")),
               let maximum = maximumCost,
               value > 0, value <= maximum else { return nil }

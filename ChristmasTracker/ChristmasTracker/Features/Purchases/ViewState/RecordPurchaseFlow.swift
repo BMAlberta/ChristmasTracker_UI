@@ -47,6 +47,118 @@ nonisolated enum RecordPurchaseFlowEffect: Equatable, Sendable {
     case close
 }
 
+// MARK: - Token redaction
+//
+// Every type below stores a confirmation token. Descriptions, debug descriptions and Mirror
+// children print `RedactedToken.placeholder` in its place; Equatable still compares the real
+// tokens and the send effect still carries the real token.
+
+nonisolated extension PendingConfirmation: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    var description: String {
+        "PendingConfirmation(warnings: \(warnings.count), token: \(RedactedToken.placeholder), "
+            + "issuedAt: \(issuedAt), notice: \(notice == nil ? "none" : "present"))"
+    }
+
+    var debugDescription: String { description }
+
+    var customMirror: Mirror {
+        Mirror(
+            self,
+            children: [
+                "warnings": warnings,
+                "token": RedactedToken.placeholder,
+                "issuedAt": issuedAt,
+                "notice": notice as Any
+            ],
+            displayStyle: .struct
+        )
+    }
+}
+
+nonisolated extension RecordPurchaseFlowState: CustomStringConvertible, CustomDebugStringConvertible {
+    var description: String {
+        switch self {
+        case .editing: return "editing"
+        case .submitting(let isConfirmed): return "submitting(isConfirmed: \(isConfirmed))"
+        case .awaitingConfirmation(let pending): return "awaitingConfirmation(\(pending))"
+        case .expired: return "expired"
+        case .recorded: return "recorded"
+        case .failed: return "failed"
+        }
+    }
+
+    var debugDescription: String { description }
+}
+
+nonisolated extension RecordPurchaseFlowEvent: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    var description: String {
+        switch self {
+        case .submit: return "submit"
+        case .serverCreated: return "serverCreated"
+        case .serverConfirmationRequired(let warnings, _):
+            return "serverConfirmationRequired(warnings: \(warnings.count), token: \(RedactedToken.placeholder))"
+        case .serverError: return "serverError"
+        case .confirm: return "confirm"
+        case .cancel: return "cancel"
+        case .editDetails: return "editDetails"
+        case .clockTick: return "clockTick"
+        case .retry: return "retry"
+        case .dismissError: return "dismissError"
+        }
+    }
+
+    var debugDescription: String { description }
+
+    var customMirror: Mirror {
+        switch self {
+        case .serverConfirmationRequired(let warnings, _):
+            return Mirror(
+                self,
+                children: ["serverConfirmationRequired": warnings, "token": RedactedToken.placeholder],
+                displayStyle: .enum
+            )
+        default:
+            return Mirror(self, children: [description: ()], displayStyle: .enum)
+        }
+    }
+}
+
+nonisolated extension RecordPurchaseFlowEffect: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    var description: String {
+        switch self {
+        case .send(let token):
+            return "send(confirmationToken: \(token == nil ? "nil" : RedactedToken.placeholder))"
+        case .close:
+            return "close"
+        }
+    }
+
+    var debugDescription: String { description }
+
+    var customMirror: Mirror {
+        switch self {
+        case .send(let token):
+            return Mirror(
+                self,
+                children: ["send": token == nil ? "nil" : RedactedToken.placeholder],
+                displayStyle: .enum
+            )
+        case .close:
+            return Mirror(self, children: ["close": ()], displayStyle: .enum)
+        }
+    }
+}
+
+nonisolated extension RecordPurchaseFlow: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    var description: String { "RecordPurchaseFlow(state: \(state))" }
+
+    var debugDescription: String { description }
+
+    var customMirror: Mirror {
+        Mirror(self, children: ["state": state], displayStyle: .struct)
+    }
+}
+
 nonisolated struct RecordPurchaseFlow: Sendable {
     /// 4 minutes 30 seconds. The server's confirmation limit is 5 minutes; the client expires
     /// the confirmation earlier so a stale token is never sent. This is the only place it lives.
