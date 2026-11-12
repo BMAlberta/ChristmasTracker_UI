@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 28 (2026-11-10)
+**Revision:** 32 (2026-11-11)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,23 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 32
+
+- **S13 (new)** [B W I]: a purchase never changes the status of a WRAPPED or GIFTED item; the purchase and the quantity counts are still recorded.
+
+### Changes in revision 31
+
+- **P24 (new)** [B W I]: Item carries quantityPurchased and quantityRemaining, returned only to callers who can see gift activity.
+- **S12 (new)** [B W I]: the budget confirmation token is also bound to the buyer's spend at the time of the warning, so a repeat purchase gets a fresh warning.
+
+### Changes in revision 30
+
+- **L17 (new)** [B W I]: a child can be deleted when none of their lists is ACTIVE or DRAFT; archived lists stay visible with the child's name.
+
+### Changes in revision 29
+
+- **L16 (new)** [B W I]: archiving a list closes list management only; items, off-list items and purchases are still accepted on an archived list.
 
 ### Changes in revision 28
 
@@ -250,6 +267,8 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | L13 | The membership route rejects the recipient, the owner, and the co-owner as members. | B |
 | L14 (new) | Co-owners may delete a list (same as owners). `deleteList` accepts `ownerId OR coOwnerId`. | B |
 | L15 | `DELETE /lists/{id}/co-owner` clears the list's co-owner and returns the updated `ListDetail`. It applies the same rules as clearing the co-owner through `PATCH /lists/{id}` with `coOwnerEmail: null` (it delegates to it): owner only (L12), 422 `CANNOT_EDIT_ARCHIVED_LIST` on an archived list, the P14 404 for a hidden list, and it succeeds without a change when there is no co-owner. `PATCH` with `coOwnerEmail: null` keeps working; clients whose generated code cannot send an explicit null use the `DELETE` operation. | B, W, I |
+| L16 | Archiving a list closes list management only: `PATCH /lists/{id}` returns 422 `CANNOT_EDIT_ARCHIVED_LIST` (including un-archiving) and the management capability flags are `false`. Items, off-list items and purchases are still accepted on an archived list, and `canCreateItem`, `canPurchase`, `canAddOffList` and `canSeeGiftActivity` do not depend on the list status, so a gift recorded late (for example a forgotten purchase) can still be entered. Clients drive the UI from the flags and add no archived-specific rule. | B, W, I |
+| L17 | `DELETE /users/me/children/{id}` succeeds when none of the child's lists is ACTIVE or DRAFT (a child with no lists, or only ARCHIVED lists); otherwise it returns 422 `CANNOT_DELETE_RESOURCE`. Deleting removes the parent link and deactivates the child; the child's ARCHIVED lists stay readable by their owner, co-owner and members, with the child's display name, the child no longer appears in `GET /users/me/children`, and no new list can be created for the child. Clients that want to remove a child with active lists archive each list first (`DELETE /lists/{id}`) after asking the user to confirm. | B, W, I |
 
 ## 5. Privacy
 
@@ -277,6 +296,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | P21 (new) | Item type is derived from who adds it: owners and co-owners create normal items; members create off-list items. `POST /lists/:id/items` carries no `offList` flag; the server derives the type from the caller's role and ignores an `offList` field if sent. | B |
 | P22 | `ListSummary` and `ListDetail` carry the required boolean `canSeeMembers`: `true` for the owner, the co-owner and MEMBER-role members (the callers who may call `GET /lists/{id}/members`), `false` for VIEWER-role members and PUBLIC non-members. `ListDetail.members` is returned only when `canSeeMembers` is `true` and is absent otherwise; `memberCount` is returned to everyone (C14). | B, W, I |
 | P23 | `ListSummary` and `ListDetail` carry five required booleans that say what the server accepts for the caller on this list now: `canEditList` (`PATCH /lists/{id}`), `canDeleteList` (`DELETE /lists/{id}`, L14) and `canManageMembers` (adding members and removing other members, L8), each `true` for the owner and the co-owner (blind or not) while the list is not ARCHIVED; `canSetCoOwner` (`coOwnerEmail`, L12), `true` for the owner only while the list is not ARCHIVED; and `canLeaveList` (removing yourself, L9), `true` for an ACTIVE MEMBER-role or VIEWER-role member on a list of any status and `false` for the owner, the co-owner and every non-member. On an ARCHIVED list `canEditList` and `canSetCoOwner` are `false` because the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST`; `canDeleteList` and `canManageMembers` are also `false` so that clients treat archived lists as read-only, although the server still accepts those calls. The server enforces every action regardless of the flags. | B, W, I |
+| P24 | `Item` carries the integers `quantityPurchased` (the sum of `quantity` over all purchases of the item) and `quantityRemaining` (`max(0, quantityRequested - quantityPurchased)`) on every response that returns an `Item` or an `ItemDetail`. They are present only when the caller has `canSeeGiftActivity` and are omitted otherwise (P3). The server does not reject a purchase that exceeds the remaining quantity or a purchase on a PURCHASED item; clients use the counts to cap or warn. | B, W, I |
 
 ## 6. Purchases, shipping, and budgets
 
@@ -293,6 +313,8 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | S9 (rev 6) | Off-list purchases count toward the buyer's budget. | B |
 | S10 | Budgets are personal. A user can read and write only their own budgets. Members and owners never read another user's budget, and a user's budget counts only their own purchases (T3, S9). | B |
 | S11 | Money amounts in requests carry at most two decimal places; otherwise 400 INVALID_PRICE. Applies to `totalCost`, `expectedUnitPrice`, `totalBudget`, and `maxSpend`. The internal `toCents` rounding is unchanged. | B, W, I |
+| S12 | The budget confirmation token (S6) is also bound to the buyer's recorded spend for the list's year at the time of the warning, both the amount spent on that recipient and the total, so a valid token only confirms the exact purchase against the exact spend it was shown for. Once another purchase changes either figure, the old token is ignored and the client receives a fresh `confirmation_required` response with a new token. | B, W, I |
+| S13 | A purchase never changes the status of an item that is `WRAPPED` or `GIFTED`. The purchase and the `quantityPurchased` and `quantityRemaining` counts (P24) are still recorded; only items that are `AVAILABLE`, `PARTIAL` or `PURCHASED` have their status recomputed from the purchases. | B, W, I |
 
 ## 7. Statistics and purchase history
 

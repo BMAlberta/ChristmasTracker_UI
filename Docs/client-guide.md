@@ -413,6 +413,7 @@ The same capability flags appear on both `ListSummary` and `ListDetail`.
 
 **C14 — memberCount vs members:** `ListSummary` (returned by `GET /lists`) carries `memberCount: number` — the count of ACTIVE memberships — not a `members` array. `ListDetail` (returned by `GET /lists/{id}` and `POST /lists`) carries the full `members` array AND `memberCount`. Clients that previously accessed `ListSummary.members` must switch to `GET /lists/{id}` to retrieve the full member list.  
 **P22 — members only when `canSeeMembers` is true:** `ListDetail.members` is present only when `canSeeMembers` is `true` and is absent otherwise (the key is not sent, and it is never an empty array). Use `memberCount` when `canSeeMembers` is `false`, and call `GET /lists/{id}/members` only when it is `true` (the endpoint returns 403 otherwise).  
+**Roster (L13):** `ListDetail.members` lists only MEMBER-role and VIEWER-role memberships, with status ACTIVE or INVITED (a pending invitation). The owner, the co-owner and the recipient are never in it: read them from `owner`, `coOwner` (`null` when there is none) and `recipient`. `memberCount` counts only ACTIVE members and viewers. Show the roster as the owner, the co-owner (if any) and then `members`.  
 
 **List management rights (P23):**
 
@@ -426,7 +427,7 @@ The same capability flags appear on both `ListSummary` and `ListDetail`.
 | Clear the co-owner (L15) | `DELETE /lists/{id}/co-owner` | `canSetCoOwner` | Owner only | `false`; the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST` |
 | Leave the list | `DELETE /lists/{id}/members/{your userId}` | `canLeaveList` | ACTIVE MEMBER-role or VIEWER-role member | unchanged; allowed on a list of any status |
 
-Archived lists are read-only in the app. The server refuses edits to an archived list with 422, but still accepts delete and member changes, so the flags are deliberately stricter than the server there. Deleting archives, so a deleted list is an ARCHIVED list. The server enforces every action regardless of the flags.  
+Archiving closes list management in the app (see §6.6). The server refuses edits to an archived list with 422, but still accepts delete and member changes, so the flags are deliberately stricter than the server there. Deleting archives, so a deleted list is an ARCHIVED list. The server enforces every action regardless of the flags.  
 `POST /lists/{id}/members` returns only the new `MemberSummary`, and `DELETE /lists/{id}/members/{userId}` and `DELETE /lists/{id}` return only a message, so refetch `GET /lists/{id}` or adjust `memberCount` yourself after these calls.  
 Source: `src/utils/privacy.ts`, `src/types/responses.ts:71-104`, `src/services/list.service.ts`, `__tests__/integration/contract-c11-c14.test.ts`
 
@@ -490,6 +491,11 @@ The server distinguishes between "you cannot do that on something you can see" (
 **Client guidance:** Treat 404 as "not found or not yours"; show a generic "not found" state. Treat 403 as "you cannot do that here"; show an appropriate permission message.  
 Source: `Docs/privacy-matrix.md`, `__tests__/integration/privacy.test.ts`
 
+### 6.6 Archived Lists (L16)
+
+`GET /lists/{id}` returns 200 with the full `ListDetail` and `status: ARCHIVED` for an archived list (never 404) to anyone who may view the list. Archiving closes list management, not gift tracking: the management flags (`canEditList`, `canDeleteList`, `canManageMembers`, `canSetCoOwner`) are `false`, `canLeaveList` stays `true` for members and viewers, and `PATCH /lists/{id}` returns 422 `CANNOT_EDIT_ARCHIVED_LIST` (including un-archiving). Items, off-list items and purchases are still accepted, and `canCreateItem`, `canPurchase`, `canAddOffList` and `canSeeGiftActivity` do not depend on the list status, so a member can still record a purchase on an archived list. `members` follows `canSeeMembers`, and the list stays in `GET /lists` unless filtered with `status`. Clients drive the UI from the flags and add no archived-specific rule of their own.  
+Source: `src/services/list.service.ts`, `src/utils/privacy.ts`, `src/services/item.service.ts`, `src/services/purchase.service.ts`
+
 ---
 
 ## 7. Key Flows with Request and Response Examples
@@ -532,6 +538,7 @@ Content-Type: application/json
 Valid `role` values: `"member"` (can purchase, see gift activity) · `"viewer"` (read-only, no gift activity).
 
 Response (201): `MemberSummary` with `status: "ACTIVE"` — membership is granted immediately; no invitation email is sent. If the email is not found, `404 MEMBER_EMAIL_NOT_FOUND`.  
+If the user already has an ACTIVE membership on the list (as a member or a viewer), `409 MEMBERSHIP_ALREADY_EXISTS` (5004); the role is not changed. A user whose membership is INVITED, REMOVED or EXPIRED is not a duplicate: the call re-activates that membership with the requested role and returns 201. The owner, the co-owner and the recipient cannot be added (403 `FORBIDDEN`).  
 Source: `src/routes/list-members.routes.ts`, `src/types/schemas.ts:102`, `__tests__/integration/members.test.ts`
 
 ### 7.4 Set Co-Owner by Email
@@ -581,6 +588,14 @@ Content-Type: application/json
 
 Response (201): `ItemResponse` with server-derived `offList` flag (`true` when caller is a member adding to someone else's list).  
 Source: `src/routes/list-items.routes.ts:99-118`, `src/services/item.service.ts` (P21)
+
+**Purchase counts (P24).** Every response that returns an `Item` (the create, list, read, edit and status endpoints) carries two optional integers:
+
+- `quantityPurchased`: the sum of `quantity` over all purchases of the item, whoever made them.
+- `quantityRemaining`: `max(0, quantityRequested - quantityPurchased)`. It is clamped at 0, so an over-purchased item or an item whose `quantityRequested` was lowered below the purchased count shows `0`, never a negative number.
+
+Both are present only when the caller can see gift activity (`canSeeGiftActivity`, P3). For a blind owner or co-owner, a VIEWER-role member or a PUBLIC non-member the keys are absent (not `null`, not `0`), the same as `updatedAt` and the real `status`. A new item returns `0` and `quantityRequested`.  
+Source: `src/services/item.service.ts` (`getPurchasedQuantities`, `formatItemResponseWithPrivacy`), `__tests__/integration/item-purchase-counts.test.ts`
 
 ### 7.6 Purchase with Budget Confirmation Flow
 
@@ -645,8 +660,14 @@ Content-Type: application/json
 }
 ```
 
-The token binds user, item, recipient, quantity, and amount in cents and expires after **5 minutes**. Use any one warning's `confirmationToken` if multiple warnings are present.  
-Source: `__tests__/integration/purchase-budget.test.ts`, `src/utils/budgetConfirmationToken.ts:18`
+The token binds user, item, recipient, quantity, amount in cents and the buyer's spend (S12) at the time of the warning: the spend on that recipient (when the buyer has a budget row for that recipient) and the total spend, both for the list's year. It expires after **5 minutes**. Use any one warning's `confirmationToken` if multiple warnings are present.
+
+The token is ignored as soon as another purchase changes the buyer's spend. A repeat purchase of the same item with the same quantity and amount therefore always gets a fresh `confirmation_required` response with a new token and a `currentSpent` that includes the earlier purchase; resubmit with the new token to complete it. An expired, tampered or mismatched token is handled the same way (no 4xx).
+
+**Quantity and item status (P24).** `POST /items/{itemId}/purchases` accepts any `quantity` of at least 1. It does not compare the quantity with the item's remaining quantity and does not check the item status: a PARTIAL or PURCHASED item can still receive purchases, including from someone who already bought part of it. After each purchase the server recomputes the item status from the sum of all purchase quantities (0 is `AVAILABLE`, below `quantityRequested` is `PARTIAL`, `quantityRequested` or more is `PURCHASED`). Clients use `quantityRemaining` (see §7.5) to cap the quantity in the purchase form or to warn before an over-purchase.
+
+**Purchases on WRAPPED and GIFTED items (S13).** A purchase on a `WRAPPED` or `GIFTED` item is recorded and counted in `quantityPurchased` and `quantityRemaining`, but it never changes that status. The status of `AVAILABLE`, `PARTIAL` and `PURCHASED` items is recomputed from the purchases as described above.  
+Source: `__tests__/integration/purchase-budget.test.ts`, `__tests__/integration/budget-token-spend-binding.test.ts`, `src/utils/budgetConfirmationToken.ts`, `src/services/purchase.service.ts` (`createPurchase`, `checkBudget`)
 
 ### 7.7 Shipping Update
 
@@ -795,8 +816,15 @@ Source: `src/routes/user.routes.ts:346-366`
 ```
 DELETE /tracker/v2/users/me/children/<childId>
 ```
-Soft-deletes the child. Returns 404 if the caller is not the child's parent. Returns 422 `CANNOT_DELETE_RESOURCE` if the child has existing lists.  
+Soft-deletes the child. Returns 404 if the caller is not the child's parent. Succeeds when none of the child's lists is `ACTIVE` or `DRAFT` (a child with no lists, or only `ARCHIVED` lists). Returns 422 `CANNOT_DELETE_RESOURCE` otherwise (L17).  
 Response (200): `data: { "message": "Child deleted successfully" }`.  
+
+After deletion:
+- The child no longer appears in `GET /users/me/children`, and no new list can be created for the child (`POST /lists` returns `404 RECIPIENT_NOT_FOUND`).
+- The child's archived lists stay readable, with the child's display name, by the list's owner, co-owner and members.
+- After deletion the child is resolved only through lists they share with the caller (P19): the owner, the co-owner and the members of the child's archived lists still get the child's PersonSummary (so a link from an archived list to the person keeps working), and everyone else, including a former parent for a child who never had a list, gets 404 PERSON_NOT_FOUND.
+
+To remove a child who has active lists: ask the user to confirm, archive each non-archived list with `DELETE /lists/{id}`, then call `DELETE /users/me/children/<childId>`.  
 Source: `src/routes/user.routes.ts:417-433`, `Docs/privacy-matrix.md` (`DELETE /users/me/children/{id}` rows)
 
 **Get user by ID (tiered — P19):**
