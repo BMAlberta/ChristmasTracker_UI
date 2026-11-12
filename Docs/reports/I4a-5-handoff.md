@@ -38,5 +38,41 @@ The verify run for this docs commit itself is reported in the final message of t
 - Rejections: none. Stuck-detector log: no triggers.
 
 ## Not done or partial
-- The fifteen real-mode steps were not run and are a draft (Deviations 1).
+- The fifteen real-mode steps were not run and are a draft (Deviations 1). SUPERSEDED by the addendum below: the steps now follow Story D word for word; they are still NOT PERFORMED.
 - No simulator screenshot of the new screen exists anywhere in the package.
+
+## Addendum: use the specified real-mode steps (commit "I4a: use the specified real-mode steps in the handoff")
+Docs only. Files changed: `Docs/handoffs/2026-11-12-ios-to-brian-i4a.md` and this report. Nothing else.
+
+What changed in the handoff:
+- "Brian's real-mode check": the draft NOTE and the draft list were replaced by the fifteen steps of Story D of the package prompt (prompts/mobile-ui/I4a-record-purchase.md), word for word, numbered 1 to 15 (the "(n)" markers became "n."; the step text, including its trailing semicolons, is unchanged). The intro sentence about the local backend and the seeded users and the scope reminder are kept.
+- "Which checks were run": step references updated to the new list; all fifteen NOT PERFORMED.
+- "Open risks" and "What the API team must do": the delete-purchase statements now say that the API chat has since decided S14 (DELETE /purchases/{id}, operationId deletePurchase, purchaser only, a hard delete that returns the deleted purchase with its item reference; PATCH /purchases/{id} accepts only notes and trackingNumber, a notes clear is an empty string; shipping through PATCH /purchases/{id}/shipping), the contract commit is not named yet and I4b will sync at it.
+- "What changed": one line noting that the section was corrected after the session was cleared.
+- Two consequential fixes outside the listed places, because they would otherwise contradict the new text: the L16 bullet in "Contract issues found" pointed at real-mode step 13 and now says step 11 (archived lists in the new list); the PROGRAM.md section 9 line said "no delete-purchase operation in the spec" and now says S14 decided, commit not named, I4b syncs at it.
+
+Verify before the change (working tree clean, HEAD 0817892), run from the repo root, summary lines:
+```
+=== verify: derived spec ===
+=== verify: build ===
+=== verify: configuration check ===
+=== verify: unit tests ===
+--- xcodebuild exit status: 0 ---
+--- tests: 2523 passed, 0 failed, 0 skipped ---
+=== verify: TrackerAPI package tests ===
+􁁛  Test run with 212 tests in 16 suites passed after 0.019 seconds.
+=== verify: TrackerAPI import audit ===
+=== verify: release script tests ===
+=== test-release.sh: 92 passed, 0 failed ===
+=== verify: destination script tests ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: prohibited frameworks in changed lines ===
+=== verify: OK ===
+```
+`swift test --package-path "LocalPackages/TrackerAPI"` before the change:
+```
+􁁛  Test run with 212 tests in 16 suites passed after 0.018 seconds.
+```
+Test arithmetic: no test added, changed or deleted: app 2523, package 212, release-script 92, destination-script 17.
+
+Verify after the commit: a report cannot contain the result of the commit that adds it; the after-commit run is in the final message of this session.
