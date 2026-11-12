@@ -63,10 +63,23 @@ struct PurchaseMappingTests {
         #expect(purchase.deliveredAt == nil)
     }
 
+    @Test("The item reference (id, name, list id) is always set from the generated purchase item")
+    func itemReferenceMaps() throws {
+        let wire = PurchaseFixtures.wirePurchase(itemId: "item-9", itemName: "Fake Scarf", listId: "list-4")
+        let purchase = try mapRecordedPurchase(wire)
+        #expect(purchase.item == PurchaseItemReference(id: "item-9", name: "Fake Scarf", listId: "list-4"))
+    }
+
+    @Test("A purchase built without an item reference defaults it to nil")
+    func itemReferenceDefaultsToNil() {
+        #expect(PurchaseFixtures.recordedPurchase().item == nil)
+        #expect(PurchaseFixtures.recordedPurchase(item: PurchaseFixtures.fakeItemReference).item != nil)
+    }
+
     @Test("Every generated shipping status maps to the domain status of the same meaning",
           arguments: Components.Schemas.ShippingStatus.allCases)
     func shippingStatusMapsOneToOne(wire: Components.Schemas.ShippingStatus) throws {
-        let expected: RecordedShippingStatus
+        let expected: PurchaseShippingStatus
         switch wire {
         case .notTracked: expected = .notTracked
         case .notShipped: expected = .notShipped

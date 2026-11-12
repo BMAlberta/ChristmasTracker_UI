@@ -17,7 +17,7 @@ private nonisolated func purchaseMoney(_ value: Double) throws -> Decimal {
     return converted
 }
 
-private nonisolated func mapRecordedShippingStatus(_ status: Components.Schemas.ShippingStatus) -> RecordedShippingStatus {
+private nonisolated func mapRecordedShippingStatus(_ status: Components.Schemas.ShippingStatus) -> PurchaseShippingStatus {
     switch status {
     case .notTracked: return .notTracked
     case .notShipped: return .notShipped
@@ -41,6 +41,7 @@ nonisolated func mapRecordedPurchase(_ purchase: Components.Schemas.Purchase) th
         deliveredAt: purchase.deliveredAt,
         purchaser: mapListItemPerson(purchase.purchaser),
         recipient: mapListItemPerson(purchase.recipient),
+        item: PurchaseItemReference(id: purchase.item.id, name: purchase.item.name, listId: purchase.item.listId),
         purchasedAt: purchase.purchasedAt,
         createdAt: purchase.createdAt,
         updatedAt: purchase.updatedAt

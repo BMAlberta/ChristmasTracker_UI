@@ -61,6 +61,9 @@ nonisolated enum PurchaseFixtures {
         .rateLimited(retryAfter: 30), .sessionEnded, .network, .invalidResponse, .server
     ]
 
+    /// Every RecordPurchaseError case including the I4b `unconfirmed`.
+    static let allErrorsWithUnconfirmed: [RecordPurchaseError] = allErrors + [.unconfirmed]
+
     // MARK: - Domain
 
     static func person(id: String, name: String) -> ListItemPerson {
@@ -76,20 +79,26 @@ nonisolated enum PurchaseFixtures {
         notes: String? = nil,
         confirmationNumber: String? = nil,
         trackingNumber: String? = nil,
-        shippingStatus: RecordedShippingStatus = .notTracked,
+        shippingStatus: PurchaseShippingStatus = .notTracked,
         shippedAt: Date? = nil,
-        deliveredAt: Date? = nil
+        deliveredAt: Date? = nil,
+        purchaser: ListItemPerson? = nil,
+        item: PurchaseItemReference? = nil,
+        purchasedAt: Date? = nil
     ) -> RecordedPurchase {
         RecordedPurchase(
             id: id, itemId: itemId, quantity: quantity, totalCost: totalCost,
             storeName: storeName, notes: notes, confirmationNumber: confirmationNumber,
             trackingNumber: trackingNumber, shippingStatus: shippingStatus,
             shippedAt: shippedAt, deliveredAt: deliveredAt,
-            purchaser: person(id: "user-3", name: "Sam Buyer"),
+            purchaser: purchaser ?? person(id: "user-3", name: "Sam Buyer"),
             recipient: person(id: "user-1", name: "Pat Recipient"),
-            purchasedAt: purchasedDate, createdAt: createdDate, updatedAt: updatedDate
+            item: item,
+            purchasedAt: purchasedAt ?? purchasedDate, createdAt: createdDate, updatedAt: updatedDate
         )
     }
+
+    static let fakeItemReference = PurchaseItemReference(id: "item-1", name: "Fake Lamp", listId: "list-1")
 
     static func recipientWarning(
         name: String? = "Pat Recipient",
@@ -149,7 +158,9 @@ nonisolated enum PurchaseFixtures {
         trackingNumber: String? = nil,
         shippingStatus: Components.Schemas.ShippingStatus = .notTracked,
         shippedAt: Date? = nil,
-        deliveredAt: Date? = nil
+        deliveredAt: Date? = nil,
+        itemName: String = "Fake Lamp",
+        listId: String = "list-1"
     ) -> Components.Schemas.Purchase {
         Components.Schemas.Purchase(
             id: id, itemId: itemId, quantity: quantity, totalCost: totalCost,
@@ -158,7 +169,7 @@ nonisolated enum PurchaseFixtures {
             shippedAt: shippedAt, deliveredAt: deliveredAt,
             purchaser: wirePerson(id: "user-3", name: "Sam Buyer"),
             recipient: wirePerson(id: "user-1", name: "Pat Recipient"),
-            item: .init(id: itemId, name: "Fake Lamp", listId: "list-1"),
+            item: .init(id: itemId, name: itemName, listId: listId),
             purchasedAt: purchasedDate, createdAt: createdDate, updatedAt: updatedDate
         )
     }

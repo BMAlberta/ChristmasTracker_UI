@@ -20,6 +20,9 @@ nonisolated enum RecordPurchaseError: Error, LocalizedError, Equatable, Sendable
     case network
     case invalidResponse
     case server
+    /// No HTTP response came back and the request may have reached the server, so the purchase
+    /// may have been recorded.
+    case unconfirmed
 
     /// A plain, user-facing message. Never interpolates a payload, an id or a raw error.
     var userMessage: String {
@@ -47,7 +50,14 @@ nonisolated enum RecordPurchaseError: Error, LocalizedError, Equatable, Sendable
             return "The server sent a response the app couldn't read."
         case .server:
             return "Something went wrong on the server. Please try again later."
+        case .unconfirmed:
+            return "We couldn't confirm whether this purchase was recorded."
         }
+    }
+
+    var failureKind: PurchaseFailureKind {
+        if case .unconfirmed = self { return .unconfirmed }
+        return .definitive
     }
 
     var errorDescription: String? { userMessage }
@@ -61,7 +71,7 @@ nonisolated enum RecordPurchaseError: Error, LocalizedError, Equatable, Sendable
     var isRetryable: Bool {
         switch self {
         case .network, .server, .rateLimited, .invalidResponse: return true
-        case .notFound, .unauthorized, .forbidden, .cannotPurchaseOwnList, .validation, .invalidPrice, .sessionEnded:
+        case .notFound, .unauthorized, .forbidden, .cannotPurchaseOwnList, .validation, .invalidPrice, .sessionEnded, .unconfirmed:
             return false
         }
     }

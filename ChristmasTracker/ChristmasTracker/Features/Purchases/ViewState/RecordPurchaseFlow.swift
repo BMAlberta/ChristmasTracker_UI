@@ -38,6 +38,10 @@ nonisolated enum RecordPurchaseFlowEvent: Equatable, Sendable {
     case clockTick
     case retry
     case dismissError
+    /// After an unconfirmed failure: record again with no token.
+    case recordAgain
+    /// After an unconfirmed failure: close the form and look at the item.
+    case checkItem
 }
 
 nonisolated enum RecordPurchaseFlowEffect: Equatable, Sendable {
@@ -45,6 +49,8 @@ nonisolated enum RecordPurchaseFlowEffect: Equatable, Sendable {
     case send(confirmationToken: String?)
     /// The form closes without recording.
     case close
+    /// The form closes and the caller force-refreshes the item, the items and the list detail.
+    case checkItem
 }
 
 // MARK: - Token redaction
@@ -104,6 +110,8 @@ nonisolated extension RecordPurchaseFlowEvent: CustomStringConvertible, CustomDe
         case .clockTick: return "clockTick"
         case .retry: return "retry"
         case .dismissError: return "dismissError"
+        case .recordAgain: return "recordAgain"
+        case .checkItem: return "checkItem"
         }
     }
 
@@ -130,6 +138,8 @@ nonisolated extension RecordPurchaseFlowEffect: CustomStringConvertible, CustomD
             return "send(confirmationToken: \(token == nil ? "nil" : RedactedToken.placeholder))"
         case .close:
             return "close"
+        case .checkItem:
+            return "checkItem"
         }
     }
 
@@ -145,6 +155,8 @@ nonisolated extension RecordPurchaseFlowEffect: CustomStringConvertible, CustomD
             )
         case .close:
             return Mirror(self, children: ["close": ()], displayStyle: .enum)
+        case .checkItem:
+            return Mirror(self, children: ["checkItem": ()], displayStyle: .enum)
         }
     }
 }
@@ -193,7 +205,22 @@ nonisolated struct RecordPurchaseFlow: Sendable {
             return handleAwaiting(event, pending: pending)
         case .expired:
             return handleLeavable(event, allowing: [.editDetails])
-        case .failed:
+        case .failed(let error):
+            if error == .unconfirmed {
+                // Never an automatic or plain retry: the purchase may already exist.
+                switch event {
+                case .recordAgain:
+                    state = .submitting(isConfirmed: false)
+                    return .send(confirmationToken: nil)
+                case .checkItem:
+                    state = .editing
+                    return .checkItem
+                case .retry:
+                    return nil
+                default:
+                    return handleLeavable(event, allowing: [.dismissError, .editDetails])
+                }
+            }
             if event == .retry {
                 state = .submitting(isConfirmed: false)
                 return .send(confirmationToken: nil)

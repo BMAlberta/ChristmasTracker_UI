@@ -26,4 +26,9 @@ nonisolated enum PurchaseRefreshPlan {
         let itemsStep: PurchaseRefreshStep = currentItemsListId == listId ? .itemsRefresh : .itemsLoad(listId: listId)
         return [.itemDetail(id: itemId), itemsStep, .listDetail(id: listId)]
     }
+
+    /// After deleting a purchase the refreshes are exactly the ones after recording one.
+    static func stepsAfterDelete(itemId: String, listId: String, currentItemsListId: String?) -> [PurchaseRefreshStep] {
+        steps(itemId: itemId, listId: listId, currentItemsListId: currentItemsListId)
+    }
 }

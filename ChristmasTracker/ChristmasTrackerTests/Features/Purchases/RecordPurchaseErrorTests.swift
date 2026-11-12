@@ -79,7 +79,8 @@ struct RecordPurchaseErrorTests {
         let expected: Bool
         switch error {
         case .network, .server, .rateLimited, .invalidResponse: expected = true
-        case .notFound, .unauthorized, .forbidden, .cannotPurchaseOwnList, .validation, .invalidPrice, .sessionEnded:
+        case .notFound, .unauthorized, .forbidden, .cannotPurchaseOwnList, .validation, .invalidPrice, .sessionEnded,
+             .unconfirmed:
             expected = false
         }
         #expect(error.isRetryable == expected, "\(error)")
