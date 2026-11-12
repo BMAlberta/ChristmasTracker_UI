@@ -139,6 +139,29 @@ nonisolated final class InertPurchaseRecorder: PurchaseRecording {
     }
 }
 
+/// Typed itself (not ConfigurationError) because PurchaseManaging throws PurchaseManagementError only.
+nonisolated final class InertPurchaseManager: PurchaseManaging {
+    @Instrumented
+    func fetchPurchase(id: String) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+
+    @Instrumented
+    func updateNotes(id: String, update: PurchaseNotesUpdate) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+
+    @Instrumented
+    func updateShipping(id: String, update: PurchaseShippingUpdate) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+
+    @Instrumented
+    func deletePurchase(id: String) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+}
+
 /// The API client of the failed state: no request is ever sent.
 nonisolated final class InertAPIClient: APIClient {
     func request<T: Decodable & Sendable>(

@@ -89,6 +89,7 @@ struct AppDependencies: Sendable {
     let childRepository: any ChildRepository
     let itemRepository: ItemRepository
     let purchaseRecorder: any PurchaseRecording
+    let purchaseManager: any PurchaseManaging
     let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
     // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
@@ -102,6 +103,11 @@ struct AppDependencies: Sendable {
         let apiClient = MockAPIClient.withMockData()
         // One list mock is shared, so members and children act on the lists the app shows.
         let lists = MockListRepository()
+        // The recorder and the manager share one store, seeded with the mock user's own purchases
+        // so their summary rows can be opened. The mock never moves item counts or statuses.
+        let purchaseStore = MockPurchaseStore(
+            seed: MockPurchaseStore.seedPurchases(from: MockItemSeed.items, for: MockItemRepository.defaultUser)
+        )
         return AppDependencies(
             apiClient: apiClient,
             authRepository: MockAuthenticationRepository(),
@@ -111,7 +117,11 @@ struct AppDependencies: Sendable {
             itemRepository: MockItemRepository(
                 capabilities: { MockListRepository.capabilities(forListId: $0) ?? MockItemRepository.ownerCapabilities }
             ),
-            purchaseRecorder: MockPurchaseRecorder(access: { MockPurchaseAccess.fromMockSeed(itemId: $0) }),
+            purchaseRecorder: MockPurchaseRecorder(
+                access: { MockPurchaseAccess.fromMockSeed(itemId: $0) },
+                store: purchaseStore
+            ),
+            purchaseManager: MockPurchaseManager(store: purchaseStore, currentUserId: { MockItemRepository.defaultUser.id }),
             appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
         )
@@ -128,6 +138,7 @@ struct AppDependencies: Sendable {
             childRepository: GeneratedClientChildRepository(client: generatedClient),
             itemRepository: GeneratedClientItemRepository(client: generatedClient),
             purchaseRecorder: GeneratedClientPurchaseRepository(client: generatedClient),
+            purchaseManager: GeneratedClientPurchaseManagementRepository(client: generatedClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)
@@ -147,6 +158,7 @@ struct AppDependencies: Sendable {
             childRepository: InertChildRepository(),
             itemRepository: InertItemRepository(),
             purchaseRecorder: InertPurchaseRecorder(),
+            purchaseManager: InertPurchaseManager(),
             appVersionRepository: InertAppVersionRepository(),
             trackerClient: nil
         )
@@ -321,7 +333,10 @@ struct ChristmasTrackerApp: App {
         )
         itemService = is_
 
-        let ps = PurchaseService(repository: dependencies.purchaseRecorder)
+        let ps = PurchaseService(
+            repository: dependencies.purchaseRecorder,
+            management: dependencies.purchaseManager
+        )
         purchaseService = ps
 
         // Create session manager with production clearables (8 total; purchaseService is appended last)

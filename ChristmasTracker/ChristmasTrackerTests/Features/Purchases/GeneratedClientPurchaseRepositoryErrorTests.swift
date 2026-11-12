@@ -6,7 +6,8 @@
 //  typed RecordPurchaseError through the REAL factory-built client with a fake transport.
 //
 //  Mapping under test (Gate 1, every case explicit, no blanket default):
-//    201 / 200 with a wrong shape            -> .invalidResponse
+//    200 with a wrong shape                  -> .invalidResponse
+//    201 whose body cannot be read or mapped -> .unconfirmed (I4b: the purchase exists on the server)
 //    400 errorCode INVALID_PRICE or 3007     -> .invalidPrice
 //    400 other                               -> .validation(message: server message, blank when absent)
 //    400 undecodable envelope                -> .validation(message: "")
@@ -18,8 +19,9 @@
 //    429 / thrown rateLimited                -> .rateLimited(retryAfter:)
 //    500, undocumented 5xx                   -> .server
 //    other undocumented, decoding            -> .invalidResponse
-//    transport failure                       -> .network
-//    CancellationError                       -> rethrown
+//    transport failure                       -> .network when definitive, .unconfirmed otherwise
+//                                               (the full table is in GeneratedClientPurchaseUnconfirmedTests)
+//    CancellationError                      -> rethrown
 //    .sessionEnded is never produced by the repository.
 //
 //  The 403 ACCOUNT_DISABLED and 404 USER_NOT_FOUND session-ending cases are handled by the
@@ -300,57 +302,75 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         }
     }
 
-    @Test("a 201 that carries confirmation_required throws invalidResponse")
+    // I4b CHANGE (spec item 3): a 201 means the server created the purchase, so a 201 body that
+    // cannot be read or mapped is `.unconfirmed` (was `.invalidResponse`).
+    @Test("a 201 that carries confirmation_required throws unconfirmed (the purchase exists)")
     func createdStatusWithConfirmationBody() async throws {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(
             status: 201, json: PurchaseWire.confirmationInCreatedEnvelope(warnings: [PurchaseWire.warningJSON()])
         )
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: RecordPurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
 
-    @Test("a malformed 200 or 201 body (decoding failure) throws invalidResponse",
-          arguments: [200, 201], ["{ this is not json", "{ \"success\": true }"])
-    func malformedSuccessBody(status: Int, body: String) async throws {
+    // I4b CHANGE: split by status. A malformed 200 stays `.invalidResponse`; a malformed 201 is
+    // `.unconfirmed`.
+    @Test("a malformed 200 body (decoding failure) throws invalidResponse",
+          arguments: ["{ this is not json", "{ \"success\": true }"])
+    func malformedOkBody(body: String) async throws {
         let sut = try makePurchaseRepoSUT()
-        await sut.transport.enqueue(status: status, json: body)
+        await sut.transport.enqueue(status: 200, json: body)
 
         await #expect(throws: RecordPurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
 
-    @Test("a created purchase missing a required field throws invalidResponse")
+    @Test("a malformed 201 body (decoding failure) throws unconfirmed (the purchase exists)",
+          arguments: ["{ this is not json", "{ \"success\": true }"])
+    func malformedCreatedBody(body: String) async throws {
+        let sut = try makePurchaseRepoSUT()
+        await sut.transport.enqueue(status: 201, json: body)
+
+        await #expect(throws: RecordPurchaseError.unconfirmed) {
+            _ = try await sut.create()
+        }
+    }
+
+    // I4b CHANGE: was `.invalidResponse`; the 201 says the purchase exists.
+    @Test("a created purchase missing a required field throws unconfirmed")
     func purchaseMissingRequiredField() async throws {
         let sut = try makePurchaseRepoSUT()
         let broken = "{ \"id\": \"purchase-1\", \"itemId\": \"item-1\" }"
         await sut.transport.enqueue(status: 201, json: PurchaseWire.createdEnvelope(purchase: broken))
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: RecordPurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
 
-    @Test("a created purchase with an unknown shipping status throws invalidResponse")
+    // I4b CHANGE: was `.invalidResponse`; the 201 says the purchase exists.
+    @Test("a created purchase with an unknown shipping status throws unconfirmed")
     func unknownShippingStatus() async throws {
         let sut = try makePurchaseRepoSUT()
         let purchase = PurchaseWire.purchaseJSON(shippingStatus: "TELEPORTED")
         await sut.transport.enqueue(status: 201, json: PurchaseWire.createdEnvelope(purchase: purchase))
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: RecordPurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
 
-    @Test("a 201 with no body at all throws invalidResponse")
+    // I4b CHANGE: was `.invalidResponse`; the 201 says the purchase exists.
+    @Test("a 201 with no body at all throws unconfirmed")
     func emptySuccessBody() async throws {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueEmpty(status: 201)
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: RecordPurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }

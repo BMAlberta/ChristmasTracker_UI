@@ -66,6 +66,8 @@ actor MockPurchaseRecorder: PurchaseRecording {
     private let access: @Sendable (_ itemId: String) -> MockPurchaseAccess
     private let buyer: ListItemPerson
     private let now: @Sendable () -> Date
+    /// When set, every recorded purchase is appended so the mock manager can open it.
+    private let store: MockPurchaseStore?
 
     private var totalSpend: Decimal = 0
     private var spendByRecipient: [String: Decimal] = [:]
@@ -78,11 +80,13 @@ actor MockPurchaseRecorder: PurchaseRecording {
     init(
         access: @escaping @Sendable (_ itemId: String) -> MockPurchaseAccess,
         buyer: ListItemPerson = MockItemRepository.defaultUser,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        store: MockPurchaseStore? = nil
     ) {
         self.access = access
         self.buyer = buyer
         self.now = now
+        self.store = store
     }
 
     // MARK: - PurchaseRecording
@@ -103,7 +107,7 @@ actor MockPurchaseRecorder: PurchaseRecording {
         let overTotal = totalSpend + draft.totalCost > MockPurchaseRules.totalBudgetLimit
 
         guard overRecipient || overTotal else {
-            return .created(record(itemId: itemId, draft: draft, recipient: recipient))
+            return .created(await record(itemId: itemId, draft: draft, recipient: recipient))
         }
 
         let currentTime = now()
@@ -111,7 +115,7 @@ actor MockPurchaseRecorder: PurchaseRecording {
         if let confirmationToken, let issued = issuedTokens[confirmationToken],
            issued.itemId == itemId, issued.quantity == draft.quantity, issued.amount == draft.totalCost,
            issued.recipientSpend == recipientSpend, issued.totalSpend == totalSpend {
-            return .created(record(itemId: itemId, draft: draft, recipient: recipient))
+            return .created(await record(itemId: itemId, draft: draft, recipient: recipient))
         }
 
         // No token, or an expired, unknown or mismatched one: a fresh confirmation, never an error.
@@ -170,7 +174,7 @@ actor MockPurchaseRecorder: PurchaseRecording {
     }
 
     /// Records the purchase. The spend changes, so every outstanding token is dropped.
-    private func record(itemId: String, draft: PurchaseDraft, recipient: ListItemPerson) -> RecordedPurchase {
+    private func record(itemId: String, draft: PurchaseDraft, recipient: ListItemPerson) async -> RecordedPurchase {
         let date = now()
         let purchase = RecordedPurchase(
             id: "mock-purchase-\(nextPurchaseNumber)",
@@ -194,6 +198,8 @@ actor MockPurchaseRecorder: PurchaseRecording {
         totalSpend += draft.totalCost
         spendByRecipient[recipient.id, default: 0] += draft.totalCost
         issuedTokens.removeAll()
+        // All spend state is updated above, before this suspension point.
+        await store?.add(purchase)
         return purchase
     }
 }

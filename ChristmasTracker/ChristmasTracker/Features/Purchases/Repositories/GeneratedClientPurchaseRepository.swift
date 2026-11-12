@@ -46,7 +46,14 @@ nonisolated final class GeneratedClientPurchaseRepository: PurchaseRecording, Se
             )
             switch output {
             case .created(let response):
-                return try mapCreatedOutcome(try response.body.json.data)
+                // A 201 means the purchase exists: a body the app cannot read or map is unconfirmed.
+                do {
+                    return try mapCreatedOutcome(try response.body.json.data)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    throw RecordPurchaseError.unconfirmed
+                }
             case .ok(let response):
                 let payload = try response.body.json
                 return try mapConfirmationOutcome(payload.data, warnings: payload.warnings)
@@ -110,6 +117,10 @@ nonisolated private func purchaseFailure(_ error: any Error) -> any Error {
         if clientError.response?.status.code == 400, clientError.underlyingError is DecodingError {
             return RecordPurchaseError.validation(message: "")
         }
+        // A 201 the client could not read: the purchase exists, so the outcome is unconfirmed.
+        if clientError.response?.status.code == 201 {
+            return clientError.underlyingError is CancellationError ? CancellationError() : RecordPurchaseError.unconfirmed
+        }
         return classifyPurchaseRootCause(clientError.underlyingError, wrappedByClient: true)
     }
     return classifyPurchaseRootCause(error, wrappedByClient: false)
@@ -126,7 +137,12 @@ nonisolated private func classifyPurchaseRootCause(_ cause: any Error, wrappedBy
         return classifyPurchaseAPIError(apiError)
     }
     if let urlError = cause as? URLError {
-        return urlError.code == .cancelled ? CancellationError() : RecordPurchaseError.network
+        // No HTTP response: the request may or may not have reached the server.
+        if urlError.code == .cancelled { return CancellationError() }
+        switch UnconfirmedPurchaseClassifier.kind(forURLErrorCode: urlError.code) {
+        case .definitive: return RecordPurchaseError.network
+        case .unconfirmed: return RecordPurchaseError.unconfirmed
+        }
     }
     if cause is SessionRefreshError {
         // A refresh that failed for a reason other than a credential failure (which the
@@ -134,8 +150,8 @@ nonisolated private func classifyPurchaseRootCause(_ cause: any Error, wrappedBy
         return RecordPurchaseError.network
     }
     // Decoding failures and runtime errors from the client are an unreadable response. A bare
-    // unknown error that did not come through the client is treated like a transport failure.
-    return wrappedByClient ? RecordPurchaseError.invalidResponse : RecordPurchaseError.network
+    // unknown error that did not come through the client may be a transport failure, so it is unconfirmed.
+    return wrappedByClient ? RecordPurchaseError.invalidResponse : RecordPurchaseError.unconfirmed
 }
 
 nonisolated private func classifyPurchaseAPIError(_ error: TrackerAPIError) -> RecordPurchaseError {
