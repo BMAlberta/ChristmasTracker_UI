@@ -75,6 +75,44 @@ struct GeneratedClientItemRepositoryTests {
         #expect(item.status == expected)
     }
 
+    @Test("fetchItems decodes quantityPurchased and quantityRemaining when present and leaves them nil when absent")
+    func fetchItemsQuantitiesPresentAndAbsent() async throws {
+        let sut = try makeItemRepoSUT()
+        let visible = ItemWire.itemJSON(
+            id: "item-1", quantity: 5, status: "PARTIAL", updatedAt: "2026-01-06T09:45:00.000Z",
+            quantityPurchased: 2, quantityRemaining: 3
+        )
+        let hidden = ItemWire.itemJSON(id: "item-2", quantity: 5, status: "AVAILABLE")
+        await sut.transport.enqueue(status: 200, json: ItemWire.listJSON([visible, hidden]))
+
+        let items = try await sut.repo.fetchItems(listId: "list-1")
+
+        let first = try #require(items.first)
+        let last = try #require(items.last)
+        #expect(first.quantityPurchased == 2)
+        #expect(first.quantityRemaining == 3)
+        #expect(last.quantityPurchased == nil)
+        #expect(last.quantityRemaining == nil)
+    }
+
+    @Test("fetchItemDetail decodes the two quantities when present and leaves them nil when absent")
+    func fetchItemDetailQuantitiesPresentAndAbsent() async throws {
+        let sut = try makeItemRepoSUT()
+        let visible = ItemWire.itemJSON(quantity: 4, quantityPurchased: 1, quantityRemaining: 3)
+        await sut.transport.enqueue(
+            status: 200,
+            json: ItemWire.detailEnvelope(item: visible, purchases: [ItemWire.purchaseJSON()], totalQuantityPurchased: 1)
+        )
+        let present = try await sut.repo.fetchItemDetail(id: "item-1")
+        #expect(present.quantityPurchased == 1)
+        #expect(present.quantityRemaining == 3)
+
+        await sut.transport.enqueue(status: 200, json: ItemWire.detailEnvelope(item: ItemWire.itemJSON(quantity: 4)))
+        let absent = try await sut.repo.fetchItemDetail(id: "item-1")
+        #expect(absent.quantityPurchased == nil)
+        #expect(absent.quantityRemaining == nil)
+    }
+
     @Test("fetchItems for a blind viewer decodes: all AVAILABLE, updatedAt absent, no purchases, no off-list items")
     func fetchItemsBlindViewer() async throws {
         let sut = try makeItemRepoSUT()

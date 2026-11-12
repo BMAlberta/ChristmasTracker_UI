@@ -55,10 +55,30 @@ After the change, before the commit, `scripts/verify.sh` (summary lines, then OK
 ```
 `swift test --package-path "LocalPackages/TrackerAPI"`: `Test run with 212 tests in 16 suites passed after 0.019 seconds.`
 
-The after-commit runs are appended below.
+After the commit (9f88f78 "I4a: regenerate from contract revision 31 and make the configuration tests hermetic"), `scripts/verify.sh` (summary lines; recorded here in the Story A commit, as agreed with Brian, because a report cannot contain the result of the commit that adds it):
+```
+=== verify: derived spec ===
+=== verify: build ===
+=== verify: configuration check ===
+=== verify: unit tests ===
+--- xcodebuild exit status: 0 ---
+--- tests: 2089 passed, 0 failed, 0 skipped ---
+=== verify: TrackerAPI package tests ===
+􁁛  Test run with 212 tests in 16 suites passed after 0.017 seconds.
+=== verify: TrackerAPI import audit ===
+=== verify: release script tests ===
+=== test-release.sh: 92 passed, 0 failed ===
+=== verify: destination script tests ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: prohibited frameworks in changed lines ===
+=== verify: OK ===
+```
+and `swift test --package-path "LocalPackages/TrackerAPI"`: `Test run with 212 tests in 16 suites passed after 0.018 seconds.`
+
+Also recorded after the earlier commit aabd269 (docs only, before regeneration): `scripts/verify.sh` failed at the derived spec exactly as before, and the package suite reported `Test run with 212 tests in 16 suites failed after 0.020 seconds with 1 issue.` (the same single derived-spec test).
 
 ## Gate 2
-- convention-reviewer: APPROVE. No hard blocks, no warnings. Evidence: four modified files only; no change under contract/, .claude/, any .pbxproj, or synced Docs; no force unwraps, Combine, or DispatchQueue; the UserDefaults-mutating suite is serialized and restores the key. Optional nit (not blocking, not changed): long one-line closures at APIModeTests.swift:185-187 and a long line at AppConfigurationTests.swift:177.
+- convention-reviewer: APPROVE. No hard blocks, no warnings. Evidence: four modified files only; no change under contract/, .claude/, any .pbxproj, or synced Docs; no force unwraps and none of the prohibited frameworks (Combine, GCD); the UserDefaults-mutating suite is serialized and restores the key. Optional nit (not blocking, not changed): long one-line closures at APIModeTests.swift:185-187 and a long line at AppConfigurationTests.swift:177.
 - acceptance-reviewer: APPROVE. (a) AppConfiguration.swift:86 takes the parameter, :110 passes it on, and the only remaining UserDefaults read of the key is the static config call at :127-130. (b) Every call passes the override explicitly; the new tests are not vacuous (standardDefaultsMockIgnored fails if production still read the key). (c) `scripts/make-client-spec.sh --check` printed "Derived spec is up to date."; the count is pinned at 5 at SpecConformanceTests.swift:172 and :201 (read). (d) No change under contract/, .claude/, any .pbxproj, or synced Docs.
 - Rejections: none. Stuck-detector log: no triggers (implementer green on the first attempt).
 

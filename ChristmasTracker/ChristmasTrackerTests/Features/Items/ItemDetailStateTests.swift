@@ -45,7 +45,9 @@ struct ItemDetailStateTests {
                 ItemFixtures.purchase(id: "p-2", quantity: 1, totalCost: ItemFixtures.decimal("1234.50"),
                                       purchaser: ItemFixtures.person(id: "user-4", displayName: "Alex Buyer"))
             ],
-            totalQuantityPurchased: 2
+            totalQuantityPurchased: 2,
+            quantityPurchased: 2,
+            quantityRemaining: 2
         )
     }
 
@@ -149,17 +151,17 @@ struct ItemDetailStateTests {
         #expect(sut.progress == nil)
     }
 
-    @Test("Progress and remaining are nil when totalQuantityPurchased is absent")
+    @Test("Progress and remaining are nil when the purchased and remaining quantities are absent")
     func progressNilWithoutPurchasedQuantity() {
-        let item = ItemFixtures.item(quantity: 4, totalQuantityPurchased: nil)
+        let item = ItemFixtures.item(quantity: 4, totalQuantityPurchased: nil, quantityPurchased: nil, quantityRemaining: nil)
         let sut = makeSUT(item, capabilities: ItemFixtures.Persona.owner.capabilities)
         #expect(sut.progress == nil)
         #expect(sut.remainingQuantity == nil)
     }
 
-    @Test("Remaining quantity is requested minus purchased")
+    @Test("Remaining quantity is the server's quantityRemaining, not a client computation")
     func remaining() {
-        let item = ItemFixtures.item(quantity: 5, totalQuantityPurchased: 2)
+        let item = ItemFixtures.item(quantity: 5, totalQuantityPurchased: 2, quantityPurchased: 2, quantityRemaining: 3)
         let sut = makeSUT(item, capabilities: ItemFixtures.Persona.owner.capabilities)
         #expect(sut.remainingQuantity == 3)
     }

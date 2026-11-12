@@ -51,6 +51,8 @@ nonisolated enum ItemWire {
         createdByName: String = "Casey Member",
         createdAt: String = "2026-01-05T08:30:00.000Z",
         updatedAt: String? = nil,
+        quantityPurchased: Int? = nil,
+        quantityRemaining: Int? = nil,
         extra: String? = nil
     ) -> String {
         var fields: [String] = [
@@ -69,6 +71,8 @@ nonisolated enum ItemWire {
         if let imageUrl { fields.append("\"imageUrl\": \"\(imageUrl)\"") }
         if let price { fields.append("\"expectedUnitPrice\": \(price)") }
         if let updatedAt { fields.append("\"updatedAt\": \"\(updatedAt)\"") }
+        if let quantityPurchased { fields.append("\"quantityPurchased\": \(quantityPurchased)") }
+        if let quantityRemaining { fields.append("\"quantityRemaining\": \(quantityRemaining)") }
         if let extra { fields.append(extra) }
         return "{ " + fields.joined(separator: ", ") + " }"
     }

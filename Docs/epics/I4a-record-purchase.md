@@ -19,7 +19,7 @@ Decisions
 - ListItem (from I3c) gains optional quantityPurchased and quantityRemaining mapped from the generated Item and ItemDetail (nil when absent). ItemDetailState's remaining-quantity text uses quantityRemaining when it is present and shows nothing when it is absent (never a computed value from a hidden field). Everything stays flag-driven: a blind or viewer caller has no purchase controls and no quantities.
 - The Record Purchase entry on the item detail appears exactly when ItemDetailState says showsPurchaseEntry (the flag canPurchase) and nothing else; the new RecordPurchaseView takes a ListItem (not the legacy GiftItem) and the list's ItemListContext. The "View Purchase History" button is removed (the item detail's purchase status card already lists the purchases the caller may see; the history screens are build 2).
 - The form: quantity (default max(1, quantityRemaining) when quantityRemaining is known and above zero, otherwise 1; at least 1; bounds from the generated schema), total cost (a Decimal parsed from the user's decimal input, greater than 0, at most 999999.99, at most two decimals), and only those optional fields that exist in the generated create body (store name, notes, confirmation number, tracking number: include a field only if the generated payload has it). The unit-cost line is computed with Decimal and shown only when valid. The server accepts any quantity, so the over-purchase prompt is a SOFT client confirmation only: when quantityRemaining is known and the quantity exceeds it, a confirmationDialog attached to the Record button asks "Record anyway?" with text that says how many remain (or, when zero remain, that the item has already been fully purchased and others may have bought it too); when quantityRemaining is absent no prompt is shown. Never block a purchase on quantity.
-- Budget confirmation flow as a pure state machine (nonisolated, Sendable): states editing, submitting, awaitingConfirmation(warnings, token, issuedAt, notice), recorded(purchase), failed(error); events submit, serverCreated, serverConfirmationRequired(warnings, token), serverError, confirm, cancel, editDetails, clockTick. Rules: a confirmation_required outcome on a FIRST submit moves to awaitingConfirmation and creates nothing; while awaitingConfirmation the form fields are read-only (the token binds quantity and amount); "Edit Details" returns to editing and DISCARDS the token; "Cancel" closes without recording; "Record Anyway" resubmits the identical draft with the token from the pending confirmation (any one warning's token: they are the same); S12: if a CONFIRMED resubmit is answered by a NEW confirmation_required (the buyer's spend changed since the warning), REPLACE the pending confirmation with the new warnings, the new token and a new issuedAt, show the notice "Your budget changed since the last warning. Review the updated amounts.", and require a NEW explicit Record Anyway (never resubmit automatically, never loop silently); a token is NEVER cached, kept in the service, or reused for a later attempt (a new submit from editing always goes out WITHOUT a token); the pending confirmation is treated as EXPIRED at 4 minutes 30 seconds after issuedAt (an injected clock; one constant in one place, with a comment that the server's limit is 5 minutes) and then shows "This confirmation has expired. Review the details and record again." with a single button that returns to editing; if the server answers a confirmed resubmit with a documented token error, show the same expired message and return to editing. The warning panel is INLINE in the form (not an alert or a dialog): one row per warning with a plain label ("Over the budget for <recipient name>" for level recipient, "Over your total budget" for level total), the Decimal amounts formatted with the user's currency formatter (limit, already spent, this purchase, over by), the notice when present, then Cancel and "Record Anyway" (prominent) and "Edit Details". The recipient name comes from the warning's details; nothing else about the recipient is shown.
+- Budget confirmation flow as a pure state machine (nonisolated, Sendable): states editing, submitting, awaitingConfirmation(warnings, token, issuedAt, notice), recorded(purchase), failed(error); events submit, serverCreated, serverConfirmationRequired(warnings, token), serverError, confirm, cancel, editDetails, clockTick. Rules: a confirmation_required outcome on a FIRST submit moves to awaitingConfirmation and creates nothing; while awaitingConfirmation the form fields are read-only (the token binds quantity and amount); "Edit Details" returns to editing and DISCARDS the token; "Cancel" closes without recording; "Record Anyway" resubmits the identical draft with the token from the pending confirmation (any one warning's token: they are the same); S12: if a CONFIRMED resubmit is answered by a NEW confirmation_required (the buyer's spend changed since the warning), REPLACE the pending confirmation with the new warnings, the new token and a new issuedAt, show the notice "The amounts changed since the last warning. Review them and confirm again.", and require a NEW explicit Record Anyway (never resubmit automatically, never loop silently); a token is NEVER cached, kept in the service, or reused for a later attempt (a new submit from editing always goes out WITHOUT a token); the pending confirmation is treated as EXPIRED at 4 minutes 30 seconds after issuedAt (an injected clock; one constant in one place, with a comment that the server's limit is 5 minutes) and then shows "This confirmation has expired. Review the details and record again." with a single button that returns to editing; the contract documents NO token error code (guide 7.6: an expired, tampered or mismatched token gets a fresh 200 confirmation_required with no 4xx), so a stale token surfaces through the replacement rule above and any other error follows the generic error handling. The warning panel is INLINE in the form (not an alert or a dialog): one row per warning with a plain label ("Over the budget for <recipient name>" for level recipient, "Over your total budget" for level total), the Decimal amounts formatted with the user's currency formatter (limit, already spent, this purchase, over by), the notice when present, then Cancel and "Record Anyway" (prominent) and "Edit Details". The recipient name comes from the warning's details; nothing else about the recipient is shown.
 - After a successful purchase: the service returns the RecordedPurchase; the form closes; the item detail reloads (itemService.loadItemDetail), the item list refreshes (itemService.refreshItems) and the list detail refreshes (listService.refreshListDetail) so counts, status and the server's quantities update. A failed follow-up refresh never turns the successful purchase into an error (the purchase is already recorded): it shows the existing banners of those screens. Do not splice the response into the item by hand, and never infer the new status yourself (for example, do not assume that buying on a WRAPPED or GIFTED item makes it PURCHASED).
 - PurchaseService is session-safe like ItemService and ListService (generation, cancellation, nothing written after the session ended, a mutating flag, cleared at teardown through the existing SessionClearable registration; the production-wiring test pins the new clearable count with a stated reason): recordPurchase(itemId:draft:confirmationToken:) throws a typed PurchaseError (no shared error property) and never keeps the token beyond the call. 401 is handled by the middleware; 403 ACCOUNT_DISABLED and 404 USER_NOT_FOUND by the existing session-ending seam; 403 CANNOT_PURCHASE_OWN_LIST and the other 403s map to plain messages; 404 (item or list gone) means gone: close the form and leave the item screen; 400 INVALID_PRICE and other validation errors show the server's plain message; 429 rateLimited; 422 per the documented responses.
 - Archived lists: nothing special; the flags decide (purchases are accepted on archived lists).
@@ -29,7 +29,7 @@ Non-goals: editing, deleting, or viewing a purchase (I4b), shipping status updat
 
 Acceptance
 - Through the REAL factory-built client with a fake transport, recording a purchase maps every documented response (201 created, 200 confirmation_required with one and with two warnings sharing one token, 400 INVALID_PRICE and the validation message, 401, 403 CANNOT_PURCHASE_OWN_LIST and the other 403s, 404, 422, 429, 500, undocumented, transport failure) with guide-accurate fixtures including the full meta object, the confirmation warnings with all details, and the confirmation token; the request carries exactly the draft fields and, on the resubmit, the token; money crosses the boundary as Decimal; the items fixtures include quantityPurchased and quantityRemaining present and absent.
-- The state machine has a full transition table test, including the expiry at 4:30 with an injected clock, edit-details discarding the token, cancel creating nothing, a confirmed resubmit answered by a NEW confirmation_required (the pending confirmation replaced with the new warnings and token and the notice shown, no automatic resubmit), a repeat purchase after success going out WITHOUT a token and returning confirmation_required again, and a documented token error.
+- The state machine has a full transition table test, including the expiry at 4:30 with an injected clock, edit-details discarding the token, cancel creating nothing, a confirmed resubmit answered by a NEW confirmation_required (the pending confirmation replaced with the new warnings and token and the notice shown, no automatic resubmit), and a repeat purchase after success going out WITHOUT a token and returning confirmation_required again.
 - The Record Purchase control and the form appear only when canPurchase is true; blind owners, blind co-owners, viewer-role members, and PUBLIC non-members never see a purchase control, purchase information, or the two quantities (view-state tests for every scenario, including archived lists).
 - The soft over-purchase prompt appears only when quantityRemaining is known and exceeded, never blocks a purchase, and has its own wording when zero remain; an absent quantityRemaining never produces a prompt or a computed value.
 - No Double arithmetic on money anywhere in the new code; a two-decimal and a three-decimal amount are tested; 999999.99 passes and 1000000.00 fails.
@@ -63,7 +63,7 @@ Taken at contract/VERSION: decisions_revision 32, spec sha256 7c5880219bd5, CONF
 - Item (also the base of the getItem data via allOf; there is no separate ItemDetail schema) gains optional quantityPurchased and quantityRemaining, integers, minimum 0, present only with gift activity visibility.
 
 ## 2. Expired or invalid confirmationToken
-The contract is NOT silent and defines no error code. Docs/client-guide.md section 7.6 (line 665): "An expired, tampered or mismatched token is handled the same way (no 4xx)", meaning a fresh 200 confirmation_required with a new token. Docs/error-codes.md has no code for an expired or invalid confirmation token (6002 is a warning, not an error). So no row in Docs/contract-issues.md is needed. The UI still handles both outcomes as the Decisions require: a new confirmation_required replaces the panel (S12 rule), and a documented token error (none today) would show the expired message and return to editing.
+The contract is NOT silent and defines no error code. Docs/client-guide.md section 7.6 (line 665): "An expired, tampered or mismatched token is handled the same way (no 4xx)", meaning a fresh 200 confirmation_required with a new token. Docs/error-codes.md has no code for an expired or invalid confirmation token (6002 is a warning, not an error). So no row in Docs/contract-issues.md is needed. Per Brian's instruction after the inventory, there is therefore NO token-error branch in the UI or the state machine: a stale token surfaces as a new confirmation_required and uses the replacement rule (notice "The amounts changed since the last warning. Review them and confirm again."); any other error follows the generic error handling; the client-side expiry at 4 minutes 30 seconds still applies. (The brief text above was patched to match; the first committed copy carried the earlier wording, which this edit supersedes.)
 
 ## 3. Generated Swift (pre-P0, signatures only; Gen = LocalPackages/TrackerAPI/.build/plugins/outputs/trackerapi/TrackerAPI/destination/OpenAPIGenerator/GeneratedSources)
 - Types+Operations.swift:3923 Operations.CreatePurchase: Input { path: Path { itemId: String }, headers, body: Body (.json(JsonPayload)) }. JsonPayload { quantity: Int, totalCost: Components.Schemas.MoneyAmount, storeName: String?, notes: String?, confirmationNumber: String?, trackingNumber: String?, confirmationToken: String? }. Output cases: ok (200), created (201), badRequest, unauthorized, forbidden, notFound, tooManyRequests, internalServerError, undocumented. Ok payload { success, data: PurchaseResult, warnings: [BudgetOverageWarning], meta }; Created payload { success, data: PurchaseResult, meta }.
@@ -120,7 +120,135 @@ ItemService: ItemServiceLoadTests, ItemServiceMutationTests, ItemServiceListSwit
 - Contract slice: createPurchase request and the 201 and 200 payloads, warnings and details, the Purchase payload, the two Item quantities.
 - New interface: yes (RecordedPurchase, PurchaseDraft, BudgetWarning, BudgetWarningLevel, PurchaseOutcome, PurchaseError, RecordPurchaseFormState, BudgetWarningPanelState, RecordPurchaseFlow with a clock, pure mapping functions, ListItem quantityPurchased and quantityRemaining).
 - Acceptance: the Acceptance bullets on money, the state machine transition table (including expiry at 4:30 with an injected clock and the S12 replacement), the soft over-purchase rule, the Decimal parser with an injected locale, the default quantity, privacy-neutral mapping of absent quantities to nil. PurchaseError does not collide with the legacy PurchaseError declared in MockPurchaseRepository.swift (the legacy type is not touched; resolve the clash by naming or module placement and state how in the report).
-- Scoped files: new files under App/Features/Purchases/Domain (or the folder the existing features use), App/Features/Purchases/ViewState, App/Features/Purchases/Repositories (mapping functions only), App/Core/Models/ListItem.swift, App/Features/Items/Repositories/ItemMapping.swift, App/Features/Items/ViewState/ItemViewState.swift (remaining text), and their tests.
+- Scoped files: new files under App/Features/Purchases/Domain, App/Features/Purchases/ViewState, App/Features/Purchases/Repositories (PurchaseMapping.swift, pure mapping functions only), App/Core/Models/ListItem.swift, App/Features/Items/Repositories/ItemMapping.swift, App/Features/Items/ViewState/ItemViewState.swift (remaining text), and their tests under Tests/Features/Purchases and Tests/Features/Items. Nothing else; legacy purchase files untouched.
+- Name decision (conflict with the brief, recorded): the brief says PurchaseError, but a top-level `enum PurchaseError` already exists in the legacy Features/Purchases/Repositories/MockPurchaseRepository.swift:159 and is used by legacy views that must not be touched until I4b, so a second one is a redeclaration. The new type is `RecordPurchaseError`; I4b can rename it after deleting the legacy one. All other names are as in the brief.
+- Money and sizes: all `nonisolated`, `Sendable`, `Equatable`; money is `Decimal`; no Double arithmetic.
+
+Interface (the test-writer works from this; production code is written afterwards):
+
+```swift
+// Domain (Features/Purchases/Domain)
+nonisolated enum RecordedShippingStatus: Equatable, Hashable, Sendable { case notTracked, notShipped, shipped, delivered }
+nonisolated struct RecordedPurchase: Identifiable, Equatable, Hashable, Sendable {
+    let id: String; let itemId: String; let quantity: Int; let totalCost: Decimal
+    let storeName: String?; let notes: String?; let confirmationNumber: String?; let trackingNumber: String?
+    let shippingStatus: RecordedShippingStatus; let shippedAt: Date?; let deliveredAt: Date?
+    let purchaser: ListItemPerson; let recipient: ListItemPerson
+    let purchasedAt: Date; let createdAt: Date; let updatedAt: Date
+}
+nonisolated struct PurchaseDraft: Equatable, Sendable {   // the optional strings are nil when blank
+    let quantity: Int; let totalCost: Decimal
+    let storeName: String?; let notes: String?; let confirmationNumber: String?; let trackingNumber: String?
+}
+nonisolated enum BudgetWarningLevel: Equatable, Sendable { case recipient, total }
+nonisolated struct BudgetWarning: Equatable, Sendable {
+    let level: BudgetWarningLevel; let recipientName: String?   // from details; nil for level total
+    let budgetLimit: Decimal; let currentSpent: Decimal; let purchaseAmount: Decimal; let overage: Decimal
+}
+nonisolated enum PurchaseOutcome: Equatable, Sendable {
+    case created(RecordedPurchase)
+    case confirmationRequired(warnings: [BudgetWarning], token: String)   // warnings is never empty, token never empty
+}
+nonisolated enum RecordPurchaseError: Error, LocalizedError, Equatable, Sendable {
+    case notFound, unauthorized, forbidden, cannotPurchaseOwnList
+    case validation(message: String), invalidPrice
+    case rateLimited(retryAfter: TimeInterval), sessionEnded, network, invalidResponse, server
+    var userMessage: String       // plain; never interpolates a payload, id or raw error
+    var errorDescription: String? // == userMessage
+    var closesForm: Bool          // true only for .notFound (item or list gone)
+    var isRetryable: Bool         // true for network, server, rateLimited, invalidResponse
+}
+// ListItem (Core/Models/ListItem.swift) gains: let quantityPurchased: Int?; let quantityRemaining: Int?  (init params last, default nil)
+
+// Mapping (Features/Purchases/Repositories/PurchaseMapping.swift), generated types in, domain out, money via doubleToDecimal
+nonisolated func mapRecordedPurchase(_ purchase: Components.Schemas.Purchase) throws -> RecordedPurchase          // non-convertible money -> RecordPurchaseError.invalidResponse
+nonisolated func mapBudgetWarning(_ warning: Components.Schemas.BudgetOverageWarning) throws -> BudgetWarning
+nonisolated func mapCreatedOutcome(_ result: Components.Schemas.PurchaseResult) throws -> PurchaseOutcome          // the 201 body
+nonisolated func mapConfirmationOutcome(_ result: Components.Schemas.PurchaseResult, warnings: [Components.Schemas.BudgetOverageWarning]) throws -> PurchaseOutcome   // the 200 body
+```
+Mapping rules: the 201 body must carry `created`; a `confirmationRequired` payload in a 201 is `invalidResponse`. The 200 body with `confirmationRequired` needs at least one warning and a non-empty token (the token of the first warning with a non-empty token; the warnings share one token) else `invalidResponse`; it NEVER becomes `created`, whatever the generated shape of the (null) purchase member is. A 200 body that carries `created` maps to `created` (the purchase exists). Item mapping: `mapListItem` fills quantityPurchased and quantityRemaining from the generated Item (nil when absent); the detail mapping inherits them from value1.
+
+```swift
+// Form rules (Features/Purchases/ViewState/RecordPurchaseFormState.swift)
+nonisolated struct RecordPurchaseFormInput: Equatable, Sendable {
+    var quantity: Int; var totalCostText: String
+    var storeName: String; var notes: String; var confirmationNumber: String; var trackingNumber: String
+}
+nonisolated struct RecordPurchaseFormState: Equatable, Sendable {
+    init(input: RecordPurchaseFormInput, quantityRemaining: Int?, currencyCode: String = "USD", locale: Locale = Locale(identifier: "en_US"))
+    let quantityInvalid: Bool        // quantity < 1 (the generated schema has a minimum of 1 and no maximum)
+    let totalCostInvalid: Bool       // text empty or not a valid cost
+    let storeNameInvalid: Bool       // trimmed length over 200
+    let notesInvalid: Bool           // over 1000
+    let confirmationNumberInvalid: Bool  // over 100
+    let trackingNumberInvalid: Bool      // over 100
+    var isValid: Bool
+    let draft: PurchaseDraft?        // nil unless valid; optional strings trimmed, nil when blank
+    let unitCostText: String?        // currency text of totalCost / quantity (Decimal, rounded to 2 places); nil unless valid
+    let overPurchasePrompt: OverPurchasePrompt?
+    static func defaultQuantity(quantityRemaining: Int?) -> Int            // max(1, remaining) when known and > 0, else 1
+    static func parseTotalCost(_ text: String, locale: Locale) -> Decimal? // see rules
+}
+nonisolated struct OverPurchasePrompt: Equatable, Sendable { let title: String; let message: String; let confirmButtonTitle: String }
+```
+Rules: `parseTotalCost` trims, requires the locale's decimal separator only (grouping separators and any sign, exponent, currency symbol or other character are REJECTED, documented), at most two fraction digits (three decimals rejected), value greater than 0 and at most 999999.99 (so "0", "0.00", negative, "1000000.00" and "999999.995" are nil; "999999.99" and "0.01" pass); with locale en_US "12.50" parses and "12,50" is nil; with a locale whose decimal separator is a comma (de_DE) "12,50" parses and "12.50" is nil. Over-purchase prompt: non-nil only when quantityRemaining is non-nil and quantity > quantityRemaining and the form is valid; title "Record anyway?"; confirmButtonTitle "Continue Anyway"; message when remaining > 0: "Only \(remaining) remaining. You're recording \(quantity)." and when remaining == 0: "This item has already been fully purchased, and others may have bought it too." A nil quantityRemaining never produces a prompt or any computed value. The prompt never affects `isValid` or `draft`.
+
+```swift
+// Warning panel (Features/Purchases/ViewState/BudgetWarningPanelState.swift)
+nonisolated struct BudgetWarningRowState: Equatable, Sendable {
+    let label: String         // "Over the budget for \(name)" (level recipient); "Over your total budget" (level total);
+                              // level recipient with nil or blank name: "Over the budget for this recipient"
+    let budgetLimitText: String; let alreadySpentText: String; let thisPurchaseText: String; let overByText: String   // currency formatted from Decimal
+}
+nonisolated struct BudgetWarningPanelState: Equatable, Sendable {
+    init(warnings: [BudgetWarning], notice: String?, currencyCode: String = "USD", locale: Locale = Locale(identifier: "en_US"))
+    let rows: [BudgetWarningRowState]      // one per warning, same order
+    let noticeText: String?                // the notice when present
+    let cancelTitle = "Cancel"; let confirmTitle = "Record Anyway"; let editTitle = "Edit Details"
+    let announcement: String               // "Budget warning. \(rows.count) item(s) over budget." style text, no amounts and no names
+}
+nonisolated enum RecordPurchaseCopy {
+    static let budgetChangedNotice = "The amounts changed since the last warning. Review them and confirm again."
+    static let expiredMessage = "This confirmation has expired. Review the details and record again."
+}
+
+// Flow (Features/Purchases/ViewState/RecordPurchaseFlow.swift)
+nonisolated struct PendingConfirmation: Equatable, Sendable { let warnings: [BudgetWarning]; let token: String; let issuedAt: Date; let notice: String? }
+nonisolated enum RecordPurchaseFlowState: Equatable, Sendable {
+    case editing
+    case submitting(isConfirmed: Bool)            // carries no token
+    case awaitingConfirmation(PendingConfirmation)
+    case expired                                  // added to the brief's list: the expired message with one button back to editing
+    case recorded(RecordedPurchase)
+    case failed(RecordPurchaseError)
+}
+nonisolated enum RecordPurchaseFlowEvent: Equatable, Sendable {
+    case submit, serverCreated(RecordedPurchase), serverConfirmationRequired(warnings: [BudgetWarning], token: String)
+    case serverError(RecordPurchaseError), confirm, cancel, editDetails, clockTick, retry, dismissError
+}
+nonisolated enum RecordPurchaseFlowEffect: Equatable, Sendable {
+    case send(confirmationToken: String?)   // the caller performs the request with the same draft
+    case close                              // the form closes without recording
+}
+nonisolated struct RecordPurchaseFlow: Sendable {
+    static let confirmationLifetime: TimeInterval = 270   // 4 min 30 s; ONE place; a comment states the server limit is 5 minutes
+    init(now: @escaping @Sendable () -> Date)
+    private(set) var state: RecordPurchaseFlowState
+    var fieldsAreReadOnly: Bool          // true in submitting, awaitingConfirmation, expired, recorded; false in editing and failed
+    var noticeText: String?              // the pending confirmation's notice, else nil
+    mutating func handle(_ event: RecordPurchaseFlowEvent) -> RecordPurchaseFlowEffect?
+}
+```
+Transition table (an event not listed for a state is ignored: state unchanged, no effect):
+- editing: submit -> submitting(isConfirmed: false), effect send(nil). cancel -> editing, effect close.
+- submitting(isConfirmed: c): serverCreated(p) -> recorded(p). serverConfirmationRequired(w,t) -> awaitingConfirmation(PendingConfirmation(w, t, issuedAt: now(), notice: c ? budgetChangedNotice : nil)), no effect (nothing is created, nothing is resubmitted). serverError(e) -> failed(e). Every other event is ignored (cancel is ignored while a request is in flight).
+- awaitingConfirmation(p): confirm -> if now() - p.issuedAt >= confirmationLifetime then expired (no effect), else submitting(isConfirmed: true) and effect send(p.token). editDetails -> editing (token discarded). cancel -> editing, effect close (token discarded). clockTick -> expired when now() - p.issuedAt >= confirmationLifetime, otherwise unchanged.
+- expired: editDetails -> editing; cancel -> editing, effect close.
+- failed(e): retry -> submitting(isConfirmed: false), effect send(nil) (a retry never carries a token: the token was dropped when the confirmed request was sent, so a retried overage purchase asks again); dismissError -> editing; editDetails -> editing; cancel -> editing, effect close.
+- recorded: terminal, every event ignored.
+- The token appears only inside awaitingConfirmation and in the send effect; it is gone from the state after every transition out of awaitingConfirmation. There is no token-error branch (the contract documents none).
+
+Test list for Story A (Swift Testing, fake data): form validity truth table (zero, negative, 0.01, 999999.99, 1000000.00, three decimals, quantity 0, 1 and large, empty text, over-length strings); default quantity (remaining 5, 0, nil, negative); soft prompt (exceeded, equal, below, zero remaining, nil, invalid form) and its wording; parseTotalCost per locale (en_US and de_DE, grouping and sign rejected); unit cost (divisible, rounding, nil when invalid); panel state (one recipient, one total, both, notice, blank recipient name, formatted amounts); the full flow transition table including expiry exactly at 270 s and just before, the S12 replacement (new warnings, new token, new issuedAt, notice, no effect, a NEW explicit confirm required), edit details discarding the token, cancel producing close and no send, retry going out without a token, a repeat purchase after recorded (a fresh flow, submit goes out send(nil)) and ignored events; message mapping for every RecordPurchaseError plus closesForm and isRetryable; mapping of the 201 and 200 payloads including absent optional fields, null purchase, two warnings sharing a token, empty warnings, missing token, 201 carrying confirmation_required, 200 carrying created, non-finite money; the item mapping with the two quantities present and absent; ItemDetailState remaining text from quantityRemaining (present, absent, hidden when the caller cannot see gift activity). Existing tests that assert the OLD computed remaining quantity (ItemDetailStateTests "Remaining quantity is requested minus purchased" and the ItemDetailStateRemainingTests expectations that derive it from totalQuantityPurchased) change deliberately; each is named in the report with this decision as the reason.
 
 ## Story B: the generated repository, the mock, and the service
 - Contract slice: createPurchase with every documented Output case.
