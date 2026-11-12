@@ -23,6 +23,15 @@ struct ItemDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var deleteError: ItemError?
     @State private var hasStartedLoading = false
+    @State private var openedPurchase: OpenedPurchase?
+
+    /// The purchase pushed from a row. It carries its own ids so the pushed screen does not depend on
+    /// the item staying loaded while this screen is covered.
+    private struct OpenedPurchase: Hashable {
+        let purchaseId: String
+        let itemId: String
+        let listId: String
+    }
 
     private enum DetailSheet: Identifiable {
         case edit
@@ -62,6 +71,17 @@ struct ItemDetailView: View {
             .sheet(item: $sheet) { sheet in
                 sheetContent(sheet)
             }
+            .navigationDestination(item: $openedPurchase) { opened in
+                ManagePurchaseView(
+                    purchaseId: opened.purchaseId,
+                    itemId: opened.itemId,
+                    listId: opened.listId,
+                    currentUserId: authenticationService.currentUser?.id,
+                    onFinish: { finish in
+                        handlePurchaseDetailFinish(finish, opened: opened)
+                    }
+                )
+            }
             .onChange(of: itemService.goneItemId) { _, goneId in
                 // The server said this item is gone: leave. The service already dropped it.
                 if goneId == itemId {
@@ -73,6 +93,8 @@ struct ItemDetailView: View {
                 await itemService.loadItemDetail(id: itemId)
             }
             .onDisappear {
+                // Covered by the purchase detail: keep the item for when this screen comes back.
+                guard openedPurchase == nil else { return }
                 deleteError = nil
                 itemService.clearItemDetail()
                 itemService.clearDetailLoadError()
@@ -139,7 +161,7 @@ struct ItemDetailView: View {
                 }
                 headerCard(state: state)
                 if state.statusMarker != nil {
-                    purchaseStatusCard(state: state)
+                    purchaseStatusCard(item: item, state: state)
                 }
                 if state.showsPurchaseEntry || state.showsDelete {
                     actionsSection(item: item, state: state)
@@ -199,7 +221,7 @@ struct ItemDetailView: View {
         .listCard()
     }
 
-    private func purchaseStatusCard(state: ItemDetailState) -> some View {
+    private func purchaseStatusCard(item: ListItem, state: ItemDetailState) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text("Purchase Status")
                 .font(.appHeadline)
@@ -216,13 +238,9 @@ struct ItemDetailView: View {
                     .foregroundStyle(Color.textMutedColor)
             }
             ForEach(state.purchases) { purchase in
-                HStack {
-                    Text(purchase.purchaserName)
-                    Spacer()
-                    Text("\(purchase.quantity) for \(purchase.totalCostText)")
+                ItemPurchaseRow(row: purchase) {
+                    openedPurchase = OpenedPurchase(purchaseId: purchase.id, itemId: item.id, listId: item.listId)
                 }
-                .font(.appCaption1)
-                .foregroundStyle(Color.textMutedColor)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -302,11 +320,18 @@ struct ItemDetailView: View {
         switch finish {
         case .recorded:
             Task { await refreshAfterPurchase(item) }
+        case .checkItem:
+            // The server decides whether the purchase exists: look at the same screens.
+            Task { await refreshAfterPurchase(item) }
         case .itemGone:
             dismiss()
         case .cancelled:
             break
         }
+    }
+
+    private var refreshRunner: PurchaseRefreshRunner {
+        PurchaseRefreshRunner(itemService: itemService, listService: listService)
     }
 
     /// Runs the refresh plan in order. A failed refresh never turns the recorded purchase into an
@@ -315,14 +340,28 @@ struct ItemDetailView: View {
         let steps = PurchaseRefreshPlan.steps(
             itemId: item.id, listId: item.listId, currentItemsListId: itemService.currentListId
         )
-        for step in steps {
-            switch step {
-            case .itemDetail(let id): await itemService.loadItemDetail(id: id)
-            case .itemsRefresh: await itemService.refreshItems()
-            case .itemsLoad(let listId): await itemService.loadItems(listId: listId)
-            case .listDetail(let id): _ = await listService.refreshListDetail(id: id)
-            }
+        await refreshRunner.run(steps)
+    }
+
+    // MARK: - Purchase detail
+
+    /// The pushed purchase detail closes in every case. A deleted purchase runs the delete plan; a
+    /// purchase that is gone refreshes too (the item may have changed). A failed refresh never turns
+    /// the delete into an error.
+    private func handlePurchaseDetailFinish(_ finish: PurchaseDetailFinish, opened: OpenedPurchase) {
+        openedPurchase = nil
+        let steps: [PurchaseRefreshStep]
+        switch finish {
+        case .deleted:
+            steps = PurchaseRefreshPlan.stepsAfterDelete(
+                itemId: opened.itemId, listId: opened.listId, currentItemsListId: itemService.currentListId
+            )
+        case .gone:
+            steps = PurchaseRefreshPlan.steps(
+                itemId: opened.itemId, listId: opened.listId, currentItemsListId: itemService.currentListId
+            )
         }
+        Task { await refreshRunner.run(steps) }
     }
 
     // MARK: - Delete

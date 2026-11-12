@@ -85,6 +85,8 @@ struct RecordPurchaseContent: View {
                 InlineErrorBanner(
                     state: banner,
                     onTryAgain: { Task { await model.retry() } },
+                    onCheckItem: { model.checkItem() },
+                    onRecordAgain: { Task { await model.recordAgain() } },
                     onDismiss: { model.dismissError() }
                 )
                 .listRowBackground(Color.clear)

@@ -43,12 +43,16 @@ struct RecordPurchaseUnconfirmedErrorTests {
 
     // MARK: - Presentation
 
-    @Test("The unconfirmed banner has the message, no Try Again and is dismissible")
+    // Story I4b-C changed this on purpose: the Story A banner was dismiss-only; it now offers
+    // Check Item, Record Again and Dismiss, in that order, and still no Try Again.
+    @Test("The unconfirmed banner has the message, Check Item, Record Again and Dismiss, and no Try Again")
     func banner() {
         let banner = RecordPurchaseErrorPresentation.banner(for: .unconfirmed)
         #expect(banner == InlineErrorBannerState(
-            message: "We couldn't confirm whether this purchase was recorded.", canRetry: false, isDismissible: true
+            message: "We couldn't confirm whether this purchase was recorded.",
+            actions: [.checkItem, .recordAgain, .dismiss]
         ))
+        #expect(banner?.actions.contains(.tryAgain) == false)
     }
 
     @Test("The two unconfirmed actions are Check Item and Record Again")

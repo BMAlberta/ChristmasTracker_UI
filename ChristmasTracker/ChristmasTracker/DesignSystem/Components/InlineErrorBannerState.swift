@@ -12,11 +12,15 @@ import Foundation
 nonisolated enum InlineErrorBannerAction: Equatable, Sendable {
     case tryAgain
     case dismiss
+    case checkItem
+    case recordAgain
 
     var title: String {
         switch self {
         case .tryAgain: "Try Again"
         case .dismiss: "Dismiss"
+        case .checkItem: "Check Item"
+        case .recordAgain: "Record Again"
         }
     }
 }
@@ -30,12 +34,17 @@ nonisolated struct InlineErrorBannerState: Equatable, Sendable {
     let actions: [InlineErrorBannerAction]
 
     init(message: String, canRetry: Bool, isDismissible: Bool) {
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.message = trimmed.isEmpty ? Self.fallbackMessage : message
         var built: [InlineErrorBannerAction] = []
         if canRetry { built.append(.tryAgain) }
         if isDismissible { built.append(.dismiss) }
-        self.actions = built
+        self.init(message: message, actions: built)
+    }
+
+    /// The actions are kept exactly as given, in that order.
+    init(message: String, actions: [InlineErrorBannerAction]) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.message = trimmed.isEmpty ? Self.fallbackMessage : message
+        self.actions = actions
     }
 
     var accessibilityLabel: String { "Error. " + message }

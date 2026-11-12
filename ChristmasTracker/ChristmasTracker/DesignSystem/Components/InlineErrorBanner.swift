@@ -14,16 +14,22 @@ struct InlineErrorBanner: View {
     let state: InlineErrorBannerState
     var onTryAgain: (() -> Void)?
     var onDismiss: (() -> Void)?
+    var onCheckItem: (() -> Void)?
+    var onRecordAgain: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         state: InlineErrorBannerState,
         onTryAgain: (() -> Void)? = nil,
+        onCheckItem: (() -> Void)? = nil,
+        onRecordAgain: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
         self.state = state
         self.onTryAgain = onTryAgain
+        self.onCheckItem = onCheckItem
+        self.onRecordAgain = onRecordAgain
         self.onDismiss = onDismiss
     }
 
@@ -93,6 +99,8 @@ struct InlineErrorBanner: View {
         switch action {
         case .tryAgain: onTryAgain?()
         case .dismiss: onDismiss?()
+        case .checkItem: onCheckItem?()
+        case .recordAgain: onRecordAgain?()
         }
     }
 }

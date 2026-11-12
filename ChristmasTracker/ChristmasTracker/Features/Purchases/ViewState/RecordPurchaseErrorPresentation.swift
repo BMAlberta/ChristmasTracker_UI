@@ -18,6 +18,9 @@ nonisolated struct UnconfirmedPurchaseActions: Equatable, Sendable {
 nonisolated enum RecordPurchaseErrorPresentation {
     static func banner(for error: RecordPurchaseError) -> InlineErrorBannerState? {
         if error == .sessionEnded { return nil }
+        if error == .unconfirmed {
+            return InlineErrorBannerState(message: error.userMessage, actions: [.checkItem, .recordAgain, .dismiss])
+        }
         return InlineErrorBannerState(message: error.userMessage, canRetry: error.isRetryable, isDismissible: true)
     }
 
