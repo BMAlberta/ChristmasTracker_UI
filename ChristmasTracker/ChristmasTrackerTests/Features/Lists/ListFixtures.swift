@@ -372,6 +372,7 @@ nonisolated enum ListFixtures {
     static func listDetail(
         id: String = "list-1",
         name: String = "Fake Family List",
+        status: ListStatus = .active,
         myRole: ListRole = .owner,
         flags: Flags = Flags(),
         memberCount: Int = 0,
@@ -386,7 +387,7 @@ nonisolated enum ListFixtures {
             theme: nil,
             year: 2026,
             visibility: .private,
-            status: .active,
+            status: status,
             recipient: person,
             owner: person,
             coOwner: nil,

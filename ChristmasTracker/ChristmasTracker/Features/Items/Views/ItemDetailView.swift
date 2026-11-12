@@ -7,325 +7,330 @@
 
 import SwiftUI
 
-import SwiftUI
-
+/// The item detail. Everything shown or enabled comes from `ItemDetailState` (itself derived
+/// from the list's capability flags); this view never reads a role or a raw item status. A
+/// delete error is held here in local state and shown in an inline banner.
 struct ItemDetailView: View {
-    
     let itemId: String
-    
+    let context: ItemListContext
+
     @Environment(\.itemService) private var itemService
+    @Environment(\.authenticationService) private var authenticationService
     @Environment(\.dismiss) private var dismiss
-    
-    @State private var showEditSheet = false
+
+    @State private var sheet: DetailSheet?
     @State private var showDeleteConfirmation = false
-    @State private var showRecordPurchaseSheet = false  // For Phase 6.5
-    @State private var showPurchaseConfirmation = false
-    @State private var showPurchaseHistorySheet = false
-    
-    private var item: GiftItem? {
-        itemService.items.first { $0.id == itemId }
+    @State private var deleteError: ItemError?
+    @State private var hasStartedLoading = false
+
+    private enum DetailSheet: Identifiable {
+        case edit
+        case recordPurchase
+        case purchaseHistory
+
+        var id: Self { self }
     }
-    
+
+    private var currentItem: ListItem? {
+        guard let item = itemService.currentItem, item.id == itemId else { return nil }
+        return item
+    }
+
+    private func state(for item: ListItem) -> ItemDetailState {
+        ItemDetailState(
+            item: item,
+            context: context,
+            currentUserId: authenticationService.currentUser?.id,
+            now: .now
+        )
+    }
+
     var body: some View {
-        Group {
-            if let item = itemService.currentItem {
-                detailContent(item: item)
-            } else {
-                LoadingView(message: "Loading item...")
-            }
-        }
-        .navigationTitle("Item Details")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if let item = item, item.canEdit {
-                    Button("Edit") {
-                        showEditSheet = true
-                    }
-                }
-            }
-        }
-        .sheet(isPresented: $showEditSheet) {
-            if let item = item {
-                EditItemView(item: item)
-            }
-        }
-        .sheet(isPresented: $showRecordPurchaseSheet) {
-            if let item = item {
-                RecordPurchaseView(item: item)
-            }
-        }
-        .sheet(isPresented: $showPurchaseHistorySheet) {
-            if let item = item {
-                PurchaseHistoryView(item: item)
-            }
-        }
-        .task {
-            try? await itemService.loadItemDetail(id: itemId)
-        }
-        .onDisappear {
-            itemService.clearItemDetail()
-        }
-    }
-    
-    private func detailContent(item: GiftItem) -> some View {
-        ScrollView {
-            VStack(spacing: AppSpacing.xl) {
-                // Header card
-                headerCard(item: item)
-                
-                // Purchase status card
-                if item.isPurchased {
-                    purchaseSummaryCard(item: item)
-                }
-                
-                // Actions
-                actionsSection(item: item)
-            }
-            .padding(EdgeInsets.appScreenPadding)
-        }
-        .background(Color.backgroundPrimaryColor)
-        .confirmationDialog(
-            "Delete Item",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete '\(item.name)'", role: .destructive) {
-                Task {
-                    try? await itemService.deleteItem(id: item.id, listId: item.listId)
-                    dismiss()
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This action cannot be undone.")
-        }
-        .confirmationDialog(
-            item.isPurchased ? "Mark as not purchased?" : "Mark as purchased?",
-            isPresented: $showPurchaseConfirmation,
-            titleVisibility: .visible
-        ) {
-            if item.isPurchased {
-                Button("Undo Purchase") {
-                    Task {
-                        //                        try? await itemService.undoPurchase(id: item.id)
-                    }
-                }
-            } else {
-                Button("Mark as Purchased") {
-                    Task {
-                        //                        try? await itemService.purchaseItem(id: item.id)
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        }
-    }
-    
-    private func headerCard(item: GiftItem) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Text(item.name)
-                .font(.appTitle1)
-                .foregroundColor(.textPrimaryColor)
-            
-            Text(item.description ?? "")
-                .font(.appBody)
-                .foregroundColor(.textMutedColor)
-            
-            if let price = item.expectedUnitPrice {
-                HStack {
-                    Text("Expected Price:")
-                        .font(.appHeadline)
-                        .foregroundColor(.textMutedColor)
-                    Text("$\(String(format: "%.2f", price))")
-                        .font(.appHeadline)
-                        .foregroundColor(.textPrimaryColor)
-                    
-                    if item.quantityRequested > 1 {
-                        Text("× \(item.quantityRequested)")
-                            .font(.appBody)
-                            .foregroundColor(.textMutedColor)
-                    }
-                }
-            }
-            
-            if item.quantityRequested > 1, let totalPrice = item.totalPrice {
-                HStack {
-                    Text("Total:")
-                        .font(.appHeadline)
-                        .foregroundColor(.textMutedColor)
-                    Text("$\(String(format: "%.2f", totalPrice))")
-                        .font(.appTitle3)
-                        .foregroundColor(.primaryColor)
-                }
-            }
-            
-            // Priority
-            if item.priority > 0 {
-                HStack {
-                    Text("Priority:")
-                        .font(.appBody)
-                        .foregroundColor(.textMutedColor)
-                    HStack(spacing: 2) {
-                        ForEach(1...10, id: \.self) { level in
-                            Image(systemName: level <= item.priority ? "star.fill" : "star")
-                                .foregroundColor(.orange)
-                                .font(.appCaption2)
+        content
+            .background(Color.backgroundPrimaryColor)
+            .navigationTitle("Item Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let item = currentItem, state(for: item).showsEdit {
+                        Button("Edit") {
+                            sheet = .edit
                         }
                     }
                 }
             }
-            
-            if let url = item.url {
-                Link(destination: URL(string: url)!) {
-                    HStack {
-                        Image(systemName: "link")
-                        Text("View Product")
-                    }
-                    .font(.appBody)
-                    .foregroundColor(.accentColor)
+            .sheet(item: $sheet) { sheet in
+                sheetContent(sheet)
+            }
+            .onChange(of: itemService.goneItemId) { _, goneId in
+                // The server said this item is gone: leave. The service already dropped it.
+                if goneId == itemId {
+                    dismiss()
                 }
             }
-            
-            if item.offList {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "gift.fill")
-                    Text("Surprise Gift - Hidden from list owner")
+            .task {
+                hasStartedLoading = true
+                await itemService.loadItemDetail(id: itemId)
+            }
+            .onDisappear {
+                deleteError = nil
+                itemService.clearItemDetail()
+                itemService.clearDetailLoadError()
+            }
+    }
+
+    // MARK: - Content
+
+    private var screenState: ItemDetailScreenState {
+        ItemDetailScreenState.resolve(
+            item: currentItem,
+            isLoading: itemService.isLoadingDetail,
+            hasStartedLoading: hasStartedLoading,
+            error: itemService.detailLoadError
+        )
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch screenState {
+        case .loaded(let item):
+            detailContent(item: item, state: state(for: item))
+        case .loading:
+            LoadingView(message: "Loading item...")
+        case .error(let banner):
+            InlineErrorBanner(
+                state: banner,
+                onTryAgain: { Task { await itemService.loadItemDetail(id: itemId) } },
+                onDismiss: { itemService.clearDetailLoadError() }
+            )
+            .padding(EdgeInsets.appScreenPadding)
+            .frame(maxHeight: .infinity, alignment: .top)
+        case .notLoaded:
+            notLoadedContent
+        }
+    }
+
+    private var notLoadedContent: some View {
+        VStack(spacing: AppSpacing.md) {
+            Text(ItemDetailScreenState.notLoadedMessage)
+                .font(.appBody)
+                .foregroundStyle(Color.textMutedColor)
+                .multilineTextAlignment(.center)
+            Button("Try Again") {
+                Task { await itemService.loadItemDetail(id: itemId) }
+            }
+            .buttonStyle(.bordered)
+            .tint(Color.primaryColor)
+            .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
+        }
+        .padding(EdgeInsets.appScreenPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func detailContent(item: ListItem, state: ItemDetailState) -> some View {
+        ScrollView {
+            VStack(spacing: AppSpacing.xl) {
+                if let banner = deleteError.flatMap({ ItemErrorPresentation.banner(for: $0, hasRetryAction: true) }) {
+                    InlineErrorBanner(
+                        state: banner,
+                        onTryAgain: { Task { await delete(item) } },
+                        onDismiss: { deleteError = nil }
+                    )
+                }
+                headerCard(state: state)
+                if state.statusMarker != nil {
+                    purchaseStatusCard(state: state)
+                }
+                if state.showsPurchaseEntry || state.showsDelete {
+                    actionsSection(item: item, state: state)
+                }
+            }
+            .padding(EdgeInsets.appScreenPadding)
+        }
+    }
+
+    // MARK: - Cards
+
+    private func headerCard(state: ItemDetailState) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Text(state.title)
+                .font(.appTitle1)
+                .foregroundStyle(Color.textPrimaryColor)
+            if let description = state.descriptionText {
+                Text(description)
+                    .font(.appBody)
+                    .foregroundStyle(Color.textMutedColor)
+            }
+            if let price = state.priceText {
+                LabeledContent("Expected Price", value: price)
+                    .font(.appHeadline)
+            }
+            LabeledContent("Quantity", value: state.quantityText)
+                .font(.appBody)
+            LabeledContent("Priority", value: state.priorityText)
+                .font(.appBody)
+            if let link = state.linkURL {
+                Link(destination: link) {
+                    Label("View Product", systemImage: "link")
+                        .font(.appBody)
+                        .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
+                }
+            }
+            if state.showsOffListBadge {
+                Label("Surprise gift - hidden from the recipient", systemImage: "gift.fill")
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textPrimaryColor)
+                    .padding(.horizontal, AppSpacing.sm)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(Color.highlightColor.opacity(0.25), in: .rect(cornerRadius: AppSpacing.xs))
+            }
+            if let marker = state.statusMarker {
+                Label(marker.displayName, systemImage: marker.icon)
+                    .font(.appHeadline)
+                    .foregroundStyle(marker.tokenColor)
+            }
+            if let updated = state.updatedText {
+                Text(updated)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textMutedColor)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
+    }
+
+    private func purchaseStatusCard(state: ItemDetailState) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Purchase Status")
+                .font(.appHeadline)
+                .foregroundStyle(Color.textPrimaryColor)
+            if let progress = state.progress {
+                ProgressView(value: progress)
+                    .tint(Color.primaryColor)
+                    .accessibilityLabel("Purchase progress")
+                    .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
+            }
+            if let remaining = state.remainingQuantity {
+                Text("\(remaining) remaining")
+                    .font(.appBody)
+                    .foregroundStyle(Color.textMutedColor)
+            }
+            ForEach(state.purchases) { purchase in
+                HStack {
+                    Text(purchase.purchaserName)
+                    Spacer()
+                    Text("\(purchase.quantity) for \(purchase.totalCostText)")
                 }
                 .font(.appCaption1)
-                .foregroundColor(.orange)
-                .padding(.horizontal, AppSpacing.sm)
-                .padding(.vertical, AppSpacing.xs)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(4)
-            }
-            
-            // Status badge
-            HStack {
-                Image(systemName: item.status.icon)
-                    .foregroundColor(item.status.color)
-                Text(item.status.displayName)
-                    .font(.appHeadline)
-                    .foregroundColor(item.status.color)
+                .foregroundStyle(Color.textMutedColor)
             }
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listCard()
     }
-    
-    private func purchaseSummaryCard(item: GiftItem) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text("Purchase Status")
-                        .font(.appHeadline)
-                        .foregroundColor(.textPrimaryColor)
-                    
-                    if let purchasedQuantity = item.totalQuantityPurchased {
-                        Text("\(purchasedQuantity) of \(item.quantityRequested) purchased")
-                            .font(.appBody)
-                            .foregroundColor(.textMutedColor)
-                    }
-                }
-                
-                Spacer()
-                
-                Button {
-                    showPurchaseHistorySheet = true
-                } label: {
-                    HStack(spacing: AppSpacing.xs) {
-                        Text("View History")
-                        Image(systemName: "chevron.right")
-                    }
-                    .font(.appCaption1)
-                    .foregroundColor(.accentColor)
-                }
-            }
-            
-            // Progress bar
-            if let purchaseQuantity = item.totalQuantityPurchased {
-                ProgressView(value: Double(purchaseQuantity) / Double(item.quantityRequested))
-                    .tint(item.status.color)
-            }
-        }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-    }
-    
-    private func actionsSection(item: GiftItem) -> some View {
+
+    // MARK: - Actions
+
+    private func actionsSection(item: ListItem, state: ItemDetailState) -> some View {
         VStack(spacing: AppSpacing.md) {
-            // Record Purchase button
-            if !item.isPurchased || item.status == .partial {
+            if state.showsPurchaseEntry {
+                // The purchase screens still run on the old stack until package I4.
                 Button {
-                    showRecordPurchaseSheet = true
+                    sheet = .recordPurchase
                 } label: {
-                    HStack {
-                        Image(systemName: "cart.badge.plus")
-                        Text(item.status == .partial ? "Record Additional Purchase" : "Record Purchase")
+                    Label("Record Purchase", systemImage: "cart.badge.plus")
+                        .font(.appHeadline)
+                        .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.primaryColor)
+                if state.statusMarker != nil {
+                    Button {
+                        sheet = .purchaseHistory
+                    } label: {
+                        Label("View Purchase History", systemImage: "clock.arrow.circlepath")
+                            .font(.appHeadline)
+                            .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
                     }
-                    .font(.appHeadline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(Color.green)
-                    .cornerRadius(12)
+                    .buttonStyle(.bordered)
+                    .tint(Color.primaryColor)
                 }
             }
-            
-            // View Purchase History button
-            if item.status != .available {
-                Button {
-                    showPurchaseHistorySheet = true
-                } label: {
-                    HStack {
-                        Image(systemName: "clock.arrow.circlepath")
-                        Text("View Purchase History")
-                    }
-                    .font(.appHeadline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(Color.blue)
-                    .cornerRadius(12)
-                }
+            if state.showsDelete {
+                deleteButton(item: item)
             }
-            
-            // Delete button (if can edit)
-            if item.canEdit {
-                Button {
-                    showDeleteConfirmation = true
-                } label: {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("Delete Item")
-                    }
-                    .font(.appHeadline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(Color.red)
-                    .cornerRadius(12)
-                }
+        }
+    }
+
+    /// The confirmation dialog is attached to this trigger, not to the screen.
+    private func deleteButton(item: ListItem) -> some View {
+        Button(role: .destructive) {
+            showDeleteConfirmation = true
+        } label: {
+            Label("Delete Item", systemImage: "trash")
+                .font(.appHeadline)
+                .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
+        }
+        .buttonStyle(.bordered)
+        .tint(Color.destructiveColor)
+        .disabled(itemService.isMutating)
+        .confirmationDialog(
+            "Delete this item?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Item", role: .destructive) {
+                Task { await delete(item) }
+            }
+            .tint(Color.destructiveColor)
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This action cannot be undone.")
+        }
+    }
+
+    // MARK: - Sheets
+
+    @ViewBuilder
+    private func sheetContent(_ sheet: DetailSheet) -> some View {
+        if let item = currentItem {
+            switch sheet {
+            case .edit:
+                EditItemView(item: item)
+            case .recordPurchase:
+                RecordPurchaseView(item: item.legacyPurchaseItem)
+            case .purchaseHistory:
+                PurchaseHistoryView(item: item.legacyPurchaseItem)
+            }
+        }
+    }
+
+    // MARK: - Delete
+
+    private func delete(_ item: ListItem) async {
+        deleteError = nil
+        do {
+            try await itemService.deleteItem(id: item.id, listId: item.listId)
+            dismiss()
+        } catch is CancellationError {
+            // The session ended or the task was cancelled: nothing to show.
+        } catch {
+            let itemError = (error as? ItemError) ?? ItemError.server
+            if ItemErrorPresentation.leavesScreen(itemError) {
+                dismiss()
+            } else {
+                deleteError = itemError
             }
         }
     }
 }
 
-#Preview {
+#Preview("Owner") {
     NavigationStack {
-        ItemDetailView(itemId: "1")
+        ItemDetailView(itemId: "mock-item-child-3", context: ItemListContext(capabilities: MockListData.ownerCapabilities))
             .environment(\.itemService, {
-                let service = ItemService(
-                    repository: MockItemRepository(),
-                    dataStore: ItemDataStore()
-                )
-                Task {
-                    await service.loadItems(listId: "1")
-                }
+                let service = ItemService(repository: MockItemRepository(), dataStore: ItemDataStore())
+                Task { await service.loadItemDetail(id: "mock-item-child-3") }
                 return service
             }())
     }

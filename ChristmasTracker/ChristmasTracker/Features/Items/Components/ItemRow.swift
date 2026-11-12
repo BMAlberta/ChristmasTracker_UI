@@ -7,99 +7,74 @@
 
 import SwiftUI
 
+/// One item in the list. Driven only by `ItemRowState`: the status marker is present only when
+/// the viewer may see gift activity, so this view never decides that itself.
 struct ItemRow: View {
-    let item: GiftItem
-    let detail: ListDetail
+    let state: ItemRowState
+
     var body: some View {
         HStack(spacing: AppSpacing.md) {
-            // Status icon
-            statusIcon
-            // Item info
+            if let marker = state.statusMarker {
+                Image(systemName: marker.icon)
+                    .font(.appTitle2)
+                    .foregroundStyle(marker.tokenColor)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text(item.name)
+                Text(state.name)
                     .font(.appBody)
-                    .foregroundColor(item.isPurchased ? .textMutedColor : .textPrimaryColor)
-                    .strikethrough(item.isPurchased)
-                if let price = item.expectedUnitPrice {
-                    Text("$\(String(format: "%.2f", price))")
-                        .font(.appCaption1)
-                        .foregroundColor(.textMutedColor)
-                }
-                // Status description
-                statusDescription
-            }
-            Spacer()
-            // Priority indicator
-            if item.priority >= 8 {
-                HStack(spacing: 2) {
-                    ForEach(0..<min(item.priority, 10), id: \.self) { _ in
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(.orange)
-                    }
+                    .foregroundStyle(state.isCompleted ? Color.textMutedColor : Color.textPrimaryColor)
+                    .strikethrough(state.isCompleted)
+                details
+                if let marker = state.statusMarker, marker != .available {
+                    Text(marker.displayName)
+                        .font(.appCaption2)
+                        .foregroundStyle(marker.tokenColor)
                 }
             }
-            // Off-list badge
-            if item.offList {
+            Spacer(minLength: AppSpacing.sm)
+            if state.showsOffListBadge {
                 Text("Surprise")
                     .font(.appCaption2)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.textPrimaryColor)
                     .padding(.horizontal, AppSpacing.xs)
-                    .padding(.vertical, 2)
-                    .background(Color.orange)
-                    .cornerRadius(4)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(Color.highlightColor, in: .rect(cornerRadius: AppSpacing.xs))
             }
             Image(systemName: "chevron.right")
                 .font(.appCaption1)
-                .foregroundColor(.textMutedColor)
+                .foregroundStyle(Color.textMutedColor)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, AppSpacing.sm)
-        .contentShape(Rectangle())
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
     }
-    private var statusIcon: some View {
-        Image(systemName: item.status.icon)
-            .font(.system(size: 24))
-            .foregroundColor(item.status.color)
-    }
-    @ViewBuilder
-    private var statusDescription: some View {
-        switch item.status {
-        case .available:
-            EmptyView()
-        case .partial:
-            Text("Partially purchased")
-                .font(.appCaption2)
-                .foregroundColor(.orange)
-        case .purchased:
-            Text("Purchased")
-                .font(.appCaption2)
-                .foregroundColor(.green)
-        case .wrapped:
-            Text("Wrapped")
-                .font(.appCaption2)
-                .foregroundColor(.blue)
-        case .gifted:
-            Text("Gifted")
-                .font(.appCaption2)
-                .foregroundColor(.purple)
+
+    private var details: some View {
+        HStack(spacing: AppSpacing.sm) {
+            if let price = state.priceText {
+                Text(price)
+            }
+            Text(state.quantityText)
+            Text(state.priorityText)
         }
+        .font(.appCaption1)
+        .foregroundStyle(Color.textMutedColor)
     }
 }
-#Preview {
+
+#Preview("Rows") {
     VStack {
-        ItemRow(
-            item: MockItemData.allItems[0],
-            detail: MockListData.allLists[0]
-        )
+        ItemRow(state: ItemRowState(
+            id: "1", name: "Toy Rocket", priceText: "$24.99", quantityText: "Qty 1", priorityText: "Priority 9",
+            statusMarker: .purchased, showsOffListBadge: false, isCompleted: true
+        ))
         Divider()
-        ItemRow(
-            item: MockItemData.allItems[1],
-            detail: MockListData.allLists[0]
-        )
+        ItemRow(state: ItemRowState(
+            id: "2", name: "Surprise Scooter", priceText: nil, quantityText: "Qty 1", priorityText: "Priority 5",
+            statusMarker: nil, showsOffListBadge: true, isCompleted: false
+        ))
     }
     .padding()
-    .environment(\.itemService, ItemService(
-        repository: MockItemRepository(),
-        dataStore: ItemDataStore()
-    ))
 }

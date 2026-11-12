@@ -60,9 +60,11 @@ struct MemberConfirmationTests {
         #expect(LeaveListConfirmation.message.lowercased().contains("removed from your lists"))
     }
 
-    @Test("The leave and delete confirmations are different")
-    func leaveIsNotDelete() {
-        #expect(LeaveListConfirmation.confirmButtonTitle != ListDeleteConfirmation.confirmButtonTitle)
-        #expect(LeaveListConfirmation.title != ListDeleteConfirmation.title)
+    // CHANGED (I3c-A, decision "deleting a list is presented as archiving it"): ListDeleteConfirmation
+    // is deleted and replaced by ListArchiveConfirmation; the assertion is the same, on the new type.
+    @Test("The leave and archive confirmations are different")
+    func leaveIsNotArchive() {
+        #expect(LeaveListConfirmation.confirmButtonTitle != ListArchiveConfirmation.confirmButtonTitle)
+        #expect(LeaveListConfirmation.title != ListArchiveConfirmation.title)
     }
 }

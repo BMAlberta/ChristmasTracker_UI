@@ -135,7 +135,7 @@ struct LogHygieneScanTests {
 
     /// Interpolations `\( ... )` found in the argument text of one call (text starts right after the
     /// opening paren of the call). Returns (expression, line offset from the first line of `tail`).
-    private static func interpolations(inCallTail tail: [Character]) -> [(expression: String, lineOffset: Int)] {
+    static func interpolations(inCallTail tail: [Character]) -> [(expression: String, lineOffset: Int)] {
         var found: [(String, Int)] = []
         var index = 0
         var depth = 1

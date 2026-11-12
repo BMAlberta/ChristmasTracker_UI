@@ -74,7 +74,7 @@ nonisolated enum ListError: Error, LocalizedError, Equatable, Sendable {
         case .duplicateRecipientYear:
             return "A list for this person and year already exists."
         case .archivedReadOnly:
-            return "This list is archived and can no longer be changed."
+            return "This list is archived and can't be edited."
         case .validation(let message):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? "The information you provided is invalid." : message

@@ -26,6 +26,8 @@ nonisolated struct ListRowState: Equatable, Sendable {
     let progress: Double?
     let showsDeleteAction: Bool
     let category: ListCategory
+    let isArchived: Bool
+    let showsArchivedBadge: Bool
 
     init(list: GiftList) {
         let permissions = ListPermissions(list.capabilities)
@@ -45,10 +47,15 @@ nonisolated struct ListRowState: Equatable, Sendable {
         progress = progressVisible ? list.progress : nil
         showsDeleteAction = permissions.canDeleteList
         category = permissions.category
+        isArchived = list.status == .archived
+        showsArchivedBadge = list.status == .archived
     }
 
     var accessibilityLabel: String {
         var parts = [title, subtitle, String(year), badgeTitle]
+        if showsArchivedBadge {
+            parts.append(ListArchivedBadge.title)
+        }
         if let itemCountText, let purchasedCountText {
             parts.append(itemCountText)
             parts.append(purchasedCountText)
@@ -83,6 +90,8 @@ nonisolated struct ListDetailState: Equatable, Sendable {
     let showsProgress: Bool
     let progress: Double?
     let showsAddItemAction: Bool
+    let isArchived: Bool
+    let showsArchivedBadge: Bool
 
     init(detail: ListDetail) {
         let permissions = ListPermissions(detail.capabilities)
@@ -111,6 +120,8 @@ nonisolated struct ListDetailState: Equatable, Sendable {
         showsProgress = progressVisible
         progress = progressVisible ? detail.progress : nil
         showsAddItemAction = detail.capabilities.canCreateItem
+        isArchived = detail.status == .archived
+        showsArchivedBadge = detail.status == .archived
     }
 }
 
@@ -269,9 +280,9 @@ nonisolated struct ListErrorPresentation: Equatable, Sendable {
             isRetryable = false
         }
         switch error {
-        case .notFound, .archivedReadOnly:
+        case .notFound:
             shouldLeaveScreen = true
-        case .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
+        case .forbidden, .archivedReadOnly, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
              .unauthorized, .sessionEnded, .network, .invalidResponse, .server, .memberEmailNotFound,
              .alreadyMember, .membershipNotFound:
             shouldLeaveScreen = false
@@ -303,6 +314,19 @@ nonisolated enum ListScreenExit {
     private static func shouldLeave(_ error: ListError?) -> Bool {
         guard let error else { return false }
         return ListErrorPresentation(error).shouldLeaveScreen
+    }
+}
+
+/// What the detail screen does once an archive returned normally. The archive itself succeeded,
+/// but the reload that follows may have failed and left its error on the service: that error is
+/// shown (no retry that would archive again) and the screen stays.
+nonisolated enum ListArchiveCompletion: Equatable, Sendable {
+    case dismiss
+    case showError(ListErrorPresentation)
+
+    static func after(serviceError: ListError?) -> ListArchiveCompletion {
+        guard let serviceError else { return .dismiss }
+        return .showError(ListErrorPresentation(serviceError))
     }
 }
 
@@ -339,8 +363,69 @@ nonisolated enum ListItemsScope {
 
 // MARK: - Delete confirmation
 
-nonisolated enum ListDeleteConfirmation {
-    static let title = "Delete this list?"
-    static let message = "The list will be removed from your lists."
-    static let confirmButtonTitle = "Delete List"
+/// Deleting a list is presented as archiving it.
+nonisolated enum ListArchiveConfirmation {
+    static let title = "Archive this list?"
+    static let message = "The list moves to Archived and can no longer be edited. "
+        + "Items and purchases can still be recorded there."
+    static let confirmButtonTitle = "Archive List"
+    static let actionTitle = "Archive List"
+}
+
+nonisolated enum ListArchivedBadge {
+    static let title = "Archived"
+}
+
+// MARK: - Segments
+
+/// The two tabs of the lists screen.
+nonisolated enum ListSegment: String, CaseIterable, Sendable {
+    case active
+    case archived
+
+    var title: String {
+        switch self {
+        case .active: return "Active"
+        case .archived: return "Archived"
+        }
+    }
+
+    /// Active holds ACTIVE and DRAFT lists; Archived holds ARCHIVED ones.
+    func includes(_ status: ListStatus) -> Bool {
+        switch (self, status) {
+        case (.active, .active), (.active, .draft), (.archived, .archived):
+            return true
+        case (.active, .archived), (.archived, .active), (.archived, .draft):
+            return false
+        }
+    }
+}
+
+/// What one segment shows: its lists and the copy of its empty state. The screen applies the
+/// search before building this, so no matching happens here.
+nonisolated struct ListSegmentState: Equatable, Sendable {
+    let lists: [GiftList]
+    let emptyTitle: String
+    let emptyMessage: String
+    let showsCreateAction: Bool
+
+    init(segment: ListSegment, lists: [GiftList], isSearching: Bool) {
+        self.lists = lists.filter { segment.includes($0.status) }
+        if isSearching {
+            emptyTitle = "No Results"
+            emptyMessage = "No lists match your search."
+            showsCreateAction = false
+            return
+        }
+        switch segment {
+        case .active:
+            emptyTitle = "No active lists"
+            emptyMessage = "Create your first gift list to get started"
+            showsCreateAction = true
+        case .archived:
+            emptyTitle = "No archived lists"
+            emptyMessage = "Archived lists appear here."
+            showsCreateAction = false
+        }
+    }
 }

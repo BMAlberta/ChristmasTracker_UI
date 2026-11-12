@@ -55,6 +55,28 @@ final class ListService {
     /// Reset with the rest of the session state.
     private var removalSequence: [String: Int] = [:]
 
+    /// Incremented when an archive completes. A list load, refresh or detail load that captured an
+    /// older value started before the archive finished, so its result may show the list as active
+    /// and is discarded without an error.
+    private var archiveEpoch = 0
+
+    /// For each list archived in this session, the number of archives that completed for it. A
+    /// detail load captures its own list's value, so an archive of one list never discards the
+    /// in-flight detail load of another.
+    private var archivedListEpoch: [String: Int] = [:]
+
+    /// Number of loadListDetail calls in flight per list id.
+    private var detailLoadsInFlight: [String: Int] = [:]
+
+    /// Monotonic token handed to each refreshListDetail; only the newest one applies.
+    private var detailRefreshToken = 0
+
+    /// Number of mutations in flight; isMutating is true while it is above zero.
+    private var mutationCount = 0
+
+    /// Monotonic token handed to each archive's reload; only the latest token's result is applied.
+    private var reloadTokenCounter = 0
+
     // MARK: - Filtering
 
     enum FilterType {
@@ -74,6 +96,16 @@ final class ListService {
         case .shared:
             return lists.filter { ListPermissions($0.capabilities).category == .shared }
         }
+    }
+
+    /// Lists with status ACTIVE or DRAFT, in the order of `lists`.
+    var activeLists: [GiftList] {
+        lists.filter { ListSegment.active.includes($0.status) }
+    }
+
+    /// Lists with status ARCHIVED, in the order of `lists`.
+    var archivedLists: [GiftList] {
+        lists.filter { ListSegment.archived.includes($0.status) }
     }
 
     // MARK: - Initialization
@@ -98,6 +130,7 @@ final class ListService {
 
         let gen = generation
         let start = operationSequence
+        let epoch = archiveEpoch
         isLoadingLists = true
         defer { if gen == generation { isLoadingLists = false } }
         error = nil
@@ -105,7 +138,7 @@ final class ListService {
         do {
             // Check cache
             let cached = await dataStore.getLists()
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archiveEpoch else { return }
             if !cached.isEmpty {
                 lists = visibleLists(cached, since: start)
 
@@ -119,16 +152,17 @@ final class ListService {
             // Fetch from repository
             let repository = self.repository
             let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archiveEpoch else { return }
 
             // Update cache
             await dataStore.setLists(fetched)
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archiveEpoch else { return }
             lists = visibleLists(fetched, since: start)
             lastUpdated = Date()
 
             LogInfo("Loaded \(fetched.count) lists", category: .business)
         } catch {
+            guard epoch == archiveEpoch else { return }
             _ = record(error, generation: gen, operation: "load lists")
         }
     }
@@ -144,6 +178,7 @@ final class ListService {
 
         let gen = generation
         let start = operationSequence
+        let epoch = archiveEpoch
         isRefreshing = true
         defer { if gen == generation { isRefreshing = false } }
         error = nil
@@ -151,14 +186,15 @@ final class ListService {
         do {
             let repository = self.repository
             let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archiveEpoch else { return }
             await dataStore.setLists(fetched)
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archiveEpoch else { return }
             lists = visibleLists(fetched, since: start)
             lastUpdated = Date()
 
             LogInfo("Refreshed \(fetched.count) lists", category: .business)
         } catch {
+            guard epoch == archiveEpoch else { return }
             _ = record(error, generation: gen, operation: "refresh lists")
         }
     }
@@ -173,8 +209,16 @@ final class ListService {
 
         let gen = generation
         let start = operationSequence
+        // Only an archive of this very list can make the result stale.
+        let epoch = archivedListEpoch[id, default: 0]
         isLoadingDetail = true
-        defer { if gen == generation { isLoadingDetail = false } }
+        detailLoadsInFlight[id, default: 0] += 1
+        defer {
+            if gen == generation {
+                isLoadingDetail = false
+                detailLoadsInFlight[id, default: 1] -= 1
+            }
+        }
         error = nil
         // A reload of the list that is already open keeps showing it; another list's detail is
         // never shown while this one loads.
@@ -196,16 +240,17 @@ final class ListService {
 
             let repository = self.repository
             let detail = try await perform { try await repository.fetchListDetail(id: id) }
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archivedListEpoch[id, default: 0] else { return }
             guard await !reportGuarded(id, since: start, generation: gen) else { return }
 
             await dataStore.setListDetail(detail)
-            guard gen == generation else { return }
+            guard gen == generation, epoch == archivedListEpoch[id, default: 0] else { return }
             guard await !reportGuarded(id, since: start, generation: gen) else { return }
             currentListDetail = detail
 
             LogInfo("Loaded list detail", category: .business)
         } catch {
+            guard epoch == archivedListEpoch[id, default: 0] else { return }
             if shownCached, (error as? ListError) == .forbidden {
                 // Revalidating a cached detail: access is gone, so the cached copy must go too.
                 if gen == generation { await dropList(id: id) }
@@ -213,6 +258,55 @@ final class ListService {
                 await dropListIfGone(error, id: id, generation: gen)
             }
             _ = record(error, generation: gen, operation: "load list details")
+        }
+    }
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
+    /// Always fetches. Returns the failure (it is not stored); nil on success, when the list is
+    /// gone (goneListId is set), when superseded by a newer refresh, or when the session ended.
+    @discardableResult
+    func refreshListDetail(id: String) async -> ListError? {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.refreshListDetail",
+            operation: "service.lists.refreshListDetail"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        let start = operationSequence
+        let epoch = archivedListEpoch[id, default: 0]
+        detailRefreshToken += 1
+        let token = detailRefreshToken
+
+        do {
+            let repository = self.repository
+            let detail = try await perform { try await repository.fetchListDetail(id: id) }
+            guard gen == generation, token == detailRefreshToken, epoch == archivedListEpoch[id, default: 0],
+                  await !reportGuarded(id, since: start, generation: gen) else { return nil }
+            await dataStore.setListDetail(detail)
+            guard gen == generation, token == detailRefreshToken, epoch == archivedListEpoch[id, default: 0],
+                  await !reportGuarded(id, since: start, generation: gen) else { return nil }
+            if currentListDetail == nil || currentListDetail?.id == id {
+                currentListDetail = detail
+            }
+            LogInfo("Refreshed list detail", category: .business)
+            return nil
+        } catch {
+            guard gen == generation, token == detailRefreshToken, !(error is CancellationError),
+                  epoch == archivedListEpoch[id, default: 0] else { return nil }
+            let listError = (error as? ListError) ?? .server
+            if listError == .notFound {
+                await dropListIfGone(error, id: id, generation: gen)
+                return nil
+            }
+            if listError == .forbidden, currentListDetail?.id == id {
+                await dropList(id: id)
+                return nil
+            }
+            // Only the operation name is logged: no ids, names, emails or server text.
+            LogError("refresh list details failed", category: .business)
+            return listError
         }
     }
 
@@ -226,8 +320,8 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
@@ -264,8 +358,8 @@ final class ListService {
 
         let gen = generation
         let start = operationSequence
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
@@ -294,6 +388,7 @@ final class ListService {
             LogInfo("Updated list", category: .business)
         } catch {
             await dropListIfGone(error, id: id, generation: gen)
+            await refetchAfterArchivedReadOnly(error, id: id, generation: gen)
             throw failure(error, generation: gen, operation: "update list")
         }
     }
@@ -309,8 +404,8 @@ final class ListService {
 
         let gen = generation
         let start = operationSequence
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
@@ -339,12 +434,17 @@ final class ListService {
             LogInfo("Removed co-owner", category: .business)
         } catch {
             await dropListIfGone(error, id: listId, generation: gen)
+            await refetchAfterArchivedReadOnly(error, id: listId, generation: gen)
             throw failure(error, generation: gen, operation: "remove co-owner")
         }
     }
 
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No list data goes into the span.
+    /// Archives a list (the server's delete), then reloads the lists with a fresh fetch so the list
+    /// shows under Archived with the server's flags. No removal is recorded and no status is
+    /// synthesized locally. If the archive succeeded but the reload fails, returns normally with
+    /// `error` set to the reload error.
     func deleteList(id: String) async throws {
         let span = SentrySDK.startTransaction(
             name: "service.lists.deleteList",
@@ -353,29 +453,32 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        let start = operationSequence
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
             let repository = self.repository
             try await perform { try await repository.deleteList(id: id) }
             try ensureCurrent(gen)
-            recordRemoval(id)
+            // Loads that started before this point may still carry the list as active.
+            archiveEpoch += 1
+            archivedListEpoch[id, default: 0] += 1
+            // A detail load of this list that is in flight now is discarded: refetch for it.
+            let discardedDetailLoad = detailLoadsInFlight[id, default: 0] > 0
+            reloadTokenCounter += 1
 
-            // The server archives the list; remove it locally without refetching. Later
-            // loads drop it because it comes back ARCHIVED.
-            await dataStore.removeList(id: id)
-            try ensureCurrent(gen)
-
-            lists.removeAll { $0.id == id }
-            if currentListDetail?.id == id {
-                currentListDetail = nil
-            }
-
-            LogInfo("Deleted list", category: .business)
+            try await reloadAfterArchive(
+                id: id,
+                since: start,
+                generation: gen,
+                reloadToken: reloadTokenCounter,
+                refetchDetailAnyway: discardedDetailLoad
+            )
+            LogInfo("Archived list", category: .business)
         } catch {
-            throw failure(error, generation: gen, operation: "delete list")
+            throw failure(error, generation: gen, operation: "archive list")
         }
     }
 
@@ -392,8 +495,8 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
@@ -404,6 +507,7 @@ final class ListService {
             LogInfo("Added list member", category: .business)
         } catch {
             await dropListIfGone(error, id: listId, generation: gen)
+            await refetchAfterArchivedReadOnly(error, id: listId, generation: gen)
             throw failure(error, generation: gen, operation: "add member")
         }
     }
@@ -419,8 +523,8 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
@@ -431,6 +535,7 @@ final class ListService {
             LogInfo("Removed list member", category: .business)
         } catch {
             await dropListIfGone(error, id: listId, generation: gen)
+            await refetchAfterArchivedReadOnly(error, id: listId, generation: gen)
             if gen == generation, (error as? ListError) == .membershipNotFound {
                 try? await refetchDetailAfterMemberChange(listId: listId, generation: gen)
             }
@@ -449,8 +554,8 @@ final class ListService {
         defer { span.finish() }
 
         let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
+        beginMutation()
+        defer { endMutation(generation: gen) }
         error = nil
 
         do {
@@ -509,6 +614,18 @@ final class ListService {
 
     // MARK: - Private Functions
 
+    private func beginMutation() {
+        mutationCount += 1
+        isMutating = true
+    }
+
+    /// Clears isMutating only when no other mutation is running. Ignores a session that ended.
+    private func endMutation(generation gen: Int) {
+        guard gen == generation else { return }
+        mutationCount = max(0, mutationCount - 1)
+        isMutating = mutationCount > 0
+    }
+
     // Covered by the manual spans of its public callers (clearForSession, clearCache).
     private func resetSession() async {
         generation += 1
@@ -525,6 +642,10 @@ final class ListService {
         isLoadingLists = false
         isLoadingDetail = false
         isMutating = false
+        mutationCount = 0
+        archivedListEpoch = [:]
+        detailLoadsInFlight = [:]
+        detailRefreshToken = 0
         isRefreshing = false
         lastUpdated = nil
         currentFilter = .all
@@ -534,10 +655,10 @@ final class ListService {
         await dataStore.clear()
     }
 
-    /// ARCHIVED lists are hidden everywhere; DRAFT behaves like ACTIVE. Lists removed after the
-    /// operation started (`start`) are hidden too, even when that load still returns them.
+    /// Every list stays, ARCHIVED included. Lists removed after the operation started (`start`)
+    /// are hidden, even when that load still returns them.
     private func visibleLists(_ fetched: [GiftList], since start: Int) -> [GiftList] {
-        fetched.filter { $0.status != .archived && !isRemoved($0.id, since: start) }
+        fetched.filter { !isRemoved($0.id, since: start) }
     }
 
     /// True when the list was removed after an operation that captured `start` began.
@@ -552,16 +673,16 @@ final class ListService {
         removalSequence[id] = operationSequence
     }
 
-    /// When a call failed because the list is gone (not found) or read-only (archived), removes
-    /// it from the lists, the cache and the open detail and records the removal for this session.
-    /// Does nothing for any other error or after the session ended.
+    /// When a call failed because the list is gone (not found), removes it from the lists, the
+    /// cache and the open detail and records the removal for this session. An archived list (422)
+    /// is not gone. Does nothing for any other error or after the session ended.
     // Covered by the manual spans of its public callers (loadListDetail, updateList).
     private func dropListIfGone(_ error: any Error, id: String, generation gen: Int) async {
         guard gen == generation, let listError = error as? ListError else { return }
         switch listError {
-        case .notFound, .archivedReadOnly:
+        case .notFound:
             break
-        case .forbidden, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
+        case .forbidden, .archivedReadOnly, .recipientNotFound, .duplicateRecipientYear, .validation, .rateLimited,
              .unauthorized, .sessionEnded, .network, .invalidResponse, .server, .memberEmailNotFound,
              .alreadyMember, .membershipNotFound:
             return
@@ -569,7 +690,7 @@ final class ListService {
         await dropList(id: id)
     }
 
-    /// Removes a list that is gone for this user (left, not found, read-only) from the lists, the
+    /// Removes a list that is gone for this user (left, not found) from the lists, the
     /// cache and the open detail, and records the removal for this session. Callers check the
     /// generation first.
     // Covered by the manual spans of its public callers.
@@ -612,6 +733,91 @@ final class ListService {
             if record(error, generation: gen, operation: "refresh list after member change") == nil {
                 throw CancellationError()
             }
+        }
+    }
+
+    /// After a successful archive: a fresh fetch of the lists (never the cache) written to `lists`
+    /// and the cache, then a refetch of the open detail when it is the archived list. Calls the
+    /// repository directly, so an in-flight refresh and its guard are not involved. A failed fetch
+    /// removes the list until the next successful load and records the error; only cancellation
+    /// or an ended session throws.
+    // Covered by the manual span of its public caller (deleteList).
+    private func reloadAfterArchive(
+        id: String,
+        since start: Int,
+        generation gen: Int,
+        reloadToken: Int,
+        refetchDetailAnyway: Bool
+    ) async throws {
+        let repository = self.repository
+        do {
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
+            try ensureCurrent(gen)
+            try Task.checkCancellation()
+            // A later archive started its own reload: this result may predate it, so drop it.
+            if reloadToken == reloadTokenCounter {
+                await dataStore.setLists(fetched)
+                try ensureCurrent(gen)
+                if reloadToken == reloadTokenCounter {
+                    lists = fetched
+                    lastUpdated = Date()
+                }
+            }
+        } catch {
+            if error is CancellationError || gen != generation { throw CancellationError() }
+            // A superseded reload reports nothing and removes nothing: the later one decides.
+            if reloadToken == reloadTokenCounter {
+                _ = record(error, generation: gen, operation: "reload lists after archive")
+                lists.removeAll { $0.id == id }
+                await dataStore.removeList(id: id)
+                try ensureCurrent(gen)
+            }
+        }
+
+        guard currentListDetail?.id == id || refetchDetailAnyway else { return }
+        do {
+            let detail = try await perform { try await repository.fetchListDetail(id: id) }
+            try ensureCurrent(gen)
+            try Task.checkCancellation()
+            await dataStore.setListDetail(detail)
+            try ensureCurrent(gen)
+            currentListDetail = detail
+        } catch {
+            if error is CancellationError || gen != generation { throw CancellationError() }
+            if self.error == nil {
+                _ = record(error, generation: gen, operation: "refresh list after archive")
+            }
+        }
+    }
+
+    /// After a 422 (the list is archived): refetches the list detail and writes it to the open
+    /// detail (when it is that list), the cache and the lists entry, so the flags refresh. Best
+    /// effort: a failed refetch changes nothing (a not-found refetch drops the list) and the caller
+    /// still throws the original error. Does nothing for any other error.
+    // Covered by the manual spans of its public callers (updateList, removeCoOwner, addMember, removeMember).
+    private func refetchAfterArchivedReadOnly(_ error: any Error, id: String, generation gen: Int) async {
+        guard gen == generation, (error as? ListError) == .archivedReadOnly else { return }
+        let start = operationSequence
+        do {
+            let repository = self.repository
+            let detail = try await perform { try await repository.fetchListDetail(id: id) }
+            try ensureCurrent(gen)
+            guard !isRemoved(id, since: start) else { return }
+            await dataStore.setListDetail(detail)
+            try ensureCurrent(gen)
+            guard !isRemoved(id, since: start) else {
+                await dataStore.removeList(id: id)
+                return
+            }
+            let summary = detail.asGiftList()
+            if let index = lists.firstIndex(where: { $0.id == summary.id }) {
+                lists[index] = summary
+            }
+            if currentListDetail?.id == detail.id {
+                currentListDetail = detail
+            }
+        } catch {
+            await dropListIfGone(error, id: id, generation: gen)
         }
     }
 

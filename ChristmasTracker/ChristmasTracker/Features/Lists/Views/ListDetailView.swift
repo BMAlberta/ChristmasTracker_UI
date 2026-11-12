@@ -15,17 +15,19 @@ struct ListDetailView: View {
     @Environment(\.authenticationService) private var authenticationService
 
     @State private var editingDetail: ListDetail?
-    @State private var showDeleteConfirmation = false
+    @State private var showArchiveConfirmation = false
     @State private var selectedItemId: String?
     @State private var actionError: ListErrorPresentation?
     @State private var failedAction: FailedAction?
     @State private var showsAddMember = false
     @State private var memberToRemove: MemberRowState?
     @State private var showLeaveConfirmation = false
+    @State private var showsAddItem = false
+    @State private var refreshError: ListError?
 
     /// The action whose failure is shown in the banner, so Try Again repeats that action.
     private enum FailedAction {
-        case deleteList
+        case archiveList
         case leaveList
         case removeMember(MemberRowState)
     }
@@ -45,7 +47,9 @@ struct ListDetailView: View {
             .navigationTitle("List Details")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $selectedItemId) { itemId in
-                ItemDetailView(itemId: itemId)
+                if let detail {
+                    ItemDetailView(itemId: itemId, context: ItemListContext(detail: detail))
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +68,11 @@ struct ListDetailView: View {
             }
             .sheet(isPresented: $showsAddMember) {
                 AddMemberView(listId: listId)
+            }
+            .sheet(isPresented: $showsAddItem) {
+                if let detail {
+                    AddItemView(listId: listId, context: ItemListContext(detail: detail))
+                }
             }
             .confirmationDialog(
                 MembersSectionState.leaveConfirmation.title,
@@ -93,29 +102,21 @@ struct ListDetailView: View {
             } message: { row in
                 Text(MembersSectionState.removeConfirmation(for: row).message)
             }
-            .confirmationDialog(
-                ListDeleteConfirmation.title,
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(ListDeleteConfirmation.confirmButtonTitle, role: .destructive) {
-                    Task { await deleteList() }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text(ListDeleteConfirmation.message)
-            }
             .onChange(of: listService.goneListId) { _, goneId in
-                // This list is gone or read-only: leave. The service has already dropped it.
+                // This list is gone: leave. The service has already dropped it.
                 if ListScreenExit.shouldDismissDetail(goneListId: goneId, openListId: listId) {
                     dismiss()
                 }
             }
             .refreshable {
-                await load()
+                await refresh()
             }
             .task {
                 await load()
+            }
+            .onDisappear {
+                refreshError = nil
+                itemService.clearListLoadError()
             }
     }
 
@@ -144,15 +145,33 @@ struct ListDetailView: View {
         await itemService.loadItems(listId: listId)
     }
 
-    private func deleteList() async {
+    /// Pull to refresh: always fetches the detail and the items, and reports a detail failure.
+    private func refresh() async {
+        refreshError = nil
+        refreshError = await listService.refreshListDetail(id: listId)
+        switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
+        case .refresh: await itemService.refreshItems()
+        case .load: await itemService.loadItems(listId: listId)
+        }
+    }
+
+    private func archiveList() async {
         actionError = nil
         do {
             try await listService.deleteList(id: listId)
-            dismiss()
+            // A failed reload still archived the list but leaves the error for the screen to show.
+            switch ListArchiveCompletion.after(serviceError: listService.error) {
+            case .dismiss:
+                dismiss()
+            case .showError(let presentation):
+                // No retry: repeating the action would archive again.
+                failedAction = nil
+                actionError = presentation
+            }
         } catch is CancellationError {
             return
         } catch {
-            failedAction = .deleteList
+            failedAction = .archiveList
             actionError = ListErrorPresentation((error as? ListError) ?? .server)
         }
     }
@@ -190,7 +209,7 @@ struct ListDetailView: View {
 
     private func retryFailedAction() async {
         switch failedAction {
-        case .deleteList: await deleteList()
+        case .archiveList: await archiveList()
         case .leaveList: await leaveList()
         case .removeMember(let row): await removeMember(row)
         case nil: break
@@ -200,6 +219,13 @@ struct ListDetailView: View {
     private func detailContent(detail: ListDetail, state: ListDetailState) -> some View {
         ScrollView {
             VStack(spacing: AppSpacing.xl) {
+                if let refreshBanner = ListDetailRefresh.banner(for: refreshError) {
+                    InlineErrorBanner(
+                        state: refreshBanner,
+                        onTryAgain: { Task { await refresh() } },
+                        onDismiss: { refreshError = nil }
+                    )
+                }
                 if let actionError {
                     ListErrorBanner(
                         presentation: actionError,
@@ -218,35 +244,19 @@ struct ListDetailView: View {
                         progress: state.progress
                     )
                 }
-                if showsItemsSection(state: state) {
-                    itemsSection(state: state, detail: detail)
-                }
+                itemsSection(detail: detail)
                 membersSection(detail: detail)
                 if state.showsDeleteAction {
-                    deleteButton
+                    archiveButton
                 }
             }
             .padding(EdgeInsets.appScreenPadding)
         }
     }
 
-    /// Viewers who may not see counts get no items section unless items were actually returned,
-    /// so an empty section never hints at whether items exist.
-    private func showsItemsSection(state: ListDetailState) -> Bool {
-        state.showsStatsCard || !scopedItems.isEmpty
-    }
-
     /// Items render only under the list they were loaded for.
-    private var scopedItems: [GiftItem] {
+    private var scopedItems: [ListItem] {
         ListItemsScope.itemsToShow(itemService.items, currentListId: itemService.currentListId, listId: listId)
-    }
-
-    private var scopedFilteredItems: [GiftItem] {
-        ListItemsScope.itemsToShow(
-            itemService.filteredItems,
-            currentListId: itemService.currentListId,
-            listId: listId
-        )
     }
 
     // MARK: - Cards
@@ -263,7 +273,12 @@ struct ListDetailView: View {
                         .foregroundStyle(Color.textMutedColor)
                 }
                 Spacer(minLength: AppSpacing.sm)
-                ListBadge(title: state.badgeTitle, tone: state.badgeTone)
+                VStack(alignment: .trailing, spacing: AppSpacing.xs) {
+                    ListBadge(title: state.badgeTitle, tone: state.badgeTone)
+                    if state.showsArchivedBadge {
+                        ListArchivedBadgeView()
+                    }
+                }
             }
             if let theme = state.theme, !theme.isEmpty {
                 Label(theme, systemImage: "sparkles")
@@ -310,11 +325,12 @@ struct ListDetailView: View {
         )
     }
 
-    private var deleteButton: some View {
+    /// The confirmation dialog is attached to this trigger, not to the screen.
+    private var archiveButton: some View {
         Button(role: .destructive) {
-            showDeleteConfirmation = true
+            showArchiveConfirmation = true
         } label: {
-            Label("Delete List", systemImage: "trash")
+            Label(ListArchiveConfirmation.actionTitle, systemImage: "archivebox")
                 .font(.appHeadline)
                 .foregroundStyle(Color.surfaceColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -322,62 +338,43 @@ struct ListDetailView: View {
                 .background(Color.accentColor, in: .rect(cornerRadius: AppSpacing.md))
         }
         .disabled(listService.isMutating)
-        .accessibilityHint("Removes this list from your lists after you confirm")
-        .accessibilityIdentifier("listDetail.deleteButton")
+        .accessibilityHint("Moves this list to Archived after you confirm")
+        .accessibilityIdentifier("listDetail.archiveButton")
+        .confirmationDialog(
+            ListArchiveConfirmation.title,
+            isPresented: $showArchiveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
+                Task { await archiveList() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(ListArchiveConfirmation.message)
+        }
     }
 
-    private func itemsSection(state: ListDetailState, detail: ListDetail) -> some View {
-        let items = scopedFilteredItems
-        let hasItems = !scopedItems.isEmpty
-        let firstItemId = items.first?.id
-        return VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack {
-                Text("Items")
-                    .font(.appHeadline)
-                    .foregroundStyle(Color.textPrimaryColor)
-                Spacer()
-                if state.showsStatsCard, hasItems {
-                    Text("\(items.count)")
-                        .font(.appCaption1)
-                        .foregroundStyle(Color.textMutedColor)
-                }
-            }
-            if itemService.isLoading && !hasItems {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.xl)
-            } else if !hasItems {
-                VStack(spacing: AppSpacing.md) {
-                    Image(systemName: "gift.fill")
-                        .font(.appTitle1)
-                        .foregroundStyle(Color.textMutedColor)
-                        .accessibilityHidden(true)
-                    Text("No items yet")
-                        .font(.appBody)
-                        .foregroundStyle(Color.textMutedColor)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.xl)
-            } else {
-                ForEach(items) { item in
-                    Button {
-                        selectedItemId = item.id
-                    } label: {
-                        ItemRow(item: item, detail: detail)
-                            .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .overlay(alignment: .top) {
-                        if item.id != firstItemId {
-                            Divider()
-                                .padding(.leading, AppSpacing.xxxl)
-                                .offset(y: -AppSpacing.md / 2)
-                        }
-                    }
-                }
-            }
+    /// The items, driven by `ItemListState` (flags through ItemPermissions). The load error is the
+    /// item service's separate `listLoadError`; Try Again refreshes, and it clears when this screen
+    /// disappears.
+    private func itemsSection(detail: ListDetail) -> some View {
+        let listState = ItemListState(
+            items: scopedItems,
+            context: ItemListContext(detail: detail),
+            currentUserId: authenticationService.currentUser?.id
+        )
+        let banner = itemService.listLoadError.flatMap {
+            ItemErrorPresentation.banner(for: $0, hasRetryAction: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        return ItemsSectionView(
+            state: listState,
+            isLoading: itemService.isLoadingItems,
+            errorBanner: banner,
+            onSelect: { selectedItemId = $0 },
+            onAdd: { showsAddItem = true },
+            onTryAgain: { Task { await itemService.refreshItems() } },
+            onDismissError: { itemService.clearListLoadError() }
+        )
         .listCard()
     }
 }
@@ -387,6 +384,16 @@ struct ListDetailView: View {
         ListDetailView(listId: MockListData.ownerOfChildList.id)
             .environment(\.listService, ListService(
                 repository: MockListRepository(),
+                dataStore: ListDataStore()
+            ))
+    }
+}
+
+#Preview("Archived list") {
+    NavigationStack {
+        ListDetailView(listId: MockListData.archivedList.id)
+            .environment(\.listService, ListService(
+                repository: MockListRepository(includeAllScenarios: true),
                 dataStore: ListDataStore()
             ))
     }

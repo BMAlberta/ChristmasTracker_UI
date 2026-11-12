@@ -17,12 +17,14 @@ struct ListErrorPresentationTests {
     }
 
     /// Every case of ListError, with the expected (retryable, leavesScreen) pair.
+    /// CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): archivedReadOnly
+    /// no longer leaves the screen (was true).
     nonisolated static let table: [(ListError, Bool, Bool)] = [
         (.forbidden, false, false),
         (.notFound, false, true),
         (.recipientNotFound, false, false),
         (.duplicateRecipientYear, false, false),
-        (.archivedReadOnly, false, true),
+        (.archivedReadOnly, false, false),
         (.validation(message: "Name is too long."), false, false),
         (.rateLimited(retryAfter: 12), true, false),
         (.unauthorized, false, false),
@@ -47,9 +49,23 @@ struct ListErrorPresentationTests {
         #expect(makeSUT(error).isRetryable == retryable)
     }
 
-    @Test("Leaves the screen only for notFound and archivedReadOnly", arguments: table)
+    @Test("Leaves the screen only for notFound", arguments: table)
     func leavesScreen(error: ListError, retryable: Bool, leaves: Bool) {
         #expect(makeSUT(error).shouldLeaveScreen == leaves)
+    }
+
+    // ADDED (I3c-A): the archived-read-only message is plain, final, and keeps the user on the screen.
+    @Test("archivedReadOnly shows the plain archived message, stays on the screen and is not retryable")
+    func archivedReadOnlyPresentation() {
+        let presentation = makeSUT(.archivedReadOnly)
+        #expect(presentation.message == "This list is archived and can't be edited.")
+        #expect(presentation.shouldLeaveScreen == false)
+        #expect(presentation.isRetryable == false)
+    }
+
+    @Test("notFound still leaves the screen")
+    func notFoundStillLeaves() {
+        #expect(makeSUT(.notFound).shouldLeaveScreen)
     }
 
     @Test("A validation error shows the server text")

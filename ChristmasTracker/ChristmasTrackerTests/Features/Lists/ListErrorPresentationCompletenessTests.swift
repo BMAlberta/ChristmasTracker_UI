@@ -50,10 +50,12 @@ struct ListErrorPresentationCompletenessTests {
         #expect(indexes.count == Self.caseCount)
     }
 
-    @Test("Only notFound and archivedReadOnly leave the screen", arguments: ListErrorPresentationTests.table.map(\.0))
+    // CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): index 4
+    // (archivedReadOnly) no longer leaves the screen.
+    @Test("Only notFound leaves the screen", arguments: ListErrorPresentationTests.table.map(\.0))
     func onlyGoneErrorsLeave(error: ListError) {
         let leaves = ListErrorPresentation(error).shouldLeaveScreen
-        let expected = Self.index(error) == 1 || Self.index(error) == 4
+        let expected = Self.index(error) == 1
         #expect(leaves == expected)
     }
 

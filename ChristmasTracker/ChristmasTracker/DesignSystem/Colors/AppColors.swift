@@ -46,4 +46,7 @@ extension Color {
     static let statusShippedColor = Color("statusShippedColor")
     static let statusWrappedColor = Color("statusWrappedColor")
     static let statusGiftedColor = Color("statusGiftedColor")
+    // MARK: - Destructive
+    /// Destructive actions and error banners: the system red, which adapts to light and dark.
+    static let destructiveColor = Color(uiColor: .systemRed)
 }

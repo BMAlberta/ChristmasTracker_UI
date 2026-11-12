@@ -103,17 +103,17 @@ nonisolated struct InertChildRepository: ChildRepository {
 
 nonisolated final class InertItemRepository: ItemRepository {
     @Instrumented
-    func fetchItems(listId: String) async throws -> [GiftItem] {
+    func fetchItems(listId: String) async throws -> [ListItem] {
         throw ConfigurationError.clientUnavailable
     }
 
     @Instrumented
-    func createItem(listId: String, _ request: CreateItemRequest) async throws -> GiftItem {
+    func createItem(listId: String, _ input: CreateItemInput) async throws -> ListItem {
         throw ConfigurationError.clientUnavailable
     }
 
     @Instrumented
-    func updateItem(id: String, _ request: UpdateItemRequest) async throws -> GiftItem {
+    func updateItem(id: String, _ input: UpdateItemInput) async throws -> ListItem {
         throw ConfigurationError.clientUnavailable
     }
 
@@ -123,7 +123,7 @@ nonisolated final class InertItemRepository: ItemRepository {
     }
 
     @Instrumented
-    func fetchItemDetail(id: String) async throws -> GiftItem {
+    func fetchItemDetail(id: String) async throws -> ListItem {
         throw ConfigurationError.clientUnavailable
     }
 }

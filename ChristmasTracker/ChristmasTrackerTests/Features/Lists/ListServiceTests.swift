@@ -19,6 +19,13 @@
 //  Session-safety tests (teardown during in-flight work, user switch) live in
 //  ListServiceSessionSafetyTests.swift.
 //
+//  Story I3c-A changes (named; reason for each: decision "archived lists stay visible and archive
+//  reloads from the server", L16): the tests that asserted archived lists are hidden, or that
+//  deleteList removes locally / records a removal, now assert the new behavior. Each is marked
+//  "CHANGED (I3c-A)" at the test. New archive behavior lives in ListServiceArchiveTests,
+//  ListServiceArchivedListsTests, ListServiceArchivedReadOnlyTests and
+//  ListServiceArchiveSessionSafetyTests.
+//
 
 import Foundation
 import Testing
@@ -135,7 +142,10 @@ struct ListServiceTests {
         #expect(service.lists.contains(where: { $0.id == listId && $0.name == "Updated Name" }))
     }
 
-    @Test("Delete list removes from collection")
+    // CHANGED (I3c-A, decision "archive reloads from the server"): was "Delete list removes from
+    // collection" (count - 1, gone from lists and cache). The mock now archives, the service
+    // reloads, so the list stays and shows as ARCHIVED with the management flags false.
+    @Test("Delete list archives: the list stays in the collection and the cache as ARCHIVED")
     func testDeleteList() async throws {
         let mockRepo = MockListRepository()
         await mockRepo.setDelay(0)
@@ -145,11 +155,14 @@ struct ListServiceTests {
         let initialCount = service.lists.count
         let listToDelete = try #require(service.lists.first?.id)
         try await service.deleteList(id: listToDelete)
-        #expect(service.lists.count == initialCount - 1)
-        #expect(!service.lists.contains(where: { $0.id == listToDelete }))
-        // Verify removed from cache
+        #expect(service.lists.count == initialCount)
+        let entry = try #require(service.lists.first(where: { $0.id == listToDelete }))
+        #expect(entry.status == .archived)
+        #expect(!entry.capabilities.canEditList)
+        #expect(!entry.capabilities.canDeleteList)
+        #expect(service.archivedLists.map(\.id) == [listToDelete])
         let cached = await dataStore.getLists()
-        #expect(!cached.contains(where: { $0.id == listToDelete }))
+        #expect(cached.first(where: { $0.id == listToDelete })?.status == .archived)
     }
 
     // REWRITTEN (I3a-L1): the owned/shared filter is a display grouping decided by
@@ -282,8 +295,11 @@ struct ListServiceTests {
 
     // MARK: - Cache stale-data: delete then loadLists
 
-    @Test("loadLists after deleteList does not serve the deleted list from cache")
-    func testLoadListsAfterDeleteDoesNotServeDeletedList() async throws {
+    // CHANGED (I3c-A, decision "archive reloads from the server"): was "loadLists after deleteList
+    // does not serve the deleted list from cache" (absent). The cache now holds the reloaded list as
+    // ARCHIVED, so a second service sees it as archived and never as active.
+    @Test("loadLists after deleteList serves the list from cache as ARCHIVED, never as active")
+    func testLoadListsAfterDeleteServesArchivedList() async throws {
         let mockRepo = MockListRepository(withMockData: true)
         await mockRepo.setDelay(0)
         let dataStore = ListDataStore()
@@ -298,7 +314,9 @@ struct ListServiceTests {
         let service2 = ListService(repository: mockRepo, dataStore: dataStore)
         await service2.loadLists()
 
-        #expect(!service2.lists.contains(where: { $0.id == listToDelete }))
+        let seen = try #require(service2.lists.first(where: { $0.id == listToDelete }))
+        #expect(seen.status == .archived)
+        #expect(!service2.activeLists.contains(where: { $0.id == listToDelete }))
     }
 
     // MARK: - Cache stale-data: logout then loadLists for another user
@@ -329,8 +347,10 @@ struct ListServiceTests {
 
     // MARK: - ADDED (I3a-L2): archived lists are hidden, DRAFT is kept
 
-    @Test("loadLists drops ARCHIVED lists and keeps ACTIVE and DRAFT ones")
-    func loadDropsArchivedKeepsDraft() async {
+    // CHANGED (I3c-A, decision "archived lists stay visible"): was "loadLists drops ARCHIVED lists
+    // and keeps ACTIVE and DRAFT ones". Now every list is kept, in `lists` and in the cache.
+    @Test("loadLists keeps ARCHIVED lists together with ACTIVE and DRAFT ones")
+    func loadKeepsArchivedAndDraft() async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([
             list("list-active"), list("list-draft", status: .draft), list("list-archived", status: .archived)
@@ -338,14 +358,15 @@ struct ListServiceTests {
 
         await sut.service.loadLists()
 
-        #expect(sut.service.lists.map(\.id) == ["list-active", "list-draft"])
+        #expect(sut.service.lists.map(\.id) == ["list-active", "list-draft", "list-archived"])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == ["list-active", "list-draft"], "archived lists must not be cached either")
+        #expect(cached.map(\.id) == ["list-active", "list-draft", "list-archived"], "archived lists are cached too")
         #expect(sut.service.error == nil)
     }
 
-    @Test("refreshLists drops ARCHIVED lists and keeps ACTIVE and DRAFT ones")
-    func refreshDropsArchivedKeepsDraft() async {
+    // CHANGED (I3c-A): was "refreshLists drops ARCHIVED lists and keeps ACTIVE and DRAFT ones".
+    @Test("refreshLists keeps ARCHIVED lists together with ACTIVE and DRAFT ones")
+    func refreshKeepsArchivedAndDraft() async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-active")]))
         sut.repo.enqueueFetchLists(.success([
@@ -355,38 +376,42 @@ struct ListServiceTests {
 
         await sut.service.refreshLists()
 
-        #expect(sut.service.lists.map(\.id) == ["list-active", "list-draft"])
+        #expect(sut.service.lists.map(\.id) == ["list-active", "list-draft", "list-archived"])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == ["list-active", "list-draft"])
+        #expect(cached.map(\.id) == ["list-active", "list-draft", "list-archived"])
     }
 
-    @Test("a response with only ARCHIVED lists leaves the list empty without an error")
-    func onlyArchivedLeavesEmpty() async {
+    // CHANGED (I3c-A): was "a response with only ARCHIVED lists leaves the list empty without an error".
+    @Test("a response with only ARCHIVED lists keeps them, without an error")
+    func onlyArchivedKeepsThem() async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-archived", status: .archived)]))
 
         await sut.service.loadLists()
 
-        #expect(sut.service.lists.isEmpty)
+        #expect(sut.service.lists.map(\.id) == ["list-archived"])
         #expect(sut.service.error == nil)
     }
 
     // MARK: - ADDED (I3a-L2 fix round): the cached branch hides ARCHIVED too
 
-    @Test("loadLists on the cached branch does not expose an ARCHIVED summary already in the cache")
-    func cachedBranchHidesArchivedOnly() async {
+    // CHANGED (I3c-A, decision "archived lists stay visible"): was "loadLists on the cached branch
+    // does not expose an ARCHIVED summary already in the cache". The cached branch keeps it.
+    @Test("loadLists on the cached branch exposes an ARCHIVED summary already in the cache")
+    func cachedBranchKeepsArchivedOnly() async {
         let sut = makeSUT()
         await sut.store.setLists([list("list-archived", status: .archived)])
 
         await sut.service.loadLists()
 
-        #expect(!sut.service.lists.contains { $0.id == "list-archived" })
-        #expect(!sut.service.lists.contains { $0.status == .archived })
+        #expect(sut.service.lists.map(\.id) == ["list-archived"])
+        #expect(sut.service.archivedLists.map(\.id) == ["list-archived"])
         #expect(sut.service.error == nil)
     }
 
-    @Test("loadLists on the cached branch shows only the non-archived part of a mixed cache, without fetching")
-    func cachedBranchHidesArchivedInMixedCache() async {
+    // CHANGED (I3c-A): was "... shows only the non-archived part of a mixed cache, without fetching".
+    @Test("loadLists on the cached branch shows all of a mixed cache, without fetching")
+    func cachedBranchKeepsArchivedInMixedCache() async {
         let sut = makeSUT()
         await sut.store.setLists([
             list("list-active"), list("list-archived", status: .archived), list("list-draft", status: .draft)
@@ -394,79 +419,97 @@ struct ListServiceTests {
 
         await sut.service.loadLists()
 
-        #expect(sut.service.lists.map(\.id) == ["list-active", "list-draft"])
+        #expect(sut.service.lists.map(\.id) == ["list-active", "list-archived", "list-draft"])
         #expect(sut.repo.fetchListsCount == 0, "a fresh non-empty cache is served without a fetch")
         #expect(sut.service.error == nil)
     }
 
     // MARK: - ADDED (I3a-L2): delete removes locally and stays hidden
 
-    @Test("deleteList removes the list from lists and the cache without refetching")
-    func deleteRemovesLocallyWithoutRefetch() async throws {
+    // CHANGED (I3c-A, decision "archive reloads from the server"): was "deleteList removes the list
+    // from lists and the cache without refetching". Archiving now reloads with a fresh fetch and the
+    // list stays, as ARCHIVED, with the server's flags.
+    @Test("deleteList archives: it reloads the lists with a fresh fetch and keeps the list as ARCHIVED")
+    func deleteArchivesAndReloads() async throws {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueDeleteList(.success(()))
+        sut.repo.enqueueFetchLists(.success([list("list-a", status: .archived), list("list-b")]))
         await sut.service.loadLists()
 
         try await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.lists.map(\.id) == ["list-b"])
+        #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
+        #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == ["list-b"])
+        #expect(cached.map(\.id) == ["list-a", "list-b"])
+        #expect(cached.first?.status == .archived)
         #expect(sut.repo.deleteListCount == 1)
-        #expect(sut.repo.fetchListsCount == 1, "delete must not refetch")
+        #expect(sut.repo.fetchListsCount == 2, "archive reloads from the server")
         #expect(sut.service.error == nil)
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("deleteList clears currentListDetail and the cached detail when it is that list")
-    func deleteClearsCurrentDetail() async throws {
+    // CHANGED (I3c-A): was "deleteList clears currentListDetail and the cached detail when it is that
+    // list". The open detail is now refetched (flags refresh) instead of cleared.
+    @Test("deleteList refetches currentListDetail and the cached detail when it is that list")
+    func deleteRefetchesCurrentDetail() async throws {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueFetchListDetail(.success(ListFixtures.listDetail(id: "list-a", name: "Name of list-a")))
         sut.repo.enqueueDeleteList(.success(()))
+        sut.repo.enqueueFetchLists(.success([list("list-a", status: .archived), list("list-b")]))
+        let archivedDetail = ListFixtures.listDetail(id: "list-a", name: "Name of list-a", status: .archived)
+        sut.repo.enqueueFetchListDetail(.success(archivedDetail))
         await sut.service.loadLists()
         await sut.service.loadListDetail(id: "list-a")
         #expect(sut.service.currentListDetail?.id == "list-a")
 
         try await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.currentListDetail == nil)
+        #expect(sut.service.currentListDetail == archivedDetail)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
-        #expect(cachedDetail == nil)
-        #expect(sut.repo.fetchListDetailCount == 1)
+        #expect(cachedDetail == archivedDetail)
+        #expect(sut.repo.fetchListDetailCount == 2)
     }
 
+    // CHANGED (I3c-A): the list set after the archive is the reloaded one (was: list-a only).
     @Test("deleteList of another list keeps currentListDetail")
     func deleteOfOtherListKeepsCurrentDetail() async throws {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueFetchListDetail(.success(ListFixtures.listDetail(id: "list-a", name: "Name of list-a")))
         sut.repo.enqueueDeleteList(.success(()))
+        sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b", status: .archived)]))
         await sut.service.loadLists()
         await sut.service.loadListDetail(id: "list-a")
 
         try await sut.service.deleteList(id: "list-b")
 
         #expect(sut.service.currentListDetail?.id == "list-a")
-        #expect(sut.service.lists.map(\.id) == ["list-a"])
+        #expect(sut.service.activeLists.map(\.id) == ["list-a"])
+        #expect(sut.service.archivedLists.map(\.id) == ["list-b"])
+        #expect(sut.repo.fetchListDetailCount == 1, "the open detail of another list is not refetched")
     }
 
-    @Test("a later refresh that still returns the deleted list as ARCHIVED keeps it hidden")
-    func deletedListStaysHiddenAfterRefresh() async throws {
+    // CHANGED (I3c-A): was "a later refresh that still returns the deleted list as ARCHIVED keeps it
+    // hidden". Archived lists stay visible, so a later refresh shows it under archivedLists.
+    @Test("a later refresh that returns the archived list keeps it, as ARCHIVED")
+    func archivedListStaysVisibleAfterRefresh() async throws {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a"), list("list-b")]))
         sut.repo.enqueueDeleteList(.success(()))
-        // The server archives instead of removing, so the list comes back with status ARCHIVED.
+        sut.repo.enqueueFetchLists(.success([list("list-a", status: .archived), list("list-b")]))
         sut.repo.enqueueFetchLists(.success([list("list-a", status: .archived), list("list-b")]))
         await sut.service.loadLists()
         try await sut.service.deleteList(id: "list-a")
 
         await sut.service.refreshLists()
 
-        #expect(sut.service.lists.map(\.id) == ["list-b"])
+        #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
+        #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
         let cached = await sut.store.getLists()
-        #expect(cached.map(\.id) == ["list-b"])
+        #expect(cached.map(\.id) == ["list-a", "list-b"])
     }
 
     @Test("a failed deleteList keeps the list, sets the typed error and rethrows")
@@ -652,12 +695,21 @@ struct ListServiceTests {
         #expect(sut.service.isLoadingDetail == false)
     }
 
+    // CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): archivedReadOnly
+    // from updateList now refetches the detail, so a refetch result is queued for that case. Without
+    // it the refetch would fail with the repository default and the outcome would depend on how a
+    // failed refetch is recorded, which this test is not about (see ListServiceArchivedReadOnlyTests).
     @Test("a typed repository error on createList, updateList and deleteList becomes the service error", arguments: ListServiceTests.typedErrors)
     func writeTypedErrors(error: ListError) async {
         let sut = makeSUT()
         sut.repo.enqueueCreateList(.failure(error))
         sut.repo.enqueueUpdateList(.failure(error))
         sut.repo.enqueueDeleteList(.failure(error))
+        if error == .archivedReadOnly {
+            sut.repo.enqueueFetchListDetail(.success(
+                ListFixtures.listDetail(id: "list-a", name: "Name of list-a", status: .archived)
+            ))
+        }
         let input = CreateListInput(recipientId: "user-1", year: 2026, name: "N", theme: nil, visibility: .private)
 
         await #expect(throws: error) { try await sut.service.createList(input) }

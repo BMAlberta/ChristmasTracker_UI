@@ -496,9 +496,11 @@ struct ListServiceMemberTests {
 
     // MARK: - Gone list (notFound / archivedReadOnly)
 
+    // CHANGED (I3c-A, decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"): archivedReadOnly
+    // removed from the arguments; it refetches instead (see ListServiceArchivedReadOnlyTests).
     @Test(
-        "notFound or archivedReadOnly from add, remove and setCoOwner drops the list via the gone-list path",
-        arguments: [MemberServiceOp.addMember, .removeMember, .setCoOwner], [ListError.notFound, .archivedReadOnly]
+        "notFound from add, remove and setCoOwner drops the list via the gone-list path",
+        arguments: [MemberServiceOp.addMember, .removeMember, .setCoOwner], [ListError.notFound]
     )
     func goneListIsDropped(op: MemberServiceOp, error: ListError) async throws {
         let sut = await H.make()

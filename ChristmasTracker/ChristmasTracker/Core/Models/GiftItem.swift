@@ -6,9 +6,13 @@
 //
 import SwiftUI
 import Foundation
+import TrackerAPI
 
+// LEGACY: this type exists only because the purchase screens still take it. It is deleted in
+// package I4 together with the `ListItem.legacyPurchaseItem` bridge at the end of this file.
+// New code uses `ListItem`.
 nonisolated struct GiftItem: Identifiable, Codable, Sendable, Hashable {
-    
+
     // MARK: - Basic Info
     let id: String
     let listId: String
@@ -37,56 +41,8 @@ nonisolated struct GiftItem: Identifiable, Codable, Sendable, Hashable {
     let purchases: [PurchaseSummary]?
     let totalQuantityPurchased: Int?
     
-    // MARK: - Computed Properties
-    var totalPrice: Double? {
-        guard let price = expectedUnitPrice else { return nil }
-        return price * Double(quantityRequested)
-    }
-    
-    var isPurchased: Bool {
-        status == .purchased || status == .wrapped || status == .gifted
-    }
-    
-    var isAvailable: Bool {
-        status == .available
-    }
-    
-    var canEdit: Bool {
-        // Can edit if available or partial
-        status == .available || status == .partial
-    }
-    
-//    var totalPurchasedQuantity: Int {
-//        purchases?.reduce(0) { $0 + $1.quantity } ?? 0
-//    }
-    
-    var totalSpent: Double {
-        purchases?.reduce(0) { $0 + $1.totalCost } ?? 0
-    }
-    
-    var remainingQuantity: Int {
-        quantityRequested - (totalQuantityPurchased ?? 0)
-    }
-    
-    var isPartiallyPurchased: Bool {
-        guard let totalQuantityPurchased else {
-            return false
-        }
-        return totalQuantityPurchased > 0 && totalQuantityPurchased < quantityRequested
-    }
-    
-    var isFullyPurchased: Bool {
-        guard let totalQuantityPurchased else {
-            return false
-        }
-        return totalQuantityPurchased >= quantityRequested
-    }
-    
-    var purchaseProgress: Double {
-        
-        guard quantityRequested > 0, let totalQuantityPurchased else { return 0 }
-        return Double(totalQuantityPurchased) / Double(quantityRequested)
-    }
+    // The purchase screens read only id, listId, name, quantityRequested, totalQuantityPurchased
+    // and expectedUnitPrice. The computed members the old item screens used are deleted.
 }
 struct PurchaseSummary: Codable, Identifiable, Sendable, Equatable, Hashable {
     let id: String
@@ -145,41 +101,30 @@ enum ItemStatus: String, Codable, Sendable, Hashable {
 
 }
 
-// MARK: - Request Types
+// MARK: - LEGACY bridge from ListItem
 
-nonisolated struct CreateItemRequest: Codable, Sendable {
-    let name: String
-    let description: String
-    let url: String?
-    let expectedUnitPrice: Double?
-    let quantityRequested: Int
-    let priority: Int
-    let offList: Bool
-    let imageUrl: String?
-}
-
-nonisolated struct UpdateItemRequest: Codable, Sendable {
-    let name: String?
-    let description: String?
-    let url: String?
-    let expectedUnitPrice: Double?
-    let quantityRequested: Int?
-    let priority: Int?
-    let imageUrl: String?
-}
-
-// MARK: - Response Types
-
-nonisolated struct ItemsResponse: Codable, Sendable {
-    let success: Bool
-    let data: ItemData
-}
-
-struct ItemData: Codable, Sendable {
-    let items: [GiftItem]
-}
-
-nonisolated struct ItemResponse: Codable, Sendable {
-    let success: Bool
-    let data: GiftItem
+// LEGACY: delete in package I4 together with GiftItem. This is the only Double money path left
+// in the app. The purchase screens still take a GiftItem; the new item screens open them
+// through this property.
+extension ListItem {
+    nonisolated var legacyPurchaseItem: GiftItem {
+        GiftItem(
+            id: id,
+            listId: listId,
+            name: name,
+            description: description,
+            url: url,
+            imageUrl: imageUrl,
+            expectedUnitPrice: expectedUnitPrice.map(decimalToDouble),
+            quantityRequested: quantityRequested,
+            priority: priority,
+            status: status,
+            offList: offList,
+            createdBy: ItemPerson(id: createdBy.id, displayName: createdBy.displayName),
+            createdAt: createdAt,
+            updatedAt: updatedAt ?? createdAt,
+            purchases: nil,
+            totalQuantityPurchased: totalQuantityPurchased
+        )
+    }
 }

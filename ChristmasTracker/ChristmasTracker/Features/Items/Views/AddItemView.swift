@@ -6,84 +6,82 @@
 //
 
 import SwiftUI
+
+/// The add form. A creation error is held here, in local state, and shown in an inline banner;
+/// it disappears on dismiss, a successful retry, closing the sheet, or leaving the screen.
 struct AddItemView: View {
     let listId: String
+    let context: ItemListContext
+
     @Environment(\.itemService) private var itemService
     @Environment(\.dismiss) private var dismiss
-    // Form state
-    @State private var name: String = ""
-    @State private var description: String = ""
-    @State private var url: String = ""
-    @State private var priceText: String = ""
-    @State private var quantityRequested: Int = 1
-    @State private var priority: Int = 5
-    @State private var offList: Bool = false
+
+    @State private var name = ""
+    @State private var description = ""
+    @State private var url = ""
+    @State private var imageUrl = ""
+    @State private var priceText = ""
+    @State private var quantityRequested = 1
+    @State private var priority = 5
     @State private var isCreating = false
-    @State private var showError = false
-    @State private var errorMessage = ""
+    @State private var creationError: ItemError?
+
+    private var permissions: ItemPermissions {
+        ItemPermissions(capabilities: context.capabilities, currentUserId: nil)
+    }
+
+    private var input: CreateItemInput? {
+        ItemFormValidation.makeCreateInput(
+            name: name,
+            description: description,
+            url: url,
+            imageUrl: imageUrl,
+            priceText: priceText,
+            quantity: quantityRequested,
+            priority: priority
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Item Details") {
-                    TextField("Item Name", text: $name)
-                        .autocorrectionDisabled()
-                    TextField("Description (optional)", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-                Section("Link") {
-                    TextField("URL (optional)", text: $url)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                    Text("Add a link to the product")
-                        .font(.appCaption1)
-                        .foregroundColor(.textMutedColor)
-                }
-                Section("Pricing") {
-                    HStack {
-                        Text("$")
-                        TextField("Price (optional)", text: $priceText)
-                            .keyboardType(.decimalPad)
-                    }
-                    Stepper("Quantity: \(quantityRequested)", value: $quantityRequested, in:
-                                1...99)
-                }
-                Section("Priority") {
-                    Stepper("Priority: \(priority)", value: $priority, in: 1...10)
-                    HStack(spacing: 2) {
-                        ForEach(1...10, id: \.self) { level in
-                            Image(systemName: level <= priority ? "star.fill" : "star")
-                                .foregroundColor(.orange)
-                                .font(.appCaption2)
-                        }
-                    }
-                    Text("1 = Low priority, 10 = High priority")
-                        .font(.appCaption1)
-                        .foregroundColor(.textMutedColor)
-                }
-                Section("Special Options") {
-                    Toggle("Surprise Gift", isOn: $offList)
-                    if offList {
-                        Text("This item will be hidden from the list owner")
-                            .font(.appCaption1)
-                            .foregroundColor(.orange)
+                if let banner = creationError.flatMap({ ItemErrorPresentation.banner(for: $0, hasRetryAction: true) }) {
+                    Section {
+                        InlineErrorBanner(
+                            state: banner,
+                            onTryAgain: { Task { await createItem() } },
+                            onDismiss: { creationError = nil }
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
+                // An off-list item bought on creation needs an API decision first; if it is ever
+                // built, its control goes here, after the form fields.
+                ItemFormFields(
+                    name: $name,
+                    description: $description,
+                    url: $url,
+                    imageUrl: $imageUrl,
+                    priceText: $priceText,
+                    quantity: $quantityRequested,
+                    priority: $priority,
+                    showsOffListNotice: permissions.showsOffListNotice
+                )
             }
             .navigationTitle("Add Item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        creationError = nil
                         dismiss()
                     }
                     .disabled(isCreating)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        Task {
-                            await createItem()
-                        }
+                        Task { await createItem() }
                     } label: {
                         if isCreating {
                             ProgressView()
@@ -91,50 +89,46 @@ struct AddItemView: View {
                             Text("Add")
                         }
                     }
-                    .disabled(!isFormValid || isCreating)
-                    .alert("Error", isPresented: $showError) {
-                        Button("OK") { }
-                    } message: {
-                        Text(errorMessage)
-                    }
+                    .disabled(input == nil || isCreating)
                 }
+            }
+            .onDisappear {
+                creationError = nil
             }
         }
     }
-    
-    private var isFormValid: Bool {
-        !name.isEmpty
-    }
-    
-    private var parsedPrice: Double? {
-        guard !priceText.isEmpty else { return nil }
-        return Double(priceText)
-    }
-    
+
     private func createItem() async {
+        guard let input, !isCreating else { return }
+        creationError = nil
         isCreating = true
-        let request = CreateItemRequest(
-            name: name.trimmingCharacters(in: .whitespaces),
-            description: description.trimmingCharacters(in: .whitespaces), // Required, can be
-            url: url.isEmpty ? nil : url.trimmingCharacters(in: .whitespaces),
-            expectedUnitPrice: parsedPrice,
-            quantityRequested: quantityRequested,
-            priority: priority,
-            offList: offList,
-            imageUrl: nil
-        )
+        defer { isCreating = false }
         do {
-            try await itemService.createItem(listId: listId, request)
+            try await itemService.createItem(listId: listId, input)
             dismiss()
+        } catch is CancellationError {
+            // The session ended or the task was cancelled: nothing to show.
         } catch {
-            errorMessage = error.localizedDescription
-            showError = true
+            let itemError = (error as? ItemError) ?? ItemError.server
+            if ItemErrorPresentation.leavesScreen(itemError) {
+                dismiss()
+            } else {
+                creationError = itemError
+            }
         }
-        isCreating = false
     }
 }
-#Preview {
-    AddItemView(listId: "1")
+
+#Preview("Owner") {
+    AddItemView(listId: "mock-list-child", context: ItemListContext(capabilities: MockListData.ownerCapabilities))
+        .environment(\.itemService, ItemService(
+            repository: MockItemRepository(),
+            dataStore: ItemDataStore()
+        ))
+}
+
+#Preview("Member (surprise item)") {
+    AddItemView(listId: "mock-list-member", context: ItemListContext(capabilities: MockListData.memberCapabilities))
         .environment(\.itemService, ItemService(
             repository: MockItemRepository(),
             dataStore: ItemDataStore()

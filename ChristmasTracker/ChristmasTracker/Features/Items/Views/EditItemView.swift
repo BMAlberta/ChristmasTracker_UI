@@ -7,102 +7,86 @@
 
 import SwiftUI
 
-import SwiftUI
-
+/// The edit form. A save error is held here, in local state, and shown in an inline banner. A
+/// "not found" means the item is gone, so the sheet closes (the detail screen closes with it).
 struct EditItemView: View {
-    
-    let item: GiftItem
-    
+    let item: ListItem
+
     @Environment(\.itemService) private var itemService
     @Environment(\.dismiss) private var dismiss
-    
-    // Form state
+
     @State private var name: String
     @State private var description: String
     @State private var url: String
+    @State private var imageUrl: String
     @State private var priceText: String
     @State private var quantityRequested: Int
     @State private var priority: Int
-    
     @State private var isSaving = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    init(item: GiftItem) {
+    @State private var saveError: ItemError?
+
+    init(item: ListItem) {
         self.item = item
         _name = State(initialValue: item.name)
-        _description = State(initialValue: item.description ?? "")
+        _description = State(initialValue: item.description)
         _url = State(initialValue: item.url ?? "")
-        _priceText = State(initialValue: item.expectedUnitPrice != nil ? String(format: "%.2f", item.expectedUnitPrice!) : "")
+        _imageUrl = State(initialValue: item.imageUrl ?? "")
+        _priceText = State(initialValue: item.expectedUnitPrice.map { "\($0)" } ?? "")
         _quantityRequested = State(initialValue: item.quantityRequested)
         _priority = State(initialValue: item.priority)
     }
-    
+
+    /// The changed fields, or nil when the form is invalid or nothing changed.
+    private var input: UpdateItemInput? {
+        ItemFormValidation.makeUpdateInput(
+            original: item,
+            name: name,
+            description: description,
+            url: url,
+            imageUrl: imageUrl,
+            priceText: priceText,
+            quantity: quantityRequested,
+            priority: priority
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Item Details") {
-                    TextField("Item Name", text: $name)
-                        .autocorrectionDisabled()
-                    
-                    TextField("Description (optional)", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-                
-                Section("Link") {
-                    TextField("URL (optional)", text: $url)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                }
-                
-                Section("Pricing") {
-                    HStack {
-                        Text("$")
-                        TextField("Price (optional)", text: $priceText)
-                            .keyboardType(.decimalPad)
-                    }
-                    
-                    Stepper("Quantity: \(quantityRequested)", value: $quantityRequested, in: 1...99)
-                }
-                
-                Section("Priority") {
-                    Stepper("Priority: \(priority)", value: $priority, in: 1...10)
-                    HStack(spacing: 2) {
-                        ForEach(1...10, id: \.self) { level in
-                            Image(systemName: level <= priority ? "star.fill" : "star")
-                                .foregroundColor(.orange)
-                                .font(.appCaption2)
-                        }
-                    }
-                }
-                
-                if item.offList {
+                if let banner = saveError.flatMap({ ItemErrorPresentation.banner(for: $0, hasRetryAction: true) }) {
                     Section {
-                        HStack(spacing: AppSpacing.xs) {
-                            Image(systemName: "gift.fill")
-                            Text("This is a surprise gift")
-                        }
-                        .font(.appCaption1)
-                        .foregroundColor(.orange)
+                        InlineErrorBanner(
+                            state: banner,
+                            onTryAgain: { Task { await saveChanges() } },
+                            onDismiss: { saveError = nil }
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
+                ItemFormFields(
+                    name: $name,
+                    description: $description,
+                    url: $url,
+                    imageUrl: $imageUrl,
+                    priceText: $priceText,
+                    quantity: $quantityRequested,
+                    priority: $priority
+                )
             }
             .navigationTitle("Edit Item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        saveError = nil
                         dismiss()
                     }
                     .disabled(isSaving)
                 }
-                
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        Task {
-                            await saveChanges()
-                        }
+                        Task { await saveChanges() }
                     } label: {
                         if isSaving {
                             ProgressView()
@@ -110,62 +94,38 @@ struct EditItemView: View {
                             Text("Save")
                         }
                     }
-                    .disabled(!hasChanges || !isFormValid || isSaving)
+                    .disabled(input == nil || isSaving)
                 }
             }
-            .alert("Error", isPresented: $showError) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
+            .onDisappear {
+                saveError = nil
             }
         }
     }
-    
-    private var isFormValid: Bool {
-        !name.isEmpty
-    }
-    
-    private var hasChanges: Bool {
-        name != item.name ||
-        description != item.description ||
-        url != (item.url ?? "") ||
-        priceText != (item.expectedUnitPrice != nil ? String(format: "%.2f", item.expectedUnitPrice!) : "") ||
-        quantityRequested != item.quantityRequested ||
-        priority != item.priority
-    }
-    
-    private var parsedPrice: Double? {
-        guard !priceText.isEmpty else { return nil }
-        return Double(priceText)
-    }
-    
+
     private func saveChanges() async {
+        guard let input, !isSaving else { return }
+        saveError = nil
         isSaving = true
-        
-        let request = UpdateItemRequest(
-            name: name != item.name ? name.trimmingCharacters(in: .whitespaces) : nil,
-            description: description != item.description ? description.trimmingCharacters(in: .whitespaces) : nil,
-            url: url != (item.url ?? "") ? (url.isEmpty ? nil : url.trimmingCharacters(in: .whitespaces)) : nil,
-            expectedUnitPrice: parsedPrice != item.expectedUnitPrice ? parsedPrice : nil,
-            quantityRequested: quantityRequested != item.quantityRequested ? quantityRequested : nil,
-            priority: priority != item.priority ? priority : nil,
-            imageUrl: nil
-        )
-        
+        defer { isSaving = false }
         do {
-            try await itemService.updateItem(id: item.id, request)
+            try await itemService.updateItem(id: item.id, input)
             dismiss()
+        } catch is CancellationError {
+            // The session ended or the task was cancelled: nothing to show.
         } catch {
-            errorMessage = error.localizedDescription
-            showError = true
+            let itemError = (error as? ItemError) ?? ItemError.server
+            if ItemErrorPresentation.leavesScreen(itemError) {
+                dismiss()
+            } else {
+                saveError = itemError
+            }
         }
-        
-        isSaving = false
     }
 }
 
 #Preview {
-    EditItemView(item: MockItemData.allItems[0])
+    EditItemView(item: MockItemSeed.items[0])
         .environment(\.itemService, ItemService(
             repository: MockItemRepository(),
             dataStore: ItemDataStore()

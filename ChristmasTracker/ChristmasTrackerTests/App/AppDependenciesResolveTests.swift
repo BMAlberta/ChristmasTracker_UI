@@ -74,6 +74,8 @@ struct AppDependenciesResolveTests {
         #expect(!(deps.authRepository is MockAuthenticationRepository))
         #expect(!(deps.listRepository is MockListRepository))
         #expect(!(deps.itemRepository is MockItemRepository))
+        // EDITED (I3c-C): also no generated item repository without a client.
+        #expect(!(deps.itemRepository is GeneratedClientItemRepository))
         #expect(!(deps.authRepository is GeneratedClientAuthenticationRepository))
         #expect(!(deps.listRepository is GeneratedClientListRepository))
     }
@@ -121,6 +123,85 @@ struct AppDependenciesResolveTests {
         await #expect(throws: ConfigurationError.clientUnavailable) { _ = try await repo.fetchItems(listId: "list-a") }
         await #expect(throws: ConfigurationError.clientUnavailable) { _ = try await repo.fetchItemDetail(id: "item-a") }
         await #expect(throws: ConfigurationError.clientUnavailable) { try await repo.deleteItem(id: "item-a") }
+        // EDITED (I3c-C): create and update take CreateItemInput / UpdateItemInput now; also covered.
+        await #expect(throws: ConfigurationError.clientUnavailable) {
+            _ = try await repo.createItem(
+                listId: "list-a",
+                CreateItemInput(
+                    name: "N", description: "D", url: nil, imageUrl: nil,
+                    expectedUnitPrice: nil, quantityRequested: 1, priority: 5
+                )
+            )
+        }
+        await #expect(throws: ConfigurationError.clientUnavailable) {
+            _ = try await repo.updateItem(id: "item-a", UpdateItemInput(name: "X"))
+        }
+    }
+
+    // MARK: - I3c-C: item repository identity
+
+    @Test("real mode without a client builds the inert item repository, no Mock and no generated one")
+    func failedBuildsInertItemRepository() throws {
+        let deps = try makeSUT(mode: .real, withClient: false).dependencies
+
+        #expect(deps.itemRepository is InertItemRepository)
+        #expect(!(deps.itemRepository is MockItemRepository))
+        #expect(!(deps.itemRepository is GeneratedClientItemRepository))
+    }
+
+    @Test("real mode with a client builds the generated-client item repository and no Mock item repository")
+    func realModeBuildsGeneratedItemRepository() throws {
+        let deps = try makeSUT(mode: .real, withClient: true).dependencies
+
+        #expect(deps.itemRepository is GeneratedClientItemRepository)
+        #expect(!(deps.itemRepository is MockItemRepository), "the real branch must not build any Mock item repository")
+        #expect(!(deps.itemRepository is InertItemRepository))
+    }
+
+    @Test("mock mode builds the Mock item repository, not the generated or inert one")
+    func mockModeBuildsMockItemRepository() throws {
+        let deps = try makeSUT(mode: .mock, withClient: false).dependencies
+
+        #expect(deps.itemRepository is MockItemRepository)
+        #expect(!(deps.itemRepository is GeneratedClientItemRepository))
+        #expect(!(deps.itemRepository is InertItemRepository))
+    }
+
+    @Test("mock mode: the item mock follows the list mock's flags (a viewer list refuses create, an owner list accepts it)")
+    func mockModeItemRepositoryFollowsTheListMockFlags() async throws {
+        let deps = try makeSUT(mode: .mock, withClient: false).dependencies
+        let items = try #require(deps.itemRepository as? MockItemRepository)
+        await items.setDelay(0)
+        let input = CreateItemInput(
+            name: "N", description: "D", url: nil, imageUrl: nil,
+            expectedUnitPrice: nil, quantityRequested: 1, priority: 5
+        )
+
+        await #expect(throws: ItemError.forbidden) {
+            _ = try await items.createItem(listId: MockListData.viewerMemberList.id, input)
+        }
+        let onMemberList = try await items.createItem(listId: MockListData.memberList.id, input)
+        let onOwnerList = try await items.createItem(listId: MockListData.ownerOfChildList.id, input)
+
+        #expect(onMemberList.offList == true, "a MEMBER adds an off-list item")
+        #expect(onOwnerList.offList == false, "an owner adds a regular item")
+    }
+
+    @Test("mock mode: a list id the list mock does not know falls back to the default owner flags")
+    func mockModeItemRepositoryUnknownListFallsBack() async throws {
+        let deps = try makeSUT(mode: .mock, withClient: false).dependencies
+        let items = try #require(deps.itemRepository as? MockItemRepository)
+        await items.setDelay(0)
+
+        let created = try await items.createItem(
+            listId: "list-not-in-the-list-mock",
+            CreateItemInput(
+                name: "N", description: "D", url: nil, imageUrl: nil,
+                expectedUnitPrice: nil, quantityRequested: 1, priority: 5
+            )
+        )
+
+        #expect(created.offList == false)
     }
 
     // MARK: - Mock mode

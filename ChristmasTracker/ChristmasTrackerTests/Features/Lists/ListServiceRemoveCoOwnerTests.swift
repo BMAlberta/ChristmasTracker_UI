@@ -15,6 +15,12 @@
 //
 //  Determinism: gated fakes with the nextHeldCall() handshake. No sleeps, no yield loops.
 //
+//  Story I3c-A changes (named; reason: decision "a 422 CANNOT_EDIT_ARCHIVED_LIST is NOT list gone"
+//  and "an archive records no removal"):
+//  - goneListIsDropped is parameterized over notFound only (archivedReadOnly now refetches, see
+//    ListServiceArchivedReadOnlyTests).
+//  - The two removal-sequence tests that used deleteList as the removal now use leaveList.
+//
 
 import Foundation
 import Testing
@@ -159,8 +165,9 @@ struct ListServiceRemoveCoOwnerTests {
         #expect(sut.lists.fetchListDetailCount == 1, "no refetch after a failure either")
     }
 
-    @Test("notFound or archivedReadOnly drops the list through the gone-list path", arguments: [
-        ListError.notFound, .archivedReadOnly
+    // CHANGED (I3c-A): archivedReadOnly removed from the arguments (it no longer drops the list).
+    @Test("notFound drops the list through the gone-list path", arguments: [
+        ListError.notFound
     ])
     func goneListIsDropped(error: ListError) async throws {
         let sut = try await makeSUT()
@@ -365,15 +372,16 @@ struct ListServiceRemoveCoOwnerTests {
 
     // MARK: - Removal-sequence guard
 
-    @Test("a list deleted while removeCoOwner was in flight is not written back")
+    // CHANGED (I3c-A): the removal is a leave (was a delete); an archive records no removal.
+    @Test("a list left while removeCoOwner was in flight is not written back")
     func listDroppedWhileInFlightIsNotWrittenBack() async throws {
         let sut = try await makeSUT()
         sut.lists.enqueueRemoveCoOwner(.success(try withoutCoOwner()), held: true)
-        sut.lists.enqueueDeleteList(.success(()))
+        sut.members.enqueueRemoveMember(.success(()))
         let task = Task { _ = try? await sut.service.removeCoOwner(listId: H.listId) }
         await sut.lists.nextHeldCall()
 
-        try await sut.service.deleteList(id: H.listId)
+        try await sut.service.leaveList(id: H.listId, userId: "user-me")
         sut.lists.releaseAll()
         await task.value
 
@@ -408,8 +416,8 @@ struct ListServiceRemoveCoOwnerTests {
     @Test("a removal that completed before removeCoOwner started does not filter its result")
     func earlierRemovalDoesNotFilter() async throws {
         let sut = try await makeSUT()
-        sut.lists.enqueueDeleteList(.success(()))
-        try await sut.service.deleteList(id: H.listId)
+        sut.members.enqueueRemoveMember(.success(()))
+        try await sut.service.leaveList(id: H.listId, userId: "user-me")
         // The list is back (for example the member was re-added): a later load shows it.
         sut.lists.enqueueFetchLists(.success([ListFixtures.giftList(id: H.listId, name: "Name of list")]))
         await sut.service.loadLists()
