@@ -267,7 +267,7 @@ struct RecordPurchaseModelConfirmationTests {
     func retryAfterConfirmedFailureAsksAgain() async {
         let sut = await makeSUT()
         await sut.driveToAwaiting(token: tokenA)
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.confirmBudget()
         #expect(sut.model.flow.state == .failed(.network))
         sut.enqueueConfirmation(token: tokenB)

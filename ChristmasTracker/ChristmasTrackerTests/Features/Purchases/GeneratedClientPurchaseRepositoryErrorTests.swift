@@ -3,7 +3,7 @@
 //  ChristmasTrackerTests
 //
 //  Story I4a-B: every documented failure of createPurchase, and the fallbacks, mapped to the exact
-//  typed RecordPurchaseError through the REAL factory-built client with a fake transport.
+//  typed PurchaseError through the REAL factory-built client with a fake transport.
 //
 //  Mapping under test (Gate 1, every case explicit, no blanket default):
 //    200 with a wrong shape                  -> .invalidResponse
@@ -43,7 +43,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 400, json: PurchaseWire.invalidPrice)
 
-        await #expect(throws: RecordPurchaseError.invalidPrice) {
+        await #expect(throws: PurchaseError.invalidPrice) {
             _ = try await sut.create()
         }
     }
@@ -54,7 +54,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 400, json: body)
 
-        await #expect(throws: RecordPurchaseError.invalidPrice) {
+        await #expect(throws: PurchaseError.invalidPrice) {
             _ = try await sut.create()
         }
     }
@@ -64,7 +64,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 400, json: PurchaseWire.validationError)
 
-        await #expect(throws: RecordPurchaseError.validation(message: "Store name must be at most 200 characters")) {
+        await #expect(throws: PurchaseError.validation(message: "Store name must be at most 200 characters")) {
             _ = try await sut.create()
         }
     }
@@ -105,7 +105,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 400, json: "{ this is not json")
 
-        await #expect(throws: RecordPurchaseError.validation(message: "")) {
+        await #expect(throws: PurchaseError.validation(message: "")) {
             _ = try await sut.create()
         }
     }
@@ -117,7 +117,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 401, json: ListWire.tokenExpired, times: 2)
 
-        await #expect(throws: RecordPurchaseError.unauthorized) {
+        await #expect(throws: PurchaseError.unauthorized) {
             _ = try await sut.create()
         }
         #expect(await sut.refresher.callCount == 1, "exactly one refresh attempt")
@@ -129,7 +129,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT(refreshFailure: SessionRefreshError.credentialFailure)
         await sut.transport.enqueue(status: 401, json: ListWire.tokenExpired)
 
-        await #expect(throws: RecordPurchaseError.unauthorized) {
+        await #expect(throws: PurchaseError.unauthorized) {
             _ = try await sut.create()
         }
         #expect(await sut.refresher.callCount == 1)
@@ -159,7 +159,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(TrackerAPIError.unauthorized)
 
-        await #expect(throws: RecordPurchaseError.unauthorized) {
+        await #expect(throws: PurchaseError.unauthorized) {
             _ = try await sut.create()
         }
     }
@@ -171,7 +171,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 403, json: PurchaseWire.cannotPurchaseOwnList)
 
-        await #expect(throws: RecordPurchaseError.cannotPurchaseOwnList) {
+        await #expect(throws: PurchaseError.cannotPurchaseOwnList) {
             _ = try await sut.create()
         }
     }
@@ -182,7 +182,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 403, json: body)
 
-        await #expect(throws: RecordPurchaseError.cannotPurchaseOwnList) {
+        await #expect(throws: PurchaseError.cannotPurchaseOwnList) {
             _ = try await sut.create()
         }
     }
@@ -193,7 +193,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 403, json: body)
 
-        await #expect(throws: RecordPurchaseError.forbidden) {
+        await #expect(throws: PurchaseError.forbidden) {
             _ = try await sut.create()
         }
     }
@@ -206,7 +206,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 404, json: body)
 
-        await #expect(throws: RecordPurchaseError.notFound) {
+        await #expect(throws: PurchaseError.notFound) {
             _ = try await sut.create()
         }
     }
@@ -218,7 +218,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 422, json: PurchaseWire.unprocessable)
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
@@ -230,7 +230,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 429, json: ListWire.rateLimit, retryAfter: "0.001", times: 3)
 
-        await #expect(throws: RecordPurchaseError.rateLimited(retryAfter: 0.001)) {
+        await #expect(throws: PurchaseError.rateLimited(retryAfter: 0.001)) {
             _ = try await sut.create()
         }
     }
@@ -240,7 +240,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(TrackerAPIError.rateLimited(retryAfter: 7))
 
-        await #expect(throws: RecordPurchaseError.rateLimited(retryAfter: 7)) {
+        await #expect(throws: PurchaseError.rateLimited(retryAfter: 7)) {
             _ = try await sut.create()
         }
     }
@@ -252,7 +252,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 500, json: ListWire.internalError)
 
-        await #expect(throws: RecordPurchaseError.server) {
+        await #expect(throws: PurchaseError.server) {
             _ = try await sut.create()
         }
     }
@@ -262,7 +262,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: status, json: ListWire.internalError)
 
-        await #expect(throws: RecordPurchaseError.server) {
+        await #expect(throws: PurchaseError.server) {
             _ = try await sut.create()
         }
     }
@@ -274,7 +274,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
             status: status, json: ListWire.errorJSON(code: 9999, errorCode: "TEAPOT", message: "I am a teapot")
         )
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
@@ -286,7 +286,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 200, json: PurchaseWire.confirmationEnvelope(warnings: []))
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
@@ -297,7 +297,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let warning = PurchaseWire.warningJSON(token: "")
         await sut.transport.enqueue(status: 200, json: PurchaseWire.confirmationEnvelope(warnings: [warning]))
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
@@ -311,7 +311,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
             status: 201, json: PurchaseWire.confirmationInCreatedEnvelope(warnings: [PurchaseWire.warningJSON()])
         )
 
-        await #expect(throws: RecordPurchaseError.unconfirmed) {
+        await #expect(throws: PurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
@@ -324,7 +324,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 200, json: body)
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
@@ -335,7 +335,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(status: 201, json: body)
 
-        await #expect(throws: RecordPurchaseError.unconfirmed) {
+        await #expect(throws: PurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
@@ -347,7 +347,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let broken = "{ \"id\": \"purchase-1\", \"itemId\": \"item-1\" }"
         await sut.transport.enqueue(status: 201, json: PurchaseWire.createdEnvelope(purchase: broken))
 
-        await #expect(throws: RecordPurchaseError.unconfirmed) {
+        await #expect(throws: PurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
@@ -359,7 +359,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let purchase = PurchaseWire.purchaseJSON(shippingStatus: "TELEPORTED")
         await sut.transport.enqueue(status: 201, json: PurchaseWire.createdEnvelope(purchase: purchase))
 
-        await #expect(throws: RecordPurchaseError.unconfirmed) {
+        await #expect(throws: PurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
@@ -370,7 +370,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueEmpty(status: 201)
 
-        await #expect(throws: RecordPurchaseError.unconfirmed) {
+        await #expect(throws: PurchaseError.unconfirmed) {
             _ = try await sut.create()
         }
     }
@@ -380,7 +380,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(TrackerAPIError.decoding(URLError(.cannotParseResponse)))
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }
@@ -389,7 +389,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
 
     @Test("thrown TrackerAPIError values map like the item repository: forbidden, notFound, validation, server, undocumented")
     func thrownTrackerErrors() async throws {
-        let cases: [(TrackerAPIError, RecordPurchaseError)] = [
+        let cases: [(TrackerAPIError, PurchaseError)] = [
             (.forbidden, .forbidden),
             (.notFound, .notFound),
             (.validation("Total cost must be positive"), .validation(message: "Total cost must be positive")),
@@ -412,7 +412,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(URLError(.notConnectedToInternet))
 
-        await #expect(throws: RecordPurchaseError.network) {
+        await #expect(throws: PurchaseError.network) {
             _ = try await sut.create()
         }
     }
@@ -422,7 +422,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(TrackerAPIError.network(URLError(.timedOut)))
 
-        await #expect(throws: RecordPurchaseError.network) {
+        await #expect(throws: PurchaseError.network) {
             _ = try await sut.create()
         }
     }
@@ -437,7 +437,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         #expect(result == .network)
     }
 
-    @Test("a URLError.cancelled becomes CancellationError, never a RecordPurchaseError")
+    @Test("a URLError.cancelled becomes CancellationError, never a PurchaseError")
     func urlCancelledIsCancellation() async throws {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(URLError(.cancelled))
@@ -447,7 +447,7 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
         }
     }
 
-    @Test("cancellation is rethrown as CancellationError, never mapped to a RecordPurchaseError")
+    @Test("cancellation is rethrown as CancellationError, never mapped to a PurchaseError")
     func cancellationIsRethrown() async throws {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueueThrow(CancellationError())
@@ -472,14 +472,14 @@ struct GeneratedClientPurchaseRepositoryErrorTests {
 
     // MARK: Helper
 
-    /// Runs the call and returns the RecordPurchaseError it threw (nil when it threw nothing or
+    /// Runs the call and returns the PurchaseError it threw (nil when it threw nothing or
     /// something else).
-    private func captureError(_ body: () async throws -> Void) async -> RecordPurchaseError? {
+    private func captureError(_ body: () async throws -> Void) async -> PurchaseError? {
         do {
             try await body()
             return nil
         } catch {
-            return error as? RecordPurchaseError
+            return error as? PurchaseError
         }
     }
 }

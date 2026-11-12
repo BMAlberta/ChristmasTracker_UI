@@ -11,7 +11,7 @@ import Foundation
 
 nonisolated protocol PurchaseRecording: Sendable {
     /// Records a purchase for an item, or answers with the budget warnings and a confirmation token
-    /// when the purchase would exceed a budget. Throws `RecordPurchaseError`, or `CancellationError`.
+    /// when the purchase would exceed a budget. Throws `PurchaseError`, or `CancellationError`.
     func createPurchase(
         itemId: String,
         draft: PurchaseDraft,

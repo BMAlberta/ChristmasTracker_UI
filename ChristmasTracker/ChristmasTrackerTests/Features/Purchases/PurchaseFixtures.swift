@@ -54,15 +54,15 @@ nonisolated enum PurchaseFixtures {
 
     static let nonFinite: [Double] = [.nan, .infinity, -.infinity]
 
-    /// One value of every RecordPurchaseError case.
-    static let allErrors: [RecordPurchaseError] = [
+    /// One value of every PurchaseError case.
+    static let allErrors: [PurchaseError] = [
         .notFound, .unauthorized, .forbidden, .cannotPurchaseOwnList,
         .validation(message: "Total cost must be positive"), .invalidPrice,
         .rateLimited(retryAfter: 30), .sessionEnded, .network, .invalidResponse, .server
     ]
 
-    /// Every RecordPurchaseError case including the I4b `unconfirmed`.
-    static let allErrorsWithUnconfirmed: [RecordPurchaseError] = allErrors + [.unconfirmed]
+    /// Every PurchaseError case including the I4b `unconfirmed`.
+    static let allErrorsWithUnconfirmed: [PurchaseError] = allErrors + [.unconfirmed]
 
     // MARK: - Domain
 

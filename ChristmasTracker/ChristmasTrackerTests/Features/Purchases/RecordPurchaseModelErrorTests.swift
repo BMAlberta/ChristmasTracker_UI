@@ -4,7 +4,7 @@
 //
 //  Story I4a-C (e): every error the service can throw, as the form shows it.
 //
-//   - a typed RecordPurchaseError -> failed(error) with the banner of RecordPurchaseErrorPresentation
+//   - a typed PurchaseError -> failed(error) with the banner of RecordPurchaseErrorPresentation
 //     (no banner for sessionEnded); .notFound (closesForm) also finishes `itemGone`;
 //   - CancellationError (the session ended) -> failed(.sessionEnded), no banner;
 //   - any other error -> failed(.server);
@@ -32,7 +32,7 @@ struct RecordPurchaseModelErrorTests {
 
     @Test("Every typed error becomes the failed state with the presentation banner",
           arguments: PurchaseFixtures.allErrors)
-    func typedErrors(error: RecordPurchaseError) async {
+    func typedErrors(error: PurchaseError) async {
         let sut = await makeSUT()
         sut.repo.enqueueFailure(error)
 
@@ -50,7 +50,7 @@ struct RecordPurchaseModelErrorTests {
     @Test("A 404 means the item is gone: the form finishes itemGone")
     func notFoundFinishesItemGone() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.notFound)
+        sut.repo.enqueueFailure(PurchaseError.notFound)
 
         await sut.model.recordTapped()
 
@@ -58,7 +58,7 @@ struct RecordPurchaseModelErrorTests {
     }
 
     @Test("Other errors keep the form open", arguments: PurchaseFixtures.allErrors.filter { $0 != .notFound })
-    func otherErrorsKeepFormOpen(error: RecordPurchaseError) async {
+    func otherErrorsKeepFormOpen(error: PurchaseError) async {
         let sut = await makeSUT()
         sut.repo.enqueueFailure(error)
 
@@ -70,19 +70,19 @@ struct RecordPurchaseModelErrorTests {
     @Test("A failure shows the Record button again so the user can retry")
     func failedShowsRecordButton() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
 
         await sut.model.recordTapped()
 
         #expect(sut.model.showsRecordButton == true)
         #expect(sut.model.canTapRecord == true)
-        #expect(sut.model.errorBanner?.message == RecordPurchaseError.network.userMessage)
+        #expect(sut.model.errorBanner?.message == PurchaseError.network.userMessage)
     }
 
     @Test("sessionEnded has no banner")
     func sessionEndedNoBanner() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.sessionEnded)
+        sut.repo.enqueueFailure(PurchaseError.sessionEnded)
 
         await sut.model.recordTapped()
 
@@ -122,31 +122,31 @@ struct RecordPurchaseModelErrorTests {
     @Test("rateLimited is retryable, with Try Again")
     func rateLimited() async throws {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.rateLimited(retryAfter: 30))
+        sut.repo.enqueueFailure(PurchaseError.rateLimited(retryAfter: 30))
 
         await sut.model.recordTapped()
 
         let banner = try #require(sut.model.errorBanner)
         #expect(banner == InlineErrorBannerState(
-            message: RecordPurchaseError.rateLimited(retryAfter: 30).userMessage, canRetry: true, isDismissible: true
+            message: PurchaseError.rateLimited(retryAfter: 30).userMessage, canRetry: true, isDismissible: true
         ))
     }
 
     @Test("cannotPurchaseOwnList is not retryable and keeps its plain message")
     func cannotPurchaseOwnList() async throws {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.cannotPurchaseOwnList)
+        sut.repo.enqueueFailure(PurchaseError.cannotPurchaseOwnList)
 
         await sut.model.recordTapped()
 
         let banner = try #require(sut.model.errorBanner)
-        #expect(banner.message == RecordPurchaseError.cannotPurchaseOwnList.userMessage)
+        #expect(banner.message == PurchaseError.cannotPurchaseOwnList.userMessage)
         #expect(banner == InlineErrorBannerState(message: banner.message, canRetry: false, isDismissible: true))
     }
 
     @Test("validation and invalidPrice show the plain message and are not retryable")
     func validationErrors() async throws {
-        for error in [RecordPurchaseError.validation(message: "Total cost must be positive"), .invalidPrice] {
+        for error in [PurchaseError.validation(message: "Total cost must be positive"), .invalidPrice] {
             let sut = await makeSUT()
             sut.repo.enqueueFailure(error)
 
@@ -165,7 +165,7 @@ struct RecordPurchaseModelErrorTests {
         let sut = await makeSUT()
         sut.model.input.quantity = 2
         sut.model.input.storeName = "Fake Store"
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.recordTapped()
         let purchase = PurchaseFixtures.recordedPurchase(id: "purchase-5")
         sut.repo.enqueue(created: purchase)
@@ -182,7 +182,7 @@ struct RecordPurchaseModelErrorTests {
     @Test("retry clears the banner while the request runs and on success")
     func retryClearsBanner() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.server)
+        sut.repo.enqueueFailure(PurchaseError.server)
         await sut.model.recordTapped()
         #expect(sut.model.errorBanner != nil)
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase(), held: true)
@@ -200,9 +200,9 @@ struct RecordPurchaseModelErrorTests {
     @Test("A failed retry shows the new error")
     func retryFailsAgain() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.recordTapped()
-        sut.repo.enqueueFailure(RecordPurchaseError.rateLimited(retryAfter: 5))
+        sut.repo.enqueueFailure(PurchaseError.rateLimited(retryAfter: 5))
 
         await sut.model.retry()
 
@@ -222,7 +222,7 @@ struct RecordPurchaseModelErrorTests {
     @Test("dismissError returns to editing, the banner goes, and a new submit starts fresh without a token")
     func dismissReturnsToEditing() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.recordTapped()
 
         sut.model.dismissError()
@@ -238,7 +238,7 @@ struct RecordPurchaseModelErrorTests {
     @Test("After dismissError a retry does nothing: the stored draft was dropped")
     func dismissDropsDraft() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.recordTapped()
 
         sut.model.dismissError()
@@ -252,7 +252,7 @@ struct RecordPurchaseModelErrorTests {
         let sut = await makeSUT()
         sut.enqueueConfirmation(token: RecordPurchaseTestToken.first)
         await sut.model.recordTapped()
-        sut.repo.enqueueFailure(RecordPurchaseError.server)
+        sut.repo.enqueueFailure(PurchaseError.server)
 
         await sut.model.confirmBudget()
 

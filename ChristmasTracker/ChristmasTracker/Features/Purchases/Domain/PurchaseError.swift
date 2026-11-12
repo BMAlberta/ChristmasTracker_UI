@@ -1,14 +1,14 @@
 //
-//  RecordPurchaseError.swift
+//  PurchaseError.swift
 //  ChristmasTracker
 //
-//  Errors of recording a purchase. Named RecordPurchaseError because the legacy purchase
-//  repository file still declares a top-level PurchaseError.
+//  Errors of recording a purchase. The errors of managing an existing purchase are
+//  PurchaseManagementError.
 //
 
 import Foundation
 
-nonisolated enum RecordPurchaseError: Error, LocalizedError, Equatable, Sendable {
+nonisolated enum PurchaseError: Error, LocalizedError, Equatable, Sendable {
     case notFound
     case unauthorized
     case forbidden

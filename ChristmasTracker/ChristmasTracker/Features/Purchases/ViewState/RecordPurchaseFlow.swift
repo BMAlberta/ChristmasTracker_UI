@@ -24,14 +24,14 @@ nonisolated enum RecordPurchaseFlowState: Equatable, Sendable {
     /// The expired message with one button back to editing.
     case expired
     case recorded(RecordedPurchase)
-    case failed(RecordPurchaseError)
+    case failed(PurchaseError)
 }
 
 nonisolated enum RecordPurchaseFlowEvent: Equatable, Sendable {
     case submit
     case serverCreated(RecordedPurchase)
     case serverConfirmationRequired(warnings: [BudgetWarning], token: String)
-    case serverError(RecordPurchaseError)
+    case serverError(PurchaseError)
     case confirm
     case cancel
     case editDetails

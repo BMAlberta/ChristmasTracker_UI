@@ -41,7 +41,7 @@ actor NetworkCache {
               !isExpired(cachedValue.timestamp) else {
             return nil
         }
-        LogDebug("Cache hit: \(key)", category: .cache)
+        LogDebug("Cache hit", category: .cache)
         return cachedValue.value
     }
     
@@ -55,14 +55,14 @@ actor NetworkCache {
                                     timestamp: Date(),
                                     sessionId: sessionId)
         
-        LogDebug("Cache set: \(key)", category: .cache)
+        LogDebug("Cache set", category: .cache)
     }
     
     // MARK: - Invalidation
     /// Invalidate specifc key
     func invalidate(_ key: String) {
         cache.removeValue(forKey: key)
-        LogDebug("Cache invalidated: \(key)", category: .cache)
+        LogDebug("Cache invalidated", category: .cache)
     }
     
     ///Invalidate by scope (lists, items, etc.)
@@ -82,7 +82,7 @@ actor NetworkCache {
         }
         
         let finalCount = cache.count
-        LogDebug("Cache scope invalidated: \(scope), removed \(initialCount - finalCount) entries", category: .cache)
+        LogDebug("Cache scope invalidated, removed \(initialCount - finalCount) entries", category: .cache)
     }
     
     ///Invalidate all cached data

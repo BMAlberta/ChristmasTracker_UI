@@ -2,10 +2,10 @@
 //  RecordPurchaseUnconfirmedErrorTests.swift
 //  ChristmasTrackerTests
 //
-//  Story I4b-A: RecordPurchaseError.unconfirmed ("the server may have recorded the purchase")
+//  Story I4b-A: PurchaseError.unconfirmed ("the server may have recorded the purchase")
 //  and the failure kind of every case, plus the banner and the two-action presentation.
 //
-//  Fails today because RecordPurchaseError.unconfirmed, failureKind and the presentation
+//  Fails today because PurchaseError.unconfirmed, failureKind and the presentation
 //  additions do not exist yet.
 //
 
@@ -20,25 +20,25 @@ struct RecordPurchaseUnconfirmedErrorTests {
 
     @Test("The unconfirmed message is the fixed sentence")
     func message() {
-        #expect(RecordPurchaseError.unconfirmed.userMessage == "We couldn't confirm whether this purchase was recorded.")
-        #expect(RecordPurchaseError.unconfirmed.errorDescription == RecordPurchaseError.unconfirmed.userMessage)
+        #expect(PurchaseError.unconfirmed.userMessage == "We couldn't confirm whether this purchase was recorded.")
+        #expect(PurchaseError.unconfirmed.errorDescription == PurchaseError.unconfirmed.userMessage)
     }
 
     @Test("Unconfirmed is not retryable and does not close the form")
     func flags() {
-        #expect(!RecordPurchaseError.unconfirmed.isRetryable)
-        #expect(!RecordPurchaseError.unconfirmed.closesForm)
+        #expect(!PurchaseError.unconfirmed.isRetryable)
+        #expect(!PurchaseError.unconfirmed.closesForm)
     }
 
     @Test("Only unconfirmed has the unconfirmed failure kind; every other case is definitive",
           arguments: PurchaseFixtures.allErrorsWithUnconfirmed)
-    func failureKind(error: RecordPurchaseError) {
+    func failureKind(error: PurchaseError) {
         #expect(error.failureKind == (error == .unconfirmed ? .unconfirmed : .definitive), "\(error)")
     }
 
     @Test("The unconfirmed message differs from every other message", arguments: PurchaseFixtures.allErrors)
-    func messageDistinct(other: RecordPurchaseError) {
-        #expect(RecordPurchaseError.unconfirmed.userMessage != other.userMessage)
+    func messageDistinct(other: PurchaseError) {
+        #expect(PurchaseError.unconfirmed.userMessage != other.userMessage)
     }
 
     // MARK: - Presentation
@@ -63,7 +63,7 @@ struct RecordPurchaseUnconfirmedErrorTests {
     }
 
     @Test("No other error has the unconfirmed actions", arguments: PurchaseFixtures.allErrors)
-    func noActionsForOthers(error: RecordPurchaseError) {
+    func noActionsForOthers(error: PurchaseError) {
         #expect(RecordPurchaseErrorPresentation.unconfirmedActions(for: error) == nil, "\(error)")
     }
 }

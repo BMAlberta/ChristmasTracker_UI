@@ -47,7 +47,7 @@ struct PurchaseServiceTokenRetentionTests {
     @Test("a token is not retained after a failed call either: the next call without a token goes out with nil")
     func tokenNotRetainedAfterFailure() async throws {
         let sut = await makePurchaseServiceSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         sut.repo.enqueue(.success(PurchaseServiceFix.confirmation()))
 
         _ = try? await sut.service.recordPurchase(
@@ -86,7 +86,7 @@ struct PurchaseServiceTokenRetentionTests {
     func reflectionNeverContainsTheToken() async {
         let sut = await makePurchaseServiceSUT()
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase())
-        sut.repo.enqueueFailure(RecordPurchaseError.server)
+        sut.repo.enqueueFailure(PurchaseError.server)
         sut.repo.enqueue(.success(PurchaseServiceFix.confirmation(token: PurchaseWire.secondToken)))
 
         _ = try? await sut.service.recordPurchase(

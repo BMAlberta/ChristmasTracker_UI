@@ -253,7 +253,7 @@ final class RecordPurchaseModel {
                 itemId: item.id, draft: draft, confirmationToken: confirmationToken
             )
             apply(outcome)
-        } catch let error as RecordPurchaseError {
+        } catch let error as PurchaseError {
             _ = flow.handle(.serverError(error))
             if error.closesForm { finish = .itemGone }
         } catch is CancellationError {

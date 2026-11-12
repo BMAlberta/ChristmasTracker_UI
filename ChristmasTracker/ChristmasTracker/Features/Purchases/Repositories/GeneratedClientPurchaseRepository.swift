@@ -4,7 +4,7 @@
 //
 //  Repository for the create-purchase operation on the generated TrackerAPI client. Every
 //  documented response is mapped explicitly (no default case), and every failure becomes a typed
-//  RecordPurchaseError. Nothing past this file sees a generated type. Nothing is logged: the
+//  PurchaseError. Nothing past this file sees a generated type. Nothing is logged: the
 //  confirmation token, amounts, ids and names never reach a log or Sentry.
 //
 
@@ -52,7 +52,7 @@ nonisolated final class GeneratedClientPurchaseRepository: PurchaseRecording, Se
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
-                    throw RecordPurchaseError.unconfirmed
+                    throw PurchaseError.unconfirmed
                 }
             case .ok(let response):
                 let payload = try response.body.json
@@ -60,15 +60,15 @@ nonisolated final class GeneratedClientPurchaseRepository: PurchaseRecording, Se
             case .badRequest(let response):
                 throw purchaseBadRequest(response.body)
             case .unauthorized:
-                throw RecordPurchaseError.unauthorized
+                throw PurchaseError.unauthorized
             case .forbidden(let response):
                 throw purchaseForbidden(response.body)
             case .notFound:
-                throw RecordPurchaseError.notFound
+                throw PurchaseError.notFound
             case .tooManyRequests:
-                throw RecordPurchaseError.rateLimited(retryAfter: 0)
+                throw PurchaseError.rateLimited(retryAfter: 0)
             case .internalServerError:
-                throw RecordPurchaseError.server
+                throw PurchaseError.server
             case .undocumented(let statusCode, _):
                 throw purchaseUndocumentedFailure(statusCode)
             }
@@ -82,7 +82,7 @@ nonisolated final class GeneratedClientPurchaseRepository: PurchaseRecording, Se
 
 /// 400: INVALID_PRICE (3007) is its own case; anything else carries the envelope's message
 /// (blank when absent, which the user message turns into the generic text).
-nonisolated private func purchaseBadRequest(_ body: Components.Responses.ValidationError.Body) -> RecordPurchaseError {
+nonisolated private func purchaseBadRequest(_ body: Components.Responses.ValidationError.Body) -> PurchaseError {
     let envelope = (try? body.json)?.error
     if envelope?.errorCode == "INVALID_PRICE" || envelope?.code == 3007 {
         return .invalidPrice
@@ -91,7 +91,7 @@ nonisolated private func purchaseBadRequest(_ body: Components.Responses.Validat
 }
 
 /// 403: CANNOT_PURCHASE_OWN_LIST (6104) is its own case; any other 403 is a plain refusal.
-nonisolated private func purchaseForbidden(_ body: Components.Responses.ForbiddenError.Body) -> RecordPurchaseError {
+nonisolated private func purchaseForbidden(_ body: Components.Responses.ForbiddenError.Body) -> PurchaseError {
     let envelope = (try? body.json)?.error
     if envelope?.errorCode == "CANNOT_PURCHASE_OWN_LIST" || envelope?.code == 6104 {
         return .cannotPurchaseOwnList
@@ -101,25 +101,25 @@ nonisolated private func purchaseForbidden(_ body: Components.Responses.Forbidde
 
 /// A status the contract does not document: 5xx is a server failure, anything else (a 422
 /// included) is a response the app cannot interpret.
-nonisolated private func purchaseUndocumentedFailure(_ statusCode: Int) -> RecordPurchaseError {
+nonisolated private func purchaseUndocumentedFailure(_ statusCode: Int) -> PurchaseError {
     statusCode >= 500 ? .server : .invalidResponse
 }
 
-/// Turns anything thrown while calling the client into a RecordPurchaseError, except cancellation,
+/// Turns anything thrown while calling the client into a PurchaseError, except cancellation,
 /// which is passed through unchanged. The OpenAPI runtime wraps transport, middleware and decoding
 /// errors in `ClientError`; the root cause is its `underlyingError`.
 nonisolated private func purchaseFailure(_ error: any Error) -> any Error {
-    if let purchaseError = error as? RecordPurchaseError {
+    if let purchaseError = error as? PurchaseError {
         return purchaseError
     }
     if let clientError = error as? ClientError {
         // A 400 whose envelope could not be decoded is still a validation failure.
         if clientError.response?.status.code == 400, clientError.underlyingError is DecodingError {
-            return RecordPurchaseError.validation(message: "")
+            return PurchaseError.validation(message: "")
         }
         // A 201 the client could not read: the purchase exists, so the outcome is unconfirmed.
         if clientError.response?.status.code == 201 {
-            return clientError.underlyingError is CancellationError ? CancellationError() : RecordPurchaseError.unconfirmed
+            return clientError.underlyingError is CancellationError ? CancellationError() : PurchaseError.unconfirmed
         }
         return classifyPurchaseRootCause(clientError.underlyingError, wrappedByClient: true)
     }
@@ -130,7 +130,7 @@ nonisolated private func classifyPurchaseRootCause(_ cause: any Error, wrappedBy
     if cause is CancellationError {
         return cause
     }
-    if let purchaseError = cause as? RecordPurchaseError {
+    if let purchaseError = cause as? PurchaseError {
         return purchaseError
     }
     if let apiError = cause as? TrackerAPIError {
@@ -140,21 +140,21 @@ nonisolated private func classifyPurchaseRootCause(_ cause: any Error, wrappedBy
         // No HTTP response: the request may or may not have reached the server.
         if urlError.code == .cancelled { return CancellationError() }
         switch UnconfirmedPurchaseClassifier.kind(forURLErrorCode: urlError.code) {
-        case .definitive: return RecordPurchaseError.network
-        case .unconfirmed: return RecordPurchaseError.unconfirmed
+        case .definitive: return PurchaseError.network
+        case .unconfirmed: return PurchaseError.unconfirmed
         }
     }
     if cause is SessionRefreshError {
         // A refresh that failed for a reason other than a credential failure (which the
         // middleware already turned into TrackerAPIError.unauthorized): treat as connectivity.
-        return RecordPurchaseError.network
+        return PurchaseError.network
     }
     // Decoding failures and runtime errors from the client are an unreadable response. A bare
     // unknown error that did not come through the client may be a transport failure, so it is unconfirmed.
-    return wrappedByClient ? RecordPurchaseError.invalidResponse : RecordPurchaseError.unconfirmed
+    return wrappedByClient ? PurchaseError.invalidResponse : PurchaseError.unconfirmed
 }
 
-nonisolated private func classifyPurchaseAPIError(_ error: TrackerAPIError) -> RecordPurchaseError {
+nonisolated private func classifyPurchaseAPIError(_ error: TrackerAPIError) -> PurchaseError {
     switch error {
     case .unauthorized: return .unauthorized
     case .forbidden: return .forbidden

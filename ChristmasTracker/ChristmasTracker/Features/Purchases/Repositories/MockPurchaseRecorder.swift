@@ -98,9 +98,9 @@ actor MockPurchaseRecorder: PurchaseRecording {
     ) async throws -> PurchaseOutcome {
         let recipient = try recipientForPurchase(itemId: itemId)
         guard draft.quantity >= 1 else {
-            throw RecordPurchaseError.validation(message: "Quantity must be at least 1.")
+            throw PurchaseError.validation(message: "Quantity must be at least 1.")
         }
-        guard isValidAmount(draft.totalCost) else { throw RecordPurchaseError.invalidPrice }
+        guard isValidAmount(draft.totalCost) else { throw PurchaseError.invalidPrice }
 
         let recipientSpend = spendByRecipient[recipient.id] ?? 0
         let overRecipient = recipientSpend + draft.totalCost > MockPurchaseRules.recipientBudgetLimit
@@ -158,9 +158,9 @@ actor MockPurchaseRecorder: PurchaseRecording {
     private func recipientForPurchase(itemId: String) throws -> ListItemPerson {
         switch access(itemId) {
         case .allowed(let recipient): return recipient
-        case .ownList: throw RecordPurchaseError.cannotPurchaseOwnList
-        case .forbidden: throw RecordPurchaseError.forbidden
-        case .unknown: throw RecordPurchaseError.notFound
+        case .ownList: throw PurchaseError.cannotPurchaseOwnList
+        case .forbidden: throw PurchaseError.forbidden
+        case .unknown: throw PurchaseError.notFound
         }
     }
 

@@ -49,7 +49,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("An unconfirmed first submit shows Check Item, Record Again and Dismiss, and no Try Again")
     func firstSubmit() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
 
         await sut.model.recordTapped()
 
@@ -65,7 +65,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     func confirmedResubmit() async {
         let sut = await makeSUT()
         await sut.driveToAwaiting(token: RecordPurchaseTestToken.first)
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
 
         await sut.model.confirmBudget()
 
@@ -78,7 +78,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("The unconfirmed banner appears and the form is still editable")
     func formStaysEditable() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
 
         await sut.model.recordTapped()
 
@@ -91,7 +91,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Check Item finishes with .checkItem, returns to editing and sends nothing")
     func checkItem() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
 
         sut.model.checkItem()
@@ -105,7 +105,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Check Item drops the draft: a later Record Again sends nothing")
     func checkItemDropsDraft() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
         sut.model.checkItem()
 
@@ -131,7 +131,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Record Again sends a fresh submit with no token and the identical draft")
     func recordAgain() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
         let purchase = PurchaseFixtures.recordedPurchase(id: "purchase-again")
         sut.repo.enqueue(created: purchase)
@@ -149,7 +149,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("The form is read-only and submitting while Record Again is in flight")
     func recordAgainInFlight() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase(), held: true)
 
@@ -167,8 +167,8 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Record Again can fail unconfirmed again and shows the same banner")
     func recordAgainUnconfirmedAgain() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
 
         await sut.model.recordAgain()
@@ -182,7 +182,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     func recordAgainRunsBudgetConfirmationAgain() async {
         let sut = await makeSUT()
         await sut.driveToAwaiting(token: RecordPurchaseTestToken.first)
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.confirmBudget()
         #expect(sut.model.flow.state == .failed(.unconfirmed))
 
@@ -219,7 +219,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("A teardown during Record Again shows no banner and records nothing")
     func teardownDuringRecordAgain() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase(), held: true)
         let task = Task { @MainActor in await sut.model.recordAgain() }
@@ -239,7 +239,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("retry() does nothing for an unconfirmed failure")
     func retryIgnored() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
 
         await sut.model.retry()
@@ -252,7 +252,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Dismiss returns to editing without sending anything")
     func dismiss() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
 
         sut.model.dismissError()
@@ -266,7 +266,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Cancel closes the form without sending anything")
     func cancel() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.recordTapped()
 
         sut.model.cancel()
@@ -279,7 +279,7 @@ struct RecordPurchaseModelUnconfirmedTests {
 
     @Test("A definitive failure keeps Try Again (when retryable) and Dismiss, and never the new actions",
           arguments: PurchaseFixtures.allErrors.filter { $0 != .sessionEnded })
-    func definitiveBannerUnchanged(error: RecordPurchaseError) async {
+    func definitiveBannerUnchanged(error: PurchaseError) async {
         let sut = await makeSUT()
         sut.repo.enqueueFailure(error)
 
@@ -293,7 +293,7 @@ struct RecordPurchaseModelUnconfirmedTests {
 
     @Test("Check Item and Record Again are ignored after a definitive failure",
           arguments: PurchaseFixtures.allErrors.filter { $0 != .sessionEnded && $0 != .notFound })
-    func newEventsIgnoredAfterDefinitive(error: RecordPurchaseError) async {
+    func newEventsIgnoredAfterDefinitive(error: PurchaseError) async {
         let sut = await makeSUT()
         sut.repo.enqueueFailure(error)
         await sut.model.recordTapped()
@@ -310,7 +310,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     @Test("Retry after a definitive failure still sends again without a token")
     func definitiveRetryUnchanged() async {
         let sut = await makeSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.recordTapped()
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase())
 
@@ -325,7 +325,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     func tokenNeverInState() async {
         let sut = await makeSUT()
         await sut.driveToAwaiting(token: RecordPurchaseTestToken.first)
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.confirmBudget()
         sut.enqueueConfirmation(token: RecordPurchaseTestToken.second)
         await sut.model.recordAgain()
@@ -342,7 +342,7 @@ struct RecordPurchaseModelUnconfirmedTests {
     func tokenNeverInFailedState() async {
         let sut = await makeSUT()
         await sut.driveToAwaiting(token: RecordPurchaseTestToken.first)
-        sut.repo.enqueueFailure(RecordPurchaseError.unconfirmed)
+        sut.repo.enqueueFailure(PurchaseError.unconfirmed)
         await sut.model.confirmBudget()
 
         let token = RecordPurchaseTestToken.first

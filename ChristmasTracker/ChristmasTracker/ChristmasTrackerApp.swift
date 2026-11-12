@@ -82,7 +82,6 @@ private final class LockCoordinator: InactivityLockPresenting {
 
 /// Dependency container for the composition root.
 struct AppDependencies: Sendable {
-    let apiClient: APIClient
     let authRepository: any AuthenticationRepository
     let listRepository: ListRepository
     let memberRepository: any MemberRepository
@@ -100,7 +99,6 @@ struct AppDependencies: Sendable {
 
     /// Build mock dependencies (used in .mock mode and when generatedClient is unavailable).
     static func makeMock() -> AppDependencies {
-        let apiClient = MockAPIClient.withMockData()
         // One list mock is shared, so members and children act on the lists the app shows.
         let lists = MockListRepository()
         // The recorder and the manager share one store, seeded with the mock user's own purchases
@@ -109,7 +107,6 @@ struct AppDependencies: Sendable {
             seed: MockPurchaseStore.seedPurchases(from: MockItemSeed.items, for: MockItemRepository.defaultUser)
         )
         return AppDependencies(
-            apiClient: apiClient,
             authRepository: MockAuthenticationRepository(),
             listRepository: lists,
             memberRepository: MockMemberRepository(listRepository: lists),
@@ -129,9 +126,7 @@ struct AppDependencies: Sendable {
 
     /// Build real dependencies using the already-constructed generated client for auth.
     static func makeReal(generatedClient: any APIProtocol) -> AppDependencies {
-        let apiClient = NetworkAPIClient()
-        return AppDependencies(
-            apiClient: apiClient,
+        AppDependencies(
             authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
             listRepository: GeneratedClientListRepository(client: generatedClient),
             memberRepository: GeneratedClientMemberRepository(client: generatedClient),
@@ -151,7 +146,6 @@ struct AppDependencies: Sendable {
     /// ConfigurationError.clientUnavailable and returns nothing. No mock is constructed.
     static func makeInert() -> AppDependencies {
         AppDependencies(
-            apiClient: InertAPIClient(),
             authRepository: InertAuthenticationRepository(),
             listRepository: InertListRepository(),
             memberRepository: InertMemberRepository(),
@@ -225,7 +219,6 @@ nonisolated func buildGeneratedClient(
 struct ChristmasTrackerApp: App {
     // MARK: - State
     @State private var authService: AuthenticationService
-    @State private var apiClient: APIClient
     @State private var listService: ListService
     @State private var itemService: ItemService
     @State private var childService: ChildService
@@ -312,7 +305,6 @@ struct ChristmasTrackerApp: App {
         )
         let dependencies = resolved.dependencies
         bootstrapState = resolved.state
-        apiClient = dependencies.apiClient
 
         // List Service
         let listDataStore = ListDataStore()
@@ -438,7 +430,6 @@ struct ChristmasTrackerApp: App {
     private var appContent: some View {
         ContentView()
                 .environment(\.authenticationService, authService)
-                .environment(\.apiClient, apiClient)
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)
                 .environment(\.childService, childService)

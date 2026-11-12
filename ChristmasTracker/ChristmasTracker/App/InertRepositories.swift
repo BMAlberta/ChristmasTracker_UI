@@ -162,19 +162,6 @@ nonisolated final class InertPurchaseManager: PurchaseManaging {
     }
 }
 
-/// The API client of the failed state: no request is ever sent.
-nonisolated final class InertAPIClient: APIClient {
-    func request<T: Decodable & Sendable>(
-        _ method: HTTPMethod,
-        path: String,
-        body: (any Encodable & Sendable)?,
-        forceRefresh: Bool,
-        cacheScope: CacheScope
-    ) async throws -> T {
-        throw ConfigurationError.clientUnavailable
-    }
-}
-
 /// The version repository of the failed state: no check is ever made.
 nonisolated final class InertAppVersionRepository: AppVersionChecking {
     @Instrumented

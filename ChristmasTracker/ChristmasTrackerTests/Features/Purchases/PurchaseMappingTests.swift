@@ -8,7 +8,7 @@
 //  (client guide 7.6 shapes: a `purchase: null` on the 200, optional details fields absent).
 //
 //  Rules under test: money converts through doubleToDecimal and a non-finite value throws
-//  RecordPurchaseError.invalidResponse; a 201 body must carry `created`; a 200 body carrying
+//  PurchaseError.invalidResponse; a 201 body must carry `created`; a 200 body carrying
 //  confirmation_required needs at least one warning and a non-empty token (the first non-empty
 //  token) and NEVER becomes `created`; a 200 body carrying `created` maps to `created`.
 //
@@ -99,7 +99,7 @@ struct PurchaseMappingTests {
 
     @Test("A NaN or infinite purchase total throws invalidResponse", arguments: PurchaseFixtures.nonFinite)
     func nonFinitePurchaseTotal(value: Double) {
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapRecordedPurchase(PurchaseFixtures.wirePurchase(totalCost: value))
         }
     }
@@ -137,7 +137,7 @@ struct PurchaseMappingTests {
             limit: field == .limit ? value : 100, spent: field == .spent ? value : 90,
             amount: field == .amount ? value : 25.50, overage: field == .overage ? value : 15.50
         )
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapBudgetWarning(wire)
         }
     }
@@ -157,14 +157,14 @@ struct PurchaseMappingTests {
 
     @Test("A 201 body carrying confirmation_required is invalidResponse")
     func createdBodyWithConfirmationRequired() {
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapCreatedOutcome(PurchaseFixtures.wireConfirmationRequired())
         }
     }
 
     @Test("A 201 body with a non-finite purchase total is invalidResponse", arguments: PurchaseFixtures.nonFinite)
     func createdNonFinite(value: Double) {
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapCreatedOutcome(PurchaseFixtures.wireCreated(PurchaseFixtures.wirePurchase(totalCost: value)))
         }
     }
@@ -217,14 +217,14 @@ struct PurchaseMappingTests {
 
     @Test("A 200 confirmation_required without warnings is invalidResponse")
     func confirmationEmptyWarnings() {
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapConfirmationOutcome(PurchaseFixtures.wireConfirmationRequired(), warnings: [])
         }
     }
 
     @Test("A 200 confirmation_required whose warnings carry no token is invalidResponse")
     func confirmationMissingToken() {
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapConfirmationOutcome(
                 PurchaseFixtures.wireConfirmationRequired(),
                 warnings: [PurchaseFixtures.wireWarning(token: ""), PurchaseFixtures.wireWarning(level: .total, token: "")]
@@ -256,7 +256,7 @@ struct PurchaseMappingTests {
 
     @Test("A non-finite money value in a 200 warning is invalidResponse", arguments: PurchaseFixtures.nonFinite)
     func confirmationNonFinite(value: Double) {
-        #expect(throws: RecordPurchaseError.invalidResponse) {
+        #expect(throws: PurchaseError.invalidResponse) {
             _ = try mapConfirmationOutcome(
                 PurchaseFixtures.wireConfirmationRequired(),
                 warnings: [PurchaseFixtures.wireWarning(overage: value)]

@@ -23,11 +23,11 @@ struct MockPurchaseRecorderAccessTests {
     // MARK: Access
 
     @Test("unknown, ownList and forbidden access map to notFound, cannotPurchaseOwnList and forbidden", arguments: [
-        ("item-unknown", RecordPurchaseError.notFound),
+        ("item-unknown", PurchaseError.notFound),
         ("item-own", .cannotPurchaseOwnList),
         ("item-forbidden", .forbidden)
     ])
-    func accessErrors(itemId: String, expected: RecordPurchaseError) async {
+    func accessErrors(itemId: String, expected: PurchaseError) async {
         let sut = makeMockPurchaseSUT()
 
         await #expect(throws: expected) {
@@ -39,7 +39,7 @@ struct MockPurchaseRecorderAccessTests {
     func accessBeforeBudget() async {
         let sut = makeMockPurchaseSUT()
 
-        await #expect(throws: RecordPurchaseError.cannotPurchaseOwnList) {
+        await #expect(throws: PurchaseError.cannotPurchaseOwnList) {
             try await sut.create(itemId: "item-own", amount: "9999")
         }
     }
@@ -109,7 +109,7 @@ struct MockPurchaseRecorderAccessTests {
     func invalidPrices(amount: String) async {
         let sut = makeMockPurchaseSUT()
 
-        await #expect(throws: RecordPurchaseError.invalidPrice) {
+        await #expect(throws: PurchaseError.invalidPrice) {
             try await sut.create(amount: amount)
         }
     }
@@ -127,7 +127,7 @@ struct MockPurchaseRecorderAccessTests {
     func justAboveTheBoundFails() async {
         let sut = makeMockPurchaseSUT()
 
-        await #expect(throws: RecordPurchaseError.invalidPrice) {
+        await #expect(throws: PurchaseError.invalidPrice) {
             try await sut.create(amount: "1000000.00")
         }
     }

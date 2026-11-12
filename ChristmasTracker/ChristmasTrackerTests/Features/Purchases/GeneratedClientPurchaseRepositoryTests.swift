@@ -222,7 +222,7 @@ struct GeneratedClientPurchaseRepositoryTests {
             status: 200, json: PurchaseWire.createdEnvelope(purchase: PurchaseWire.purchaseJSON(id: "purchase-9"))
         )
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }

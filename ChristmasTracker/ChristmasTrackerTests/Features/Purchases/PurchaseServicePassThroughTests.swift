@@ -8,7 +8,7 @@
 //   - `created` and `confirmationRequired` outcomes come back unchanged (the caller needs the
 //     warnings and the token on the first answer).
 //   - The arguments reach the repository unchanged (item id, draft, token).
-//   - A typed RecordPurchaseError is rethrown as is; any other error becomes `.server`;
+//   - A typed PurchaseError is rethrown as is; any other error becomes `.server`;
 //     CancellationError stays CancellationError.
 //   - Nothing is published: the service has no error property to read.
 //
@@ -81,8 +81,8 @@ struct PurchaseServicePassThroughTests {
 
     // MARK: Errors
 
-    @Test("every RecordPurchaseError is rethrown as is", arguments: PurchaseFixtures.allErrors)
-    func typedErrorsAreRethrown(error: RecordPurchaseError) async {
+    @Test("every PurchaseError is rethrown as is", arguments: PurchaseFixtures.allErrors)
+    func typedErrorsAreRethrown(error: PurchaseError) async {
         let sut = await makePurchaseServiceSUT()
         sut.repo.enqueueFailure(error)
 
@@ -94,7 +94,7 @@ struct PurchaseServicePassThroughTests {
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("an error that is not a RecordPurchaseError becomes server", arguments: [
+    @Test("an error that is not a PurchaseError becomes server", arguments: [
         "unrelated", "url", "item"
     ])
     func untypedErrorsBecomeServer(kind: String) async {
@@ -106,7 +106,7 @@ struct PurchaseServicePassThroughTests {
         }
         sut.repo.enqueueFailure(error)
 
-        await #expect(throws: RecordPurchaseError.server) {
+        await #expect(throws: PurchaseError.server) {
             _ = try await sut.service.recordPurchase(
                 itemId: "item-1", draft: PurchaseFixtures.draft(), confirmationToken: nil
             )
@@ -131,7 +131,7 @@ struct PurchaseServicePassThroughTests {
     @Test("the service has no error property: a failure is thrown to the caller and stored nowhere")
     func noErrorIsPublished() async {
         let sut = await makePurchaseServiceSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         _ = try? await sut.service.recordPurchase(
             itemId: "item-1", draft: PurchaseFixtures.draft(), confirmationToken: nil
         )
@@ -142,13 +142,13 @@ struct PurchaseServicePassThroughTests {
         for child in Mirror(reflecting: sut.service).children where !(child.value is any PurchaseRecording) {
             dump(child.value, to: &dumped)
         }
-        #expect(!dumped.contains("RecordPurchaseError"), "the service must not hold an error value")
+        #expect(!dumped.contains("PurchaseError"), "the service must not hold an error value")
     }
 
     @Test("a second call after a failure starts clean: the earlier error is not carried over")
     func failureDoesNotLeak() async throws {
         let sut = await makePurchaseServiceSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase())
 
         _ = try? await sut.service.recordPurchase(

@@ -6,14 +6,14 @@
 //  repository boundary: nothing past it sees a generated type. Like ItemMapping.swift these are
 //  nonisolated free functions and carry no instrumentation (they neither suspend nor perform I/O).
 //  Money goes through the package helper; a value that cannot convert (NaN, infinite) throws
-//  `RecordPurchaseError.invalidResponse`.
+//  `PurchaseError.invalidResponse`.
 //
 
 import Foundation
 import TrackerAPI
 
 private nonisolated func purchaseMoney(_ value: Double) throws -> Decimal {
-    guard let converted = doubleToDecimal(value) else { throw RecordPurchaseError.invalidResponse }
+    guard let converted = doubleToDecimal(value) else { throw PurchaseError.invalidResponse }
     return converted
 }
 
@@ -71,7 +71,7 @@ nonisolated func mapCreatedOutcome(_ result: Components.Schemas.PurchaseResult) 
     case .created(let data):
         return .created(try mapRecordedPurchase(data.purchase))
     case .confirmationRequired:
-        throw RecordPurchaseError.invalidResponse
+        throw PurchaseError.invalidResponse
     }
 }
 
@@ -86,7 +86,7 @@ nonisolated func mapConfirmationOutcome(
         return .created(try mapRecordedPurchase(data.purchase))
     case .confirmationRequired:
         guard let token = warnings.map(\.confirmationToken).first(where: { !$0.isEmpty }) else {
-            throw RecordPurchaseError.invalidResponse
+            throw PurchaseError.invalidResponse
         }
         let mapped = try warnings.map(mapBudgetWarning)
         return .confirmationRequired(warnings: mapped, token: token)

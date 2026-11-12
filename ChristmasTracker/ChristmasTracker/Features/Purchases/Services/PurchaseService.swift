@@ -2,7 +2,7 @@
 //  PurchaseService.swift
 //  ChristmasTracker
 //
-//  Session-safe service for recording a purchase. The typed RecordPurchaseError goes to the
+//  Session-safe service for recording a purchase. The typed PurchaseError goes to the
 //  initiating view and nothing is published: the service has no error property. The confirmation
 //  token is an argument of one call and is kept nowhere. No id, amount, name, token or raw error
 //  value is ever logged.
@@ -204,12 +204,12 @@ final class PurchaseService {
         if gen != generation || Task.isCancelled { throw CancellationError() }
     }
 
-    /// The error a call rethrows: the typed RecordPurchaseError, or CancellationError when the call
+    /// The error a call rethrows: the typed PurchaseError, or CancellationError when the call
     /// was cancelled or its session ended. Never stored in the service.
     private func failure(_ error: any Error, generation gen: Int) -> any Error {
         if error is CancellationError || gen != generation || Task.isCancelled { return CancellationError() }
         LogError("record purchase failed", category: .business)
-        return (error as? RecordPurchaseError) ?? RecordPurchaseError.server
+        return (error as? PurchaseError) ?? PurchaseError.server
     }
 }
 

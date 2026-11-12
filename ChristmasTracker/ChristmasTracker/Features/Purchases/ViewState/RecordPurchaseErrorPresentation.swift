@@ -16,7 +16,7 @@ nonisolated struct UnconfirmedPurchaseActions: Equatable, Sendable {
 }
 
 nonisolated enum RecordPurchaseErrorPresentation {
-    static func banner(for error: RecordPurchaseError) -> InlineErrorBannerState? {
+    static func banner(for error: PurchaseError) -> InlineErrorBannerState? {
         if error == .sessionEnded { return nil }
         if error == .unconfirmed {
             return InlineErrorBannerState(message: error.userMessage, actions: [.checkItem, .recordAgain, .dismiss])
@@ -25,7 +25,7 @@ nonisolated enum RecordPurchaseErrorPresentation {
     }
 
     /// Non-nil only for an unconfirmed failure.
-    static func unconfirmedActions(for error: RecordPurchaseError) -> UnconfirmedPurchaseActions? {
+    static func unconfirmedActions(for error: PurchaseError) -> UnconfirmedPurchaseActions? {
         guard error == .unconfirmed else { return nil }
         return UnconfirmedPurchaseActions(checkItemTitle: "Check Item", recordAgainTitle: "Record Again")
     }

@@ -46,9 +46,9 @@ struct PurchaseServiceSessionSafetyTests {
             switch self {
             case .created: repo.enqueue(created: PurchaseFixtures.recordedPurchase(id: "purchase-stale"), held: held)
             case .confirmation: repo.enqueue(.success(PurchaseServiceFix.confirmation(token: "tok-stale")), held: held)
-            case .networkError: repo.enqueueFailure(RecordPurchaseError.network, held: held)
-            case .notFoundError: repo.enqueueFailure(RecordPurchaseError.notFound, held: held)
-            case .forbiddenError: repo.enqueueFailure(RecordPurchaseError.forbidden, held: held)
+            case .networkError: repo.enqueueFailure(PurchaseError.network, held: held)
+            case .notFoundError: repo.enqueueFailure(PurchaseError.notFound, held: held)
+            case .forbiddenError: repo.enqueueFailure(PurchaseError.forbidden, held: held)
             }
         }
     }
@@ -141,7 +141,7 @@ struct PurchaseServiceSessionSafetyTests {
     @Test("user switch: A's late failure is a cancellation, not an error for B")
     func userSwitchLateFailure() async throws {
         let sut = await makePurchaseServiceSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.forbidden, held: true)
+        sut.repo.enqueueFailure(PurchaseError.forbidden, held: true)
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase(id: "purchase-b"))
         let userA = startRecord(sut.service)
         await sut.repo.gate.nextHeldCall()

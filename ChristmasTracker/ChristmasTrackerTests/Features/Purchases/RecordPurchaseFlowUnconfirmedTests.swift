@@ -163,7 +163,7 @@ struct RecordPurchaseFlowUnconfirmedTests {
 
     @Test("Record Again and Check Item are ignored after any other failure",
           arguments: PurchaseFixtures.allErrors)
-    func ignoredAfterOtherFailures(error: RecordPurchaseError) {
+    func ignoredAfterOtherFailures(error: PurchaseError) {
         for event in [RecordPurchaseFlowEvent.recordAgain, .checkItem] {
             var sut = makeSUT()
             sut.driveToFailed(error)

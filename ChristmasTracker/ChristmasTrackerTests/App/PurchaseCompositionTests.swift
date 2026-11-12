@@ -110,7 +110,7 @@ struct PurchaseCompositionTests {
     func mockModeOwnList() async throws {
         let recorder = try makeDependencies(mode: .mock, withClient: false).purchaseRecorder
 
-        await #expect(throws: RecordPurchaseError.cannotPurchaseOwnList) {
+        await #expect(throws: PurchaseError.cannotPurchaseOwnList) {
             _ = try await recorder.createPurchase(itemId: "mock-item-self-2", draft: draft(), confirmationToken: nil)
         }
     }
@@ -120,7 +120,7 @@ struct PurchaseCompositionTests {
         let recorder = try makeDependencies(mode: .mock, withClient: false).purchaseRecorder
 
         for itemId in ["mock-item-viewer-2", "mock-item-public-1"] {
-            await #expect(throws: RecordPurchaseError.forbidden) {
+            await #expect(throws: PurchaseError.forbidden) {
                 _ = try await recorder.createPurchase(itemId: itemId, draft: draft(), confirmationToken: nil)
             }
         }
@@ -141,7 +141,7 @@ struct PurchaseCompositionTests {
     func mockModeUnknownItem() async throws {
         let recorder = try makeDependencies(mode: .mock, withClient: false).purchaseRecorder
 
-        await #expect(throws: RecordPurchaseError.notFound) {
+        await #expect(throws: PurchaseError.notFound) {
             _ = try await recorder.createPurchase(itemId: "item-not-in-the-mock", draft: draft(), confirmationToken: nil)
         }
     }
