@@ -4,306 +4,152 @@
 //
 //  Created by Brian Alberta on 2/16/26.
 //
+//  The Record Purchase form, presented as a sheet from the item detail. Everything shown comes
+//  from RecordPurchaseModel (itself gated by the list's capability flags). A purchase error is
+//  held in the model and shown as an inline banner at the top of the form. The budget warning is
+//  inline, not an alert. The view reports the end of the flow once through `onFinish`; the item
+//  detail then runs the refreshes.
+//
 
 import SwiftUI
 
 struct RecordPurchaseView: View {
-    
-    let item: GiftItem
-    
-    @Environment(\.itemService) private var itemService
-    @Environment(\.dismiss) private var dismiss
-    
-    @State private var quantity: Int
-    @State private var totalCostText: String = ""
-    @State private var storeName: String = ""
-    @State private var confirmationNumber: String = ""
-    @State private var trackingNumber: String = ""
-    @State private var notes: String = ""
-    
-    @State private var isRecording = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    // Budget warning state
-    @State private var pendingWarning: PurchaseWarning?
-    @State private var showBudgetWarning = false
-    
-    // Over-purchase warning state
-    @State private var showOverPurchaseWarning = false
-    
-    init(item: GiftItem) {
-        self.item = item
-        // Default to remaining quantity
-        let remaining = item.quantityRequested - (item.totalQuantityPurchased ?? 0)
-        _quantity = State(initialValue: max(1, remaining))
+    let item: ListItem
+    let context: ItemListContext
+    let onFinish: (RecordPurchaseFinish) -> Void
+
+    @Environment(\.purchaseService) private var purchaseService
+
+    var body: some View {
+        RecordPurchaseContent(item: item, context: context, service: purchaseService, onFinish: onFinish)
     }
-    
-    private var remainingQuantity: Int {
-        item.quantityRequested - (item.totalQuantityPurchased ?? 0)
+}
+
+struct RecordPurchaseContent: View {
+    let onFinish: (RecordPurchaseFinish) -> Void
+
+    @State private var model: RecordPurchaseModel
+
+    init(
+        item: ListItem,
+        context: ItemListContext,
+        service: PurchaseService,
+        onFinish: @escaping (RecordPurchaseFinish) -> Void
+    ) {
+        self.init(model: RecordPurchaseModel(item: item, context: context, service: service), onFinish: onFinish)
     }
-    
-    private var willOverPurchase: Bool {
-        quantity > remainingQuantity
+
+    init(model: RecordPurchaseModel, onFinish: @escaping (RecordPurchaseFinish) -> Void) {
+        self.onFinish = onFinish
+        _model = State(initialValue: model)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                itemSummarySection
-                purchaseDetailsSection
-                storeOrderSection
-                notesSection
-                afterPurchaseSection
+                if model.isAllowed {
+                    formSections
+                } else {
+                    Section {
+                        Text("You can't record purchases on this list.")
+                            .font(.appBody)
+                            .foregroundStyle(Color.textMutedColor)
+                    }
+                }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Record Purchase")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .disabled(isRecording)
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task {
-                            await handleRecordPurchase()
-                        }
-                    } label: {
-                        if isRecording {
-                            ProgressView()
-                        } else {
-                            Text("Record")
-                        }
-                    }
-                    .disabled(!isFormValid || isRecording)
+                    Button("Cancel") { model.cancel() }
+                        .disabled(model.isSubmitting)
                 }
             }
-            .alert("Error", isPresented: $showError) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
-            }
-            .alert("Purchase Exceeds Request", isPresented: $showOverPurchaseWarning) {
-                Button("Cancel", role: .cancel) { }
-                Button("Continue Anyway") {
-                    Task {
-                        await recordPurchase(confirmationToken: nil)
-                    }
-                }
-            } message: {
-                Text("This will result in \((item.totalQuantityPurchased ?? 0) + quantity) purchased, but only \(item.quantityRequested) was requested. Multiple people may be purchasing this item.")
-            }
-            .alert("Budget Warning", isPresented: $showBudgetWarning) {
-                Button("Cancel", role: .cancel) {
-                    pendingWarning = nil
-                    isRecording = false
-                }
-                Button("Continue Anyway") {
-                    if let token = pendingWarning?.confirmationToken {
-                        Task {
-                            await recordPurchase(confirmationToken: token)
-                        }
-                    }
-                }
-            } message: {
-                budgetWarningMessage
-            }
+        }
+        .interactiveDismissDisabled(model.isSubmitting)
+        .onChange(of: model.finish) { _, finish in
+            if let finish { onFinish(finish) }
+        }
+        .task(id: model.expiryDelay == nil ? -1 : model.awaitingEpoch) {
+            await waitForExpiry()
         }
     }
 
-    private var itemSummarySection: some View {
+    // MARK: - Sections
+
+    @ViewBuilder
+    private var formSections: some View {
+        if let banner = model.errorBanner {
+            Section {
+                InlineErrorBanner(
+                    state: banner,
+                    onTryAgain: { Task { await model.retry() } },
+                    onDismiss: { model.dismissError() }
+                )
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+        }
+        if let summary = model.summary {
+            summarySection(summary)
+        }
+        RecordPurchaseFormFields(
+            input: $model.input,
+            formState: model.formState,
+            isReadOnly: model.fieldsAreReadOnly
+        )
+        if let panel = model.panel {
+            Section {
+                BudgetWarningPanel(
+                    state: panel,
+                    onCancel: { model.cancel() },
+                    onConfirm: { Task { await model.confirmBudget() } },
+                    onEdit: { model.editDetails() }
+                )
+            }
+        } else if model.showsExpired {
+            Section {
+                RecordPurchaseExpiredNotice(onEdit: { model.editDetails() })
+            }
+        } else if model.showsRecordButton {
+            RecordPurchaseRecordSection(model: model)
+        }
+    }
+
+    private func summarySection(_ summary: RecordPurchaseItemSummary) -> some View {
         Section {
-            VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                Text(item.name)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text(summary.name)
                     .font(.appHeadline)
-                    .foregroundColor(.textPrimaryColor)
-
-                HStack {
-                    Text("Requested:")
-                    Spacer()
-                    Text("\(item.quantityRequested)")
-                        .foregroundColor(.textMutedColor)
+                    .foregroundStyle(Color.textPrimaryColor)
+                Text(summary.requestedText)
+                    .font(.appCallout)
+                    .foregroundStyle(Color.textMutedColor)
+                if let remaining = summary.remainingText {
+                    Text(remaining)
+                        .font(.appCallout)
+                        .foregroundStyle(Color.textMutedColor)
                 }
-                .font(.appCaption1)
-
-                HStack {
-                    Text("Already purchased:")
-                    Spacer()
-                    Text("\(item.totalQuantityPurchased ?? 0)")
-                        .foregroundColor(.textMutedColor)
-                }
-                .font(.appCaption1)
-
-                if let expectedPrice = item.expectedUnitPrice {
-                    HStack {
-                        Text("Expected price:")
-                        Spacer()
-                        Text("$\(String(format: "%.2f", expectedPrice))")
-                            .foregroundColor(.textMutedColor)
-                    }
-                    .font(.appCaption1)
+                if let price = summary.expectedPriceText {
+                    Text("Expected price: \(price)")
+                        .font(.appCallout)
+                        .foregroundStyle(Color.textMutedColor)
                 }
             }
         }
     }
 
-    private var purchaseDetailsSection: some View {
-        Section("Purchase Details") {
-            // ✅ UPDATED: Allow any quantity (optimistic concurrency)
-            Stepper("Quantity: \(quantity)", value: $quantity, in: 1...99)
+    // MARK: - Expiry
 
-            HStack {
-                Text("$")
-                TextField("Total Cost", text: $totalCostText)
-                    .keyboardType(.decimalPad)
-            }
-
-            if let parsed = parsedCost, quantity > 0 {
-                HStack {
-                    Text("Unit Cost:")
-                        .foregroundColor(.textMutedColor)
-                    Spacer()
-                    Text("$\(String(format: "%.2f", parsed / Double(quantity)))")
-                        .foregroundColor(.textPrimaryColor)
-                }
-                .font(.appCaption1)
-            }
-        }
-    }
-
-    private var storeOrderSection: some View {
-        Section("Store & Order Info") {
-            TextField("Store Name (optional)", text: $storeName)
-                .autocorrectionDisabled()
-
-            TextField("Confirmation # (optional)", text: $confirmationNumber)
-                .autocorrectionDisabled()
-
-            TextField("Tracking # (optional)", text: $trackingNumber)
-                .autocorrectionDisabled()
-        }
-    }
-
-    private var notesSection: some View {
-        Section("Notes") {
-            TextField("Additional notes (optional)", text: $notes, axis: .vertical)
-                .lineLimit(3...6)
-        }
-    }
-
-    private var afterPurchaseSection: some View {
-        Section {
-            HStack {
-                Text("After this purchase:")
-                Spacer()
-                Text("\((item.totalQuantityPurchased ?? 0) + quantity) of \(item.quantityRequested)")
-                    .foregroundColor(willOverPurchase ? .orange : .textPrimaryColor)
-            }
-            .font(.appCaption1)
-
-            // ✅ NEW: Over-purchase warning
-            if willOverPurchase {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("This will exceed the requested quantity")
-                        .font(.appCaption1)
-                        .foregroundColor(.orange)
-                }
-            }
-        }
-    }
-
-    private var budgetWarningMessage: some View {
-        Group {
-            if let warning = pendingWarning {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text(warning.message)
-
-                    if let summary = warning.details?.budgetSummary {
-                        Text(summary)
-                            .font(.appCaption1)
-                    }
-                }
-            }
-        }
-    }
-    
-    private var isFormValid: Bool {
-        !totalCostText.isEmpty && parsedCost != nil && quantity > 0
-    }
-    
-    private var parsedCost: Double? {
-        Double(totalCostText)
-    }
-    
-    // ✅ NEW: Handle over-purchase warning first
-    private func handleRecordPurchase() async {
-        // Check for over-purchase
-        if willOverPurchase && !showOverPurchaseWarning {
-            showOverPurchaseWarning = true
+    /// Sleeps until the pending confirmation expires, then tells the model. Ends quietly when cancelled.
+    private func waitForExpiry() async {
+        guard let delay = model.expiryDelay else { return }
+        do {
+            try await Task.sleep(for: delay)
+        } catch {
             return
         }
-        
-        // Proceed to actual recording
-        await recordPurchase(confirmationToken: nil)
+        model.expiryReached()
     }
-    
-    // ✅ UPDATED: Handle budget warnings and confirmation tokens
-    private func recordPurchase(confirmationToken: String?) async {
-        guard let cost = parsedCost else { return }
-        
-        isRecording = true
-        showOverPurchaseWarning = false  // Clear over-purchase warning
-        
-        let request = CreatePurchaseRequest(
-            quantity: quantity,
-            totalCost: cost,
-            storeName: storeName.isEmpty ? nil : storeName.trimmingCharacters(in: .whitespaces),
-            notes: notes.isEmpty ? nil : notes.trimmingCharacters(in: .whitespaces),
-            confirmationNumber: confirmationNumber.isEmpty ? nil : confirmationNumber.trimmingCharacters(in: .whitespaces),
-            trackingNumber: trackingNumber.isEmpty ? nil : trackingNumber.trimmingCharacters(in: .whitespaces),
-            confirmationToken: confirmationToken  // ✅ Include token if retrying
-        )
-        
-        do {
-            // TODO: Call purchase repository via service
-            // For now, this is a placeholder showing the pattern
-            
-            // let response = try await purchaseRepository.createPurchase(itemId: item.id, request)
-            
-            // if response.data.requiresConfirmation,
-            //    let warning = response.warnings?.first(where: { $0.requiresConfirmation }) {
-            //     // Show budget warning
-            //     pendingWarning = warning
-            //     showBudgetWarning = true
-            //     isRecording = false
-            //     return
-            // }
-            
-            // Success - refresh items
-//            if listId = item.listId {
-            await itemService.loadItems(listId: item.listId)
-//            }
-            
-            dismiss()
-            
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-        
-        isRecording = false
-    }
-}
-
-#Preview {
-    RecordPurchaseView(item: MockItemData.allItems[1])
-        .environment(\.itemService, ItemService(
-            repository: MockItemRepository(),
-            dataStore: ItemDataStore()
-        ))
 }

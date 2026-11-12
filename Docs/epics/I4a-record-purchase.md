@@ -305,6 +305,83 @@ Test list for Story B (Swift Testing; REAL factory-built client with a fake Clie
 - Acceptance: the Acceptance bullets on visibility, the soft prompt, the inline panel, the four UI rules, the refresh plan, removal of "View Purchase History" and its sheet case, removal of the legacy bridge call (and the bridge itself plus its tests only if nothing else uses it, with a stated reason).
 - Scoped files: App/Features/Purchases/Views/RecordPurchaseView.swift (rewritten), new panel and form components, App/Features/Items/Views/ItemDetailView.swift, App/Core/Models/GiftItem.swift (bridge only, conditional), the legacy scan and bridge tests (conditional), new tests. The other legacy purchase files are not touched.
 
+### Story C Gate 1 (detailed; weight: full pipeline, capability-flag-driven UI plus purchase and budget confirmation)
+Contract slice: none new. Brian's notes at the start of Story C: (1) Story B decisions accepted (invalidResponse for a 200 `created` without warnings; `recordPurchase` returns `PurchaseOutcome`; the mock does not mutate mock items); (2) the 409 mapping assumption and the exact 300-second token boundary assumption are listed as open items in the Story C report; (3) in mock mode no test assumes counts or statuses change after a purchase, and the refresh plan only lists refreshes; (4) the review must state, with file and line, which control each confirmationDialog is attached to.
+
+New interface: yes, and one more than the brief names. The brief adds only a pure refresh plan; this spec also adds `RecordPurchaseModel`, a `@MainActor @Observable` controller (owned by the view through `@State`) that drives the existing pure `RecordPurchaseFlow` and calls `PurchaseService`. Reason: the screen's behaviour (which effect leads to which service call, which draft and token go out, what happens on cancel, expiry and session end, the gating on `canPurchase`) must be unit tested, and the testing conventions do not unit test views. Recorded as a deviation from the brief for the report.
+
+```swift
+// Features/Purchases/ViewState/PurchaseRefreshPlan.swift (pure)
+nonisolated enum PurchaseRefreshStep: Equatable, Sendable {
+    case itemDetail(id: String)       // itemService.loadItemDetail(id:)
+    case itemsRefresh                 // itemService.refreshItems()   (the item service already holds this list)
+    case itemsLoad(listId: String)    // itemService.loadItems(listId:) (it holds another list or none)
+    case listDetail(id: String)       // listService.refreshListDetail(id:)
+}
+nonisolated enum PurchaseRefreshPlan {
+    /// Always three steps in this order: itemDetail, then itemsRefresh or itemsLoad (the same choice as
+    /// ListDetailRefresh.itemsStep), then listDetail. It lists refreshes only: it carries no count, no status and no
+    /// quantity, and never infers any (mock mode does not change items after a purchase; a real server may not either).
+    static func steps(itemId: String, listId: String, currentItemsListId: String?) -> [PurchaseRefreshStep]
+}
+
+// Features/Purchases/ViewState/RecordPurchaseErrorPresentation.swift (pure, like ItemErrorPresentation)
+nonisolated enum RecordPurchaseErrorPresentation {
+    static func banner(for error: RecordPurchaseError) -> InlineErrorBannerState?   // nil for .sessionEnded; message == error.userMessage; canRetry == error.isRetryable; isDismissible true
+}
+
+// Features/Purchases/ViewState/RecordPurchaseItemSummary.swift (pure)
+nonisolated struct RecordPurchaseItemSummary: Equatable, Sendable {
+    init(item: ListItem, capabilities: ListCapabilities, currencyCode: String, locale: Locale)
+    let name: String
+    let requestedText: String        // "Requested: N"
+    let remainingText: String?       // "N remaining" ONLY when capabilities.canSeeGiftActivity and item.quantityRemaining is non-nil; never computed
+    let expectedPriceText: String?   // Decimal currency text, nil when the item has no expected price
+    // There is NO "already purchased" member and no member derived from totalQuantityPurchased or from purchases.
+}
+
+// Features/Purchases/ViewState/RecordPurchaseModel.swift
+nonisolated enum RecordPurchaseFinish: Equatable, Sendable { case recorded(RecordedPurchase), itemGone, cancelled }
+@MainActor @Observable final class RecordPurchaseModel {
+    init(item: ListItem, context: ItemListContext, service: PurchaseService,
+         now: @escaping @Sendable () -> Date = { Date() }, currencyCode: String = "USD", locale: Locale = .current)
+    var input: RecordPurchaseFormInput        // initial quantity = defaultQuantity(quantityRemaining: known only when canSeeGiftActivity); an assignment while fieldsAreReadOnly is ignored
+    private(set) var flow: RecordPurchaseFlow // the pure state machine; its description is already redacted
+    private(set) var finish: RecordPurchaseFinish?
+    var isShowingOverPurchasePrompt: Bool     // the binding of the confirmationDialog on the Record button
+    var isAllowed: Bool { get }               // context.capabilities.canPurchase and nothing else
+    var summary: RecordPurchaseItemSummary? { get }          // nil when not allowed
+    var formState: RecordPurchaseFormState { get }
+    var fieldsAreReadOnly: Bool { get }
+    var overPurchasePrompt: OverPurchasePrompt? { get }      // formState's, only while editing or failed
+    var panel: BudgetWarningPanelState? { get }              // non-nil only in awaitingConfirmation (notice from the pending confirmation)
+    var showsExpired: Bool { get }                           // true only in expired; text is RecordPurchaseCopy.expiredMessage
+    var errorBanner: InlineErrorBannerState? { get }         // only in failed, via RecordPurchaseErrorPresentation
+    var showsRecordButton: Bool { get }                      // allowed, and the flow is editing, submitting or failed
+    var canTapRecord: Bool { get }                           // showsRecordButton, formState.isValid, flow editing or failed, not submitting
+    var isSubmitting: Bool { get }
+    var expiryDelay: Duration? { get }                       // awaitingConfirmation only: remaining time until the 4:30 expiry from now(), never negative
+    func recordTapped() async          // if overPurchasePrompt != nil: isShowingOverPurchasePrompt = true, nothing is sent; else submit
+    func confirmOverPurchase() async   // closes the prompt and submits (from the dialog's "Continue Anyway")
+    func confirmBudget() async         // "Record Anyway": flow.confirm; sends the SAME draft with the pending token
+    func editDetails()                 // flow.editDetails: token discarded, fields editable again
+    func cancel()                      // flow.cancel: finish = .cancelled when the flow answers close; nothing recorded; ignored while a request is in flight
+    func retry() async                 // failed state, flow.retry: goes out WITHOUT a token
+    func dismissError()                // flow.dismissError
+    func expiryReached()               // flow.clockTick
+}
+```
+Model rules: (1) EVERY action is a no-op and the service is NEVER called when `isAllowed` is false (blind owner, blind co-owner, viewer-role member, PUBLIC non-member, whatever the item); `summary` is nil, `showsRecordButton` false. (2) The first submit takes the draft from `formState.draft` (nil draft: no call), stores it as the in-flight draft, and calls `service.recordPurchase(itemId:draft:confirmationToken: nil)`; the confirmed resubmit and retry reuse the IDENTICAL stored draft; the stored draft is dropped on editDetails, on dismissError and when the flow returns to editing. (3) The service result feeds the flow: `created` -> serverCreated and `finish = .recorded(purchase)`; `confirmationRequired` -> serverConfirmationRequired (nothing is recorded, nothing is resubmitted automatically; a confirmation_required answering a CONFIRMED resubmit shows the S12 notice and needs a new explicit confirmBudget); a thrown `RecordPurchaseError` -> serverError (if `closesForm`, `finish = .itemGone`); `CancellationError` -> serverError(.sessionEnded) (no banner; the app is leaving); any other error -> serverError(.server). (4) The token exists only inside the flow's pending confirmation and in the local value passed to the one service call; the model has no token property, never logs, and never puts anything in an accessibility identifier; after editDetails, cancel, expiry, success or failure the flow holds no token. (5) Expiry: `confirmBudget` after 270 s is refused by the flow (expired state, no call); `expiryReached` moves to expired when due. (6) A second action while a request is in flight does not start a second call. (7) The model never reads a role; never computes a status, count or remaining value; `finish == .recorded` is its only success signal and it does not refresh anything (the view hands the plan to the detail screen).
+
+Views (not unit tested; covered by the scans below, previews and the reviewer reading the files):
+- `RecordPurchaseView(item: ListItem, context: ItemListContext, onFinish: (RecordPurchaseFinish) -> Void)` owns `@State private var model`; sheet-presented from the item detail inside its own NavigationStack; a form with the summary, quantity stepper (at least 1, no maximum), total cost field, optional store name, confirmation number, tracking number, notes (all four exist in the generated body), the unit cost line only when `formState.unitCostText` is non-nil, the INLINE `BudgetWarningPanel` (rows, notice, Cancel, prominent Record Anyway, Edit Details) in place of the Record button while awaiting confirmation, the expired message with one button back to editing, and an `InlineErrorBanner` (Try Again only when retryable, dismissible) at the top of the form for `errorBanner`. Fields disabled while `fieldsAreReadOnly`. Toolbar: Cancel (calls `model.cancel()`), disabled while submitting. When `model.finish` becomes non-nil the view calls `onFinish` once. While awaiting confirmation a `.task(id:)` sleeps for `expiryDelay` and calls `expiryReached()` (no GCD, no Combine).
+- ONE confirmationDialog in the whole package: the soft over-purchase prompt, attached with `.confirmationDialog(...)` directly to the Record button (the Button in the form's Record section), bound to `model.isShowingOverPurchasePrompt`, title/message/"Continue Anyway" from `OverPurchasePrompt`, Cancel with `role: .cancel`. The budget panel is inline and is NOT a dialog or alert. No `.alert` for errors anywhere in the new or rewritten files. No confirmationDialog on a List, ScrollView, Form, NavigationStack, sheet or screen container.
+- `ItemDetailView`: the Record Purchase button appears exactly when `state.showsPurchaseEntry`; the "View Purchase History" button, `DetailSheet.purchaseHistory` and `item.legacyPurchaseItem` are removed; the sheet presents the new `RecordPurchaseView(item:context:onFinish:)`. On `.recorded` the sheet closes and the screen runs `PurchaseRefreshPlan.steps(itemId:listId:currentItemsListId: itemService.currentListId)` in order (itemService.loadItemDetail, then itemService.refreshItems or loadItems, then listService.refreshListDetail); a failed follow-up never turns the recorded purchase into an error and never shows a purchase error: the screens' own existing banners apply. On `.itemGone` the sheet closes and the detail screen dismisses (a 404 means gone, never forbidden). On `.cancelled` the sheet closes. Nothing else changes in the detail screen.
+- Bridge: `ListItem.legacyPurchaseItem` (GiftItem.swift) is deleted together with its tests (GiftItemLegacyBridgeTests and the allowlist entries) ONLY if nothing else uses it after this story; the report states what was searched and the reason. The legacy GiftItem and the other legacy purchase files stay untouched. No new or rewritten file references GiftItem, ShippingStatus, PurchaseWarning or the legacy Purchase types.
+- Design: DesignSystem tokens only (AppColors, AppTypography, AppSpacing, AppIcons); no raw colors, spacing or fonts; previews for editing, over-purchase, awaiting confirmation (one recipient and one total warning), expired and error states.
+
+Test list for Story C (Swift Testing, fake data, no sleeps; use PurchaseServiceHarness/GatedPurchaseRecorder-style fakes for the service): (a) PurchaseRefreshPlan: both branches, order, ids, no other members, an unrelated current list, nil current list. (b) RecordPurchaseErrorPresentation: every RecordPurchaseError case (message, retry, nil for sessionEnded). (c) RecordPurchaseItemSummary: remaining present, absent, zero, hidden without gift activity, no already-purchased text; price text. (d) VISIBILITY for every persona, with and without an ARCHIVED list (non-blind owner, non-blind co-owner, ACTIVE MEMBER-role member -> entry shown with quantities; blind owner, blind co-owner, viewer-role member, PUBLIC non-member -> `ItemDetailState.showsPurchaseEntry` false, remainingQuantity nil, statusMarker nil, progress nil, purchases empty, the model `isAllowed` false, `summary` nil, `showsRecordButton` false, every model action a no-op that never reaches the service). (e) RecordPurchaseModel: initial quantity (remaining 5, 0, nil, hidden when no gift activity); input locked while read-only; created path (finish recorded, one service call, request carries the draft and no token); soft prompt (shown only when remaining is known and exceeded, tapping Record sends nothing until confirmOverPurchase, the zero-remaining wording, absent remaining never prompts, never blocks); confirmation path (confirmationRequired creates nothing, panel rows and token not exposed, confirmBudget resubmits the identical draft with the token, edit details discards the token and the next submit goes out without one, cancel finishes `cancelled` with no further call and drops the token); S12 (a confirmed resubmit answered by a new confirmation_required replaces the warnings and token, shows the notice, makes NO automatic call, and needs a new confirmBudget that carries the NEW token); repeat purchase after success goes out WITHOUT a token and gets confirmation_required again; expiry at 270 s with an injected clock (confirmBudget refused with no call, `expiryReached`, expiry message, back to editing; `expiryDelay` values); every error (banner text, retry without a token, dismiss returns to editing, 404 -> finish itemGone, sessionEnded and CancellationError -> no banner, 429 retryable, validation, invalidPrice, cannotPurchaseOwnList not retryable); double tap does not start two calls; the model and its Mirror never contain the token string, `String(describing:)` of the flow never contains it. (f) Source scans over the new and rewritten files (RecordPurchaseView, BudgetWarningPanel, form components, RecordPurchaseModel, ItemDetailView): no GiftItem or legacy purchase type names, no `.alert(`, exactly one `.confirmationDialog(` in the package and it sits on the Record button, no Double arithmetic on money, no raw colors/fonts/spacing, no `confirmationToken`/`token` reference in any view file, no Log call or accessibilityIdentifier that interpolates a token, an amount, a name or an id, no Combine/GCD, no force unwraps, "View Purchase History" gone, legacyPurchaseItem gone from ItemDetailView. (g) The existing suites that pinned the old behaviour (LegacyGiftItemScanTests allowlist, GiftItemLegacyBridgeTests) change deliberately, each named in the report with this decision as the reason.
+
 ## Story D: handoff and the real-mode check (docs only)
 - Contract slice: none. New interface: none.
 - Acceptance: Docs/handoffs/<run date>-ios-to-brian-i4a.md with the sections the prompt lists, including "Brian's real-mode check" with the fifteen steps exactly as specified, the not-performed items stated, the spec has no delete-purchase operation noted as an I4b risk, and a section 9 line for PROGRAM.md.
