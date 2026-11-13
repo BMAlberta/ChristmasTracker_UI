@@ -31,6 +31,10 @@ final class ChildService {
     /// Incremented every time the session is cleared; stale results are dropped.
     private var generation = 0
 
+    /// Read-only view of the session generation, so a coordinator can tell that the session was
+    /// cleared (a user switch) between its steps.
+    var sessionGeneration: Int { generation }
+
     /// Cancel handles of the repository calls that are in flight, keyed by call.
     private var inFlight: [UUID: () -> Void] = [:]
 

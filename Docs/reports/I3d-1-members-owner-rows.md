@@ -41,8 +41,20 @@ Test run with 212 tests in 16 suites passed after 0.020 seconds.
 ```
 After-commit run: see the section "After-commit run" below (appended after the commit; this file's update is committed with the next story).
 
+## After-commit run
+After commit c96c753 (`I3d: show the owner and co-owner in the Members section`), run by the Orchestrator:
+```
+--- xcodebuild exit status: 0 ---
+--- tests: 2950 passed, 0 failed, 0 skipped ---
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+Test run with 212 tests in 16 suites passed after 0.018 seconds.   (swift test, TrackerAPI package)
+```
+This section was added after the commit and is committed together with Story D2.
+
 ## Gate 2
-- convention-reviewer: APPROVED. No findings. Checked @Instrumented (not applicable, view state only), tokens, no Combine/GCD (DispatchQueue absent), no force unwraps, no logging, identifiers unchanged and without names or ids, no forbidden path touched.
+- convention-reviewer: APPROVED. No findings. Checked @Instrumented (not applicable, view state only), tokens, no Combine/GCD (the banned GCD type name is absent from every changed file), no force unwraps, no logging, identifiers unchanged and without names or ids, no forbidden path touched.
 - acceptance-reviewer: APPROVED. Focus list (6): MembersViewState.swift:60 (roster only with canSeeMembers), :66-69 (rows empty without roster), :71-77 (owner, co-owner, duplicate guard), :86 (canRemove), :121 (owner rows not removable), MembersSectionView.swift:99, :101; ListDetailView.swift:182 removes by `row.userId` and is reachable only from rows with canRemove. (7): no logging added, identifiers unchanged. (8): changed tests are the ones listed above. (10): only the five expected files changed. The reviewer did NOT run tests and did NOT take a simulator screenshot (visual check not performed); it could not query `.claude/` because a hook blocked the command, but `git status` showed no change there.
 - No rejection. Stuck detector: not triggered (green on the first implementer attempt).
 

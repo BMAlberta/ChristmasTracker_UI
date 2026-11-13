@@ -67,11 +67,13 @@ struct ChildErrorTests {
         #expect(ChildError.childNotFound.userMessage == "That child could not be found.")
     }
 
+    // Deliberately changed by I3d-D2 (decision L17): only active lists block a child delete, and
+    // the way out is to archive them.
     @Test("childHasLists has its own exact text")
     func childHasListsText() {
         #expect(
             ChildError.childHasLists.userMessage
-                == "This child still has lists, so it can't be removed. Delete those lists first."
+                == "This child still has active lists. Archive them first."
         )
     }
 

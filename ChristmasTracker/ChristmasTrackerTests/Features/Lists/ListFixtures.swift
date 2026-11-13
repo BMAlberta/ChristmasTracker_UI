@@ -345,7 +345,8 @@ nonisolated enum ListFixtures {
         flags: Flags = Flags(),
         memberCount: Int = 0,
         itemCount: Int? = nil,
-        purchasedCount: Int? = nil
+        purchasedCount: Int? = nil,
+        recipient: ListPerson? = nil
     ) -> GiftList {
         let person = ListPerson(id: "user-1", displayName: "Robin Recipient")
         return GiftList(
@@ -355,7 +356,7 @@ nonisolated enum ListFixtures {
             year: year,
             visibility: visibility,
             status: status,
-            recipient: person,
+            recipient: recipient ?? person,
             owner: person,
             coOwner: nil,
             myRole: myRole,
