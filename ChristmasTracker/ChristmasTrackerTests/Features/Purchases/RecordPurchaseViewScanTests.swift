@@ -4,8 +4,8 @@
 //
 //  Story I4a-C (f): text-scan evidence over the NEW or REWRITTEN Record Purchase files:
 //   - views: Features/Purchases/Views and Components files named RecordPurchase* or BudgetWarning*
-//     (the legacy PurchaseRow, PurchaseEditView, PurchaseHistoryView, PurchaseDetailView are not in
-//     this set), which must include RecordPurchaseView.swift and the file that declares BudgetWarningPanel;
+//     (the legacy PurchaseRow, PurchaseEditView, PurchaseHistoryView, PurchaseDetailView were
+//     deleted in I4b and are not in this set), which must include RecordPurchaseView.swift and the file that declares BudgetWarningPanel;
 //   - view state: RecordPurchaseModel, PurchaseRefreshPlan, RecordPurchaseErrorPresentation and
 //     RecordPurchaseItemSummary;
 //   - Features/Items/Views/ItemDetailView.swift.

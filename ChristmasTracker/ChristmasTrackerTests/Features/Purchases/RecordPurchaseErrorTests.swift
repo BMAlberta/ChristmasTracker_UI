@@ -9,7 +9,7 @@
 //    "forbidden").
 //  - isRetryable is true only for network, server, rateLimited and invalidResponse.
 //
-//  Fails today because PurchaseError does not exist yet.
+//  These tests pin the PurchaseError messages and flags described above.
 //
 
 import Foundation

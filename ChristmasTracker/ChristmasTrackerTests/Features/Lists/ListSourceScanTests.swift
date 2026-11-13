@@ -12,7 +12,8 @@
 //     still scanned for `isOwner` and `canEdit`.
 //     A bare `myRole` property declaration or a `myRole:` argument label is not a `.myRole`
 //     access and is allowed. Item and purchase `canEdit` live outside the scoped files
-//     (GiftItem.swift, ItemDetailView, PurchaseDetailView), so they are not flagged.
+//     (ItemDetailView and the purchase detail views; GiftItem.swift and the old PurchaseDetailView
+//     were deleted in I4b), so they are not flagged.
 //     `canEditList` is a different word and is not flagged.
 //  2. The hand-written list wire types are gone: no code anywhere in the app sources
 //     mentions CreateListRequest, UpdateListRequest or ListResponse, and

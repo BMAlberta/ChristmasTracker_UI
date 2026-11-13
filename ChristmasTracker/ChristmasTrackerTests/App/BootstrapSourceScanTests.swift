@@ -103,6 +103,7 @@ struct BootstrapSourceScanTests {
         let makeMock = try #require(Self.braceBody(after: "func makeMock", in: code))
         let preview = Self.braceBody(after: "#Preview", in: code)
 
+        // MockAPIClient was deleted in I4b; the `MockAPIClient.` alternative is kept harmlessly.
         let regex = try NSRegularExpression(pattern: #"\bMock[A-Za-z]+\(|\bMockAPIClient\."#)
         var offenders: [String] = []
         for match in regex.matches(in: code, range: NSRange(code.startIndex..., in: code)) {

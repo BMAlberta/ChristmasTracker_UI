@@ -3,8 +3,9 @@
 //  ChristmasTrackerTests
 //
 //  Story I4a-B: text-scan evidence over the NEW purchase sources (Domain, ViewState, the new
-//  Repositories files and Services; the legacy PurchaseRepository, NetworkPurchaseRepository and
-//  MockPurchaseRepository files and the legacy Views and Components are excluded).
+//  Repositories files and Services). The legacy PurchaseRepository, NetworkPurchaseRepository and
+//  MockPurchaseRepository files and the legacy Views and Components were deleted in I4b; the
+//  exclusion entry below is kept harmlessly.
 //
 //  Rules under test (acceptance: "the confirmation token never appears in a log, Sentry, an
 //  accessibility identifier, a service property, or any persisted store"; Gate 1 service and
@@ -27,6 +28,7 @@ import Testing
 
 nonisolated enum PurchaseScan {
 
+    // These files were deleted in I4b; the entries are kept harmlessly.
     static let legacyFiles: Set<String> = [
         "PurchaseRepository.swift", "NetworkPurchaseRepository.swift", "MockPurchaseRepository.swift"
     ]
