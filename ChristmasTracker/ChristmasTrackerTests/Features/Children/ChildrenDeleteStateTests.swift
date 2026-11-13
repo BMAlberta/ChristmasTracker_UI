@@ -27,9 +27,9 @@ struct ChildrenDeleteStateTests {
 
     private func makeSUT(
         children: [Child] = ChildFixtures.twoChildren(),
-        deletingChildId: String? = nil
+        deletion: ChildDeletionPresentation = .idle
     ) -> ChildrenState {
-        ChildrenState(children: children, phase: .loaded, deletingChildId: deletingChildId)
+        ChildrenState(children: children, phase: .loaded, deletion: deletion)
     }
 
     // MARK: - Confirmation per plan
@@ -212,46 +212,129 @@ struct ChildrenDeleteStateTests {
 
     // MARK: - Row progress
 
-    @Test("Only the row being deleted is marked and labelled as being removed")
-    func deletingRow() throws {
-        let state = makeSUT(deletingChildId: "child-2")
+    @Test("Planning marks only that row as checking, with progress and a checking-lists label")
+    func planningRow() throws {
+        let state = makeSUT(deletion: ChildDeletionPhaseKind.planning.make(childId: "child-2"))
         let first = try #require(state.rows.first { $0.id == "child-1" })
         let second = try #require(state.rows.first { $0.id == "child-2" })
-        #expect(!first.isDeleting)
-        #expect(second.isDeleting)
-        #expect(second.accessibilityLabel == "\(second.title), \(second.relationshipTitle), being removed")
-        #expect(second.accessibilityLabel == "Dana Dependent, Guardian, being removed")
+        #expect(first.status == ChildRowDeletionStatus.none)
+        #expect(!first.showsProgress)
+        #expect(second.status == ChildRowDeletionStatus.checking)
+        #expect(second.showsProgress)
+        #expect(second.accessibilityLabel == "\(second.title), \(second.relationshipTitle), checking lists")
+        #expect(second.accessibilityLabel == "Dana Dependent, Guardian, checking lists")
         #expect(first.accessibilityLabel == "\(first.title), \(first.relationshipTitle)")
     }
 
-    @Test("Nobody is deleting by default or with a nil id")
+    @Test("Executing marks only that row as removing, with progress and a removing label")
+    func executingRow() throws {
+        let state = makeSUT(deletion: ChildDeletionPhaseKind.executing.make(childId: "child-2"))
+        let first = try #require(state.rows.first { $0.id == "child-1" })
+        let second = try #require(state.rows.first { $0.id == "child-2" })
+        #expect(first.status == ChildRowDeletionStatus.none)
+        #expect(!first.showsProgress)
+        #expect(second.status == ChildRowDeletionStatus.removing)
+        #expect(second.showsProgress)
+        #expect(second.accessibilityLabel == "\(second.title), \(second.relationshipTitle), removing")
+        #expect(second.accessibilityLabel == "Dana Dependent, Guardian, removing")
+        #expect(first.accessibilityLabel == "\(first.title), \(first.relationshipTitle)")
+    }
+
+    @Test("Confirming marks no row: no status, no spinner, plain labels")
+    func confirmingRow() {
+        let state = makeSUT(deletion: ChildDeletionPhaseKind.confirming.make(childId: "child-2"))
+        for row in state.rows {
+            #expect(row.status == ChildRowDeletionStatus.none)
+            #expect(!row.showsProgress)
+            #expect(row.accessibilityLabel == "\(row.title), \(row.relationshipTitle)")
+        }
+    }
+
+    @Test("Nobody is deleting by default or when idle")
     func nobodyDeleting() {
-        #expect(makeSUT(deletingChildId: nil).rows.allSatisfy { !$0.isDeleting })
-        #expect(ChildrenState(children: ChildFixtures.twoChildren(), phase: .loaded).rows.allSatisfy { !$0.isDeleting })
+        #expect(makeSUT(deletion: .idle).rows.allSatisfy { $0.status == ChildRowDeletionStatus.none && !$0.showsProgress })
+        let byDefault = ChildrenState(children: ChildFixtures.twoChildren(), phase: .loaded)
+        #expect(byDefault.rows.allSatisfy { $0.status == ChildRowDeletionStatus.none && !$0.showsProgress })
     }
 
-    @Test("An id that matches no row marks no row")
-    func unknownDeletingId() {
-        #expect(makeSUT(deletingChildId: "child-unknown").rows.allSatisfy { !$0.isDeleting })
+    @Test("A deletion for an id that matches no row marks no row",
+          arguments: [ChildDeletionPhaseKind.planning, ChildDeletionPhaseKind.executing, ChildDeletionPhaseKind.confirming])
+    func unknownDeletingId(kind: ChildDeletionPhaseKind) {
+        let state = makeSUT(deletion: kind.make(childId: "child-unknown"))
+        #expect(state.rows.allSatisfy { $0.status == ChildRowDeletionStatus.none && !$0.showsProgress })
     }
 
-    @Test("Row labels never contain the id while deleting")
-    func deletingLabelHasNoId() {
-        for row in makeSUT(deletingChildId: "child-1").rows {
+    @Test("showsProgress is true only for checking and removing",
+          arguments: [
+            (ChildDeletionPhaseKind.idle, false),
+            (ChildDeletionPhaseKind.planning, true),
+            (ChildDeletionPhaseKind.confirming, false),
+            (ChildDeletionPhaseKind.executing, true)
+          ])
+    func showsProgressTable(kind: ChildDeletionPhaseKind, expected: Bool) throws {
+        let state = makeSUT(deletion: kind.make(childId: "child-1"))
+        let row = try #require(state.rows.first { $0.id == "child-1" })
+        #expect(row.showsProgress == expected)
+    }
+
+    @Test("Row labels never contain the id in any phase", arguments: ChildDeletionPhaseKind.allCases)
+    func labelsHaveNoId(kind: ChildDeletionPhaseKind) {
+        for row in makeSUT(deletion: kind.make(childId: "child-1")).rows {
             #expect(!row.accessibilityLabel.contains(row.id))
+        }
+    }
+
+    // MARK: - Announcements for the plan step and Try Again
+
+    @Test("The planning announcement is the plain Checking lists text")
+    func planningAnnouncementText() {
+        #expect(ChildrenState.planningAnnouncement == "Checking lists")
+    }
+
+    @Test("retryAnnouncement equals the progress announcement of the recomputed plan")
+    func retryAnnouncementFollowsPlan() {
+        let archive = ChildDeletionPlan.archiveThenDelete(listIds: ["list-secret-1", "list-secret-2"])
+        #expect(ChildrenState.retryAnnouncement(for: archive) == ChildrenState.progressAnnouncement(for: archive))
+        #expect(ChildrenState.retryAnnouncement(for: archive) == "Archiving lists")
+        #expect(ChildrenState.retryAnnouncement(for: .deleteNow) == ChildrenState.progressAnnouncement(for: .deleteNow))
+    }
+
+    @Test("retryAnnouncement is not always Archiving lists: deleteNow says Deleting child")
+    func retryAnnouncementDeleteNow() {
+        #expect(ChildrenState.retryAnnouncement(for: .deleteNow) == "Deleting child")
+        #expect(ChildrenState.retryAnnouncement(for: .deleteNow) != "Archiving lists")
+    }
+
+    @Test("The planning and retry announcements carry no name or id")
+    func newAnnouncementsCarryNoPersonalData() {
+        let texts = [
+            ChildrenState.planningAnnouncement,
+            ChildrenState.retryAnnouncement(for: .deleteNow) ?? "",
+            ChildrenState.retryAnnouncement(for: .archiveThenDelete(listIds: ["list-secret-1"])) ?? ""
+        ]
+        for text in texts {
+            #expect(!text.isEmpty)
+            #expect(!text.contains("Test Kid"))
+            #expect(!text.contains("child-secret"))
+            #expect(!text.contains("list-secret"))
         }
     }
 
     // MARK: - Control gating
 
-    @Test("Delete controls are enabled only when nothing is mutating and nothing is being deleted",
+    @Test("Delete controls are enabled only when idle and not mutating (every phase times isMutating)",
           arguments: [
-            (false, nil as String?, true),
-            (true, nil as String?, false),
-            (false, "child-1" as String?, false),
-            (true, "child-1" as String?, false)
+            (ChildDeletionPhaseKind.idle, false, true),
+            (ChildDeletionPhaseKind.idle, true, false),
+            (ChildDeletionPhaseKind.planning, false, false),
+            (ChildDeletionPhaseKind.planning, true, false),
+            (ChildDeletionPhaseKind.confirming, false, false),
+            (ChildDeletionPhaseKind.confirming, true, false),
+            (ChildDeletionPhaseKind.executing, false, false),
+            (ChildDeletionPhaseKind.executing, true, false)
           ])
-    func deleteControlsEnabled(isMutating: Bool, deletingChildId: String?, expected: Bool) {
-        #expect(ChildrenState.deleteControlsEnabled(isMutating: isMutating, deletingChildId: deletingChildId) == expected)
+    func deleteControlsEnabled(kind: ChildDeletionPhaseKind, isMutating: Bool, expected: Bool) {
+        let deletion = kind.make()
+        #expect(ChildrenState.deleteControlsEnabled(isMutating: isMutating, deletion: deletion) == expected)
     }
 }

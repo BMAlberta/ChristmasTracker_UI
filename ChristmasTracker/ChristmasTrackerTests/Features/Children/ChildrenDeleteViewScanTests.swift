@@ -31,6 +31,18 @@ struct ChildrenDeleteViewScanTests {
         #"\b(?:Log(?:Debug|Info|Warning|Error|Critical)|print|debugPrint|NSLog|os_log|Logger)\s*\([^\n]*\\\("#
     private static let identifierCallPattern = #"accessibilityIdentifier\("#
     private static let identifierLiteralPattern = #"accessibilityIdentifier\(\s*"[^"\\]*"\s*\)"#
+    private static let runCallPattern = #"\.run\s*\("#
+    private static let stateAttributePattern = #"@State\b"#
+    private static let oldConfirmationStatePattern = #"\b(?:pendingPlan|showsConfirmation)\b"#
+    private static let deferPattern = #"\bdefer\b"#
+    private static let deletingIdAssignmentPattern = #"\bdeletingChildId\s*=(?!=)"#
+    private static let sleepPattern = #"\bTask\s*\.\s*sleep\b"#
+    private static let yieldPattern = #"\bTask\s*\.\s*yield\b"#
+    private static let queuePattern = #"\bDispatch"# + #"Queue\b"#
+    private static let presentationStatePattern =
+        #"@State\s+(?:private\s+)?var\s+\w+\s*(?::\s*ChildDeletionPresentation\b|=\s*ChildDeletionPresentation\b)"#
+    private static let requestDeleteCallPattern = #"\.requestDelete\s*\(\s*childId\s*:"#
+    private static let retryFunctionPattern = #"func\s+retry\w*"#
     private static let structPattern = #"(?m)^\s*(?:(?:private|fileprivate|public)\s+)?(?:final\s+)?struct\s+(\w+)"#
 
     // MARK: - Source discovery
@@ -312,8 +324,8 @@ struct ChildrenDeleteViewScanTests {
                 "The row must request ChildDeletionFlow.plan(childId:) first")
         #expect(try !Self.matches(#"\.execute\s*\(\s*childId\s*:"#, in: text).isEmpty,
                 "The row must call ChildDeletionFlow.execute after the confirmation")
-        #expect(try !Self.matches(#"\.run\s*\(\s*childId\s*:"#, in: text).isEmpty,
-                "Try Again must call ChildDeletionFlow.run(childId:)")
+        #expect(try Self.matches(Self.runCallPattern, in: text).isEmpty,
+                "Try Again must run plan then execute, not ChildDeletionFlow.run")
     }
 
     @Test("(f) The Children views build the confirmation and the banner from the pure states")
@@ -327,5 +339,243 @@ struct ChildrenDeleteViewScanTests {
         #expect(text.contains("deleteControlsEnabled"), "Controls must be gated by ChildrenState.deleteControlsEnabled")
         #expect(text.contains("progressAnnouncement"), "VoiceOver must announce progress")
         #expect(text.contains("resultAnnouncement"), "VoiceOver must announce the result")
+    }
+
+    // MARK: - Fix pass F1: the confirmation state lives above the rows
+
+    /// The first `{ ... }` block (balanced) that starts after the first match of `pattern`.
+    private static func block(afterMatchOf pattern: String, in code: String) throws -> String? {
+        let regex = try NSRegularExpression(pattern: pattern)
+        guard let match = regex.firstMatch(in: code, range: NSRange(code.startIndex..., in: code)),
+              let matchRange = Range(match.range, in: code),
+              let open = code[matchRange.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var index = open
+        while index < code.endIndex {
+            if code[index] == "{" {
+                depth += 1
+            } else if code[index] == "}" {
+                depth -= 1
+                if depth == 0 { return String(code[open...index]) }
+            }
+            index = code.index(after: index)
+        }
+        return nil
+    }
+
+    private func childRowBody(_ scope: Scope) throws -> String {
+        var bodies: [String] = []
+        for url in scope.views {
+            for segment in try Self.structSegments(in: try code(url)) where segment.name == "ChildRow" {
+                bodies.append(segment.body)
+            }
+        }
+        #expect(bodies.count == 1, "Expected exactly one ChildRow struct in the Children views, found \(bodies.count)")
+        return try #require(bodies.first)
+    }
+
+    @Test("(g) The F1 scanner helpers are exact")
+    func f1PatternsAreExact() throws {
+        #expect(try !Self.matches(Self.stateAttributePattern, in: "@State private var x = 1").isEmpty)
+        #expect(try Self.matches(Self.stateAttributePattern, in: "@StateObject var x").isEmpty)
+        #expect(try Self.matches(Self.stateAttributePattern, in: "let isStateful = 1").isEmpty)
+        #expect(try !Self.matches(Self.oldConfirmationStatePattern, in: "@State private var pendingPlan: P?").isEmpty)
+        #expect(try !Self.matches(Self.oldConfirmationStatePattern, in: "showsConfirmation = true").isEmpty)
+        #expect(try Self.matches(Self.oldConfirmationStatePattern, in: "isConfirmationPresented").isEmpty)
+        #expect(try !Self.matches(Self.deferPattern, in: "defer { x = nil }").isEmpty)
+        #expect(try Self.matches(Self.deferPattern, in: "let deferred = 1").isEmpty)
+        #expect(try !Self.matches(Self.deletingIdAssignmentPattern, in: "deletingChildId = nil").isEmpty)
+        #expect(try !Self.matches(Self.deletingIdAssignmentPattern, in: "deletingChildId = childId").isEmpty)
+        #expect(try Self.matches(Self.deletingIdAssignmentPattern, in: "if deletingChildId == nil { }").isEmpty)
+        #expect(try Self.matches(Self.deletingIdAssignmentPattern, in: "let deletingChildId: String? = deletion.deletingChildId").isEmpty)
+        #expect(try !Self.matches(Self.sleepPattern, in: "try await Task.sleep(for: .seconds(1))").isEmpty)
+        #expect(try !Self.matches(Self.yieldPattern, in: "await Task.yield()").isEmpty)
+        #expect(try !Self.matches(Self.queuePattern, in: "Dispatch" + "Queue.main.async { }").isEmpty)
+        #expect(try Self.matches(Self.sleepPattern, in: "let sleeper = 1").isEmpty)
+        #expect(try !Self.matches(Self.runCallPattern, in: "await flow.run(childId: id)").isEmpty)
+        #expect(try Self.matches(Self.runCallPattern, in: "await flow.execute(childId: id, plan: p)").isEmpty)
+        #expect(try !Self.matches(Self.presentationStatePattern,
+                                  in: "@State private var deletion = ChildDeletionPresentation.idle").isEmpty)
+        #expect(try !Self.matches(Self.presentationStatePattern,
+                                  in: "@State private var deletion: ChildDeletionPresentation = .idle").isEmpty)
+        #expect(try Self.matches(Self.presentationStatePattern, in: "@State private var deletion: String?").isEmpty)
+        #expect(try Self.matches(Self.presentationStatePattern, in: "@State private var deletion = .idle").isEmpty)
+        #expect(try !Self.matches(Self.requestDeleteCallPattern, in: "deletion = deletion.requestDelete(childId: id)").isEmpty)
+        #expect(try Self.matches(Self.requestDeleteCallPattern, in: "onRequestDelete()").isEmpty)
+        #expect(try !Self.matches(Self.retryFunctionPattern, in: "private func retryDeletion() {").isEmpty)
+    }
+
+    @Test("(g) The block extractor returns the balanced block after a marker")
+    func blockExtractorIsExact() throws {
+        let sample = #"a.swipeActions(edge: .trailing) { Button { inner() } label: { Text("x") } } b.other { later() }"#
+        let found = try #require(try Self.block(afterMatchOf: #"\.swipeActions\s*\("#, in: sample))
+        #expect(found.contains("inner()"))
+        #expect(!found.contains("later()"))
+        #expect(try Self.block(afterMatchOf: #"\.missing\s*\("#, in: sample) == nil)
+        #expect(try Self.block(afterMatchOf: #"\.swipeActions\s*\("#, in: "a.swipeActions(x) { unbalanced") == nil)
+    }
+
+    @Test("(g) ChildRow has no @State at all")
+    func childRowHasNoState() throws {
+        let scope = try makeSUT()
+        let row = try childRowBody(scope)
+        #expect(try Self.matches(Self.stateAttributePattern, in: row).isEmpty,
+                "ChildRow must not own @State; the presentation lives on ChildrenView")
+    }
+
+    @Test("(g) No pendingPlan or showsConfirmation remains anywhere in the Children views")
+    func oldConfirmationStateIsGone() throws {
+        let scope = try makeSUT()
+        let text = try viewsCode(scope)
+        #expect(try Self.matches(Self.oldConfirmationStatePattern, in: text).isEmpty,
+                "pendingPlan or showsConfirmation remains in the Children views")
+    }
+
+    @Test("(g) ChildrenView owns the presentation as @State of type ChildDeletionPresentation")
+    func screenOwnsThePresentation() throws {
+        let scope = try makeSUT()
+        let screenFiles = scope.views.filter { $0.lastPathComponent == "ChildrenView.swift" }
+        #expect(screenFiles.count == 1)
+        let text = try screenFiles.map { try code($0) }.joined(separator: "\n")
+        #expect(try Self.matches(Self.presentationStatePattern, in: text).count == 1,
+                "ChildrenView.swift must declare exactly one @State of type ChildDeletionPresentation")
+        let row = try childRowBody(scope)
+        #expect(try Self.matches(Self.presentationStatePattern, in: row).isEmpty)
+    }
+
+    @Test("(g) The confirmationDialog is inside the ChildRow struct")
+    func dialogIsInChildRow() throws {
+        let scope = try makeSUT()
+        let row = try childRowBody(scope)
+        #expect(try Self.matches(Self.dialogPattern, in: row).count == 1,
+                "The single confirmationDialog must be inside ChildRow")
+    }
+
+    @Test("(g) No defer and no deletingChildId assignment remain in the Children views")
+    func noDeferAndNoFlagAssignment() throws {
+        let scope = try makeSUT()
+        let text = try viewsCode(scope)
+        #expect(try Self.matches(Self.deferPattern, in: text).isEmpty, "A defer remains in the Children views")
+        #expect(try Self.matches(Self.deletingIdAssignmentPattern, in: text).isEmpty,
+                "A deletingChildId assignment remains in the Children views")
+    }
+
+    @Test("(g) No Task.sleep, Task.yield or dispatch queue in the Children views")
+    func noTimingTricks() throws {
+        let scope = try makeSUT()
+        let text = try viewsCode(scope)
+        #expect(try Self.matches(Self.sleepPattern, in: text).isEmpty, "Task.sleep in the Children views")
+        #expect(try Self.matches(Self.yieldPattern, in: text).isEmpty, "Task.yield in the Children views")
+        #expect(try Self.matches(Self.queuePattern, in: text).isEmpty, "A dispatch queue in the Children views")
+    }
+
+    @Test("(g) The views drive the presentation through its transitions and gate controls by it")
+    func viewsUseTheTransitions() throws {
+        let scope = try makeSUT()
+        let text = try viewsCode(scope)
+        for transition in [#"\.planReady\s*\("#, #"\.planFailed\s*\("#, #"\.cancelConfirmation\s*\("#,
+                           #"\.confirm\s*\(\s*childId\s*:"#, #"\.executionFinished\s*\("#,
+                           #"\.childrenChanged\s*\(\s*existingIds\s*:"#, #"\.reset\s*\(\s*\)"#] {
+            #expect(try !Self.matches(transition, in: text).isEmpty, "The views never call \(transition)")
+        }
+        #expect(try !Self.matches(#"deleteControlsEnabled\s*\([^)]*deletion\s*:"#, in: text).isEmpty,
+                "Controls must be gated by deleteControlsEnabled(isMutating:deletion:)")
+        #expect(text.contains("planningAnnouncement"), "VoiceOver must announce the plan step")
+        #expect(text.contains("retryAnnouncement"), "Try Again must announce from the recomputed plan")
+    }
+
+    @Test("(g) requestDelete goes through the presentation, from the row handler and from Try Again")
+    func requestDeleteGoesThroughThePresentation() throws {
+        let scope = try makeSUT()
+        let text = try viewsCode(scope)
+        #expect(try Self.matches(Self.requestDeleteCallPattern, in: text).count >= 2,
+                "Both the row request and Try Again must call the presentation's requestDelete(childId:)")
+        let retry = try #require(try Self.block(afterMatchOf: Self.retryFunctionPattern, in: text),
+                                 "No retry function found (expected func retry...)")
+        #expect(try !Self.matches(Self.requestDeleteCallPattern, in: retry).isEmpty,
+                "Try Again must start with the presentation's requestDelete")
+        #expect(try !Self.matches(#"\.plan\s*\(\s*childId\s*:"#, in: retry).isEmpty, "Try Again must plan first")
+        #expect(try !Self.matches(#"\.execute\s*\(\s*childId\s*:"#, in: retry).isEmpty, "Try Again must then execute")
+        #expect(try !Self.matches(#"requiresConfirmation\s*:\s*false"#, in: retry).isEmpty,
+                "Try Again continues without a new dialog")
+        #expect(retry.contains("retryAnnouncement"), "Try Again announces from the recomputed plan")
+        #expect(try Self.matches(Self.runCallPattern, in: retry).isEmpty)
+        #expect(try !Self.matches(#"onTryAgain\s*:[^\n]*\bretry"#, in: text).isEmpty,
+                "The banner's Try Again must call the retry function")
+    }
+
+    /// Every function body (balanced braces after `func name`) that contains `marker`.
+    private static func functionBodies(containing marker: String, in code: String) throws -> [String] {
+        let regex = try NSRegularExpression(pattern: #"\bfunc\s+\w+"#)
+        var found: [String] = []
+        for match in regex.matches(in: code, range: NSRange(code.startIndex..., in: code)) {
+            guard let range = Range(match.range, in: code),
+                  let open = code[range.upperBound...].firstIndex(of: "{") else { continue }
+            var depth = 0
+            var index = open
+            while index < code.endIndex {
+                if code[index] == "{" {
+                    depth += 1
+                } else if code[index] == "}" {
+                    depth -= 1
+                    if depth == 0 { break }
+                }
+                index = code.index(after: index)
+            }
+            guard depth == 0, index < code.endIndex else { continue }
+            let body = String(code[open...index])
+            if try !matches(marker, in: body).isEmpty { found.append(body) }
+        }
+        return found
+    }
+
+    private static let planReadyPattern = #"\.planReady\s*\("#
+    private static let childrenChangedPattern = #"\.childrenChanged\s*\(\s*existingIds\s*:"#
+
+    /// True when `childrenChanged(existingIds:` appears after the first `.planReady(` in `body`.
+    private static func reevaluatesAfterPlanReady(_ body: String) throws -> Bool {
+        guard let planLine = try matches(planReadyPattern, in: body).first else { return false }
+        return try matches(childrenChangedPattern, in: body).contains { $0 >= planLine }
+    }
+
+    @Test("(g) The F1 re-evaluation scanner helpers are exact")
+    func reevaluationHelpersAreExact() throws {
+        let good = "func apply() {\n  let t = d.planReady(childId: id, plan: p, requiresConfirmation: true)\n  d = t.presentation.childrenChanged(existingIds: ids)\n}\nfunc other() { x() }"
+        let bad = "func apply() {\n  d = d.childrenChanged(existingIds: ids)\n  let t = d.planReady(childId: id, plan: p, requiresConfirmation: true)\n}"
+        let missing = "func apply() {\n  let t = d.planReady(childId: id, plan: p, requiresConfirmation: true)\n}\nfunc elsewhere() { d.childrenChanged(existingIds: ids) }"
+        let goodBodies = try Self.functionBodies(containing: Self.planReadyPattern, in: good)
+        #expect(goodBodies.count == 1)
+        #expect(try Self.reevaluatesAfterPlanReady(try #require(goodBodies.first)))
+        #expect(try !Self.reevaluatesAfterPlanReady(try #require(Self.functionBodies(containing: Self.planReadyPattern, in: bad).first)))
+        #expect(try !Self.reevaluatesAfterPlanReady(try #require(Self.functionBodies(containing: Self.planReadyPattern, in: missing).first)))
+        #expect(try Self.functionBodies(containing: Self.planReadyPattern, in: "func a() { }").isEmpty)
+    }
+
+    @Test("(g) Every function that applies planReady re-evaluates childrenChanged(existingIds:) after it")
+    func planReadyIsFollowedByChildrenChanged() throws {
+        let scope = try makeSUT()
+        let text = try viewsCode(scope)
+        let bodies = try Self.functionBodies(containing: Self.planReadyPattern, in: text)
+        #expect(!bodies.isEmpty, "No function applying .planReady( found in the Children views")
+        for body in bodies {
+            #expect(try Self.reevaluatesAfterPlanReady(body),
+                    "A function applying .planReady( must call .childrenChanged(existingIds:) afterwards, with the current child ids")
+        }
+    }
+
+    @Test("(g) Swipe action, context menu and accessibility action all call the same request closure")
+    func oneRequestClosureForAllEntryPoints() throws {
+        let scope = try makeSUT()
+        let row = try childRowBody(scope)
+        let name = "onRequestDelete"
+        let declarations = try Self.matches(#"\b(?:let|var)\s+onRequestDelete\b"#, in: row).count
+        #expect(declarations == 1, "ChildRow must declare onRequestDelete once")
+        let uses = try Self.matches(#"\bonRequestDelete\b"#, in: row).count - declarations
+        #expect(uses == 3, "Expected exactly three uses of \(name) in ChildRow, found \(uses)")
+        for marker in [#"\.swipeActions\s*\("#, #"\.contextMenu\b"#, #"\.accessibilityAction\s*\(\s*named\s*:"#] {
+            let body = try #require(try Self.block(afterMatchOf: marker, in: row), "No block after \(marker)")
+            #expect(try Self.matches(#"\bonRequestDelete\b"#, in: body).count == 1,
+                    "The block after \(marker) must call onRequestDelete once")
+        }
     }
 }

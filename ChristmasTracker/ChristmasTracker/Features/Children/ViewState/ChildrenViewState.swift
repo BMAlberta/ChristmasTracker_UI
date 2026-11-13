@@ -23,12 +23,29 @@ nonisolated struct ChildRowState: Identifiable, Equatable, Sendable {
     let id: String
     let title: String
     let relationshipTitle: String
-    /// True while this child's deletion (planning, archiving, deleting) is running.
-    var isDeleting: Bool = false
+    /// Where this child's deletion is: checking lists, or removing. The confirming row has none.
+    var status: ChildRowDeletionStatus = .none
+
+    var showsProgress: Bool {
+        switch status {
+        case .none: false
+        case .checking, .removing: true
+        }
+    }
 
     var accessibilityLabel: String {
-        isDeleting ? "\(title), \(relationshipTitle), being removed" : "\(title), \(relationshipTitle)"
+        switch status {
+        case .none: "\(title), \(relationshipTitle)"
+        case .checking: "\(title), \(relationshipTitle), checking lists"
+        case .removing: "\(title), \(relationshipTitle), removing"
+        }
     }
+}
+
+nonisolated enum ChildRowDeletionStatus: Equatable, Sendable {
+    case none
+    case checking
+    case removing
 }
 
 /// The banner for a finished deletion that did not remove the child.
@@ -52,13 +69,19 @@ nonisolated struct ChildrenState: Equatable, Sendable {
         "No children added yet."
     }
 
-    init(children: [Child], phase: ChildrenLoadPhase, deletingChildId: String? = nil) {
-        rows = children.map {
-            ChildRowState(
-                id: $0.id,
-                title: $0.shownName,
-                relationshipTitle: $0.relationship.title,
-                isDeleting: $0.id == deletingChildId
+    init(children: [Child], phase: ChildrenLoadPhase, deletion: ChildDeletionPresentation = .idle) {
+        rows = children.map { child in
+            var status = ChildRowDeletionStatus.none
+            switch deletion.phase {
+            case .planning(let id) where id == child.id: status = .checking
+            case .executing(let id) where id == child.id: status = .removing
+            default: break
+            }
+            return ChildRowState(
+                id: child.id,
+                title: child.shownName,
+                relationshipTitle: child.relationship.title,
+                status: status
             )
         }
         switch phase {
@@ -140,6 +163,16 @@ nonisolated struct ChildrenState: Equatable, Sendable {
         }
     }
 
+    static let planningAnnouncement = "Checking lists"
+
+    /// Try Again announces from the recomputed plan; nil for a blocked plan (the banner explains).
+    static func retryAnnouncement(for plan: ChildDeletionPlan) -> String? {
+        switch plan {
+        case .blocked: nil
+        case .archiveThenDelete, .deleteNow: progressAnnouncement(for: plan)
+        }
+    }
+
     /// nil for results whose banner announces itself.
     static func resultAnnouncement(for result: ChildDeletionResult) -> String? {
         switch result {
@@ -154,9 +187,9 @@ nonisolated struct ChildrenState: Equatable, Sendable {
         }
     }
 
-    /// False while a deletion runs or the child service is mutating.
-    static func deleteControlsEnabled(isMutating: Bool, deletingChildId: String?) -> Bool {
-        !isMutating && deletingChildId == nil
+    /// False while the child service is mutating or a deletion is planning, confirming or executing.
+    static func deleteControlsEnabled(isMutating: Bool, deletion: ChildDeletionPresentation) -> Bool {
+        !isMutating && deletion.isIdle
     }
 }
 

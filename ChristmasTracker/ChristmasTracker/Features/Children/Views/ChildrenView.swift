@@ -14,7 +14,8 @@ struct ChildrenView: View {
     @Environment(\.listService) private var listService
 
     @State private var showsAddChild = false
-    @State private var deletingChildId: String?
+    // The screen outlives its rows, so the deletion presentation lives here, not in a row.
+    @State private var deletion = ChildDeletionPresentation.idle
     @State private var deletionFailure: DeletionFailure?
     @State private var deletionTask: Task<Void, Never>?
 
@@ -25,14 +26,14 @@ struct ChildrenView: View {
     }
 
     private var state: ChildrenState {
-        ChildrenState(children: childService.children, phase: childService.phase, deletingChildId: deletingChildId)
+        ChildrenState(children: childService.children, phase: childService.phase, deletion: deletion)
     }
 
     var body: some View {
         let state = state
         let controlsEnabled = ChildrenState.deleteControlsEnabled(
             isMutating: childService.isMutating,
-            deletingChildId: deletingChildId
+            deletion: deletion
         )
         return List {
             if let failure = deletionFailure {
@@ -51,12 +52,14 @@ struct ChildrenView: View {
                 if let child = childService.children.first(where: { $0.id == row.id }) {
                     ChildRow(
                         row: row,
-                        child: child,
+                        isConfirmationPresented: confirmationBinding(for: row.id),
+                        confirmation: deletion.confirmingPlan(for: row.id).flatMap {
+                            ChildrenState.deleteConfirmation(for: child, plan: $0)
+                        },
+                        confirmingPlan: deletion.confirmingPlan(for: row.id),
                         controlsEnabled: controlsEnabled,
-                        deletingChildId: $deletingChildId,
-                        start: startDeletionWork,
-                        onBanner: { showBanner($0, for: row.id) },
-                        onResult: { finish($0, for: row.id) }
+                        onRequestDelete: { requestDelete(childId: row.id) },
+                        onConfirm: { confirm(childId: row.id, plan: $0) }
                     )
                 }
             }
@@ -87,10 +90,14 @@ struct ChildrenView: View {
         .task {
             await childService.loadChildren()
         }
+        .onChange(of: childService.children.map(\.id)) { _, ids in
+            deletion = deletion.childrenChanged(existingIds: ids)
+        }
+        .onChange(of: childService.sessionGeneration) {
+            cancelAndReset()
+        }
         .onDisappear {
-            deletionTask?.cancel()
-            deletionTask = nil
-            deletingChildId = nil
+            cancelAndReset()
         }
     }
 
@@ -99,7 +106,7 @@ struct ChildrenView: View {
     private func deletionBanner(_ failure: DeletionFailure) -> some View {
         InlineErrorBanner(
             state: failure.banner.state,
-            onTryAgain: { retry(failure) },
+            onTryAgain: { retryDeletion(failure) },
             onDismiss: { deletionFailure = nil }
         )
         .listRowBackground(Color.clear)
@@ -182,16 +189,113 @@ struct ChildrenView: View {
         showBanner(ChildrenState.banner(for: result), for: childId)
     }
 
-    private func retry(_ failure: DeletionFailure) {
-        let childId = failure.childId
+    private func makeFlow() -> ChildDeletionFlow {
+        ChildDeletionFlow(childService: childService, listService: listService)
+    }
+
+    private func announce(_ text: String?) {
+        guard let text else { return }
+        AccessibilityNotification.Announcement(text).post()
+    }
+
+    private func cancelAndReset() {
+        deletionTask?.cancel()
+        deletionTask = nil
+        deletion = deletion.reset()
+    }
+
+    /// The dialog's presented flag, read from the screen's presentation. Dismissing it cancels
+    /// the confirmation only while that child is still the one being confirmed.
+    private func confirmationBinding(for childId: String) -> Binding<Bool> {
+        Binding(
+            get: { deletion.isConfirming(childId: childId) },
+            set: { presented in
+                if !presented, deletion.isConfirming(childId: childId) {
+                    deletion = deletion.cancelConfirmation()
+                }
+            }
+        )
+    }
+
+    /// Applies a transition in one assignment; a banner request becomes the screen's banner.
+    private func apply(_ transition: ChildDeletionPresentation.Transition, for childId: String) {
+        deletion = transition.presentation
+        if let request = transition.banner {
+            let result: ChildDeletionResult = switch request {
+            case .blocked: .blocked
+            case .failed(let error): .failed(error: error)
+            }
+            showBanner(ChildrenState.banner(for: result), for: childId)
+        }
+    }
+
+    /// Applies planReady, then re-checks the child list: a child that vanished while planning
+    /// must not leave a confirmation with no row to host it. Returns the plan to run, if any.
+    private func applyPlanReady(
+        childId: String,
+        plan: ChildDeletionPlan,
+        requiresConfirmation: Bool
+    ) -> ChildDeletionPlan? {
+        let transition = deletion.planReady(childId: childId, plan: plan, requiresConfirmation: requiresConfirmation)
+        apply(transition, for: childId)
+        deletion = deletion.childrenChanged(existingIds: childService.children.map(\.id))
+        return transition.plan
+    }
+
+    private func requestDelete(childId: String) {
+        guard deletion.isIdle else { return }
+        showBanner(nil, for: childId)
+        deletion = deletion.requestDelete(childId: childId)
+        announce(ChildrenState.planningAnnouncement)
         startDeletionWork {
-            deletingChildId = childId
-            AccessibilityNotification.Announcement(
-                ChildrenState.progressAnnouncement(for: .archiveThenDelete(listIds: []))
-            ).post()
-            let flow = ChildDeletionFlow(childService: childService, listService: listService)
-            let result = await flow.run(childId: childId)
-            deletingChildId = nil
+            do {
+                let plan = try await makeFlow().plan(childId: childId)
+                _ = applyPlanReady(childId: childId, plan: plan, requiresConfirmation: true)
+            } catch is CancellationError {
+                return
+            } catch {
+                let childError = (error as? ChildError) ?? .server
+                apply(deletion.planFailed(childId: childId, error: childError), for: childId)
+            }
+        }
+    }
+
+    private func confirm(childId: String, plan: ChildDeletionPlan) {
+        let transition = deletion.confirm(childId: childId, plan: plan)
+        deletion = transition.presentation
+        guard let confirmedPlan = transition.plan else { return }
+        announce(ChildrenState.progressAnnouncement(for: confirmedPlan))
+        startDeletionWork {
+            let result = await makeFlow().execute(childId: childId, plan: confirmedPlan)
+            deletion = deletion.executionFinished(childId: childId)
+            finish(result, for: childId)
+        }
+    }
+
+    /// Try Again: plans afresh and continues without a new dialog. A no-op unless idle.
+    private func retryDeletion(_ failure: DeletionFailure) {
+        guard deletion.isIdle else { return }
+        let childId = failure.childId
+        showBanner(nil, for: childId)
+        deletion = deletion.requestDelete(childId: childId)
+        announce(ChildrenState.planningAnnouncement)
+        startDeletionWork {
+            let flow = makeFlow()
+            let plan: ChildDeletionPlan
+            do {
+                plan = try await flow.plan(childId: childId)
+            } catch is CancellationError {
+                return
+            } catch {
+                let childError = (error as? ChildError) ?? .server
+                apply(deletion.planFailed(childId: childId, error: childError), for: childId)
+                return
+            }
+            let planned = applyPlanReady(childId: childId, plan: plan, requiresConfirmation: false)
+            guard let planToRun = planned else { return }
+            announce(ChildrenState.retryAnnouncement(for: planToRun))
+            let result = await flow.execute(childId: childId, plan: planToRun)
+            deletion = deletion.executionFinished(childId: childId)
             finish(result, for: childId)
         }
     }
@@ -199,21 +303,16 @@ struct ChildrenView: View {
 
 // MARK: - Row
 
-/// One child. It holds its own confirmation state, so the confirmationDialog is attached here.
+/// One child. It holds no state: the screen owns the presentation and passes the dialog's
+/// binding and content in. The confirmationDialog is attached here.
 private struct ChildRow: View {
     let row: ChildRowState
-    let child: Child
+    @Binding var isConfirmationPresented: Bool
+    let confirmation: ChildDeleteConfirmation?
+    let confirmingPlan: ChildDeletionPlan?
     let controlsEnabled: Bool
-    @Binding var deletingChildId: String?
-    let start: (@escaping @MainActor () async -> Void) -> Void
-    let onBanner: (ChildDeletionBanner?) -> Void
-    let onResult: (ChildDeletionResult?) -> Void
-
-    @Environment(\.childService) private var childService
-    @Environment(\.listService) private var listService
-
-    @State private var pendingPlan: ChildDeletionPlan?
-    @State private var showsConfirmation = false
+    let onRequestDelete: () -> Void
+    let onConfirm: (ChildDeletionPlan) -> Void
 
     var body: some View {
         HStack(spacing: AppSpacing.md) {
@@ -226,7 +325,7 @@ private struct ChildRow: View {
                     .foregroundStyle(Color.textMutedColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if row.isDeleting {
+            if row.showsProgress {
                 ProgressView()
             }
         }
@@ -235,77 +334,34 @@ private struct ChildRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.accessibilityLabel)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive, action: requestDelete) {
+            Button(role: .destructive, action: onRequestDelete) {
                 Label("Delete", systemImage: "trash")
             }
             .tint(Color.destructiveColor)
             .disabled(!controlsEnabled)
         }
         .contextMenu {
-            Button(role: .destructive, action: requestDelete) {
+            Button(role: .destructive, action: onRequestDelete) {
                 Label("Delete", systemImage: "trash")
             }
             .tint(Color.destructiveColor)
             .disabled(!controlsEnabled)
         }
         .accessibilityAction(named: "Delete") {
-            if controlsEnabled { requestDelete() }
+            if controlsEnabled { onRequestDelete() }
         }
         .confirmationDialog(
             confirmation?.title ?? "",
-            isPresented: $showsConfirmation,
+            isPresented: $isConfirmationPresented,
             titleVisibility: .visible,
             presenting: confirmation
         ) { confirmation in
-            Button(confirmation.confirmButtonTitle, role: .destructive, action: confirmDelete)
+            Button(confirmation.confirmButtonTitle, role: .destructive) {
+                if let plan = confirmingPlan { onConfirm(plan) }
+            }
             Button("Cancel", role: .cancel) { }
         } message: { confirmation in
             Text(confirmation.message)
-        }
-    }
-
-    private var confirmation: ChildDeleteConfirmation? {
-        pendingPlan.flatMap { ChildrenState.deleteConfirmation(for: child, plan: $0) }
-    }
-
-    private func makeFlow() -> ChildDeletionFlow {
-        ChildDeletionFlow(childService: childService, listService: listService)
-    }
-
-    private func requestDelete() {
-        guard controlsEnabled else { return }
-        let childId = row.id
-        start {
-            onBanner(nil)
-            deletingChildId = childId
-            defer { deletingChildId = nil }
-            do {
-                let plan = try await makeFlow().plan(childId: childId)
-                if plan == .blocked {
-                    onBanner(ChildrenState.banner(for: .blocked))
-                } else {
-                    pendingPlan = plan
-                    showsConfirmation = true
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                let childError = (error as? ChildError) ?? .server
-                onBanner(ChildrenState.banner(for: .failed(error: childError)))
-            }
-        }
-    }
-
-    private func confirmDelete() {
-        guard let plan = pendingPlan else { return }
-        pendingPlan = nil
-        let childId = row.id
-        start {
-            deletingChildId = childId
-            AccessibilityNotification.Announcement(ChildrenState.progressAnnouncement(for: plan)).post()
-            let result = await makeFlow().execute(childId: childId, plan: plan)
-            deletingChildId = nil
-            onResult(result)
         }
     }
 }
