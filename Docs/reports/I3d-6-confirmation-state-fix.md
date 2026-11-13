@@ -92,5 +92,12 @@ I grepped every `confirmationDialog` and `.alert` in Features/ and read the stat
 - The audit of the Authentication, Profile, EditList and RecordPurchase presentations is shallow (see above).
 - Try Again still continues without a new confirmation (accepted decision, remains an open risk).
 
-## Verification after the commit
-Recorded in the commit follow-up below.
+## Verification after the commit (433d697; run by me, added by the F2 commit)
+```
+** BUILD SUCCEEDED **
+--- tests: 3107 passed, 0 failed, 0 skipped ---
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+􁁛  Test run with 212 tests in 16 suites passed after 0.019 seconds.
+```
