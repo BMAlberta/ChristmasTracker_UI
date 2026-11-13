@@ -34,7 +34,9 @@ struct MembersTruthTableTests {
             for membersPresent in [true, false] {
                 for hasCoOwner in [true, false] {
                     let flags = MembersFixtures.sectionFlags(bits: bits)
-                    let roster = membersPresent ? MembersFixtures.fullRoster(includeCoOwner: hasCoOwner) : nil
+                    // I3d-D1: the roster holds only members and viewers; the owner and co-owner rows
+                    // come from detail.owner and detail.coOwner.
+                    let roster = membersPresent ? MembersFixtures.memberRoster() : nil
                     // myRole is varied with the case index; it must make no difference.
                     let myRole = ["owner", "co-owner", "member", "viewer"][checked % 4]
                     let detail = try MembersFixtures.detail(
@@ -163,7 +165,8 @@ struct MembersTruthTableTests {
 
     @Test("Seven personas show exactly what their flags allow", arguments: MembersTruthTableTests.personas)
     func personaOutcome(persona: Persona) throws {
-        let roster = persona.membersPresent ? MembersFixtures.fullRoster() : nil
+        // I3d-D1: members and viewers only; owner and co-owner rows come from the detail.
+        let roster = persona.membersPresent ? MembersFixtures.memberRoster() : nil
         let detail = try MembersFixtures.detail(
             flags: persona.flags, roster: roster, memberCount: 4,
             status: persona.status, visibility: persona.visibility, myRole: persona.myRole
