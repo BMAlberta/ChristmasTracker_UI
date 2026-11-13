@@ -12,8 +12,8 @@ import Foundation
 
 // MARK: - Row
 
-/// Who a roster row is. The owner and co-owner rows are identified by the detail's person ids,
-/// not by the wire role (which only knows member and viewer).
+/// Who a roster row is. The owner and co-owner rows come from the detail's own person fields,
+/// not from the wire roster (which only holds members and viewers).
 nonisolated enum MemberRowKind: Equatable, Sendable {
     case owner
     case coOwner
@@ -32,7 +32,7 @@ nonisolated enum MemberRowKind: Equatable, Sendable {
 
 /// What one roster row shows and offers.
 nonisolated struct MemberRowState: Identifiable, Equatable, Sendable {
-    /// The membership id.
+    /// The membership id, or a synthetic "owner:<id>" / "co-owner:<id>" for those rows.
     let id: String
     let userId: String
     let displayName: String
@@ -63,19 +63,31 @@ nonisolated struct MembersSectionState: Equatable, Sendable {
         showsAdd = permissions.canManageMembers
         showsLeave = permissions.canLeaveList
         memberCountText = detail.memberCount == 1 ? "1 member" : "\(detail.memberCount) members"
-        rows = (roster ?? [])
-            .filter { $0.status == .active }
-            .map { member in
-                let kind = Self.kind(of: member, in: detail)
-                return MemberRowState(
+        guard let roster else {
+            rows = []
+            return
+        }
+
+        var built: [MemberRowState] = [Self.personRow(detail.owner, kind: .owner)]
+        var shownIds: Set<String> = [detail.owner.id]
+        if let coOwner = detail.coOwner {
+            built.append(Self.personRow(coOwner, kind: .coOwner))
+            shownIds.insert(coOwner.id)
+        }
+        for member in roster where member.status == .active && !shownIds.contains(member.userId) {
+            let kind = Self.kind(of: member)
+            built.append(
+                MemberRowState(
                     id: member.id,
                     userId: member.userId,
                     displayName: member.displayName,
                     kind: kind,
                     roleLabel: kind.title,
-                    canRemove: permissions.canManageMembers && (kind == .member || kind == .viewer)
+                    canRemove: permissions.canManageMembers
                 )
-            }
+            )
+        }
+        rows = built
     }
 
     /// The texts of the remove-member confirmation for a roster row.
@@ -96,9 +108,22 @@ nonisolated struct MembersSectionState: Equatable, Sendable {
         )
     }
 
-    private static func kind(of member: ListMember, in detail: ListDetail) -> MemberRowKind {
-        if member.userId == detail.owner.id { return .owner }
-        if let coOwner = detail.coOwner, member.userId == coOwner.id { return .coOwner }
+    /// The owner or co-owner row: built from the detail's person, never removable, with a
+    /// synthetic id that cannot collide with a membership id.
+    private static func personRow(_ person: ListPerson, kind: MemberRowKind) -> MemberRowState {
+        let prefix = kind == .owner ? "owner" : "co-owner"
+        return MemberRowState(
+            id: "\(prefix):\(person.id)",
+            userId: person.id,
+            displayName: person.displayName,
+            kind: kind,
+            roleLabel: kind.title,
+            canRemove: false
+        )
+    }
+
+    /// The server never sends the owner or co-owner in members, so a roster row is a member or viewer.
+    private static func kind(of member: ListMember) -> MemberRowKind {
         switch member.role {
         case .member: return .member
         case .viewer: return .viewer

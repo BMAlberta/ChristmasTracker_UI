@@ -12,7 +12,7 @@ import Foundation
 nonisolated enum ChildError: Error, LocalizedError, Equatable, Sendable {
     /// 404 RESOURCE_NOT_FOUND for an unknown or foreign child.
     case childNotFound
-    /// 422 CANNOT_DELETE_RESOURCE (6501): the child still has lists.
+    /// 422 CANNOT_DELETE_RESOURCE (6501): the child still has active lists.
     case childHasLists
     case validation(message: String)
     case rateLimited(retryAfter: TimeInterval)
@@ -28,7 +28,7 @@ nonisolated enum ChildError: Error, LocalizedError, Equatable, Sendable {
         case .childNotFound:
             return "That child could not be found."
         case .childHasLists:
-            return "This child still has lists, so it can't be removed. Delete those lists first."
+            return "This child still has active lists. Archive them first."
         case .validation(let message):
             return ListError.validation(message: message).userMessage
         case .rateLimited(let retryAfter):

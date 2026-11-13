@@ -92,7 +92,9 @@ struct MockChildRepositoryTests {
 
     // MARK: - deleteChild
 
-    @Test("deleting a child that has a list throws childHasLists and keeps the child")
+    // I3d-D2 (decision L17): reworded from "has a list" to "has an active list"; only ACTIVE or
+    // DRAFT lists block now. The seed child's list is active, so the behavior is unchanged.
+    @Test("deleting a child that has an active list throws childHasLists and keeps the child")
     func deleteChildWithListFails() async throws {
         let sut = await makeSUT()
         let child = try await tommy(sut)
@@ -137,7 +139,8 @@ struct MockChildRepositoryTests {
         }
     }
 
-    @Test("a child that gets a list through the shared list repository can no longer be deleted")
+    // I3d-D2 (decision L17): reworded to "active list"; a new list is active, so it still blocks.
+    @Test("a child that gets an active list through the shared list repository can no longer be deleted")
     func childWithNewListCannotBeDeleted() async throws {
         let sut = await makeSUT()
         let created = try await sut.children.createChild(newInput)
@@ -148,6 +151,58 @@ struct MockChildRepositoryTests {
         await #expect(throws: ChildError.childHasLists) {
             try await sut.children.deleteChild(id: created.id)
         }
+    }
+
+    // MARK: - deleteChild after archiving (I3d-D2, decision L17)
+
+    @Test("a child whose only list was archived can be deleted")
+    func childWithOnlyArchivedListCanBeDeleted() async throws {
+        let sut = await makeSUT()
+        let child = try await tommy(sut)
+        let childLists = try await sut.lists.fetchLists().filter { $0.recipient.id == child.id }
+        #expect(childLists.isEmpty == false)
+        for list in childLists {
+            try await sut.lists.deleteList(id: list.id)
+        }
+
+        try await sut.children.deleteChild(id: child.id)
+
+        let all = try await sut.children.fetchChildren()
+        #expect(all.contains(child) == false)
+    }
+
+    @Test("archiving some of a child's lists is not enough: the remaining active list still blocks")
+    func childWithOneArchivedAndOneActiveListStillBlocked() async throws {
+        let sut = await makeSUT()
+        let created = try await sut.children.createChild(newInput)
+        let first = try await sut.lists.createList(
+            CreateListInput(recipientId: created.id, year: 2031, name: "Eli's Wishes", theme: nil, visibility: .private)
+        )
+        _ = try await sut.lists.createList(
+            CreateListInput(recipientId: created.id, year: 2032, name: "Eli's Wishes 2", theme: nil, visibility: .private)
+        )
+        try await sut.lists.deleteList(id: first.id)
+
+        await #expect(throws: ChildError.childHasLists) {
+            try await sut.children.deleteChild(id: created.id)
+        }
+        let all = try await sut.children.fetchChildren()
+        #expect(all.contains(created))
+    }
+
+    @Test("a child with a freshly archived list is deletable and the archived list is kept")
+    func archivedListIsKeptAfterChildDeletion() async throws {
+        let sut = await makeSUT()
+        let created = try await sut.children.createChild(newInput)
+        let list = try await sut.lists.createList(
+            CreateListInput(recipientId: created.id, year: 2031, name: "Eli's Wishes", theme: nil, visibility: .private)
+        )
+        try await sut.lists.deleteList(id: list.id)
+
+        try await sut.children.deleteChild(id: created.id)
+
+        let kept = try await sut.lists.fetchLists().first { $0.id == list.id }
+        #expect(kept?.status == .archived)
     }
 
     // MARK: - createList for a child recipient

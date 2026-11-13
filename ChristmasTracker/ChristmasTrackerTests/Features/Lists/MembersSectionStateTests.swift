@@ -22,7 +22,7 @@ struct MembersSectionStateTests {
 
     private func makeSUT(
         flags: MembersFixtures.SectionFlags = MembersSectionStateTests.managerFlags,
-        roster: [ListFixtures.MemberSpec]? = MembersFixtures.fullRoster(),
+        roster: [ListFixtures.MemberSpec]? = MembersFixtures.memberRoster(),
         hasCoOwner: Bool = true,
         memberCount: Int = 4,
         myRole: String = "owner"
@@ -36,10 +36,11 @@ struct MembersSectionStateTests {
 
     // MARK: - Rows
 
-    @Test("Rows show ACTIVE members only, in server order")
+    @Test("Rows show the owner and co-owner, then ACTIVE roster entries only, in server order")
     func activeRowsOnly() throws {
         let state = try makeSUT()
-        #expect(state.rows.map(\.id) == ["mem-owner", "mem-co", "mem-m1", "mem-v1"])
+        #expect(state.rows.count == 4)
+        #expect(Array(state.rows.map(\.id).suffix(2)) == ["mem-m1", "mem-v1"])
     }
 
     @Test("INVITED, REMOVED and EXPIRED rows never appear")
@@ -60,17 +61,18 @@ struct MembersSectionStateTests {
         ])
     }
 
-    @Test("The owner row is the owner even when its wire role is viewer, and the co-owner row even when member")
+    @Test("A defensive roster entry for the owner (wire role viewer) or co-owner (member) is shown once, as the owner or co-owner")
     func kindIgnoresWireRoleForOwnerAndCoOwner() throws {
         // MembersFixtures gives the owner row role "viewer" and the co-owner row role "member".
-        let state = try makeSUT()
+        let state = try makeSUT(roster: MembersFixtures.fullRoster())
+        #expect(state.rows.map(\.kind) == [.owner, .coOwner, .member, .viewer])
         #expect(state.rows[0].kind == .owner)
         #expect(state.rows[1].kind == .coOwner)
     }
 
     @Test("Without a co-owner on the list the co-owner id matches nothing")
     func noCoOwnerOnList() throws {
-        let state = try makeSUT(roster: MembersFixtures.fullRoster(includeCoOwner: false), hasCoOwner: false)
+        let state = try makeSUT(roster: MembersFixtures.memberRoster(), hasCoOwner: false)
         #expect(state.rows.map(\.kind) == [.owner, .member, .viewer])
     }
 
@@ -80,7 +82,7 @@ struct MembersSectionStateTests {
         #expect(state.rows.map(\.roleLabel) == ["Owner", "Co-owner", "Member", "Viewer"])
     }
 
-    @Test("Row display names come from the roster")
+    @Test("Row display names come from the detail's owner and co-owner and from the roster")
     func displayNames() throws {
         let state = try makeSUT()
         #expect(state.rows.map(\.displayName) == [
@@ -129,11 +131,11 @@ struct MembersSectionStateTests {
         #expect(state.rows.isEmpty)
     }
 
-    @Test("A present but empty roster still shows the (empty) roster")
+    @Test("A present but empty roster still shows the roster, with the owner and co-owner rows")
     func emptyRoster() throws {
         let state = try makeSUT(roster: [])
         #expect(state.showsRoster)
-        #expect(state.rows.isEmpty)
+        #expect(state.rows.map(\.kind) == [.owner, .coOwner])
     }
 
     @Test("A viewer-role member gets no rows even when a members array is in the model")

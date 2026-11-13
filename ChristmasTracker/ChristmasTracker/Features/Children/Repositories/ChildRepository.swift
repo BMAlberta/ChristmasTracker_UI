@@ -15,6 +15,6 @@ nonisolated protocol ChildRepository: Repository {
     /// Create a child. The child has no email or password and can never sign in.
     func createChild(_ input: CreateChildInput) async throws -> Child
 
-    /// Delete a child (soft delete). Fails with `childHasLists` while the child still has lists.
+    /// Delete a child (soft delete). Fails with `childHasLists` while the child still has an active (ACTIVE or DRAFT) list.
     func deleteChild(id: String) async throws
 }

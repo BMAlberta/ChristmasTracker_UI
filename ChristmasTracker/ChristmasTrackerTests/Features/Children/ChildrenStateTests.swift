@@ -119,27 +119,49 @@ struct ChildrenStateTests {
 
     // MARK: - Delete confirmation
 
-    @Test("The delete confirmation names the child and warns it cannot be undone")
-    func deleteConfirmation() {
+    // Changed in I3d-D3 (the three tests below): this story replaces
+    // ChildrenState.deleteConfirmation(for:) by deleteConfirmation(for:plan:), so each test is
+    // rewritten for the new signature. The old assertion that the message contains "undone" is
+    // dropped for deleteNow (its message is now "<name> will be removed.") and kept for
+    // archiveThenDelete. The full text tables live in ChildrenDeleteStateTests.
+
+    @Test("The archive-then-delete confirmation names the child and warns it cannot be undone")
+    func deleteConfirmation() throws {
         let child = ChildFixtures.child(firstName: "Charlie", lastName: "Child", displayName: "Charlie C")
-        let confirmation = ChildrenState.deleteConfirmation(for: child)
+        let confirmation = try #require(
+            ChildrenState.deleteConfirmation(for: child, plan: .archiveThenDelete(listIds: ["list-1"]))
+        )
         #expect(!confirmation.title.isEmpty)
         #expect(confirmation.message.contains(child.shownName))
         #expect(confirmation.message.lowercased().contains("undone"))
         #expect(!confirmation.confirmButtonTitle.isEmpty)
     }
 
-    @Test("The delete confirmation follows the shown name when there is no display name")
-    func deleteConfirmationFallbackName() {
-        let child = ChildFixtures.child(firstName: "Dana", lastName: "Dependent", displayName: nil)
-        #expect(ChildrenState.deleteConfirmation(for: child).message.contains("Dana Dependent"))
+    @Test("The delete-now confirmation names the child and has a title and a button")
+    func deleteConfirmationDeleteNow() throws {
+        let child = ChildFixtures.child(firstName: "Charlie", lastName: "Child", displayName: "Charlie C")
+        let confirmation = try #require(ChildrenState.deleteConfirmation(for: child, plan: .deleteNow))
+        #expect(!confirmation.title.isEmpty)
+        #expect(confirmation.message.contains(child.shownName))
+        #expect(!confirmation.confirmButtonTitle.isEmpty)
     }
 
-    @Test("The delete confirmation never contains the child id")
-    func deleteConfirmationHasNoId() {
+    @Test("The delete confirmation follows the shown name when there is no display name",
+          arguments: [ChildDeletionPlan.deleteNow, .archiveThenDelete(listIds: ["list-1", "list-2"])])
+    func deleteConfirmationFallbackName(plan: ChildDeletionPlan) throws {
+        let child = ChildFixtures.child(firstName: "Dana", lastName: "Dependent", displayName: nil)
+        let confirmation = try #require(ChildrenState.deleteConfirmation(for: child, plan: plan))
+        #expect(confirmation.message.contains("Dana Dependent"))
+    }
+
+    @Test("The delete confirmation never contains the child id or a list id",
+          arguments: [ChildDeletionPlan.deleteNow, .archiveThenDelete(listIds: ["list-secret-1", "list-secret-2"])])
+    func deleteConfirmationHasNoId(plan: ChildDeletionPlan) throws {
         let child = ChildFixtures.child(id: "child-secret-7")
-        let confirmation = ChildrenState.deleteConfirmation(for: child)
-        #expect(!confirmation.title.contains("child-secret-7"))
-        #expect(!confirmation.message.contains("child-secret-7"))
+        let confirmation = try #require(ChildrenState.deleteConfirmation(for: child, plan: plan))
+        for text in [confirmation.title, confirmation.message, confirmation.confirmButtonTitle] {
+            #expect(!text.contains("child-secret-7"))
+            #expect(!text.contains("list-secret"))
+        }
     }
 }

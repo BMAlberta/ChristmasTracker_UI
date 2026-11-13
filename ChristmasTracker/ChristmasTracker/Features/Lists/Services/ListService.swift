@@ -41,6 +41,10 @@ final class ListService {
     /// switch never leaves the previous user's data in the service or the cache.
     private var generation = 0
 
+    /// Read-only view of the session generation, so a coordinator can tell that the session was
+    /// cleared between its steps.
+    var sessionGeneration: Int { generation }
+
     /// Cancel handles of the repository calls that are in flight, keyed by call.
     private var inFlight: [UUID: () -> Void] = [:]
 
@@ -483,6 +487,127 @@ final class ListService {
     }
 
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
+    /// Always fetches from the repository (never the cache), writes the result to `lists` and the
+    /// cache like `refreshLists`, and returns it. Publishes no shared `error`: a failure is thrown
+    /// as the typed ListError (anything else as `.server`); a cancelled call or an ended session
+    /// throws CancellationError and writes nothing.
+    func freshLists() async throws -> [GiftList] {
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.freshLists",
+            operation: "service.lists.freshLists"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        let start = operationSequence
+        let epoch = archiveEpoch
+
+        do {
+            let repository = self.repository
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
+            try ensureCurrent(gen)
+            try Task.checkCancellation()
+            // An archive that finished meanwhile makes this result stale for the cache and `lists`.
+            guard epoch == archiveEpoch else { return fetched }
+            await dataStore.setLists(fetched)
+            try ensureCurrent(gen)
+            guard epoch == archiveEpoch else { return fetched }
+            lists = visibleLists(fetched, since: start)
+            lastUpdated = Date()
+            return fetched
+        } catch {
+            if error is CancellationError || Task.isCancelled || gen != generation {
+                throw CancellationError()
+            }
+            // Only the operation name is logged: no ids, names, emails or server text.
+            LogError("fresh lists failed", category: .business)
+            throw (error as? ListError) ?? ListError.server
+        }
+    }
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
+    // so a manual SentrySDK span is used. No list data goes into the span.
+    /// Archives the lists one after the other and stops at the first failure (a not-found counts as
+    /// archived). Reloads the lists exactly once at the end, also after a failure or zero progress,
+    /// but not for empty input and not when the session ended or the caller was cancelled. Publishes
+    /// no shared `error`: the failure is in the result. Counts only are logged.
+    func archiveLists(ids: [String]) async -> ArchiveBatchResult {
+        guard !ids.isEmpty else {
+            return ArchiveBatchResult(archivedCount: 0, totalCount: 0, failedId: nil, failure: nil)
+        }
+        let span = SentrySDK.startTransaction(
+            name: "service.lists.archiveLists",
+            operation: "service.lists.archiveLists"
+        )
+        defer { span.finish() }
+
+        let gen = generation
+        let start = operationSequence
+        beginMutation()
+        defer { endMutation(generation: gen) }
+
+        var archivedCount = 0
+        var failedId: String?
+        var failure: ListError?
+        let repository = self.repository
+
+        for id in ids {
+            if Task.isCancelled || gen != generation {
+                return ArchiveBatchResult(
+                    archivedCount: archivedCount, totalCount: ids.count, failedId: nil, failure: nil
+                )
+            }
+            do {
+                try await perform { try await repository.deleteList(id: id) }
+                try ensureCurrent(gen)
+            } catch {
+                if error is CancellationError || Task.isCancelled || gen != generation {
+                    return ArchiveBatchResult(
+                        archivedCount: archivedCount, totalCount: ids.count, failedId: nil, failure: nil
+                    )
+                }
+                let listError = (error as? ListError) ?? ListError.server
+                if listError != .notFound {
+                    // Only the operation name is logged: no ids, names, emails or server text.
+                    LogError("archive list in batch failed", category: .business)
+                    failedId = id
+                    failure = listError
+                    break
+                }
+            }
+            archivedCount += 1
+            // Loads that started before this point may still carry the list as active.
+            archiveEpoch += 1
+            archivedListEpoch[id, default: 0] += 1
+        }
+
+        reloadTokenCounter += 1
+        let token = reloadTokenCounter
+        do {
+            let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
+            try ensureCurrent(gen)
+            try Task.checkCancellation()
+            if token == reloadTokenCounter {
+                await dataStore.setLists(fetched)
+                try ensureCurrent(gen)
+                if token == reloadTokenCounter {
+                    lists = fetched
+                    lastUpdated = Date()
+                }
+            }
+        } catch {
+            // A failed reload is left to the next load; nothing is published.
+            LogError("reload lists after archive batch failed", category: .business)
+        }
+
+        LogInfo("Archived \(archivedCount) of \(ids.count) lists", category: .business)
+        return ArchiveBatchResult(
+            archivedCount: archivedCount, totalCount: ids.count, failedId: failedId, failure: failure
+        )
+    }
+
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No member data goes into the span.
     /// Adds a member, then refetches the detail: the roster is never built from the add response.
     /// If the add succeeded but the refetch fails, returns normally with `error` set to the
@@ -875,6 +1000,16 @@ final class ListService {
         }
         return CancellationError()
     }
+}
+
+/// The outcome of `ListService.archiveLists(ids:)`. `failedId` and `failure` are set only when an
+/// archive failed (kept in memory only; never logged). A result with fewer archived than total and
+/// no failure means the batch stopped because the session ended or the caller was cancelled.
+nonisolated struct ArchiveBatchResult: Equatable, Sendable {
+    let archivedCount: Int
+    let totalCount: Int
+    let failedId: String?
+    let failure: ListError?
 }
 
 // MARK: - SessionClearable

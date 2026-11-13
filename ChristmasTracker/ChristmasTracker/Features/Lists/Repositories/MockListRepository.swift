@@ -294,8 +294,8 @@ actor MockListRepository: ListRepository {
         guard let index = children.firstIndex(where: { $0.id == id }) else {
             throw ChildError.childNotFound
         }
-        // A child that has a list cannot be deleted.
-        guard !lists.contains(where: { $0.recipient.id == id }) else {
+        // A child with an ACTIVE or DRAFT list cannot be deleted; archived lists do not block (L17).
+        guard !lists.contains(where: { $0.recipient.id == id && ListSegment.active.includes($0.status) }) else {
             throw ChildError.childHasLists
         }
         children.remove(at: index)

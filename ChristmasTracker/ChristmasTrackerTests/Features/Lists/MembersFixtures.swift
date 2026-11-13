@@ -110,6 +110,14 @@ nonisolated enum MembersFixtures {
         return rows
     }
 
+    /// I3d-D1: the roster as the server now sends it. The owner and co-owner are never in it, only
+    /// members and viewers (and the inactive rows, which never show).
+    static func memberRoster(includeInactive: Bool = true) -> [ListFixtures.MemberSpec] {
+        var rows = [memberRow(), viewerRow()]
+        if includeInactive { rows += inactiveRows() }
+        return rows
+    }
+
     // MARK: - Detail
 
     /// A domain detail. `roster` nil means the `members` key is absent from the wire JSON.
