@@ -45,6 +45,18 @@ Test run with 212 tests in 16 suites passed after 0.022 seconds.   (swift test, 
 ```
 After-commit run: see "After-commit run" below (added after the commit; committed with Story D3).
 
+## After-commit run
+After commit 330939d (`I3d: archive a child's active lists before deleting the child`), run by the Orchestrator:
+```
+--- xcodebuild exit status: 0 ---
+--- tests: 2997 passed, 0 failed, 0 skipped ---
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+Test run with 212 tests in 16 suites passed after 0.018 seconds.   (swift test, TrackerAPI package)
+```
+This section was added after the commit and is committed together with Story D3.
+
 ## Gate 2
 - convention-reviewer: APPROVED, no findings. Manual-span rule satisfied on all five new @MainActor async functions (ListService.freshLists, archiveLists; ChildDeletionFlow.plan, run, execute; the private helpers are covered by their public callers' spans); no Combine or GCD; no force unwraps, no `@unchecked Sendable` or `nonisolated(unsafe)`; logs are constants and counts only (ListService.swift freshLists/archiveLists, `LogInfo("Archived \(archivedCount) of \(ids.count) lists")` counts only); `failedId` never logged; fakes are MainActor structs/classes; no sleeps or yield loops. It noted that the banned GCD type name appeared once in the D1 report text; that line was reworded in this commit. It could not query `.claude/` directly (hook), but `git status` showed no entry there.
 - acceptance-reviewer: APPROVED, no rejection. Focus list: (1) the only route to `deleteChild` after an archive is ChildDeletionFlow.swift:132-143 and needs the isCurrent guard (:133), no `batch.failure` (:134) and `archivedCount == totalCount` (:142); a clear during the final reload is caught at :133; retry goes through `plan` -> `freshLists`, archived lists excluded at ChildDeletionPlan.swift:20; covered by the test at ChildDeletionFlowTests.swift:225. (2) `freshLists` always calls `repository.fetchLists` (ListService.swift ~500-527); plan filters at ChildDeletionPlan.swift:20-22. (3) `archiveLists` ListService.swift:546-607: break at first failure, one reload, 404 as archived, no `error`, epochs bumped like `deleteList`; `deleteList` untouched. (5) generations and `Task.isCancelled` through `isCurrent` (:167-171). (7) no identifying data in logs, spans or Sentry. (8) test changes as listed above. (10) nothing forbidden changed. The reviewer ran no tests and took no screenshot (no UI in this story).

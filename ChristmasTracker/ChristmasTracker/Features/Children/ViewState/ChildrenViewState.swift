@@ -23,10 +23,17 @@ nonisolated struct ChildRowState: Identifiable, Equatable, Sendable {
     let id: String
     let title: String
     let relationshipTitle: String
+    /// True while this child's deletion (planning, archiving, deleting) is running.
+    var isDeleting: Bool = false
 
     var accessibilityLabel: String {
-        "\(title), \(relationshipTitle)"
+        isDeleting ? "\(title), \(relationshipTitle), being removed" : "\(title), \(relationshipTitle)"
     }
+}
+
+/// The banner for a finished deletion that did not remove the child.
+nonisolated struct ChildDeletionBanner: Equatable, Sendable {
+    let state: InlineErrorBannerState
 }
 
 nonisolated struct ChildDeleteConfirmation: Equatable, Sendable {
@@ -45,9 +52,14 @@ nonisolated struct ChildrenState: Equatable, Sendable {
         "No children added yet."
     }
 
-    init(children: [Child], phase: ChildrenLoadPhase) {
+    init(children: [Child], phase: ChildrenLoadPhase, deletingChildId: String? = nil) {
         rows = children.map {
-            ChildRowState(id: $0.id, title: $0.shownName, relationshipTitle: $0.relationship.title)
+            ChildRowState(
+                id: $0.id,
+                title: $0.shownName,
+                relationshipTitle: $0.relationship.title,
+                isDeleting: $0.id == deletingChildId
+            )
         }
         switch phase {
         case .idle:
@@ -69,12 +81,82 @@ nonisolated struct ChildrenState: Equatable, Sendable {
         }
     }
 
-    static func deleteConfirmation(for child: Child) -> ChildDeleteConfirmation {
-        ChildDeleteConfirmation(
-            title: "Delete this child?",
-            message: "\(child.shownName) will be removed. This can't be undone.",
-            confirmButtonTitle: "Delete"
-        )
+    static let blockedMessage =
+        "An active list of this child can't be archived by you. The person who owns it must archive it first."
+
+    /// The confirmation for a plan; nil for a blocked plan (the banner explains instead).
+    static func deleteConfirmation(for child: Child, plan: ChildDeletionPlan) -> ChildDeleteConfirmation? {
+        switch plan {
+        case .blocked:
+            return nil
+        case .deleteNow:
+            return ChildDeleteConfirmation(
+                title: "Delete this child?",
+                message: "\(child.shownName) will be removed.",
+                confirmButtonTitle: "Delete"
+            )
+        case .archiveThenDelete(let listIds):
+            let count = listIds.count
+            return ChildDeleteConfirmation(
+                title: count == 1
+                    ? "Archive 1 list and delete this child?"
+                    : "Archive \(count) lists and delete this child?",
+                message: "\(child.shownName)'s active lists will move to Archived and can't be edited afterwards. Archived lists stay available there. This can't be undone.",
+                confirmButtonTitle: "Archive and Delete"
+            )
+        }
+    }
+
+    /// The banner for a result that did not remove the child; nil for success.
+    static func banner(for result: ChildDeletionResult) -> ChildDeletionBanner? {
+        switch result {
+        case .deleted, .archivedThenDeleted:
+            return nil
+        case .partialFailure(let archived, let total, let error):
+            return ChildDeletionBanner(state: InlineErrorBannerState(
+                message: "Archived \(archived) of \(total) lists. The child was not removed.",
+                canRetry: ChildErrorPresentation(error).isRetryable,
+                isDismissible: true
+            ))
+        case .failed(let error):
+            return ChildDeletionBanner(state: InlineErrorBannerState(
+                message: error.userMessage,
+                canRetry: ChildErrorPresentation(error).isRetryable,
+                isDismissible: true
+            ))
+        case .blocked:
+            return ChildDeletionBanner(state: InlineErrorBannerState(
+                message: blockedMessage,
+                canRetry: false,
+                isDismissible: true
+            ))
+        }
+    }
+
+    static func progressAnnouncement(for plan: ChildDeletionPlan) -> String {
+        switch plan {
+        case .archiveThenDelete: "Archiving lists"
+        case .deleteNow, .blocked: "Deleting child"
+        }
+    }
+
+    /// nil for results whose banner announces itself.
+    static func resultAnnouncement(for result: ChildDeletionResult) -> String? {
+        switch result {
+        case .deleted:
+            return "Child removed"
+        case .archivedThenDeleted(let count):
+            return count == 1
+                ? "Archived 1 list and removed the child"
+                : "Archived \(count) lists and removed the child"
+        case .partialFailure, .failed, .blocked:
+            return nil
+        }
+    }
+
+    /// False while a deletion runs or the child service is mutating.
+    static func deleteControlsEnabled(isMutating: Bool, deletingChildId: String?) -> Bool {
+        !isMutating && deletingChildId == nil
     }
 }
 
