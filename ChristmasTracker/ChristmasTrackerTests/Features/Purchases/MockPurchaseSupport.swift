@@ -108,13 +108,13 @@ func makeMockPurchaseSUT(buyer: ListItemPerson? = nil) -> MockPurchaseSUT {
     return MockPurchaseSUT(recorder: recorder, clock: clock)
 }
 
-/// Runs the body and returns the RecordPurchaseError it threw (nil when it threw nothing or
+/// Runs the body and returns the PurchaseError it threw (nil when it threw nothing or
 /// something else).
-func capturePurchaseError(_ body: () async throws -> Void) async -> RecordPurchaseError? {
+func capturePurchaseError(_ body: () async throws -> Void) async -> PurchaseError? {
     do {
         try await body()
         return nil
     } catch {
-        return error as? RecordPurchaseError
+        return error as? PurchaseError
     }
 }

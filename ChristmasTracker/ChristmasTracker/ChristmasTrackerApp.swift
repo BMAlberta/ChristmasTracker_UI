@@ -82,13 +82,13 @@ private final class LockCoordinator: InactivityLockPresenting {
 
 /// Dependency container for the composition root.
 struct AppDependencies: Sendable {
-    let apiClient: APIClient
     let authRepository: any AuthenticationRepository
     let listRepository: ListRepository
     let memberRepository: any MemberRepository
     let childRepository: any ChildRepository
     let itemRepository: ItemRepository
     let purchaseRecorder: any PurchaseRecording
+    let purchaseManager: any PurchaseManaging
     let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
     // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
@@ -99,11 +99,14 @@ struct AppDependencies: Sendable {
 
     /// Build mock dependencies (used in .mock mode and when generatedClient is unavailable).
     static func makeMock() -> AppDependencies {
-        let apiClient = MockAPIClient.withMockData()
         // One list mock is shared, so members and children act on the lists the app shows.
         let lists = MockListRepository()
+        // The recorder and the manager share one store, seeded with the mock user's own purchases
+        // so their summary rows can be opened. The mock never moves item counts or statuses.
+        let purchaseStore = MockPurchaseStore(
+            seed: MockPurchaseStore.seedPurchases(from: MockItemSeed.items, for: MockItemRepository.defaultUser)
+        )
         return AppDependencies(
-            apiClient: apiClient,
             authRepository: MockAuthenticationRepository(),
             listRepository: lists,
             memberRepository: MockMemberRepository(listRepository: lists),
@@ -111,7 +114,11 @@ struct AppDependencies: Sendable {
             itemRepository: MockItemRepository(
                 capabilities: { MockListRepository.capabilities(forListId: $0) ?? MockItemRepository.ownerCapabilities }
             ),
-            purchaseRecorder: MockPurchaseRecorder(access: { MockPurchaseAccess.fromMockSeed(itemId: $0) }),
+            purchaseRecorder: MockPurchaseRecorder(
+                access: { MockPurchaseAccess.fromMockSeed(itemId: $0) },
+                store: purchaseStore
+            ),
+            purchaseManager: MockPurchaseManager(store: purchaseStore, currentUserId: { MockItemRepository.defaultUser.id }),
             appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
         )
@@ -119,15 +126,14 @@ struct AppDependencies: Sendable {
 
     /// Build real dependencies using the already-constructed generated client for auth.
     static func makeReal(generatedClient: any APIProtocol) -> AppDependencies {
-        let apiClient = NetworkAPIClient()
-        return AppDependencies(
-            apiClient: apiClient,
+        AppDependencies(
             authRepository: GeneratedClientAuthenticationRepository(client: generatedClient),
             listRepository: GeneratedClientListRepository(client: generatedClient),
             memberRepository: GeneratedClientMemberRepository(client: generatedClient),
             childRepository: GeneratedClientChildRepository(client: generatedClient),
             itemRepository: GeneratedClientItemRepository(client: generatedClient),
             purchaseRecorder: GeneratedClientPurchaseRepository(client: generatedClient),
+            purchaseManager: GeneratedClientPurchaseManagementRepository(client: generatedClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)
@@ -140,13 +146,13 @@ struct AppDependencies: Sendable {
     /// ConfigurationError.clientUnavailable and returns nothing. No mock is constructed.
     static func makeInert() -> AppDependencies {
         AppDependencies(
-            apiClient: InertAPIClient(),
             authRepository: InertAuthenticationRepository(),
             listRepository: InertListRepository(),
             memberRepository: InertMemberRepository(),
             childRepository: InertChildRepository(),
             itemRepository: InertItemRepository(),
             purchaseRecorder: InertPurchaseRecorder(),
+            purchaseManager: InertPurchaseManager(),
             appVersionRepository: InertAppVersionRepository(),
             trackerClient: nil
         )
@@ -213,7 +219,6 @@ nonisolated func buildGeneratedClient(
 struct ChristmasTrackerApp: App {
     // MARK: - State
     @State private var authService: AuthenticationService
-    @State private var apiClient: APIClient
     @State private var listService: ListService
     @State private var itemService: ItemService
     @State private var childService: ChildService
@@ -300,7 +305,6 @@ struct ChristmasTrackerApp: App {
         )
         let dependencies = resolved.dependencies
         bootstrapState = resolved.state
-        apiClient = dependencies.apiClient
 
         // List Service
         let listDataStore = ListDataStore()
@@ -321,7 +325,10 @@ struct ChristmasTrackerApp: App {
         )
         itemService = is_
 
-        let ps = PurchaseService(repository: dependencies.purchaseRecorder)
+        let ps = PurchaseService(
+            repository: dependencies.purchaseRecorder,
+            management: dependencies.purchaseManager
+        )
         purchaseService = ps
 
         // Create session manager with production clearables (8 total; purchaseService is appended last)
@@ -423,7 +430,6 @@ struct ChristmasTrackerApp: App {
     private var appContent: some View {
         ContentView()
                 .environment(\.authenticationService, authService)
-                .environment(\.apiClient, apiClient)
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)
                 .environment(\.childService, childService)

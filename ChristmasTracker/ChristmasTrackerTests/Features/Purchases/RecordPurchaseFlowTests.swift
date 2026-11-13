@@ -82,7 +82,7 @@ struct RecordPurchaseFlowTests {
     }
 
     @Test("submitting + serverError fails with that error, for every error", arguments: PurchaseFixtures.allErrors)
-    func submittingError(error: RecordPurchaseError) {
+    func submittingError(error: PurchaseError) {
         var sut = makeSUT()
         sut.send(.submit)
         let effect = sut.send(.serverError(error))

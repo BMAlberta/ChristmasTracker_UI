@@ -4545,6 +4545,77 @@
             "$ref": "#/components/responses/InternalError"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete your own purchase",
+        "operationId": "deletePurchase",
+        "description": "Delete a purchase (purchaser only, S14). The core fields of a purchase stay immutable: to correct the quantity or cost, delete it and record a new one. The response is the deleted purchase, as GET /purchases/{id} returns it. The item status, the quantity counts and the buyer's recorded spend follow the deletion (an item that is WRAPPED or GIFTED keeps its status); clients refetch the item. It works whether or not the purchaser can still see the item. Anyone else gets 404 PURCHASE_NOT_FOUND, identical to a nonexistent id.",
+        "tags": [
+          "Purchases"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Purchase ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase deleted; the deleted purchase",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Purchase"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
       }
     },
     "/tracker/v2/purchases": {

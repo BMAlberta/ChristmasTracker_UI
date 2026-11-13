@@ -160,7 +160,7 @@ struct RecordPurchaseModelPromptTests {
     @Test("The prompt returns after a failure (retry path), still only for a known, exceeded quantity")
     func promptInFailedState() async {
         let sut = await makeSUT(remaining: 2, quantity: 3)
-        sut.repo.enqueueFailure(RecordPurchaseError.network)
+        sut.repo.enqueueFailure(PurchaseError.network)
         await sut.model.recordTapped()
         await sut.model.confirmOverPurchase()
         #expect(sut.model.flow.state == .failed(.network))

@@ -8,7 +8,6 @@
 import SwiftUI
 struct ContentView: View {
     @Environment(\.authenticationService) private var authService
-    @Environment(\.apiClient) private var apiClient
     var body: some View {
         rootView
     }
@@ -16,7 +15,7 @@ struct ContentView: View {
     private var rootView: some View {
         Group {
             if authService.isAuthenticated {
-                TabBarView(apiClient: apiClient)
+                TabBarView()
             } else {
                 LoginView()
             }
@@ -39,13 +38,11 @@ private struct ContentViewAuthenticatedPreview: View {
 //        sessionManager: SessionManager(initialClearables: [])
 //    )
     
-    @State private var apiClient = MockAPIClient.withMockData()
     @State private var authService = AuthenticationService(repository: MockAuthenticationRepository(), sessionManager: SessionManager(initialClearables: []))
     
     var body: some View {
         ContentView()
             .environment(\.authenticationService, authService)
-            .environment(\.apiClient, apiClient)
             .task {
                 await authService.login(email: "test@example.com", password: "password", rememberEmail: false)
             }

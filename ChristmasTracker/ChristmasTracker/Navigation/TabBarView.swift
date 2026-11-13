@@ -11,8 +11,6 @@ struct TabBarView: View {
     
     @State private var selection: TabSelection = .dashboard
     
-    let apiClient: APIClient
-    
     var body: some View {
         TabView(selection: $selection) {
             // Dashboard Tab
@@ -41,6 +39,6 @@ struct TabBarView: View {
 }
 
 #Preview {
-    TabBarView(apiClient: MockAPIClient.withMockData())
+    TabBarView()
         .environment(\.authenticationService, AuthenticationService(repository: MockAuthenticationRepository(), sessionManager: SessionManager(initialClearables: [])))
 }

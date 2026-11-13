@@ -52,7 +52,7 @@ struct PurchaseServiceMutatingTests {
     }
 
     @Test("isMutating is false after an error", arguments: PurchaseFixtures.allErrors)
-    func falseAfterError(error: RecordPurchaseError) async {
+    func falseAfterError(error: PurchaseError) async {
         let sut = await makePurchaseServiceSUT()
         sut.repo.enqueueFailure(error, held: true)
         let task = startRecord(sut.service)
@@ -62,7 +62,7 @@ struct PurchaseServiceMutatingTests {
         sut.repo.gate.releaseAll()
         let result = await task.value
 
-        #expect(result.thrown as? RecordPurchaseError == error)
+        #expect(result.thrown as? PurchaseError == error)
         #expect(sut.service.isMutating == false)
     }
 
@@ -104,7 +104,7 @@ struct PurchaseServiceMutatingTests {
     @Test("a failing call does not clear isMutating while another call is still running")
     func failureWhileAnotherRuns() async {
         let sut = await makePurchaseServiceSUT()
-        sut.repo.enqueueFailure(RecordPurchaseError.network, held: true)
+        sut.repo.enqueueFailure(PurchaseError.network, held: true)
         sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase(), held: true)
         let failing = startRecord(sut.service)
         await sut.repo.gate.nextHeldCall()

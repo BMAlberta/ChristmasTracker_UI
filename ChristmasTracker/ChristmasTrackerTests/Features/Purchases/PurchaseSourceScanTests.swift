@@ -128,8 +128,8 @@ struct PurchaseSourceScanTests {
     }
 
     @Test("the raw error rule does not fire on a type check, a comment or a different name", arguments: [
-        "if let typed = error as? RecordPurchaseError { throw typed }",
-        "throw RecordPurchaseError.server",
+        "if let typed = error as? PurchaseError { throw typed }",
+        "throw PurchaseError.server",
         "// String(describing: error) is never used",
         "let errorCount = 1"
     ])

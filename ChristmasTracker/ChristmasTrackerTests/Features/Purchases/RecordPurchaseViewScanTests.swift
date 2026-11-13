@@ -53,7 +53,7 @@ struct RecordPurchaseViewScanTests {
         ("let item: GiftItem", true), ("var p: Purchase", true), ("let s: ShippingStatus", true),
         ("let w: PurchaseWarning", true), ("let x = item.legacyPurchaseItem", true),
         ("sheet = PurchaseHistoryView()", true), ("let r: PurchaseResponse", true),
-        ("let item: ListItem", false), ("let e: RecordPurchaseError", false), ("let d: PurchaseDraft", false),
+        ("let item: ListItem", false), ("let e: PurchaseError", false), ("let d: PurchaseDraft", false),
         ("let p: RecordedPurchase", false), ("let s: ListItemPurchaseSummary", false),
         ("Text(\"Record Purchase\")", false), ("let r: PurchaseRowState", false)
     ])

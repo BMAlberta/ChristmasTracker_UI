@@ -100,10 +100,10 @@ struct GeneratedClientPurchaseRepositoryTests {
     }
 
     @Test("Every shipping status maps to the domain status of the same meaning", arguments: [
-        ("NOT_TRACKED", RecordedShippingStatus.notTracked), ("NOT_SHIPPED", .notShipped),
+        ("NOT_TRACKED", PurchaseShippingStatus.notTracked), ("NOT_SHIPPED", .notShipped),
         ("SHIPPED", .shipped), ("DELIVERED", .delivered)
     ])
-    func shippingStatuses(raw: String, expected: RecordedShippingStatus) async throws {
+    func shippingStatuses(raw: String, expected: PurchaseShippingStatus) async throws {
         let sut = try makePurchaseRepoSUT()
         await sut.transport.enqueue(
             status: 201, json: PurchaseWire.createdEnvelope(purchase: PurchaseWire.purchaseJSON(shippingStatus: raw))
@@ -222,7 +222,7 @@ struct GeneratedClientPurchaseRepositoryTests {
             status: 200, json: PurchaseWire.createdEnvelope(purchase: PurchaseWire.purchaseJSON(id: "purchase-9"))
         )
 
-        await #expect(throws: RecordPurchaseError.invalidResponse) {
+        await #expect(throws: PurchaseError.invalidResponse) {
             _ = try await sut.create()
         }
     }

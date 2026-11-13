@@ -161,6 +161,9 @@ nonisolated struct PurchaseRowState: Equatable, Identifiable, Sendable {
     let quantity: Int
     let totalCostText: String
     let purchaserName: String
+    /// True only for the signed-in purchaser's own purchase.
+    let canOpen: Bool
+    let accessibilityHint: String?
 }
 
 nonisolated struct ItemDetailState: Equatable, Sendable {
@@ -215,11 +218,16 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
         remainingQuantity = showsActivity ? item.quantityRemaining : nil
         purchases = showsActivity
             ? (item.purchases ?? []).map { purchase in
-                PurchaseRowState(
+                let canOpen = PurchasePermissions.canManage(
+                    purchasePurchaserId: purchase.purchaser.id, currentUserId: currentUserId
+                )
+                return PurchaseRowState(
                     id: purchase.id,
                     quantity: purchase.quantity,
                     totalCostText: itemPriceText(purchase.totalCost, currencyCode: currencyCode, locale: locale),
-                    purchaserName: purchase.purchaser.displayName
+                    purchaserName: purchase.purchaser.displayName,
+                    canOpen: canOpen,
+                    accessibilityHint: canOpen ? "Opens your purchase" : nil
                 )
             }
             : []

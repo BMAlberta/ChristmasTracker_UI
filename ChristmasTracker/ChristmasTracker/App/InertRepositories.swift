@@ -139,16 +139,26 @@ nonisolated final class InertPurchaseRecorder: PurchaseRecording {
     }
 }
 
-/// The API client of the failed state: no request is ever sent.
-nonisolated final class InertAPIClient: APIClient {
-    func request<T: Decodable & Sendable>(
-        _ method: HTTPMethod,
-        path: String,
-        body: (any Encodable & Sendable)?,
-        forceRefresh: Bool,
-        cacheScope: CacheScope
-    ) async throws -> T {
-        throw ConfigurationError.clientUnavailable
+/// Typed itself (not ConfigurationError) because PurchaseManaging throws PurchaseManagementError only.
+nonisolated final class InertPurchaseManager: PurchaseManaging {
+    @Instrumented
+    func fetchPurchase(id: String) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+
+    @Instrumented
+    func updateNotes(id: String, update: PurchaseNotesUpdate) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+
+    @Instrumented
+    func updateShipping(id: String, update: PurchaseShippingUpdate) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
+    }
+
+    @Instrumented
+    func deletePurchase(id: String) async throws -> RecordedPurchase {
+        throw PurchaseManagementError.server
     }
 }
 

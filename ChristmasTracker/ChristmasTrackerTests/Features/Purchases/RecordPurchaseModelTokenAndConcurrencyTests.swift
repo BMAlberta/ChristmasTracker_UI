@@ -159,7 +159,7 @@ struct RecordPurchaseModelTokenAndConcurrencyTests {
             sut.repo.enqueue(created: PurchaseFixtures.recordedPurchase())
             await sut.model.confirmBudget()
         case "failure":
-            sut.repo.enqueueFailure(RecordPurchaseError.server)
+            sut.repo.enqueueFailure(PurchaseError.server)
             await sut.model.confirmBudget()
         case "cancel":
             sut.model.cancel()

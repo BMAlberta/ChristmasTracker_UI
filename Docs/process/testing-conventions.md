@@ -25,11 +25,10 @@ for the right reason** before any implementation exists.
 
 - Construct the SUT through a **`makeSUT` factory** so setup is uniform.
 - **Reuse the existing mocks** — do not hand-roll a duplicate:
-  - `MockAPIClient` — `Core/Networking/MockAPIClient.swift`
   - `MockAuthenticationRepository` — `Features/Authentication/Repositories/`
   - `MockListRepository` — `Features/Lists/Repositories/`
   - `MockItemRepository` — `Features/Items/Repositories/`
-  - `MockPurchaseRepository` — `Features/Purchases/Repositories/`
+  - `MockPurchaseRecorder`, `MockPurchaseManager` — `Features/Purchases/Repositories/`
   - `MockData` (preview fixtures) — `PreviewContent/MockData.swift`
 - Mock types live alongside the production code they stand in for, not inside the test
   target, so Xcode Previews and tests share the same fixtures.

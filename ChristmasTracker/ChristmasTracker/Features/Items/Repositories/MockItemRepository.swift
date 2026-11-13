@@ -221,7 +221,7 @@ nonisolated enum MockItemSeed {
         // MEMBER of someone else's list: own surprise item and another member's.
         item("mock-item-member-1", "mock-list-member", "Garden Gloves", cents: 1899, priority: 6),
         item("mock-item-member-2", "mock-list-member", "Cookbook", cents: 3200, priority: 7,
-             status: .purchased, purchasedBy: pat, purchased: 1),
+             status: .purchased, purchasedBy: me, purchased: 1),
         item("mock-item-member-3", "mock-list-member", "My Surprise Gift", cents: 4000, offList: true, by: me),
         item("mock-item-member-4", "mock-list-member", "Casey's Surprise Gift", cents: 2500, status: .wrapped,
              offList: true, by: casey),

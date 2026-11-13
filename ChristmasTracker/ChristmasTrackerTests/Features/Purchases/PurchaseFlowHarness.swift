@@ -51,7 +51,7 @@ nonisolated struct PurchaseFlowHarness {
         send(.clockTick)
     }
 
-    mutating func driveToFailed(_ error: RecordPurchaseError = .network) {
+    mutating func driveToFailed(_ error: PurchaseError = .network) {
         send(.submit)
         send(.serverError(error))
     }

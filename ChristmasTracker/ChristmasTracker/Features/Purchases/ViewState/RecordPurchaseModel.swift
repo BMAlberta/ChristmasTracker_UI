@@ -18,6 +18,8 @@ nonisolated enum RecordPurchaseFinish: Equatable, Sendable {
     case recorded(RecordedPurchase)
     case itemGone
     case cancelled
+    /// After an unconfirmed failure: close the form so the host can force-refresh the item.
+    case checkItem
 }
 
 @MainActor
@@ -197,6 +199,27 @@ final class RecordPurchaseModel {
         await perform(draft: draft, confirmationToken: confirmationToken)
     }
 
+    /// After an unconfirmed failure only: closes the form so the item can be checked.
+    func checkItem() {
+        guard isAllowed else { return }
+        if flow.handle(.checkItem) == .checkItem {
+            activeDraft = nil
+            finish = .checkItem
+        }
+    }
+
+    /// After an unconfirmed failure only: a fresh submit of the same draft with no token, which
+    /// runs the budget confirmation again.
+    func recordAgain() async {
+        guard isAllowed else { return }
+        guard case .send(let confirmationToken)? = flow.handle(.recordAgain) else { return }
+        guard let draft = activeDraft else {
+            _ = flow.handle(.serverError(.server))
+            return
+        }
+        await perform(draft: draft, confirmationToken: confirmationToken)
+    }
+
     func dismissError() {
         guard isAllowed else { return }
         _ = flow.handle(.dismissError)
@@ -230,7 +253,7 @@ final class RecordPurchaseModel {
                 itemId: item.id, draft: draft, confirmationToken: confirmationToken
             )
             apply(outcome)
-        } catch let error as RecordPurchaseError {
+        } catch let error as PurchaseError {
             _ = flow.handle(.serverError(error))
             if error.closesForm { finish = .itemGone }
         } catch is CancellationError {

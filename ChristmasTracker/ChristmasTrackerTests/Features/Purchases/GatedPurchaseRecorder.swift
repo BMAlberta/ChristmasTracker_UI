@@ -5,7 +5,7 @@
 //  Story I4a-B: a scripted, optionally gated PurchaseRecording fake for the PurchaseService tests.
 //
 //  Determinism: no sleeps and no polling. Each call pops one scripted step (an empty script answers
-//  RecordPurchaseError.server). A step marked `held` suspends the call on a gate until the test
+//  PurchaseError.server). A step marked `held` suspends the call on a gate until the test
 //  releases it, and announces itself through `gate.nextHeldCall()` (a continuation handshake, see
 //  HeldCallGate), so a test can wait until the service has really entered the repository, act (for
 //  example tear the session down), and then release.
@@ -75,7 +75,7 @@ nonisolated final class GatedPurchaseRecorder: PurchaseRecording, Sendable {
         let step: Step = state.withLock { state in
             state.calls.append(call)
             if state.steps.isEmpty {
-                return Step(outcome: .failure(RecordPurchaseError.server), held: false)
+                return Step(outcome: .failure(PurchaseError.server), held: false)
             }
             return state.steps.removeFirst()
         }
