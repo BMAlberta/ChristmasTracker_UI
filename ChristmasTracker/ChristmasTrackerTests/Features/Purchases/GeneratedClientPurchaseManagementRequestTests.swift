@@ -184,7 +184,7 @@ struct GeneratedClientPurchaseManagementRequestTests {
         await sut.transport.enqueue(status: 200, json: okBody)
 
         _ = try await sut.repo.updateShipping(
-            id: "purchase-1", update: PurchaseShippingUpdate(status: pair.0, trackingNumber: nil)
+            id: "purchase-1", update: PurchaseShippingUpdate(status: pair.0, trackingChange: .unchanged)
         )
 
         let request = try await sut.lastRequest()
@@ -200,7 +200,7 @@ struct GeneratedClientPurchaseManagementRequestTests {
         await sut.transport.enqueue(status: 200, json: okBody)
 
         _ = try await sut.repo.updateShipping(
-            id: "purchase-1", update: PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-FAKE-0001")
+            id: "purchase-1", update: PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-FAKE-0001"))
         )
 
         let body = try #require(try await sut.lastRequest().jsonObject)
@@ -215,7 +215,7 @@ struct GeneratedClientPurchaseManagementRequestTests {
         await sut.transport.enqueue(status: 200, json: okBody)
 
         _ = try await sut.repo.updateShipping(
-            id: "purchase-1", update: PurchaseShippingUpdate(status: .delivered, trackingNumber: "TRK-FAKE-0002")
+            id: "purchase-1", update: PurchaseShippingUpdate(status: .delivered, trackingChange: .set("TRK-FAKE-0002"))
         )
 
         #expect(try await sut.lastRequest().jsonObject?["notes"] == nil)

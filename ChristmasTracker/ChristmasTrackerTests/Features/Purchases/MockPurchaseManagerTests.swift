@@ -61,7 +61,7 @@ struct MockPurchaseManagerTests {
         }
         let shippingError = await sut.managementError {
             _ = try await sut.manager.updateShipping(
-                id: "purchase-missing", update: PurchaseShippingUpdate(status: .shipped, trackingNumber: nil)
+                id: "purchase-missing", update: PurchaseShippingUpdate(status: .shipped, trackingChange: .unchanged)
             )
         }
         let deleteError = await sut.managementError { _ = try await sut.manager.deletePurchase(id: "purchase-missing") }
@@ -105,7 +105,7 @@ struct MockPurchaseManagerTests {
         }
         let shippingError = await sut.managementError {
             _ = try await sut.manager.updateShipping(
-                id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-FAKE-1")
+                id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-FAKE-1"))
             )
         }
         let deleteError = await sut.managementError { _ = try await sut.manager.deletePurchase(id: created.id) }
@@ -126,7 +126,7 @@ struct MockPurchaseManagerTests {
 
         _ = try? await sut.manager.updateNotes(id: created.id, update: PurchaseNotesUpdate(change: .clear))
         _ = try? await sut.manager.updateShipping(
-            id: created.id, update: PurchaseShippingUpdate(status: .delivered, trackingNumber: "TRK-FAKE-1")
+            id: created.id, update: PurchaseShippingUpdate(status: .delivered, trackingChange: .set("TRK-FAKE-1"))
         )
         _ = try? await sut.manager.deletePurchase(id: created.id)
         sut.user.set(MockManagerKit.sam.id)
@@ -253,7 +253,7 @@ struct MockPurchaseManagerTests {
         let created = try await sut.record()
 
         let updated = try await sut.manager.updateShipping(
-            id: created.id, update: PurchaseShippingUpdate(status: status, trackingNumber: nil)
+            id: created.id, update: PurchaseShippingUpdate(status: status, trackingChange: .unchanged)
         )
 
         #expect(updated.shippingStatus == status)
@@ -266,7 +266,7 @@ struct MockPurchaseManagerTests {
         let created = try await sut.record()
 
         let updated = try await sut.manager.updateShipping(
-            id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-FAKE-0001")
+            id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-FAKE-0001"))
         )
 
         #expect(updated.trackingNumber == "TRK-FAKE-0001")
@@ -279,7 +279,7 @@ struct MockPurchaseManagerTests {
         let created = try await sut.record(trackingNumber: "TRK-FAKE-0002")
 
         let updated = try await sut.manager.updateShipping(
-            id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingNumber: nil)
+            id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingChange: .unchanged)
         )
 
         #expect(updated.trackingNumber == "TRK-FAKE-0002")
@@ -291,7 +291,7 @@ struct MockPurchaseManagerTests {
         let created = try await sut.record(quantity: 3, amount: "30", notes: "Original note")
 
         let updated = try await sut.manager.updateShipping(
-            id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-FAKE-0003")
+            id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-FAKE-0003"))
         )
 
         #expect(updated.id == created.id)
@@ -312,7 +312,7 @@ struct MockPurchaseManagerTests {
     private func ship(
         _ sut: MockManagerSUT, _ id: String, _ status: PurchaseShippingStatus
     ) async throws -> RecordedPurchase {
-        try await sut.manager.updateShipping(id: id, update: PurchaseShippingUpdate(status: status, trackingNumber: nil))
+        try await sut.manager.updateShipping(id: id, update: PurchaseShippingUpdate(status: status, trackingChange: .unchanged))
     }
 
     @Test("a new purchase has no shipping timestamps and starts NOT_TRACKED")
@@ -429,7 +429,7 @@ struct MockPurchaseManagerTests {
         }
         let shippingError = await sut.managementError {
             _ = try await sut.manager.updateShipping(
-                id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingNumber: nil)
+                id: created.id, update: PurchaseShippingUpdate(status: .shipped, trackingChange: .unchanged)
             )
         }
 

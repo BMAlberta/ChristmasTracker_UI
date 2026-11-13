@@ -68,7 +68,7 @@ struct PurchaseDetailModelShippingTests {
         #expect(sut.callsAfterLoad == [
             .updateShipping(
                 id: PurchaseDetailTest.purchaseId,
-                update: PurchaseShippingUpdate(status: .shipped, trackingNumber: Self.trackingNumber)
+                update: PurchaseShippingUpdate(status: .shipped, trackingChange: .set(Self.trackingNumber))
             )
         ])
         #expect(sut.model.shipping == PurchaseShippingSectionState(purchase: returned))
@@ -91,7 +91,7 @@ struct PurchaseDetailModelShippingTests {
         #expect(sut.callsAfterLoad == [
             .updateShipping(
                 id: PurchaseDetailTest.purchaseId,
-                update: PurchaseShippingUpdate(status: .delivered, trackingNumber: nil)
+                update: PurchaseShippingUpdate(status: .delivered, trackingChange: .unchanged)
             )
         ])
     }
@@ -132,8 +132,8 @@ struct PurchaseDetailModelShippingTests {
         #expect(sut.callsAfterLoad.count == 1)
     }
 
-    @Test("An empty tracking field is never sent")
-    func emptyTrackingNeverSent() async {
+    @Test("Emptying a saved tracking field alongside a status change sends a clear")
+    func emptyTrackingSendsClear() async {
         let sut = await makeLoadedPurchaseDetailSUT(purchase: PurchaseDetailTest.own(trackingNumber: "TRK-OLD-1", status: .shipped))
         sut.management.enqueue(PurchaseDetailTest.own(trackingNumber: "TRK-OLD-1", status: .delivered))
         sut.setShipping(status: .delivered, tracking: "")
@@ -143,7 +143,7 @@ struct PurchaseDetailModelShippingTests {
         #expect(sut.callsAfterLoad == [
             .updateShipping(
                 id: PurchaseDetailTest.purchaseId,
-                update: PurchaseShippingUpdate(status: .delivered, trackingNumber: nil)
+                update: PurchaseShippingUpdate(status: .delivered, trackingChange: .clear)
             )
         ])
     }

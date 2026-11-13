@@ -60,9 +60,9 @@ struct PurchaseServiceManagementTests {
 
     @Test("the shipping update reaches the repository unchanged, with and without a tracking number",
           arguments: [
-        PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-FAKE-0001"),
-        PurchaseShippingUpdate(status: .notShipped, trackingNumber: nil),
-        PurchaseShippingUpdate(status: .delivered, trackingNumber: nil)
+        PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-FAKE-0001")),
+        PurchaseShippingUpdate(status: .notShipped, trackingChange: .unchanged),
+        PurchaseShippingUpdate(status: .delivered, trackingChange: .unchanged)
     ])
     func shippingUpdateIsPassedThrough(update: PurchaseShippingUpdate) async throws {
         let sut = await makeManagementServiceSUT()

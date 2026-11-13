@@ -97,7 +97,7 @@ nonisolated enum ManagementOp: CaseIterable, Sendable, CustomTestStringConvertib
     var isRetriedOn429: Bool { self == .get }
 
     static let defaultNotes = PurchaseNotesUpdate(change: .set("Gift wrap please"))
-    static let defaultShipping = PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-FAKE-0001")
+    static let defaultShipping = PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-FAKE-0001"))
 
     func call(
         _ repo: any PurchaseManaging,

@@ -136,7 +136,7 @@ nonisolated final class MockPurchaseManager: PurchaseManaging, Sendable {
                 deliveredAt = deliveredAt ?? Date()
             }
             return current.replacing(
-                trackingNumber: update.trackingNumber.map { .some($0) },
+                trackingNumber: update.wireTrackingNumber.map { (wire: String) -> String? in wire.isEmpty ? nil : wire },
                 shippingStatus: update.status,
                 shippedAt: .some(shippedAt),
                 deliveredAt: .some(deliveredAt)
