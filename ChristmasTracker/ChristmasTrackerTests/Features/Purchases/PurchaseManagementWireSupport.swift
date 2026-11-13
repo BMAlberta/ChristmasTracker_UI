@@ -37,6 +37,54 @@ nonisolated enum ManagementWire {
         ListWire.success(data: purchase)
     }
 
+    /// How a nullable text member appears in a purchase body (S15): explicit null, the key left out,
+    /// or a literal string.
+    enum WireText: Sendable {
+        case null
+        case absent
+        case text(String)
+
+        /// The `"key": value, ` fragment (empty when the key is absent).
+        func member(_ key: String) -> String {
+            switch self {
+            case .null: "\"\(key)\": null, "
+            case .absent: ""
+            case .text(let value): "\"\(key)\": \"\(value)\", "
+            }
+        }
+    }
+
+    /// One Purchase body where `trackingNumber` and `notes` can be null, absent, "" or a value.
+    /// Every other member is the fixed fake purchase shape with item {id, name, listId}.
+    static func purchaseJSON(
+        trackingNumber: WireText,
+        notes: WireText,
+        shippingStatus: String = "SHIPPED"
+    ) -> String {
+        """
+        { "id": "purchase-1", "itemId": "item-1", "quantity": 1, "totalCost": 79.99, \
+        "storeName": null, \(notes.member("notes"))"confirmationNumber": null, \
+        \(trackingNumber.member("trackingNumber"))"shippingStatus": "\(shippingStatus)", \
+        "shippedAt": null, "deliveredAt": null, \
+        "purchaser": { "id": "user-3", "displayName": "Sam Buyer" }, \
+        "recipient": { "id": "user-1", "displayName": "Pat Recipient" }, \
+        "item": { "id": "item-1", "name": "Fake Lamp", "listId": "list-1" }, \
+        "purchasedAt": "2026-01-05T08:30:00.000Z", "createdAt": "2026-01-05T08:30:01.000Z", \
+        "updatedAt": "2026-01-05T08:30:02.000Z" }
+        """
+    }
+
+    /// The request body with sorted keys and no insignificant whitespace, so a test can assert the
+    /// exact JSON without depending on the encoder's key order. Nil when the body is not a JSON object.
+    static func canonicalBody(_ data: Data?) -> String? {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sorted = try? JSONSerialization.data(
+                withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]
+              ) else { return nil }
+        return String(decoding: sorted, as: UTF8.self)
+    }
+
     static let purchaseNotFound = ListWire.errorJSON(
         code: 4005, errorCode: "PURCHASE_NOT_FOUND", message: "Purchase not found"
     )

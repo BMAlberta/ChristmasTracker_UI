@@ -26,6 +26,13 @@ private nonisolated func mapRecordedShippingStatus(_ status: Components.Schemas.
     }
 }
 
+/// The server may send null or an empty string for a cleared optional text field. Both (and a
+/// whitespace-only value) mean "none" and map to nil; any other value is kept exactly as received.
+private nonisolated func nilIfBlank(_ value: String?) -> String? {
+    guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+    return value
+}
+
 nonisolated func mapRecordedPurchase(_ purchase: Components.Schemas.Purchase) throws -> RecordedPurchase {
     RecordedPurchase(
         id: purchase.id,
@@ -33,9 +40,9 @@ nonisolated func mapRecordedPurchase(_ purchase: Components.Schemas.Purchase) th
         quantity: purchase.quantity,
         totalCost: try purchaseMoney(purchase.totalCost),
         storeName: purchase.storeName,
-        notes: purchase.notes,
+        notes: nilIfBlank(purchase.notes),
         confirmationNumber: purchase.confirmationNumber,
-        trackingNumber: purchase.trackingNumber,
+        trackingNumber: nilIfBlank(purchase.trackingNumber),
         shippingStatus: mapRecordedShippingStatus(purchase.shippingStatus),
         shippedAt: purchase.shippedAt,
         deliveredAt: purchase.deliveredAt,
