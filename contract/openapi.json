@@ -4421,7 +4421,7 @@
       "get": {
         "summary": "Get purchase by ID",
         "operationId": "getPurchase",
-        "description": "Get purchase details (purchaser or list owner only)",
+        "description": "Get purchase details (purchaser only; anyone else gets 404 PURCHASE_NOT_FOUND (P11))",
         "tags": [
           "Purchases"
         ],
@@ -4521,11 +4521,13 @@
                   "notes": {
                     "type": "string",
                     "maxLength": 1000,
+                    "description": "An empty string clears the field.",
                     "example": "Arrived early!"
                   },
                   "trackingNumber": {
                     "type": "string",
                     "maxLength": 100,
+                    "description": "An empty string clears the field.",
                     "example": "1Z999AA10123456784"
                   }
                 }
@@ -4825,6 +4827,7 @@
                   "trackingNumber": {
                     "type": "string",
                     "maxLength": 100,
+                    "description": "An empty string clears the field.",
                     "example": "1Z999AA10123456784"
                   }
                 }
