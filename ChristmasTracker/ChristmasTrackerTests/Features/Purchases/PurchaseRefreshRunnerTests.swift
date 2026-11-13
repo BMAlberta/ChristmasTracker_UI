@@ -66,7 +66,9 @@ struct PurchaseRefreshRunnerTests {
         sut.itemRepo.enqueueFetchItems(.success([item, otherItem]), held: true)
         sut.listRepo.enqueueFetchListDetail(.success(ListFixtures.listDetail()), held: true)
         let plan = steps(sut)
-        #expect(plan == [.itemDetail(id: "item-1"), .itemsRefresh, .listDetail(id: "list-1")])
+        // EDITED (I5a-B): the plan gained the final .invalidateSpending step (a no-op for this runner,
+        // which has no spending caches).
+        #expect(plan == [.itemDetail(id: "item-1"), .itemsRefresh, .listDetail(id: "list-1"), .invalidateSpending])
 
         let task = Task { @MainActor in await sut.runner.run(plan) }
 
@@ -124,7 +126,10 @@ struct PurchaseRefreshRunnerTests {
     func itemsLoadWhenListNotHeld() async {
         let sut = makeSUT()
         let plan = steps(sut)
-        #expect(plan == [.itemDetail(id: "item-1"), .itemsLoad(listId: "list-1"), .listDetail(id: "list-1")])
+        // EDITED (I5a-B): the plan gained the final .invalidateSpending step.
+        #expect(plan == [
+            .itemDetail(id: "item-1"), .itemsLoad(listId: "list-1"), .listDetail(id: "list-1"), .invalidateSpending
+        ])
         sut.itemRepo.enqueueFetchItemDetail(.success(item))
         sut.itemRepo.enqueueFetchItems(.success([item]))
         sut.listRepo.enqueueFetchListDetail(.success(ListFixtures.listDetail()))

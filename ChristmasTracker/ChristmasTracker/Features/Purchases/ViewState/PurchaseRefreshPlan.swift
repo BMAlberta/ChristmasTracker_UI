@@ -17,14 +17,17 @@ nonisolated enum PurchaseRefreshStep: Equatable, Sendable {
     case itemsLoad(listId: String)
     /// listService.refreshListDetail(id:)
     case listDetail(id: String)
+    /// Marks the stats and budget caches stale (spending changed). Always the last step.
+    case invalidateSpending
 }
 
 nonisolated enum PurchaseRefreshPlan {
-    /// Always three steps in this order: the item detail, then the items (refresh in place or
-    /// load, the same choice as the list detail refresh), then the list detail.
+    /// Always four steps in this order: the item detail, then the items (refresh in place or
+    /// load, the same choice as the list detail refresh), then the list detail, then the spending
+    /// cache invalidation.
     static func steps(itemId: String, listId: String, currentItemsListId: String?) -> [PurchaseRefreshStep] {
         let itemsStep: PurchaseRefreshStep = currentItemsListId == listId ? .itemsRefresh : .itemsLoad(listId: listId)
-        return [.itemDetail(id: itemId), itemsStep, .listDetail(id: listId)]
+        return [.itemDetail(id: itemId), itemsStep, .listDetail(id: listId), .invalidateSpending]
     }
 
     /// After deleting a purchase the refreshes are exactly the ones after recording one.

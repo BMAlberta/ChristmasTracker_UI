@@ -16,6 +16,7 @@ struct ItemDetailView: View {
 
     @Environment(\.itemService) private var itemService
     @Environment(\.listService) private var listService
+    @Environment(\.spendingCacheInvalidator) private var spendingCacheInvalidator
     @Environment(\.authenticationService) private var authenticationService
     @Environment(\.dismiss) private var dismiss
 
@@ -331,7 +332,11 @@ struct ItemDetailView: View {
     }
 
     private var refreshRunner: PurchaseRefreshRunner {
-        PurchaseRefreshRunner(itemService: itemService, listService: listService)
+        PurchaseRefreshRunner(
+            itemService: itemService,
+            listService: listService,
+            spendingCaches: spendingCacheInvalidator
+        )
     }
 
     /// Runs the refresh plan in order. A failed refresh never turns the recorded purchase into an

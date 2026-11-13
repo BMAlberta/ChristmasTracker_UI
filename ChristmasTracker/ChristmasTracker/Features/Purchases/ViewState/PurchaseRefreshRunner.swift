@@ -15,9 +15,16 @@ final class PurchaseRefreshRunner {
     private let itemService: ItemService
     private let listService: ListService
 
-    init(itemService: ItemService, listService: ListService) {
+    private let spendingCaches: (any SpendingCacheInvalidating)?
+
+    init(
+        itemService: ItemService,
+        listService: ListService,
+        spendingCaches: (any SpendingCacheInvalidating)? = nil
+    ) {
         self.itemService = itemService
         self.listService = listService
+        self.spendingCaches = spendingCaches
     }
 
     func run(_ steps: [PurchaseRefreshStep]) async {
@@ -33,6 +40,7 @@ final class PurchaseRefreshRunner {
             case .itemsRefresh: await itemService.refreshItems()
             case .itemsLoad(let listId): await itemService.loadItems(listId: listId)
             case .listDetail(let id): _ = await listService.refreshListDetail(id: id)
+            case .invalidateSpending: spendingCaches?.markSpendingStale()
             }
         }
     }

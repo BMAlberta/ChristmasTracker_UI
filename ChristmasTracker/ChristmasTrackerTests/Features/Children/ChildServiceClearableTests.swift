@@ -45,7 +45,10 @@ struct ChildServiceClearableTests {
             lockController: lockController,
             childService: childService,
             // EDITED (I4a-B): the new final parameter of makeProductionClearables.
-            purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown }))
+            purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown })),
+            // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
+            statsService: StatsService(repository: GatedStatsLoader()),
+            budgetService: BudgetService(repository: GatedBudgetManager())
         )
         return SUT(
             clearables: clearables, childService: childService, repo: repo,
@@ -55,14 +58,18 @@ struct ChildServiceClearableTests {
 
     // EDITED (I4a-B): count 7 -> 8 and the name no longer says "last". Reason: the PurchaseService
     // clearable is appended last (index 7); the ChildService keeps index 6.
-    @Test("makeProductionClearables(childService:) returns 8 clearables and the ChildService keeps index 6")
+    // EDITED (I5a-B): count 8 -> 10. Reason: two session-safe services were added to the teardown list
+    // (StatsService at index 8, BudgetService at index 9); the ChildService keeps index 6.
+    @Test("makeProductionClearables(childService:) returns 10 clearables and the ChildService keeps index 6")
     func childServiceKeepsIndexSix() {
         let sut = makeSUT()
 
-        #expect(sut.clearables.count == 8)
+        #expect(sut.clearables.count == 10)
         #expect(sut.clearables[6] is ChildService, "the ChildService must come after the lock controller")
         #expect(sut.clearables[6] === sut.childService, "the registered clearable is the very instance passed in")
-        #expect(sut.clearables[7] is PurchaseService, "the PurchaseService clearable is appended last")
+        #expect(sut.clearables[7] is PurchaseService, "the PurchaseService clearable keeps index 7")
+        #expect(sut.clearables[8] is StatsService, "the StatsService clearable is at index 8")
+        #expect(sut.clearables[9] is BudgetService, "the BudgetService clearable is appended last")
     }
 
     // EDITED (I4a-B): the title said "the existing six"; the ChildService (index 6) is now also pinned

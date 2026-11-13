@@ -21,6 +21,7 @@ struct ManagePurchaseView: View {
     @Environment(\.purchaseService) private var purchaseService
     @Environment(\.itemService) private var itemService
     @Environment(\.listService) private var listService
+    @Environment(\.spendingCacheInvalidator) private var spendingCacheInvalidator
 
     // The environment service is not readable in init, so the model is built once, in `.task`,
     // never in `body`. Until then a progress view shows.
@@ -38,7 +39,11 @@ struct ManagePurchaseView: View {
 
     private func buildModelOnce() {
         guard model == nil else { return }
-        let runner = PurchaseRefreshRunner(itemService: itemService, listService: listService)
+        let runner = PurchaseRefreshRunner(
+            itemService: itemService,
+            listService: listService,
+            spendingCaches: spendingCacheInvalidator
+        )
         let items = itemService
         let refresh = PurchaseDetailRefresh(
             run: { steps, shouldContinue in await runner.run(steps, while: shouldContinue) },

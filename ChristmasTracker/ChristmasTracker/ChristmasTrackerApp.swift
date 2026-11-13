@@ -89,6 +89,8 @@ struct AppDependencies: Sendable {
     let itemRepository: ItemRepository
     let purchaseRecorder: any PurchaseRecording
     let purchaseManager: any PurchaseManaging
+    let statsLoader: any StatsLoading
+    let budgetManager: any BudgetManaging
     let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
     // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
@@ -106,6 +108,9 @@ struct AppDependencies: Sendable {
         let purchaseStore = MockPurchaseStore(
             seed: MockPurchaseStore.seedPurchases(from: MockItemSeed.items, for: MockItemRepository.defaultUser)
         )
+        // The stats and budget mocks share one store seeded with the current year, so a budget
+        // created through one shows in the other. The mock never moves purchase or item data.
+        let budgetStore = MockBudgetStore(currentYear: Calendar.current.component(.year, from: Date()))
         return AppDependencies(
             authRepository: MockAuthenticationRepository(),
             listRepository: lists,
@@ -119,6 +124,8 @@ struct AppDependencies: Sendable {
                 store: purchaseStore
             ),
             purchaseManager: MockPurchaseManager(store: purchaseStore, currentUserId: { MockItemRepository.defaultUser.id }),
+            statsLoader: MockStatsRepository(store: budgetStore),
+            budgetManager: MockBudgetRepository(store: budgetStore),
             appVersionRepository: MockAppVersionRepository(),
             trackerClient: nil
         )
@@ -134,6 +141,8 @@ struct AppDependencies: Sendable {
             itemRepository: GeneratedClientItemRepository(client: generatedClient),
             purchaseRecorder: GeneratedClientPurchaseRepository(client: generatedClient),
             purchaseManager: GeneratedClientPurchaseManagementRepository(client: generatedClient),
+            statsLoader: GeneratedClientStatsRepository(client: generatedClient),
+            budgetManager: GeneratedClientBudgetRepository(client: generatedClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)
@@ -153,6 +162,8 @@ struct AppDependencies: Sendable {
             itemRepository: InertItemRepository(),
             purchaseRecorder: InertPurchaseRecorder(),
             purchaseManager: InertPurchaseManager(),
+            statsLoader: InertStatsLoader(),
+            budgetManager: InertBudgetManager(),
             appVersionRepository: InertAppVersionRepository(),
             trackerClient: nil
         )
@@ -223,6 +234,9 @@ struct ChristmasTrackerApp: App {
     @State private var itemService: ItemService
     @State private var childService: ChildService
     @State private var purchaseService: PurchaseService
+    @State private var statsService: StatsService
+    @State private var budgetService: BudgetService
+    @State private var spendingCacheInvalidator: SpendingCacheInvalidator
     @State private var showBiometricSetup = false
     @State private var versionGate: VersionGate
     @State private var versionService: VersionService
@@ -331,7 +345,14 @@ struct ChristmasTrackerApp: App {
         )
         purchaseService = ps
 
-        // Create session manager with production clearables (8 total; purchaseService is appended last)
+        let stats = StatsService(repository: dependencies.statsLoader)
+        statsService = stats
+        let budgets = BudgetService(repository: dependencies.budgetManager)
+        budgetService = budgets
+        spendingCacheInvalidator = SpendingCacheInvalidator(statsService: stats, budgetService: budgets)
+
+        // Create session manager with production clearables (10 total; statsService and
+        // budgetService are appended last, after purchaseService)
         let clearables = makeProductionClearables(
             listDataStore: listDataStore,
             itemDataStore: itemDataStore,
@@ -340,7 +361,9 @@ struct ChristmasTrackerApp: App {
             networkCache: NetworkCache.shared,
             lockController: lc,
             childService: cs,
-            purchaseService: ps
+            purchaseService: ps,
+            statsService: stats,
+            budgetService: budgets
         )
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
@@ -434,6 +457,9 @@ struct ChristmasTrackerApp: App {
                 .environment(\.itemService, itemService)
                 .environment(\.childService, childService)
                 .environment(\.purchaseService, purchaseService)
+                .environment(\.statsService, statsService)
+                .environment(\.budgetService, budgetService)
+                .environment(\.spendingCacheInvalidator, spendingCacheInvalidator)
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         lockController.authService = authService

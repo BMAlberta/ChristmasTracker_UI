@@ -41,18 +41,26 @@ struct PurchaseServiceClearableTests {
             networkCache: NetworkCache(),
             lockController: InactivityLockController(policy: FakePolicy10()),
             childService: ChildService(repository: GatedChildRepository()),
-            purchaseService: purchaseService
+            purchaseService: purchaseService,
+            // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
+            statsService: StatsService(repository: GatedStatsLoader()),
+            budgetService: BudgetService(repository: GatedBudgetManager())
         )
         return SUT(clearables: clearables, purchaseService: purchaseService, repo: repo)
     }
 
-    @Test("makeProductionClearables returns 8 clearables with the PurchaseService appended last, at index 7")
+    // EDITED (I5a-B): count 8 -> 10 and the name no longer says "last". Reason: two session-safe services
+    // were added to the teardown list (StatsService at index 8, BudgetService at index 9); the
+    // PurchaseService keeps index 7.
+    @Test("makeProductionClearables returns 10 clearables with the PurchaseService at index 7")
     func purchaseServiceIsEighthAndLast() {
         let sut = makeSUT()
 
-        #expect(sut.clearables.count == 8)
+        #expect(sut.clearables.count == 10)
         #expect(sut.clearables[7] is PurchaseService, "the PurchaseService must come after the ChildService")
         #expect(sut.clearables[7] === sut.purchaseService, "the registered clearable is the very instance passed in")
+        #expect(sut.clearables[8] is StatsService, "the StatsService clearable follows the PurchaseService")
+        #expect(sut.clearables[9] is BudgetService, "the BudgetService clearable is appended last")
     }
 
     @Test("the existing seven clearables keep their indices")
