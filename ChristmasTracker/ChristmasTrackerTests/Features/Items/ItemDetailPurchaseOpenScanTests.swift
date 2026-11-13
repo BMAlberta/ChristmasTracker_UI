@@ -99,11 +99,11 @@ struct ItemDetailPurchaseOpenScanTests {
         #expect(detail.bare.contains("case .itemGone"))
     }
 
-    @Test("ItemDetailView runs the delete plan after .deleted and dismisses the pushed screen on .deleted and .gone")
+    @Test("ItemDetailView dismisses the pushed screen on .deleted and .gone; the delete plan now runs in the model (I4c-C)")
     func handlesDeleted() throws {
         let views = try itemViews()
         let combined = views.map(\.bare).joined(separator: "\n")
-        #expect(combined.contains("PurchaseRefreshPlan.stepsAfterDelete("))
+        #expect(!combined.contains("PurchaseRefreshPlan.stepsAfterDelete("), "the model runs the delete refresh, once")
         #expect(combined.contains(".deleted"))
         #expect(combined.contains(".gone"))
         #expect(combined.contains("PurchaseDetailFinish"))

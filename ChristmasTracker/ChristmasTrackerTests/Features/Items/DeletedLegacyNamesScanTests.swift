@@ -18,7 +18,7 @@
 //
 //  Not scanned on purpose: the bare word for the legacy purchase model (too generic; the
 //  generated `Components.Schemas.` purchase type and the live domain words use it), and the
-//  device fingerprint service (the inventory has not decided it).
+//  device fingerprint service (deleted in I4b; it is not in the scan list).
 //
 
 import Testing

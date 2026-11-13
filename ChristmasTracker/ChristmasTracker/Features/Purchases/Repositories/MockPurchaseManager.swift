@@ -135,8 +135,20 @@ nonisolated final class MockPurchaseManager: PurchaseManaging, Sendable {
             case .delivered:
                 deliveredAt = deliveredAt ?? Date()
             }
+            // .unchanged keeps the stored value; .clear stores nil; .set stores the value, or nil
+            // when it is blank. An empty string is never stored.
+            let trackingNumber: String??
+            switch update.trackingChange {
+            case .unchanged:
+                trackingNumber = nil
+            case .clear:
+                trackingNumber = .some(nil)
+            case .set(let value):
+                let isBlank = value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                trackingNumber = .some(isBlank ? nil : value)
+            }
             return current.replacing(
-                trackingNumber: update.trackingNumber.map { .some($0) },
+                trackingNumber: trackingNumber,
                 shippingStatus: update.status,
                 shippedAt: .some(shippedAt),
                 deliveredAt: .some(deliveredAt)

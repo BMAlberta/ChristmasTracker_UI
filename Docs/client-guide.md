@@ -666,11 +666,19 @@ The token is ignored as soon as another purchase changes the buyer's spend. A re
 
 **Quantity and item status (P24).** `POST /items/{itemId}/purchases` accepts any `quantity` of at least 1. It does not compare the quantity with the item's remaining quantity and does not check the item status: a PARTIAL or PURCHASED item can still receive purchases, including from someone who already bought part of it. After each purchase the server recomputes the item status from the sum of all purchase quantities (0 is `AVAILABLE`, below `quantityRequested` is `PARTIAL`, `quantityRequested` or more is `PURCHASED`). Clients use `quantityRemaining` (see §7.5) to cap the quantity in the purchase form or to warn before an over-purchase.
 
+**Statuses of `POST /items/{itemId}/purchases`.** It never returns 409 or 422. Its statuses are 200, 201, 400, 401, 403, 404, 429 and 500. Two concurrent identical requests both succeed with 201 (when neither needs a budget confirmation) because the server does not de-duplicate. It does not check the remaining quantity or the item status (P24).
+
+**Token lifetime.** The budget confirmation token is valid for strictly less than 300 whole seconds after the warning: it is signed with `exp = iat + 300` and verified with no clock tolerance.
+
+**Response invariants.**
+- A `200` always has `data.status` `"confirmation_required"`, `data.purchase` `null`, `data.requiresConfirmation` `true` and a non-empty top-level `warnings` array. Every entry carries the same `confirmationToken`.
+- A `201` always has `data.status` `"created"`, a non-null `data.purchase`, `data.requiresConfirmation` `false` and no top-level `warnings` key.
+
 **Purchases on WRAPPED and GIFTED items (S13).** A purchase on a `WRAPPED` or `GIFTED` item is recorded and counted in `quantityPurchased` and `quantityRemaining`, but it never changes that status. The status of `AVAILABLE`, `PARTIAL` and `PURCHASED` items is recomputed from the purchases as described above.
 
 **Deleting a purchase (S14).** `DELETE /tracker/v2/purchases/<purchaseId>` with a bearer token removes a purchase. Only the purchaser can do it. Anyone else (another member, the list owner or co-owner, an admin-role user, a stranger) and any id that does not exist get the same `404 PURCHASE_NOT_FOUND`, so a client cannot tell them apart. A second delete of the same id is also a 404. A malformed id is a 400. An archived list does not block the delete. It also works when the purchaser can no longer see the item, for example after leaving the list or being removed from it, or after the recipient removed the item.
 
-The response is `200` with the deleted purchase, in the same shape `GET /purchases/{id}` returns. It does not include the item. Refetch the item (`GET /items/{id}` or the list's items) to show the new status and counts, as you do after creating a purchase; the refetch can be a 404 if the item is no longer visible to the user.
+The status is `200`. The response is the deleted purchase, including its item reference `{id, name, listId}`; it does not include the item's updated status or counts, so refetch the item. Use `GET /items/{id}` or the list's items to show the new status and counts, as you do after creating a purchase; the refetch can be a 404 if the item is no longer visible to the user.
 
 Effects:
 - **Status.** An `AVAILABLE`, `PARTIAL` or `PURCHASED` item has its status recomputed from the remaining purchases (deleting the only purchase of a `PARTIAL` item gives `AVAILABLE`; deleting one of two purchases of a `PURCHASED` item can give `PARTIAL`). A `WRAPPED` or `GIFTED` item keeps its status (S13).
@@ -691,8 +699,19 @@ Content-Type: application/json
 { "shippingStatus": "SHIPPED", "trackingNumber": "1Z999AA10123456784" }
 ```
 
-Valid statuses: `NOT_TRACKED` · `NOT_SHIPPED` · `SHIPPED` · `DELIVERED`. Any transition (including backwards) is permitted — tracking is manual.  
-Source: `src/routes/purchase.routes.ts:330-348`, `__tests__/integration/purchase-shipping.test.ts`
+Valid statuses: `NOT_TRACKED` · `NOT_SHIPPED` · `SHIPPED` · `DELIVERED`. Any transition (including backwards) is permitted — tracking is manual.
+
+**Clearing notes and the tracking number (S15).** Two operations change them: `PATCH /tracker/v2/purchases/<purchaseId>` (`notes` and `trackingNumber`) and `PATCH /tracker/v2/purchases/<purchaseId>/shipping` (`trackingNumber` only; it has no `notes`). The same rule applies to both:
+- An empty string (`""`) clears the field. The response and later reads return it as `null`.
+- A field you omit is unchanged. Send only the fields you want to change.
+- `null` is not accepted: it is a `400`. The generated clients cannot send an explicit `null`, so use `""` to clear.
+
+```
+PATCH /tracker/v2/purchases/<purchaseId>
+{ "trackingNumber": "" }
+```
+
+Source: `src/routes/purchase.routes.ts:330-348`, `src/services/purchase.service.ts` (`updatePurchase`, `updateShippingStatus`), `__tests__/integration/purchase-shipping.test.ts`, `__tests__/integration/purchase-clear-fields.test.ts`
 
 ### 7.8 Stats and Purchase History Drill-Down
 

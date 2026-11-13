@@ -41,7 +41,7 @@ import Foundation
 // EDITED (I3c-C): the item repository protocol moved from GiftItem / CreateItemRequest /
 // UpdateItemRequest to ListItem / CreateItemInput / UpdateItemInput, and ItemError.createFailed /
 // .updateFailed were removed (both now throw .server). The fixed items replace MockItemData
-// (legacy GiftItem) so this file no longer touches the legacy type.
+// (the old GiftItem type, deleted in I4b) so this file does not use it.
 private func teardownItems(listId: String) -> [ListItem] {
     guard listId == "1" else { return [] }
     return [
@@ -104,7 +104,7 @@ struct SessionTeardownTests {
         let listId = "1"
 
         // Seed items for list "1"
-        // EDITED (I3c-C): ItemDataStore stores ListItem now; a fixed ListItem fixture replaces MockItemData.
+        // EDITED (I3c-C): ItemDataStore stores ListItem now; a fixed ListItem fixture replaces MockItemData (deleted in I4b).
         let items = teardownItems(listId: listId)
         await dataStore.setItems(items, listId: listId)
 

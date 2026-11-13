@@ -54,7 +54,7 @@ nonisolated struct PurchaseShippingSectionState: Equatable, Sendable {
         originalStatus = purchase.shippingStatus
         originalTracking = purchase.trackingNumber
         draftStatus = purchase.shippingStatus
-        draftTracking = purchase.trackingNumber ?? ""
+        draftTracking = PurchaseEmptyValue.displayText(purchase.trackingNumber)
     }
 
     private init(
@@ -77,6 +77,10 @@ nonisolated struct PurchaseShippingSectionState: Equatable, Sendable {
             draftStatus: status ?? draftStatus,
             draftTracking: tracking ?? draftTracking
         )
+    }
+
+    var trackingChange: PurchaseTrackingChange {
+        PurchaseTrackingChange.derive(original: originalTracking, edited: draftTracking)
     }
 
     var update: PurchaseShippingUpdate? {
@@ -106,7 +110,7 @@ nonisolated struct PurchaseNotesSectionState: Equatable, Sendable {
 
     init(purchase: RecordedPurchase) {
         originalNotes = purchase.notes
-        draftText = purchase.notes ?? ""
+        draftText = PurchaseEmptyValue.displayText(purchase.notes)
     }
 
     private init(originalNotes: String?, draftText: String) {

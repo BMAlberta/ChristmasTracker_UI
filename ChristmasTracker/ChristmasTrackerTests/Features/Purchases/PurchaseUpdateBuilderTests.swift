@@ -6,11 +6,11 @@
 //  Notes: compare after trimming both ends (nil original is ""); equal gives nil; a trimmed empty
 //  edit of a non-empty original is `.clear` (wire ""), never null; otherwise `.set(trimmed)`. The
 //  notes update has no tracking field of any kind.
-//  Shipping: nil when status and tracking are both unchanged; the status is always the edited
-//  status; the tracking number is sent only when non-empty AND different from the trimmed
-//  original; an empty edited tracking is "unchanged" and is never sent (never an empty string).
+//  Shipping (decision S15): nil when status and tracking change are both unchanged; the status is
+//  always the edited status; the tracking change is derived (unchanged, set, clear). The wire value
+//  omits an unchanged tracking number, sends the value for set and "" for clear (never null).
 //
-//  Fails today because the update types do not exist yet.
+//  These tests pin the trackingChange member of PurchaseShippingUpdate.
 //
 
 import Foundation
@@ -103,43 +103,87 @@ struct PurchaseUpdateBuilderTests {
         #expect(shipping(.notTracked, nil, .notTracked, "   ") == nil)
     }
 
-    @Test("An empty edited tracking is unchanged and never sent",
+    @Test("An empty edited tracking against a non-empty original is a clear (rewritten: the old rule was 'empty means unchanged')",
           arguments: PurchaseShippingStatus.allCases, ["", "  ", "\n"])
-    func emptyTrackingNeverSent(status: PurchaseShippingStatus, edited: String) {
+    func emptyTrackingClears(status: PurchaseShippingStatus, edited: String) {
         let update = shipping(.notTracked, "TRK-1", status, edited)
-        if status == .notTracked {
-            #expect(update == nil)
-        } else {
-            #expect(update == PurchaseShippingUpdate(status: status, trackingNumber: nil))
-        }
-        #expect(update?.trackingNumber != "")
+        #expect(update == PurchaseShippingUpdate(status: status, trackingChange: .clear))
+        #expect(update?.wireTrackingNumber == "")
     }
 
     @Test("A status change alone sends the new status and no tracking")
     func statusOnly() {
-        #expect(shipping(.notShipped, "TRK-1", .shipped, "TRK-1") == PurchaseShippingUpdate(status: .shipped, trackingNumber: nil))
-        #expect(shipping(.notTracked, nil, .delivered, "") == PurchaseShippingUpdate(status: .delivered, trackingNumber: nil))
+        let update = shipping(.notShipped, "TRK-1", .shipped, "TRK-1")
+        #expect(update == PurchaseShippingUpdate(status: .shipped, trackingChange: .unchanged))
+        #expect(update?.trackingChange == .unchanged)
+        #expect(update?.wireTrackingNumber == nil)
+        #expect(shipping(.notTracked, nil, .delivered, "") == PurchaseShippingUpdate(status: .delivered, trackingChange: .unchanged))
     }
 
-    @Test("A tracking change alone still carries the (unchanged) edited status")
-    func trackingOnly() {
-        #expect(shipping(.shipped, "TRK-1", .shipped, "TRK-2") == PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-2"))
-        #expect(shipping(.shipped, nil, .shipped, "TRK-2") == PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-2"))
+    @Test("A tracking set alone still carries the (unchanged) edited status")
+    func trackingOnlySet() {
+        #expect(shipping(.shipped, "TRK-1", .shipped, "TRK-2") == PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-2")))
+        #expect(shipping(.shipped, nil, .shipped, "TRK-2") == PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-2")))
+        #expect(shipping(.shipped, "", .shipped, "TRK-2") == PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-2")))
     }
 
-    @Test("Both changed sends the status and the trimmed tracking")
-    func both() {
-        #expect(shipping(.notShipped, nil, .shipped, "  TRK-9 \n") == PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-9"))
+    @Test("A tracking clear alone still carries the (unchanged) edited status and the empty-string wire value")
+    func trackingOnlyClear() {
+        let update = shipping(.shipped, "TRK-1", .shipped, "")
+        #expect(update == PurchaseShippingUpdate(status: .shipped, trackingChange: .clear))
+        #expect(update?.wireTrackingNumber == "")
+        #expect(update?.wireTrackingNumber != nil)
     }
 
-    @Test("The tracking is sent only when different from the TRIMMED original")
+    @Test("Both changed (set) sends the new status and the trimmed tracking")
+    func bothSet() {
+        let update = shipping(.notShipped, nil, .shipped, "  TRK-9 \n")
+        #expect(update == PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-9")))
+        #expect(update?.wireTrackingNumber == "TRK-9")
+    }
+
+    @Test("Both changed (clear) sends the new status and the empty string")
+    func bothClear() {
+        let update = shipping(.notShipped, "TRK-1", .delivered, "   ")
+        #expect(update == PurchaseShippingUpdate(status: .delivered, trackingChange: .clear))
+        #expect(update?.wireTrackingNumber == "")
+    }
+
+    @Test("Neither changed gives no update")
+    func neither() {
+        #expect(shipping(.delivered, "TRK-1", .delivered, "TRK-1") == nil)
+        #expect(shipping(.delivered, nil, .delivered, "") == nil)
+    }
+
+    @Test("A whitespace-only edit against an empty original is no update", arguments: [nil, "", "   "])
+    func whitespaceAgainstEmptyOriginal(original: String?) {
+        #expect(shipping(.shipped, original, .shipped, " \n\t ") == nil)
+    }
+
+    @Test("A whitespace-only edit against a non-empty original is a clear")
+    func whitespaceAgainstNonEmptyOriginal() {
+        #expect(shipping(.shipped, "TEST123", .shipped, "   ") == PurchaseShippingUpdate(status: .shipped, trackingChange: .clear))
+    }
+
+    @Test("The tracking is compared to the TRIMMED original")
     func trackingComparedToTrimmedOriginal() {
-        #expect(shipping(.shipped, "  TRK-1 ", .delivered, "TRK-1") == PurchaseShippingUpdate(status: .delivered, trackingNumber: nil))
+        #expect(shipping(.shipped, "  TRK-1 ", .delivered, "TRK-1") == PurchaseShippingUpdate(status: .delivered, trackingChange: .unchanged))
         #expect(shipping(.shipped, "  TRK-1 ", .shipped, "TRK-1") == nil)
     }
 
     @Test("A tracking number differing only by case is a change")
     func trackingCaseSensitive() {
-        #expect(shipping(.shipped, "trk-1", .shipped, "TRK-1") == PurchaseShippingUpdate(status: .shipped, trackingNumber: "TRK-1"))
+        #expect(shipping(.shipped, "trk-1", .shipped, "TRK-1") == PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TRK-1")))
+    }
+
+    // MARK: - Wire value
+
+    @Test("The wire tracking number: unchanged omits, set sends the value, clear sends an empty string never null")
+    func wireTrackingNumber() {
+        #expect(PurchaseShippingUpdate(status: .shipped, trackingChange: .unchanged).wireTrackingNumber == nil)
+        #expect(PurchaseShippingUpdate(status: .shipped, trackingChange: .set("TEST123")).wireTrackingNumber == "TEST123")
+        let cleared = PurchaseShippingUpdate(status: .shipped, trackingChange: .clear).wireTrackingNumber
+        #expect(cleared == "")
+        #expect(cleared != nil)
     }
 }

@@ -85,7 +85,7 @@ nonisolated final class GeneratedClientPurchaseManagementRepository: PurchaseMan
         do {
             let body = Operations.UpdatePurchaseShipping.Input.Body.JsonPayload(
                 shippingStatus: wireShippingStatus(update.status),
-                trackingNumber: update.trackingNumber
+                trackingNumber: update.wireTrackingNumber
             )
             let output = try await client.updatePurchaseShipping(
                 Operations.UpdatePurchaseShipping.Input(path: .init(id: id), body: .json(body))

@@ -68,13 +68,81 @@ struct PurchaseDetailSUT {
     let manager: SessionManager
 }
 
+// MARK: - I4c-C test support for the model's refresh dependency
+//
+// The shape of the real PurchaseDetailRefresh that this support builds on:
+//
+//   struct PurchaseDetailRefresh {
+//       var run: @MainActor ([PurchaseRefreshStep], @MainActor () -> Bool) async -> Void
+//       var currentItemsListId: @MainActor () -> String?
+//   }
+//   PurchaseDetailModel.init(..., refresh: PurchaseDetailRefresh)   // label `refresh:`, optional, defaulted
+//
+// `run` executes the steps in order, asking the continue-check before each step. The model passes the
+// check `service.sessionGeneration == capturedGeneration && !Task.isCancelled`.
+
+/// Builds the real PurchaseDetailRefresh from two closures.
+@MainActor
+func makeRefreshDependency(
+    run: @escaping @MainActor ([PurchaseRefreshStep], @MainActor () -> Bool) async -> Void,
+    currentItemsListId: @escaping @MainActor () -> String?
+) -> PurchaseDetailRefresh {
+    PurchaseDetailRefresh(run: run, currentItemsListId: currentItemsListId)
+}
+
+/// A scripted stand-in for the host's runner. It runs the steps in order like the real runner, asking
+/// the continue-check before each one, and records everything. No sleeps; hooks give the tests the
+/// deterministic points they need.
+@MainActor
+final class RefreshProbe {
+    /// Every list of steps the model asked to run.
+    private(set) var requested: [[PurchaseRefreshStep]] = []
+    /// The steps that actually ran (the check answered true before them).
+    private(set) var executed: [PurchaseRefreshStep] = []
+    /// Every answer the continue-check gave, in order.
+    private(set) var checkAnswers: [Bool] = []
+    /// How many times the model read the item service's list id.
+    private(set) var listIdReads = 0
+
+    /// The list id the (fake) item service currently holds. Tests change it at will.
+    var itemsListId: String?
+    /// Called when a run starts, before the first check.
+    var onRun: (@MainActor () -> Void)?
+    /// Called after a step ran, before the next check.
+    var afterStep: (@MainActor (PurchaseRefreshStep) async -> Void)?
+    /// The task running confirmDelete, so a hook can cancel it.
+    var runningTask: Task<Void, Never>?
+
+    var dependency: PurchaseDetailRefresh {
+        makeRefreshDependency(
+            run: { [self] steps, shouldContinue in
+                requested.append(steps)
+                onRun?()
+                for step in steps {
+                    let answer = shouldContinue()
+                    checkAnswers.append(answer)
+                    guard answer else { return }
+                    executed.append(step)
+                    await afterStep?(step)
+                }
+            },
+            currentItemsListId: { [self] in
+                listIdReads += 1
+                return itemsListId
+            }
+        )
+    }
+}
+
 /// A model over a real service and a scripted management fake. Nothing is loaded yet.
 @MainActor
 func makePurchaseDetailSUT(
     currentUserId: String? = PurchaseDetailTest.userId,
-    honorsCancellation: Bool = false
+    honorsCancellation: Bool = false,
+    refresh: PurchaseDetailRefresh? = nil
 ) async -> PurchaseDetailSUT {
     let base = await makeManagementServiceSUT(honorsCancellation: honorsCancellation)
+    // `refresh` is optional on the model's init; nil means no follow-up refresh.
     let model = PurchaseDetailModel(
         purchaseId: PurchaseDetailTest.purchaseId,
         itemId: PurchaseDetailTest.itemId,
@@ -82,7 +150,8 @@ func makePurchaseDetailSUT(
         currentUserId: currentUserId,
         service: base.service,
         currencyCode: "USD",
-        locale: PurchaseDetailTest.locale
+        locale: PurchaseDetailTest.locale,
+        refresh: refresh
     )
     return PurchaseDetailSUT(
         model: model, service: base.service, management: base.management,
@@ -93,9 +162,10 @@ func makePurchaseDetailSUT(
 /// A model that has loaded `purchase` (the fetch is scripted and awaited).
 @MainActor
 func makeLoadedPurchaseDetailSUT(
-    purchase: RecordedPurchase = PurchaseDetailTest.own()
+    purchase: RecordedPurchase = PurchaseDetailTest.own(),
+    refresh: PurchaseDetailRefresh? = nil
 ) async -> PurchaseDetailSUT {
-    let sut = await makePurchaseDetailSUT()
+    let sut = await makePurchaseDetailSUT(refresh: refresh)
     sut.management.enqueue(purchase)
     await sut.model.load()
     return sut
