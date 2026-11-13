@@ -4,8 +4,7 @@
 //
 //  The controller behind the purchase detail screen. It loads one purchase through PurchaseService,
 //  holds the two editable sections (shipping and notes) and the delete, and reports the end of the
-//  screen through `finish`. It never refetches the item and never refreshes anything: the host runs
-//  the refresh plan on `.deleted`.
+//  screen through `finish`. After a delete it runs the follow-up refresh itself (see confirmDelete).
 //
 //  Errors are scoped. A load error, a shipping error, a notes error and a delete error are four
 //  separate properties; each is cleared by its own dismiss, by its own success and by `disappear()`.
@@ -29,6 +28,17 @@ nonisolated enum PurchaseDetailPhase: Equatable, Sendable {
     case failed
 }
 
+/// What the model needs to run the follow-up refresh after a delete. `run` executes the steps in
+/// order and asks the continue-check before each one.
+struct PurchaseDetailRefresh {
+    var run: @MainActor ([PurchaseRefreshStep], @MainActor () -> Bool) async -> Void
+    var currentItemsListId: @MainActor () -> String?
+
+    static var doNothing: PurchaseDetailRefresh {
+        PurchaseDetailRefresh(run: { _, _ in }, currentItemsListId: { nil })
+    }
+}
+
 @MainActor
 @Observable
 final class PurchaseDetailModel {
@@ -42,6 +52,7 @@ final class PurchaseDetailModel {
     private let service: PurchaseService
     private let currencyCode: String
     private let locale: Locale
+    private let refresh: PurchaseDetailRefresh
 
     // MARK: - State
 
@@ -75,8 +86,10 @@ final class PurchaseDetailModel {
         currentUserId: String?,
         service: PurchaseService,
         currencyCode: String? = nil,
-        locale: Locale? = nil
+        locale: Locale? = nil,
+        refresh: PurchaseDetailRefresh? = nil
     ) {
+        self.refresh = refresh ?? .doNothing
         self.purchaseId = purchaseId
         self.itemId = itemId
         self.listId = listId
@@ -153,7 +166,7 @@ final class PurchaseDetailModel {
             let returned = try await service.updateShipping(id: purchaseId, update: update)
             shipping = section.applying(returned)
             shippingBanner = nil
-            announce("Shipping saved.")
+            announce(update.trackingChange == .clear ? "Tracking number cleared." : "Shipping saved.")
         } catch {
             shippingBanner = bannerAfterFailure(error)
             announceFailure(shippingBanner)
@@ -193,14 +206,27 @@ final class PurchaseDetailModel {
         guard !isDeleting, case .loaded = phase else { return }
         isDeleting = true
         defer { isDeleting = false }
+        let capturedGeneration = service.sessionGeneration
+        var deleted = false
         do {
             _ = try await service.deletePurchase(id: purchaseId)
-            finishDeleted()
+            deleted = true
         } catch PurchaseManagementError.notFound {
-            finishDeleted()
+            deleted = true
         } catch {
             deleteBanner = bannerAfterFailure(error)
             announceFailure(deleteBanner)
+        }
+        guard deleted else { return }
+        finishDeleted()
+        // The follow-up refresh runs here, in the task that ran the delete, so leaving the screen
+        // does not cancel it. It stops when the session ended or this task was cancelled, and it never
+        // changes `finish` or shows an error.
+        let steps = PurchaseRefreshPlan.stepsAfterDelete(
+            itemId: itemId, listId: listId, currentItemsListId: refresh.currentItemsListId()
+        )
+        await refresh.run(steps) { [service] in
+            service.sessionGeneration == capturedGeneration && !Task.isCancelled
         }
     }
 

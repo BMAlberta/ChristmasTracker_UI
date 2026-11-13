@@ -21,7 +21,13 @@ final class PurchaseRefreshRunner {
     }
 
     func run(_ steps: [PurchaseRefreshStep]) async {
+        await run(steps, while: { true })
+    }
+
+    /// Asks `shouldContinue` before each step and stops when it answers false.
+    func run(_ steps: [PurchaseRefreshStep], while shouldContinue: @MainActor () -> Bool) async {
         for step in steps {
+            guard shouldContinue() else { return }
             switch step {
             case .itemDetail(let id): await itemService.loadItemDetail(id: id)
             case .itemsRefresh: await itemService.refreshItems()

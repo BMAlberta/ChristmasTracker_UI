@@ -9,9 +9,10 @@
 //   - unauthorized, an ended session and cancellation show nothing and do not finish;
 //   - a second confirm while deleting is ignored; the other banners are never touched.
 //
-//  The model does not refresh anything itself: the host runs the refresh plan on .deleted.
+//  These tests build the model without a refresh dependency (the default does nothing). The refresh
+//  after a delete is covered by PurchaseDetailModelDeleteRefreshTests (I4c-C).
 //
-//  Fails today because PurchaseDetailModel does not exist yet.
+//  These tests pin the delete behavior of PurchaseDetailModel.
 //
 
 import Foundation

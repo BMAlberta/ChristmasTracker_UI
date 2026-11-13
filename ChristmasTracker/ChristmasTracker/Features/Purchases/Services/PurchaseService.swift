@@ -32,6 +32,9 @@ final class PurchaseService {
     /// await and drops its result (and any error) if it changed.
     private var generation = 0
 
+    /// Read-only view of the session generation, so a follow-up task can stop when the session ended.
+    var sessionGeneration: Int { generation }
+
     /// Cancel handles of the repository calls that are in flight.
     private var inFlight: [UUID: () -> Void] = [:]
 

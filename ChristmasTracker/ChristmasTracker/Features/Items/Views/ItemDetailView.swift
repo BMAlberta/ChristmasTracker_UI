@@ -345,23 +345,20 @@ struct ItemDetailView: View {
 
     // MARK: - Purchase detail
 
-    /// The pushed purchase detail closes in every case. A deleted purchase runs the delete plan; a
-    /// purchase that is gone refreshes too (the item may have changed). A failed refresh never turns
-    /// the delete into an error.
+    /// The pushed purchase detail closes in every case. A deleted purchase only closes: the detail
+    /// model runs its own follow-up refresh. A purchase that is gone refreshes here (the item may
+    /// have changed). A failed refresh never turns anything into an error.
     private func handlePurchaseDetailFinish(_ finish: PurchaseDetailFinish, opened: OpenedPurchase) {
         openedPurchase = nil
-        let steps: [PurchaseRefreshStep]
         switch finish {
         case .deleted:
-            steps = PurchaseRefreshPlan.stepsAfterDelete(
-                itemId: opened.itemId, listId: opened.listId, currentItemsListId: itemService.currentListId
-            )
+            break
         case .gone:
-            steps = PurchaseRefreshPlan.steps(
+            let steps = PurchaseRefreshPlan.steps(
                 itemId: opened.itemId, listId: opened.listId, currentItemsListId: itemService.currentListId
             )
+            Task { await refreshRunner.run(steps) }
         }
-        Task { await refreshRunner.run(steps) }
     }
 
     // MARK: - Delete

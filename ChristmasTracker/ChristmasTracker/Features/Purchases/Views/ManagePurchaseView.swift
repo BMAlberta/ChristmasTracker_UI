@@ -6,7 +6,7 @@
 //  section, a Notes section and a Delete button. Everything shown comes from PurchaseDetailModel;
 //  this view renders state and sends events only. Each section owns its own error banner, and the
 //  load banner sits at the top. The view reports the end of the screen once through `onFinish`; the
-//  host closes it and, after a delete, runs the refresh plan.
+//  host closes it. The model runs the follow-up refresh after a delete itself.
 //
 
 import SwiftUI
@@ -19,6 +19,8 @@ struct ManagePurchaseView: View {
     let onFinish: (PurchaseDetailFinish) -> Void
 
     @Environment(\.purchaseService) private var purchaseService
+    @Environment(\.itemService) private var itemService
+    @Environment(\.listService) private var listService
 
     // The environment service is not readable in init, so the model is built once, in `.task`,
     // never in `body`. Until then a progress view shows.
@@ -36,12 +38,19 @@ struct ManagePurchaseView: View {
 
     private func buildModelOnce() {
         guard model == nil else { return }
+        let runner = PurchaseRefreshRunner(itemService: itemService, listService: listService)
+        let items = itemService
+        let refresh = PurchaseDetailRefresh(
+            run: { steps, shouldContinue in await runner.run(steps, while: shouldContinue) },
+            currentItemsListId: { items.currentListId }
+        )
         model = PurchaseDetailModel(
             purchaseId: purchaseId,
             itemId: itemId,
             listId: listId,
             currentUserId: currentUserId,
-            service: purchaseService
+            service: purchaseService,
+            refresh: refresh
         )
     }
 }

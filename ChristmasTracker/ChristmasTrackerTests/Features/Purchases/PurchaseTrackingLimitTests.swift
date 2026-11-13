@@ -6,7 +6,7 @@
 //  TRIMMED draft. 100 is allowed, 101 blocks Save, an emoji counts as two units at the boundary,
 //  and a too-long set is blocked while clearing a too-long original is allowed.
 //
-//  Fails today because PurchaseShippingSectionState has no trackingChange member yet.
+//  These tests pin the trackingChange member of PurchaseShippingSectionState.
 //
 
 import Foundation

@@ -10,7 +10,7 @@
 //  `PurchaseShippingSectionState(purchase:)` and `editing(status:tracking:)` where an omitted
 //  argument keeps the current draft value.
 //
-//  Fails today because PurchaseShippingSectionState does not exist yet.
+//  These tests pin the PurchaseShippingSectionState behavior.
 //
 
 import Foundation

@@ -7,7 +7,7 @@
 //  empty edit: unchanged. Non-empty original and empty edit: clear. Otherwise equal after trimming
 //  is unchanged, else set(trimmed edit). The 100-unit limit is NOT applied here. Case matters.
 //
-//  Fails today because PurchaseTrackingChange does not exist yet.
+//  These tests pin the PurchaseTrackingChange rules.
 //
 
 import Foundation

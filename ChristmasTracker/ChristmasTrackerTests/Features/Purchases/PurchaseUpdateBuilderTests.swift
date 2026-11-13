@@ -10,7 +10,7 @@
 //  always the edited status; the tracking change is derived (unchanged, set, clear). The wire value
 //  omits an unchanged tracking number, sends the value for set and "" for clear (never null).
 //
-//  Fails today because PurchaseShippingUpdate has no trackingChange member yet.
+//  These tests pin the trackingChange member of PurchaseShippingUpdate.
 //
 
 import Foundation
