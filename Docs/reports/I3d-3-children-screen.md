@@ -32,6 +32,18 @@ Test run with 212 tests in 16 suites passed after 0.019 seconds.   (swift test, 
 ```
 After-commit run: see below (added after the commit; committed with Story D4).
 
+## After-commit run
+After commit 755ef71 (`I3d: rebuild the child delete UI on the new flow`), run by the Orchestrator:
+```
+--- xcodebuild exit status: 0 ---
+--- tests: 3034 passed, 0 failed, 0 skipped ---
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+Test run with 212 tests in 16 suites passed after 0.019 seconds.   (swift test, TrackerAPI package)
+```
+This section was added after the commit and is committed together with Story D4.
+
 ## Gate 2
 - convention-reviewer: APPROVED, no findings. Tokens only (AppSpacing, `.appBody`, `.appCaption1`, `Color.*Color`; the pre-existing 44-point values and the "trash" symbol were already there); the four UI rules hold (dialog on the row at ChildrenView.swift:254-264; local errors in `@State deletionFailure` :18; destructive role plus token :238-249; `InlineErrorBanner` :100-104); no force unwraps, Combine or GCD; no logging; the only accessibility identifier is the literal "children.addButton" (:78). Observations: `pendingPlan` is not cleared on dialog Cancel (overwritten by the next request).
 - acceptance-reviewer: APPROVED, no rejection. Focus list: (4) dialog on the row wrapper, destructive and `Color.destructiveColor`, texts match the Decisions (ChildrenViewState.swift:88-108), blocked returns nil and shows a dismiss-only banner (ChildrenView.swift:284-286, ChildrenViewState.swift:127-132); (1) `.partialFailure` is returned before `deleteChild` can be reached (ChildDeletionFlow.swift:134-143), Try Again runs `flow.run` and re-plans from fresh lists (ChildrenView.swift:185-197); (5) `onDisappear` cancels the task (:90-94), a nil result writes nothing (:178); (7) no names or ids in logs, spans, identifiers or banner/announcement text; (8) only `ChildrenStateTests.swift` changed among existing tests and each change is justified; the scan tests (a), (b), (c) would have failed on the old UI; (10) nothing forbidden changed. The reviewer ran no tests and took NO simulator screenshot (visual check not performed).
@@ -53,4 +65,4 @@ Test counts and verify: from running commands. View behavior (dialog attachment,
 ## Not done or partial
 - No simulator or real-mode check of the Children screen (Story D4, Brian's steps 2 to 5), and no screenshot or Dynamic Type check.
 - The four reviewer findings above are not fixed.
-- The after-commit verify run is recorded below, after the commit.
+- The after-commit verify run is recorded in the "After-commit run" section above (added after the commit).
