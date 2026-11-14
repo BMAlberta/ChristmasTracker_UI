@@ -26,7 +26,7 @@ Test run with 212 tests in 16 suites passed
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After commit: see the line added at the end of this report after the commit run.
+After commit 7de8476 (separate run): `--- tests: 4345 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===` (this line ships with the next commit).
 
 ## Gate 2
 - convention-reviewer: APPROVE. Warning: three test lines over 120 characters (TabBarMinimizeScanTests.swift 46, 55, 71).
