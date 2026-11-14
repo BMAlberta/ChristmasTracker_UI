@@ -14,22 +14,15 @@ struct DashboardView: View {
     @State private var listToArchive: GiftList?
     @State private var segment = ListSegment.active
     @State private var searchText = ""
-    @State private var errorDismissal = ListErrorDismissal()
+    @State private var dismissed = DismissedLoads()
     @State private var archiveFailure: ListError?
-    @State private var lastOperation = Operation.load
-
-    /// The last operation the dashboard started, so Retry is offered only where it means the same.
-    private enum Operation {
-        case load
-        case refresh
-        case archive
-        case create
-    }
+    @State private var archiveRetryListId: String?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: AppSpacing.sm) {
                 segmentPicker
+                banners
                 content
             }
             .background(Color.backgroundPrimaryColor)
@@ -54,7 +47,7 @@ struct DashboardView: View {
                 }
                 .searchable(text: $searchText, prompt: "Search lists")
                 .refreshable {
-                    begin(.refresh)
+                    dismissed.reset()
                     await listService.refreshLists()
                 }
                 .sheet(isPresented: $showCreateSheet) {
@@ -62,13 +55,15 @@ struct DashboardView: View {
                 }
                 .task {
                     if listService.lists.isEmpty {
-                        begin(.load)
+                        dismissed.reset()
                         await listService.loadLists()
                     }
                 }
                 .onDisappear {
                     listService.clearListsLoadFailure()
+                    dismissed.reset()
                     archiveFailure = nil
+                    archiveRetryListId = nil
                 }
         }
     }
@@ -79,14 +74,13 @@ struct DashboardView: View {
     private var content: some View {
         if listService.isLoadingLists && listService.lists.isEmpty {
             loadingView
-        } else if let error = visibleError, listService.lists.isEmpty {
-            ListErrorBanner(
-                presentation: ListErrorPresentation(error),
-                onRetry: retryAction,
-                onDismiss: { dismiss(error) }
+        } else if let fullError = loadPresentation.fullError, listService.lists.isEmpty {
+            InlineErrorBanner(
+                state: LoadBannerPresentation.state(for: fullError, dismissible: false),
+                onTryAgain: { retryLoad() }
             )
             .padding(EdgeInsets.appScreenPadding)
-            .frame(maxHeight: .infinity, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .center)
         } else if segmentState.lists.isEmpty {
             emptyStateView
         } else {
@@ -109,43 +103,54 @@ struct DashboardView: View {
         }
     }
 
-    /// The archive failure of this screen, else the lists load failure, unless the user dismissed
-    /// this same error. Dismissal is remembered here and reset by every new operation.
-    private var visibleError: ListError? {
-        errorDismissal.visible(archiveFailure ?? listService.listsLoadFailure)
+    /// What the lists load failure shows: the pure state decides, the view renders it.
+    private var loadPresentation: ScreenLoadPresentation {
+        DashboardLoadState.make(
+            hasCachedLists: !listService.lists.isEmpty,
+            listsFailure: listService.listsLoadFailure,
+            archiveFailure: archiveFailure,
+            dismissed: dismissed
+        )
     }
 
-    private func dismiss(_ error: ListError) {
-        archiveFailure = nil
-        errorDismissal.dismiss(error)
-    }
-
-    private func begin(_ operation: Operation) {
-        lastOperation = operation
-        archiveFailure = nil
-        errorDismissal.reset()
-    }
-
-    /// Retry only for a failed load or refresh; a failed delete or create has no meaningful retry here.
-    private var retryAction: (() -> Void)? {
-        switch lastOperation {
-        case .load:
-            return {
-                begin(.load)
-                Task { await listService.loadLists() }
+    /// The load banners and the archive failure, above the lists.
+    @ViewBuilder
+    private var banners: some View {
+        let loadBanners = loadPresentation.banners
+        let archiveBanner = archiveFailure.flatMap { MutationBanner.state(for: $0) }
+        if !loadBanners.isEmpty || archiveBanner != nil {
+            VStack(spacing: AppSpacing.sm) {
+                ForEach(Array(loadBanners.enumerated()), id: \.offset) { _, banner in
+                    InlineErrorBanner(
+                        state: LoadBannerPresentation.state(for: banner),
+                        onTryAgain: { retryLoad() },
+                        onDismiss: { dismissed.dismiss(banner.retryTargets) }
+                    )
+                }
+                if let archiveBanner {
+                    InlineErrorBanner(
+                        state: archiveBanner,
+                        onTryAgain: { retryArchive() },
+                        onDismiss: { clearArchiveFailure() }
+                    )
+                }
             }
-        case .refresh:
-            return {
-                begin(.refresh)
-                Task { await listService.refreshLists() }
-            }
-        case .archive, .create:
-            return nil
+            .padding(.horizontal, AppSpacing.lg)
         }
     }
 
+    /// Try Again repeats the lists load as a forced fetch.
+    private func retryLoad() {
+        dismissed.reset()
+        Task { await listService.refreshLists() }
+    }
+
+    private func clearArchiveFailure() {
+        archiveFailure = nil
+        archiveRetryListId = nil
+    }
+
     private func openCreate() {
-        begin(.create)
         showCreateSheet = true
     }
 
@@ -162,17 +167,28 @@ struct DashboardView: View {
     private func confirmArchive() {
         guard let list = listToArchive else { return }
         listToArchive = nil
-        begin(.archive)
+        archive(listId: list.id)
+    }
+
+    private func retryArchive() {
+        guard let listId = archiveRetryListId else { return }
+        archive(listId: listId)
+    }
+
+    private func archive(listId: String) {
+        clearArchiveFailure()
         Task {
             // The service throws the failure; the dashboard keeps it in local state for the banner.
             do {
-                try await listService.deleteList(id: list.id)
+                try await listService.deleteList(id: listId)
             } catch is CancellationError {
                 return
             } catch let failure as ListError {
                 archiveFailure = failure
+                archiveRetryListId = listId
             } catch {
                 archiveFailure = .server
+                archiveRetryListId = listId
             }
         }
     }
@@ -250,14 +266,6 @@ struct DashboardView: View {
 
     private var listsView: some View {
         List {
-            if let error = visibleError {
-                ListErrorBanner(
-                    presentation: ListErrorPresentation(error),
-                    onRetry: retryAction,
-                    onDismiss: { dismiss(error) }
-                )
-                .dashboardRow()
-            }
             if let lastUpdated = listService.lastUpdated {
                 lastUpdatedView(date: lastUpdated)
                     .dashboardRow()

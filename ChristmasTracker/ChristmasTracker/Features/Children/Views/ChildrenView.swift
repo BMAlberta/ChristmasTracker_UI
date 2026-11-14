@@ -18,6 +18,7 @@ struct ChildrenView: View {
     @State private var deletion = ChildDeletionPresentation.idle
     @State private var deletionFailure: DeletionFailure?
     @State private var deletionTask: Task<Void, Never>?
+    @State private var dismissedLoads = DismissedLoads()
 
     /// A deletion that did not remove the child, held only in this screen's state.
     private struct DeletionFailure: Equatable {
@@ -27,6 +28,15 @@ struct ChildrenView: View {
 
     private var state: ChildrenState {
         ChildrenState(children: childService.children, phase: childService.phase, deletion: deletion)
+    }
+
+    /// What a failed children load shows: the full error with nothing to show, else the stale banner.
+    private var loadPresentation: ScreenLoadPresentation {
+        ChildrenLoadState.make(
+            phase: childService.phase,
+            hasChildren: !childService.children.isEmpty,
+            dismissed: dismissedLoads
+        )
     }
 
     var body: some View {
@@ -39,11 +49,9 @@ struct ChildrenView: View {
             if let failure = deletionFailure {
                 deletionBanner(failure)
             }
+            loadBanners
             if state.showsLoading, state.rows.isEmpty {
                 loadingRow
-            }
-            if let message = state.errorMessage {
-                errorRow(message: message)
             }
             if state.showsEmptyState {
                 emptyRow(text: state.emptyText)
@@ -85,6 +93,7 @@ struct ChildrenView: View {
             AddChildView()
         }
         .refreshable {
+            dismissedLoads.reset()
             await childService.loadChildren()
         }
         .task {
@@ -98,8 +107,38 @@ struct ChildrenView: View {
         }
         .onDisappear {
             cancelAndReset()
+            dismissedLoads.reset()
             childService.clearLoadFailure()
         }
+    }
+
+    // MARK: - Load banner
+
+    /// The load failure as an InlineErrorBanner row: the full error when no child is shown, the
+    /// stale-data banner when a refresh failed over saved children.
+    @ViewBuilder
+    private var loadBanners: some View {
+        let presentation = loadPresentation
+        if let fullError = presentation.fullError {
+            loadBanner(fullError, dismissible: false)
+        }
+        ForEach(Array(presentation.banners.enumerated()), id: \.offset) { _, banner in
+            loadBanner(banner, dismissible: true)
+        }
+    }
+
+    private func loadBanner(_ banner: LoadBanner, dismissible: Bool) -> some View {
+        InlineErrorBanner(
+            state: LoadBannerPresentation.state(for: banner, dismissible: dismissible),
+            onTryAgain: {
+                dismissedLoads.reset()
+                Task { await childService.loadChildren() }
+            },
+            onDismiss: { dismissedLoads.dismiss(banner.retryTargets) }
+        )
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
     }
 
     // MARK: - Deletion banner
@@ -126,31 +165,6 @@ struct ChildrenView: View {
         .frame(maxWidth: .infinity, minHeight: 44)
         .listRowBackground(Color.surfaceColor)
         .accessibilityElement(children: .combine)
-    }
-
-    private func errorRow(message: String) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Label {
-                Text(message)
-                    .font(.appBody)
-                    .foregroundStyle(Color.textPrimaryColor)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Color.accentColor)
-            }
-            Button {
-                Task { await childService.loadChildren() }
-            } label: {
-                Label("Try Again", systemImage: "arrow.clockwise")
-                    .font(.appHeadline)
-                    .frame(minHeight: 44)
-            }
-            .buttonStyle(.bordered)
-            .tint(.primaryColor)
-            .accessibilityHint("Loads your children again")
-        }
-        .listRowBackground(Color.surfaceColor)
     }
 
     private func emptyRow(text: String) -> some View {

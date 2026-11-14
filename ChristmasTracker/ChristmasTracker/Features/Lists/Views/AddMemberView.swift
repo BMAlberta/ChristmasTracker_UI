@@ -16,7 +16,7 @@ struct AddMemberView: View {
 
     @State private var email = ""
     @State private var role: MemberRole = .member
-    @State private var errorPresentation: ListErrorPresentation?
+    @State private var errorBanner: InlineErrorBannerState?
 
     private var canSubmit: Bool {
         AddMemberFormValidation.canSubmit(email: email, role: role, isMutating: listService.isMutating)
@@ -25,13 +25,12 @@ struct AddMemberView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let errorPresentation {
+                if let errorBanner {
                     Section {
-                        ListErrorBanner(
-                            presentation: errorPresentation,
-                            onRetry: { Task { await add() } },
-                            onLeave: { dismiss() },
-                            onDismiss: { self.errorPresentation = nil }
+                        InlineErrorBanner(
+                            state: errorBanner,
+                            onTryAgain: { Task { await add() } },
+                            onDismiss: { self.errorBanner = nil }
                         )
                     }
                 }
@@ -62,6 +61,7 @@ struct AddMemberView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Add Member")
             .navigationBarTitleDisplayMode(.inline)
+            .onDisappear { errorBanner = nil }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -91,7 +91,7 @@ struct AddMemberView: View {
 
     private func add() async {
         guard canSubmit else { return }
-        errorPresentation = nil
+        errorBanner = nil
         do {
             try await listService.addMember(
                 listId: listId,
@@ -102,7 +102,7 @@ struct AddMemberView: View {
         } catch is CancellationError {
             return
         } catch {
-            errorPresentation = ListErrorPresentation((error as? ListError) ?? .server)
+            errorBanner = MutationBanner.state(for: (error as? ListError) ?? .server)
         }
     }
 }

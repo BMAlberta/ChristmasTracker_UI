@@ -23,7 +23,8 @@ struct CreateListView: View {
     @State private var selectedRecipientId: String?
 
     @State private var isCreating = false
-    @State private var errorPresentation: ListErrorPresentation?
+    @State private var errorBanner: InlineErrorBannerState?
+    @State private var dismissedLoads = DismissedLoads()
 
     private var validity: CreateFormValidity {
         ListFormValidation.validateCreate(name: name, theme: theme, year: year)
@@ -37,16 +38,20 @@ struct CreateListView: View {
         )
     }
 
+    /// A failed children load: the picker offers no children then, so there is nothing saved to show.
+    private var childrenLoad: ScreenLoadPresentation {
+        ChildrenLoadState.make(phase: childService.phase, hasChildren: false, dismissed: dismissedLoads)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: AppSpacing.xl) {
-                    if let errorPresentation {
-                        ListErrorBanner(
-                            presentation: errorPresentation,
-                            onRetry: { Task { await createList() } },
-                            onLeave: { dismiss() },
-                            onDismiss: { self.errorPresentation = nil }
+                    if let errorBanner {
+                        InlineErrorBanner(
+                            state: errorBanner,
+                            onTryAgain: { Task { await createList() } },
+                            onDismiss: { self.errorBanner = nil }
                         )
                     }
                     recipientCard
@@ -61,6 +66,11 @@ struct CreateListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await childService.loadChildren()
+            }
+            .onDisappear {
+                errorBanner = nil
+                dismissedLoads.reset()
+                childService.clearLoadFailure()
             }
             .onChange(of: recipientOptions) { _, options in
                 selectedRecipientId = options.resolvedSelection(current: selectedRecipientId)
@@ -118,16 +128,15 @@ struct CreateListView: View {
                 ProgressView()
                     .accessibilityLabel("Loading your children")
             }
-            if let message = options.errorMessage {
-                Text(message)
-                    .font(.appCaption1)
-                    .foregroundStyle(Color.textMutedColor)
-                Button("Try Again") {
-                    Task { await childService.loadChildren() }
-                }
-                .font(.appHeadline)
-                .frame(minHeight: 44)
-                .accessibilityHint("Loads your children again")
+            if let childrenFailure = childrenLoad.fullError {
+                InlineErrorBanner(
+                    state: LoadBannerPresentation.state(for: childrenFailure),
+                    onTryAgain: {
+                        dismissedLoads.reset()
+                        Task { await childService.loadChildren() }
+                    },
+                    onDismiss: { dismissedLoads.dismiss(childrenFailure.retryTargets) }
+                )
             }
             if options.showsEmptyHint {
                 Text("Children you add in your profile can be chosen here.")
@@ -238,15 +247,12 @@ struct CreateListView: View {
     // MARK: - Actions
 
     private func createList() async {
-        guard authenticationService.currentUser?.id != nil else {
-            errorPresentation = ListErrorPresentation(.sessionEnded)
-            return
-        }
+        guard authenticationService.currentUser?.id != nil else { return }
         guard validity.isValid else { return }
         let recipientId = recipientOptions.resolvedSelection(current: selectedRecipientId)
 
         isCreating = true
-        errorPresentation = nil
+        errorBanner = nil
         defer { isCreating = false }
 
         let input = ListFormValidation.makeCreateInput(
@@ -263,7 +269,7 @@ struct CreateListView: View {
         } catch is CancellationError {
             return
         } catch {
-            errorPresentation = ListErrorPresentation((error as? ListError) ?? .server)
+            errorBanner = MutationBanner.state(for: (error as? ListError) ?? .server)
         }
     }
 }

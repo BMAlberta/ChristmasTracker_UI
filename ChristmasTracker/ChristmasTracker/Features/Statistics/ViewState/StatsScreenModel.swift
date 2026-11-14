@@ -40,7 +40,6 @@ final class StatsScreenModel {
 
     // MARK: - Strings
 
-    static let staleMessage = "Couldn't update. Showing saved data."
     static let budgetNotFoundMessage = "Couldn't find that budget. Try again."
     static let deleteMessage = "Your spending is not affected. This can't be undone."
     static let deleteButtonTitle = "Delete Budget"
@@ -143,17 +142,38 @@ final class StatsScreenModel {
         return .loading
     }
 
-    var staleBanner: InlineErrorBannerState? {
-        guard screenState != nil, loadError != nil, dismissedFailureCount != failureCount else { return nil }
-        return InlineErrorBannerState(message: Self.staleMessage, actions: [.tryAgain, .dismiss])
+    /// The stats failure of the selected year (source .stats) and this screen's budget list failure
+    /// (source .budgets), the inputs of LoadFailurePolicy.
+    private var loadFailures: [LoadFailure] {
+        var failures: [LoadFailure] = []
+        if let stats = statsService.failure(forYear: selectedYear) {
+            failures.append(LoadFailure(stats, source: .stats))
+        }
+        if let budgets = budgetListFailure {
+            failures.append(LoadFailure(budgets, source: .budgets))
+        }
+        return failures
     }
 
+    /// The banners over saved data, from the policy: ONE for failures of the same category, at most
+    /// two when the categories differ. Empty when dismissed, when nothing is saved, or when a gone
+    /// resource or a session end takes over.
+    var staleBanners: [InlineErrorBannerState] {
+        guard screenState != nil, dismissedFailureCount != failureCount else { return [] }
+        return ScreenLoadPresentation.make(hasCachedData: true, failures: loadFailures).banners
+            .map { LoadBannerPresentation.state(for: $0) }
+    }
+
+    var staleBanner: InlineErrorBannerState? {
+        staleBanners.first
+    }
+
+    /// The full error of a screen with nothing to show: Try Again only.
     var failureBanner: InlineErrorBannerState? {
-        guard screenState == nil, let loadError else { return nil }
-        return InlineErrorBannerState(
-            message: loadError.userMessage,
-            actions: loadError.isRetryable ? [.tryAgain] : []
-        )
+        guard screenState == nil else { return nil }
+        let presentation = ScreenLoadPresentation.make(hasCachedData: false, failures: loadFailures)
+        guard let banner = presentation.fullError ?? presentation.banners.first else { return nil }
+        return LoadBannerPresentation.state(for: banner, dismissible: false)
     }
 
     // MARK: - Lifecycle

@@ -149,7 +149,12 @@ final class BudgetEditorModel {
             loadFailure = await listService.loadLists(reportingFailure: false)
         }
         if listService.lists.isEmpty, let loadFailure {
-            pickerLoad = .failed(loadFailure.userMessage)
+            // No saved people exist here, so the policy's answer is the full error (plain message).
+            let presentation = ScreenLoadPresentation.make(
+                hasCachedData: false,
+                failures: [LoadFailure(loadFailure, source: .people)]
+            )
+            pickerLoad = .failed(presentation.fullError?.message ?? loadFailure.userMessage)
             return
         }
         baseOptions = BudgetRecipientOptions.build(

@@ -317,41 +317,6 @@ nonisolated enum ListScreenExit {
     }
 }
 
-/// What the detail screen does once an archive returned normally. The archive itself succeeded,
-/// but the reload that follows may have failed and left its error on the service: that error is
-/// shown (no retry that would archive again) and the screen stays.
-nonisolated enum ListArchiveCompletion: Equatable, Sendable {
-    case dismiss
-    case showError(ListErrorPresentation)
-
-    static func after(serviceError: ListError?) -> ListArchiveCompletion {
-        guard let serviceError else { return .dismiss }
-        return .showError(ListErrorPresentation(serviceError))
-    }
-}
-
-/// Remembers which error the user dismissed. A new operation resets it, so the same failure
-/// after a new attempt is shown again.
-nonisolated struct ListErrorDismissal: Equatable, Sendable {
-    private(set) var dismissed: ListError?
-
-    init() {}
-
-    mutating func dismiss(_ error: ListError?) {
-        guard let error else { return }
-        dismissed = error
-    }
-
-    mutating func reset() {
-        dismissed = nil
-    }
-
-    func visible(_ current: ListError?) -> ListError? {
-        guard let current, current != dismissed else { return nil }
-        return current
-    }
-}
-
 // MARK: - Items scope
 
 /// Items render only under the list they were loaded for.

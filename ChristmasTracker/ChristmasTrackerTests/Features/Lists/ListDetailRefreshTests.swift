@@ -3,8 +3,14 @@
 //  ChristmasTrackerTests
 //
 //  Story I3c-F2: the pure pieces behind the detail screen's pull to refresh.
-//  - ListDetailRefresh.banner(for:) turns a returned refresh failure into banner state.
 //  - ListDetailRefresh.itemsStep chooses between refreshing and loading the items.
+//
+//  UX1a Story U3: the ListDetailRefresh.banner(for:) tests that used to live here (nil for no error and
+//  for a session end, "The list could not be refreshed. " prefix, Try Again only when retryable) are
+//  REMOVED with the banner path: the detail refresh failure now goes through ListDetailLoadState and
+//  LoadFailurePolicy (see ListDetailLoadStateTests: refresh failure alone, merged with a detail
+//  failure, session end shows nothing, rate limit hint kept), and the texts and actions are those of
+//  LoadBannerPresentationTests / ScreenLoadPresentationTests.
 //
 
 import Foundation
@@ -13,71 +19,6 @@ import Testing
 
 @Suite("ListDetailRefresh")
 struct ListDetailRefreshTests {
-
-    nonisolated static let retryable: [ListError] = [.network, .server, .rateLimited(retryAfter: 5), .invalidResponse]
-
-    nonisolated static let nonRetryable: [ListError] = [
-        .forbidden, .notFound, .recipientNotFound, .duplicateRecipientYear, .archivedReadOnly,
-        .validation(message: "Fake message"), .unauthorized, .memberEmailNotFound, .alreadyMember,
-        .membershipNotFound
-    ]
-
-    private static let prefix = "The list could not be refreshed. "
-
-    // MARK: - banner(for:)
-
-    @Test("no error means no banner")
-    func nilErrorNoBanner() {
-        #expect(ListDetailRefresh.banner(for: nil) == nil)
-    }
-
-    @Test("sessionEnded means no banner")
-    func sessionEndedNoBanner() {
-        #expect(ListDetailRefresh.banner(for: .sessionEnded) == nil)
-    }
-
-    @Test("a retryable error shows Try Again then Dismiss", arguments: ListDetailRefreshTests.retryable)
-    func retryableBanner(error: ListError) {
-        let banner = ListDetailRefresh.banner(for: error)
-
-        #expect(banner?.actions == [.tryAgain, .dismiss])
-        #expect(ListErrorPresentation(error).isRetryable)
-    }
-
-    @Test("a non-retryable error shows Dismiss only", arguments: ListDetailRefreshTests.nonRetryable)
-    func nonRetryableBanner(error: ListError) {
-        let banner = ListDetailRefresh.banner(for: error)
-
-        #expect(banner?.actions == [.dismiss])
-        #expect(ListErrorPresentation(error).isRetryable == false)
-    }
-
-    @Test("the message is the refresh prefix followed by the error's user message",
-          arguments: ListDetailRefreshTests.retryable + ListDetailRefreshTests.nonRetryable)
-    func messageText(error: ListError) {
-        let banner = ListDetailRefresh.banner(for: error)
-
-        #expect(banner?.message == Self.prefix + error.userMessage)
-    }
-
-    @Test("the banner equals one built from the same message and flags", arguments: ListDetailRefreshTests.retryable)
-    func bannerEqualsBuiltState(error: ListError) {
-        let expected = InlineErrorBannerState(
-            message: Self.prefix + error.userMessage,
-            canRetry: ListErrorPresentation(error).isRetryable,
-            isDismissible: true
-        )
-
-        #expect(ListDetailRefresh.banner(for: error) == expected)
-    }
-
-    @Test("a network error reads as a refresh failure with the network text")
-    func networkMessageLiteral() {
-        let banner = ListDetailRefresh.banner(for: .network)
-
-        #expect(banner?.message.hasPrefix("The list could not be refreshed. ") == true)
-        #expect(banner?.message.hasSuffix(ListError.network.userMessage) == true)
-    }
 
     // MARK: - itemsStep
 

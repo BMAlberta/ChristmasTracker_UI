@@ -25,6 +25,7 @@ struct ItemDetailView: View {
     @State private var deleteError: ItemError?
     @State private var hasStartedLoading = false
     @State private var openedPurchase: OpenedPurchase?
+    @State private var dismissedLoads = DismissedLoads()
 
     /// The purchase pushed from a row. It carries its own ids so the pushed screen does not depend on
     /// the item staying loaded while this screen is covered.
@@ -89,6 +90,9 @@ struct ItemDetailView: View {
                     dismiss()
                 }
             }
+            .onChange(of: loadPresentation.leavesScreen) { _, leaves in
+                if leaves { dismiss() }
+            }
             .task {
                 hasStartedLoading = true
                 await itemService.loadItemDetail(id: itemId)
@@ -97,6 +101,7 @@ struct ItemDetailView: View {
                 // Covered by the purchase detail: keep the item for when this screen comes back.
                 guard openedPurchase == nil else { return }
                 deleteError = nil
+                dismissedLoads.reset()
                 itemService.clearItemDetail()
                 itemService.clearDetailLoadError()
             }
@@ -113,6 +118,16 @@ struct ItemDetailView: View {
         )
     }
 
+    /// What a failed item load shows: the full error with no item, else the stale-data banner.
+    private var loadPresentation: ScreenLoadPresentation {
+        ItemDetailLoadState.make(
+            hasItem: currentItem != nil,
+            loading: itemService.isLoadingDetail,
+            error: itemService.detailLoadError,
+            dismissed: dismissedLoads
+        )
+    }
+
     @ViewBuilder
     private var content: some View {
         switch screenState {
@@ -120,39 +135,39 @@ struct ItemDetailView: View {
             detailContent(item: item, state: state(for: item))
         case .loading:
             LoadingView(message: "Loading item...")
-        case .error(let banner):
-            InlineErrorBanner(
-                state: banner,
-                onTryAgain: { Task { await itemService.loadItemDetail(id: itemId) } },
-                onDismiss: { itemService.clearDetailLoadError() }
-            )
-            .padding(EdgeInsets.appScreenPadding)
-            .frame(maxHeight: .infinity, alignment: .top)
+        case .error:
+            if let fullError = loadPresentation.fullError {
+                fullErrorContent(LoadBannerPresentation.state(for: fullError, dismissible: false))
+            }
         case .notLoaded:
-            notLoadedContent
+            fullErrorContent(
+                InlineErrorBannerState(message: ItemDetailScreenState.notLoadedMessage, canRetry: true, isDismissible: false)
+            )
         }
     }
 
-    private var notLoadedContent: some View {
-        VStack(spacing: AppSpacing.md) {
-            Text(ItemDetailScreenState.notLoadedMessage)
-                .font(.appBody)
-                .foregroundStyle(Color.textMutedColor)
-                .multilineTextAlignment(.center)
-            Button("Try Again") {
-                Task { await itemService.loadItemDetail(id: itemId) }
-            }
-            .buttonStyle(.bordered)
-            .tint(Color.primaryColor)
-            .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
-        }
-        .padding(EdgeInsets.appScreenPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    /// The full error: an InlineErrorBanner in a centered container.
+    private func fullErrorContent(_ state: InlineErrorBannerState) -> some View {
+        InlineErrorBanner(state: state, onTryAgain: { retryLoad() })
+            .padding(EdgeInsets.appScreenPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func retryLoad() {
+        dismissedLoads.reset()
+        Task { await itemService.loadItemDetail(id: itemId) }
     }
 
     private func detailContent(item: ListItem, state: ItemDetailState) -> some View {
         ScrollView {
             VStack(spacing: AppSpacing.xl) {
+                ForEach(Array(loadPresentation.banners.enumerated()), id: \.offset) { _, banner in
+                    InlineErrorBanner(
+                        state: LoadBannerPresentation.state(for: banner),
+                        onTryAgain: { retryLoad() },
+                        onDismiss: { dismissedLoads.dismiss(banner.retryTargets) }
+                    )
+                }
                 if let banner = deleteError.flatMap({ ItemErrorPresentation.banner(for: $0, hasRetryAction: true) }) {
                     InlineErrorBanner(
                         state: banner,

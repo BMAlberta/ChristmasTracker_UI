@@ -73,16 +73,8 @@ struct ProfileView: View {
                     toggleModel = ProfileBiometricToggleModel(authService: authService)
                 }
             }
-            .alert(
-                "Biometric Setup Failed",
-                isPresented: Binding(
-                    get: { toggleModel?.errorMessage != nil },
-                    set: { if !$0 { toggleModel?.errorMessage = nil } }
-                )
-            ) {
-                Button("OK") { toggleModel?.errorMessage = nil }
-            } message: {
-                Text(toggleModel?.errorMessage ?? "")
+            .onDisappear {
+                toggleModel?.dismissBanner()
             }
             .confirmationDialog(
                 "Are you sure you want to logout?",
@@ -149,6 +141,15 @@ private struct SettingsSectionView: View {
     var body: some View {
         VStack(spacing: 0) {
             SectionHeaderView(title: "Settings")
+
+            if let banner = toggleModel.banner {
+                InlineErrorBanner(
+                    state: banner,
+                    onTryAgain: { Task { await toggleModel.toggle(to: true) } },
+                    onDismiss: { toggleModel.dismissBanner() }
+                )
+                .padding(.bottom, AppSpacing.md)
+            }
 
             CardContainerView {
                 VStack(spacing: 0) {

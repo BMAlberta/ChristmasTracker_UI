@@ -17,13 +17,14 @@ struct ListDetailView: View {
     @State private var editingDetail: ListDetail?
     @State private var showArchiveConfirmation = false
     @State private var selectedItemId: String?
-    @State private var actionError: ListErrorPresentation?
+    @State private var actionBanner: InlineErrorBannerState?
     @State private var failedAction: FailedAction?
     @State private var showsAddMember = false
     @State private var memberToRemove: MemberRowState?
     @State private var showLeaveConfirmation = false
     @State private var showsAddItem = false
-    @State private var refreshError: ListError?
+    @State private var refreshFailure: ListError?
+    @State private var dismissed = DismissedLoads()
 
     /// The action whose failure is shown in the banner, so Try Again repeats that action.
     private enum FailedAction {
@@ -111,11 +112,17 @@ struct ListDetailView: View {
             .refreshable {
                 await refresh()
             }
+            .onChange(of: loadPresentation.leavesScreen) { _, leaves in
+                if leaves { dismiss() }
+            }
             .task {
                 await load()
             }
             .onDisappear {
-                refreshError = nil
+                refreshFailure = nil
+                dismissed.reset()
+                actionBanner = nil
+                failedAction = nil
                 listService.clearDetailLoadFailure()
                 itemService.clearListLoadError()
             }
@@ -123,33 +130,73 @@ struct ListDetailView: View {
 
     // MARK: - Content
 
+    /// ONE policy call for the detail load, the detail refresh and the items load of this screen.
+    private var loadPresentation: ScreenLoadPresentation {
+        ListDetailLoadState.make(
+            hasDetail: currentDetail != nil,
+            detailFailure: listService.detailLoadFailure,
+            refreshFailure: refreshFailure,
+            itemsFailure: itemService.listLoadError,
+            dismissed: dismissed
+        )
+    }
+
     @ViewBuilder
     private func content(detail: ListDetail?, state: ListDetailState?) -> some View {
         if let detail, let state {
             detailContent(detail: detail, state: state)
-        } else if !listService.isLoadingDetail, let error = listService.detailLoadFailure {
-            ListErrorBanner(
-                presentation: ListErrorPresentation(error),
-                onRetry: { Task { await load() } },
-                onLeave: { dismiss() }
+        } else if !listService.isLoadingDetail, let fullError = loadPresentation.fullError {
+            InlineErrorBanner(
+                state: LoadBannerPresentation.state(for: fullError, dismissible: false),
+                onTryAgain: { Task { await retry(fullError.retryTargets) } }
             )
             .padding(EdgeInsets.appScreenPadding)
-            .frame(maxHeight: .infinity, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .center)
         } else {
             LoadingView(message: "Loading list...")
         }
     }
 
     private func load() async {
-        actionError = nil
+        actionBanner = nil
+        refreshFailure = nil
+        dismissed.reset()
         await listService.loadListDetail(id: listId)
         await itemService.loadItems(listId: listId)
     }
 
-    /// Pull to refresh: always fetches the detail and the items, and reports a detail failure.
+    /// Pull to refresh: always fetches the detail and the items.
     private func refresh() async {
-        refreshError = nil
-        refreshError = await listService.refreshListDetail(id: listId)
+        dismissed.reset()
+        refreshFailure = nil
+        listService.clearDetailLoadFailure()
+        refreshFailure = await listService.refreshListDetail(id: listId)
+        switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
+        case .refresh: await itemService.refreshItems()
+        case .load: await itemService.loadItems(listId: listId)
+        }
+    }
+
+    /// Try Again of a load banner: the forced fetch of every source the banner names.
+    private func retry(_ targets: [LoadSource]) async {
+        dismissed.reset(targets)
+        if targets.contains(.listDetail) { await refetchDetail() }
+        if targets.contains(.items) { await refetchItems() }
+    }
+
+    /// A forced fetch of the detail; a first load when nothing is cached yet.
+    private func refetchDetail() async {
+        refreshFailure = nil
+        listService.clearDetailLoadFailure()
+        if currentDetail == nil {
+            await listService.loadListDetail(id: listId)
+        } else {
+            refreshFailure = await listService.refreshListDetail(id: listId)
+        }
+    }
+
+    /// A forced fetch of the items; a first load when the item service does not hold this list.
+    private func refetchItems() async {
         switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
         case .refresh: await itemService.refreshItems()
         case .load: await itemService.loadItems(listId: listId)
@@ -157,7 +204,7 @@ struct ListDetailView: View {
     }
 
     private func archiveList() async {
-        actionError = nil
+        actionBanner = nil
         do {
             try await listService.deleteList(id: listId)
             // A failed follow-up reload is no longer published: the archive itself succeeded.
@@ -165,30 +212,27 @@ struct ListDetailView: View {
         } catch is CancellationError {
             return
         } catch {
-            failedAction = .archiveList
-            actionError = ListErrorPresentation((error as? ListError) ?? .server)
+            hold(error, for: .archiveList)
         }
     }
 
     private func removeMember(_ row: MemberRowState) async {
-        actionError = nil
+        actionBanner = nil
         do {
             try await listService.removeMember(listId: listId, userId: row.userId)
         } catch is CancellationError {
             return
         } catch {
-            failedAction = .removeMember(row)
-            actionError = ListErrorPresentation((error as? ListError) ?? .server)
+            hold(error, for: .removeMember(row))
         }
     }
 
     /// Leaves the list as the signed-in user. The detail screen pops when the service reports
     /// the list gone.
     private func leaveList() async {
-        actionError = nil
+        actionBanner = nil
         guard let userId = authenticationService.currentUser?.id else {
             failedAction = nil
-            actionError = ListErrorPresentation(.sessionEnded)
             return
         }
         do {
@@ -196,9 +240,14 @@ struct ListDetailView: View {
         } catch is CancellationError {
             return
         } catch {
-            failedAction = .leaveList
-            actionError = ListErrorPresentation((error as? ListError) ?? .server)
+            hold(error, for: .leaveList)
         }
+    }
+
+    /// Keeps a thrown mutation error in this screen's own banner; nil for an ended session.
+    private func hold(_ error: Error, for action: FailedAction) {
+        failedAction = action
+        actionBanner = MutationBanner.state(for: (error as? ListError) ?? .server)
     }
 
     private func retryFailedAction() async {
@@ -213,21 +262,14 @@ struct ListDetailView: View {
     private func detailContent(detail: ListDetail, state: ListDetailState) -> some View {
         ScrollView {
             VStack(spacing: AppSpacing.xl) {
-                if let refreshBanner = ListDetailRefresh.banner(for: refreshError) {
-                    InlineErrorBanner(
-                        state: refreshBanner,
-                        onTryAgain: { Task { await refresh() } },
-                        onDismiss: { refreshError = nil }
-                    )
-                }
-                if let actionError {
-                    ListErrorBanner(
-                        presentation: actionError,
-                        onRetry: failedAction == nil ? nil : { Task { await retryFailedAction() } },
-                        onLeave: { dismiss() },
-                        onDismiss: { self.actionError = nil }
-                    )
-                }
+                ListDetailBannersView(
+                    loadBanners: loadPresentation.banners,
+                    actionBanner: actionBanner,
+                    onRetryLoad: { targets in Task { await retry(targets) } },
+                    onDismissLoad: { targets in dismissed.dismiss(targets) },
+                    onRetryAction: { Task { await retryFailedAction() } },
+                    onDismissAction: { actionBanner = nil; failedAction = nil }
+                )
                 headerCard(state: state)
                 if state.showsStatsCard,
                    let itemCountText = state.itemCountText,
@@ -348,26 +390,19 @@ struct ListDetailView: View {
         }
     }
 
-    /// The items, driven by `ItemListState` (flags through ItemPermissions). The load error is the
-    /// item service's separate `listLoadError`; Try Again refreshes, and it clears when this screen
-    /// disappears.
+    /// The items, driven by `ItemListState` (flags through ItemPermissions). Their load error is part
+    /// of the screen's merged banner at the top, not shown here.
     private func itemsSection(detail: ListDetail) -> some View {
         let listState = ItemListState(
             items: scopedItems,
             context: ItemListContext(detail: detail),
             currentUserId: authenticationService.currentUser?.id
         )
-        let banner = itemService.listLoadError.flatMap {
-            ItemErrorPresentation.banner(for: $0, hasRetryAction: true)
-        }
         return ItemsSectionView(
             state: listState,
             isLoading: itemService.isLoadingItems,
-            errorBanner: banner,
             onSelect: { selectedItemId = $0 },
-            onAdd: { showsAddItem = true },
-            onTryAgain: { Task { await itemService.refreshItems() } },
-            onDismissError: { itemService.clearListLoadError() }
+            onAdd: { showsAddItem = true }
         )
         .listCard()
     }

@@ -86,7 +86,10 @@ struct StatsScreenModelLoadTests {
         #expect(sut.model.staleBanner == nil, "the stale banner is only for saved data")
     }
 
-    @Test("a non-retryable failure with nothing cached is a failed phase whose banner has no actions")
+    // REWRITTEN (UX1a U3): the full error now comes from LoadFailurePolicy through LoadBannerPresentation,
+    // which knows no per-error retryability: every full error offers Try Again (and no Dismiss, as
+    // before for retryable errors). The message and the failed phase are unchanged.
+    @Test("a non-retryable failure with nothing cached is a failed phase whose banner offers Try Again only")
     func failedNotRetryable() async {
         let sut = makeStatsScreenSUT()
         sut.manager.enqueueList([])
@@ -96,7 +99,7 @@ struct StatsScreenModelLoadTests {
 
         let message = BudgetError.forbidden.userMessage
         #expect(sut.model.loadPhase == .failed(message: message))
-        #expect(sut.model.failureBanner == InlineErrorBannerState(message: message, actions: []))
+        #expect(sut.model.failureBanner == InlineErrorBannerState(message: message, actions: [.tryAgain]))
     }
 
     @Test("Try Again after a failed first load recovers to content and removes the failure banner")

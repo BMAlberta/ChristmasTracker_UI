@@ -15,7 +15,7 @@ struct AddChildView: View {
     @State private var lastName = ""
     @State private var displayName = ""
     @State private var relationship: ChildRelationship = .parent
-    @State private var errorMessage: String?
+    @State private var errorBanner: InlineErrorBannerState?
 
     private var canSubmit: Bool {
         ChildFormValidation.canSubmit(
@@ -33,16 +33,13 @@ struct AddChildView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let errorMessage {
+                if let errorBanner {
                     Section {
-                        Label {
-                            Text(errorMessage)
-                                .font(.appBody)
-                                .foregroundStyle(Color.textPrimaryColor)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(Color.accentColor)
-                        }
+                        InlineErrorBanner(
+                            state: errorBanner,
+                            onTryAgain: { Task { await save() } },
+                            onDismiss: { self.errorBanner = nil }
+                        )
                     }
                 }
                 Section("Child") {
@@ -80,6 +77,7 @@ struct AddChildView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Add Child")
             .navigationBarTitleDisplayMode(.inline)
+            .onDisappear { errorBanner = nil }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -115,7 +113,7 @@ struct AddChildView: View {
 
     private func save() async {
         guard canSubmit else { return }
-        errorMessage = nil
+        errorBanner = nil
         do {
             try await childService.addChild(
                 ChildFormValidation.makeInput(
@@ -129,7 +127,7 @@ struct AddChildView: View {
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = ((error as? ChildError) ?? .server).userMessage
+            errorBanner = MutationBanner.state(for: (error as? ChildError) ?? .server)
         }
     }
 }

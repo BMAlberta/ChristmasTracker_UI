@@ -40,13 +40,20 @@ struct StatsScreenModelStaleBannerTests {
         #expect(sut.model.failureBanner == nil, "the full-screen failure is only for an empty screen")
     }
 
-    @Test("a non-retryable failure also shows the stale banner with Try Again and Dismiss")
+    // REWRITTEN (UX1a U3): this test used to pin that a 403 is shown as "Couldn't update. Showing saved
+    // data.". The policy forbids that: a 403 is never shown as a failed update, it shows its own plain
+    // message (still with Try Again and Dismiss, saved data still visible). The connectivity cases keep
+    // the stale text (staleBannerText above, StatsScreenModelPolicyBannerTests).
+    @Test("a non-retryable failure shows its own plain message, never the stale-data text")
     func staleBannerForNonRetryableFailure() async {
         let sut = await makeLoadedStatsScreenSUT()
 
         await sut.failRefresh(with: .forbidden)
 
-        #expect(sut.model.staleBanner == StatsScreenTest.staleBanner)
+        #expect(sut.model.staleBanner?.message == BudgetError.forbidden.userMessage)
+        #expect(sut.model.staleBanner?.message != StatsScreenTest.staleMessage)
+        #expect(sut.model.staleBanner?.actions == [.tryAgain, .dismiss])
+        #expect(sut.model.loadPhase == .content, "the saved data stays visible")
     }
 
     @Test("no stale banner while the refresh succeeds")

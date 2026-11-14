@@ -294,10 +294,10 @@ struct EnrollMarkerRegistrationTests {
     }
 
     /// toggle(to: true) with a failing authenticator must result in evaluationCount == 1,
-    /// isEnabled == false, and a non-nil errorMessage. If the double-prompt bug (E4) is
+    /// isEnabled == false, and a non-nil banner (UX1a U3: was errorMessage). If the double-prompt bug (E4) is
     /// present, enrollCurrentSession would add a second authenticate call before throwing,
     /// making the count 2.
-    @Test("E4b: toggle(to: true) with failing authenticator: evaluationCount == 1, isEnabled == false, errorMessage set")
+    @Test("E4b: toggle(to: true) with failing authenticator: evaluationCount == 1, isEnabled == false, banner set")
     func toggleToTrueWithFailingAuthCallsAuthenticateExactlyOnce() async throws {
         let history = InMemoryEnrollmentHistory()
         let (service, _, _, auth, _) = makeSUT(
@@ -318,8 +318,8 @@ struct EnrollMarkerRegistrationTests {
                 "toggle(to: true) with a failing authenticator must still trigger exactly one prompt (evaluationCount must be 1)")
         #expect(toggleModel.isEnabled == false,
                 "isEnabled must remain false when biometric authentication fails during toggle")
-        #expect(toggleModel.errorMessage != nil,
-                "errorMessage must be set when toggle(to: true) fails due to biometric rejection")
+        #expect(toggleModel.banner != nil,
+                "banner must be set when toggle(to: true) fails due to biometric rejection")
     }
 
     /// With a failing authenticator, enrollCurrentSession must NOT be reached.

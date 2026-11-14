@@ -481,18 +481,24 @@ struct MembersChildrenViewScanTests {
         return String(rest)
     }
 
+    // REWRITTEN (UX1a U3): the banner is now InlineErrorBanner, whose Try Again closure is `onTryAgain:`
+    // (the removed ListErrorBanner called it `onRetry:`). The rule is unchanged: Try Again is routed
+    // through EditRetry and is never hard-wired to saveChanges(). It also requires the banner to be
+    // an InlineErrorBanner( call.
     @Test("(h) The error banner's Try Again is routed through EditRetry, not hard-wired to saveChanges")
     func retryIsNotHardWiredToSave() throws {
         let text = try editListCode()
+        #expect(text.contains("InlineErrorBanner("), "EditListView shows its mutation error in an InlineErrorBanner")
         let lines = text.components(separatedBy: "\n")
-        let retryLine = try #require(lines.firstIndex { $0.contains("onRetry:") }, "EditListView has no onRetry")
+        let retryLine = try #require(lines.firstIndex { $0.contains("onTryAgain:") }, "EditListView has no onTryAgain")
         let closure = lines[retryLine...min(retryLine + 8, lines.count - 1)].joined(separator: "\n")
         #expect(closure.contains("EditRetry.action(after"),
-                "onRetry must ask EditRetry.action(after:) which action failed")
-        #expect(closure.contains("saveChanges()"), "onRetry must still be able to re-run saveChanges()")
-        #expect(closure.contains("removeCoOwner()"), "onRetry must be able to re-run removeCoOwner()")
-        #expect(try Self.matches(#"onRetry:\s*\{\s*Task\s*\{\s*await\s+saveChanges\(\)\s*\}\s*\}"#, in: text).isEmpty,
-                "onRetry must not be hard-wired to saveChanges() alone")
+                "onTryAgain must ask EditRetry.action(after:) which action failed")
+        #expect(closure.contains("saveChanges()"), "onTryAgain must still be able to re-run saveChanges()")
+        #expect(closure.contains("removeCoOwner()"), "onTryAgain must be able to re-run removeCoOwner()")
+        #expect(try Self.matches(#"onTryAgain:\s*\{\s*Task\s*\{\s*await\s+saveChanges\(\)\s*\}\s*\}"#, in: text).isEmpty,
+                "onTryAgain must not be hard-wired to saveChanges() alone")
+        #expect(try Self.matches(#"onRetry:"#, in: text).isEmpty, "the removed ListErrorBanner callback must be gone")
     }
 
     @Test("(h) removeCoOwner() records .removeCoOwner as the failed action and saveChanges() records .save")
