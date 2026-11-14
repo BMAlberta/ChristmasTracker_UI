@@ -71,7 +71,7 @@
 | 4007 | `BUDGET_NOT_FOUND` | 404 | Budget not found | src/services/budget.service.ts | ACTIVE | treat as not found |
 | 4008 | `RECIPIENT_BUDGET_NOT_FOUND` | 404 | Recipient budget not found | — | UNUSED | treat as not found |
 | 4009 | `MEMBER_EMAIL_NOT_FOUND` | 404 | Member email not found | src/services/list.service.ts | ACTIVE | show message |
-| 4010 | `RECIPIENT_NOT_FOUND` | 404 | Recipient not found | src/services/list.service.ts | ACTIVE | treat as not found |
+| 4010 | `RECIPIENT_NOT_FOUND` | 404 | Recipient not found | src/services/budget.service.ts, src/services/list.service.ts | ACTIVE | treat as not found |
 | 4011 | `PERSON_NOT_FOUND` | 404 | Person not found | src/services/user.service.ts | ACTIVE | treat as not found |
 | 5001 | `DUPLICATE_RESOURCE` | 409 | Duplicate resource | src/middleware/errorHandler.ts | ACTIVE | show message |
 | 5002 | `LIST_ALREADY_EXISTS` | 409 | List already exists | src/services/list.service.ts | ACTIVE | show message |

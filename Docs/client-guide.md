@@ -413,7 +413,7 @@ The same capability flags appear on both `ListSummary` and `ListDetail`.
 
 **C14 — memberCount vs members:** `ListSummary` (returned by `GET /lists`) carries `memberCount: number` — the count of ACTIVE memberships — not a `members` array. `ListDetail` (returned by `GET /lists/{id}` and `POST /lists`) carries the full `members` array AND `memberCount`. Clients that previously accessed `ListSummary.members` must switch to `GET /lists/{id}` to retrieve the full member list.  
 **P22 — members only when `canSeeMembers` is true:** `ListDetail.members` is present only when `canSeeMembers` is `true` and is absent otherwise (the key is not sent, and it is never an empty array). Use `memberCount` when `canSeeMembers` is `false`, and call `GET /lists/{id}/members` only when it is `true` (the endpoint returns 403 otherwise).  
-**Roster (L13):** `ListDetail.members` lists only MEMBER-role and VIEWER-role memberships, with status ACTIVE or INVITED (a pending invitation). The owner, the co-owner and the recipient are never in it: read them from `owner`, `coOwner` (`null` when there is none) and `recipient`. `memberCount` counts only ACTIVE members and viewers. Show the roster as the owner, the co-owner (if any) and then `members`.  
+**Roster (L13):** `ListDetail.members` lists only MEMBER-role and VIEWER-role memberships, with status ACTIVE or INVITED (a pending invitation). The owner, the co-owner and the recipient are never in it: read them from `owner`, `coOwner` (`null` when there is none) and `recipient`. `memberCount` counts only ACTIVE members and viewers. Show the roster as the owner, the co-owner (if any) and then `members`. Every roster row is `ACTIVE` in practice: adding a member makes the membership active at once, and `INVITED` is reserved and not currently produced (§10).  
 
 **List management rights (P23):**
 
@@ -495,6 +495,16 @@ Source: `Docs/privacy-matrix.md`, `__tests__/integration/privacy.test.ts`
 
 `GET /lists/{id}` returns 200 with the full `ListDetail` and `status: ARCHIVED` for an archived list (never 404) to anyone who may view the list. Archiving closes list management, not gift tracking: the management flags (`canEditList`, `canDeleteList`, `canManageMembers`, `canSetCoOwner`) are `false`, `canLeaveList` stays `true` for members and viewers, and `PATCH /lists/{id}` returns 422 `CANNOT_EDIT_ARCHIVED_LIST` (including un-archiving). Items, off-list items and purchases are still accepted, and `canCreateItem`, `canPurchase`, `canAddOffList` and `canSeeGiftActivity` do not depend on the list status, so a member can still record a purchase on an archived list. `members` follows `canSeeMembers`, and the list stays in `GET /lists` unless filtered with `status`. Clients drive the UI from the flags and add no archived-specific rule of their own.  
 Source: `src/services/list.service.ts`, `src/utils/privacy.ts`, `src/services/item.service.ts`, `src/services/purchase.service.ts`
+
+### 6.7 Leaving a List and Removing Members
+
+A member leaves with `DELETE /lists/{id}/members/{your userId}`. Afterwards:
+
+- On a PRIVATE, INVITE_ONLY or FRIENDS_ONLY list, `GET /lists/{id}`, `GET /lists/{id}/members` and `GET /lists/{id}/items` return `404 LIST_NOT_FOUND` (4003), item operations by item id (read, edit, status, delete) return `404 ITEM_NOT_FOUND` (4004), and the list is gone from `GET /lists`. The server treats the former member as any other non-member (§6.5).
+- A PUBLIC list stays readable as a non-member: `GET /lists/{id}` and `GET /lists/{id}/items` return 200 with the view of §6.3. Writes return 403, and `GET /lists/{id}/members` returns 403 (P22).
+
+`DELETE /lists/{id}/members/{userId}` with the owner's or the co-owner's id returns `403 FORBIDDEN` (2001), whoever calls it and including the owner's own id. A caller who cannot see the list gets the 404 of §6.5 first.  
+Source: `src/services/list.service.ts` (`removeMember`, `getMembers`, `getListById`, `getLists`), `src/services/item.service.ts`
 
 ---
 
@@ -596,6 +606,23 @@ Source: `src/routes/list-items.routes.ts:99-118`, `src/services/item.service.ts`
 
 Both are present only when the caller can see gift activity (`canSeeGiftActivity`, P3). For a blind owner or co-owner, a VIEWER-role member or a PUBLIC non-member the keys are absent (not `null`, not `0`), the same as `updatedAt` and the real `status`. A new item returns `0` and `quantityRequested`.  
 Source: `src/services/item.service.ts` (`getPurchasedQuantities`, `formatItemResponseWithPrivacy`), `__tests__/integration/item-purchase-counts.test.ts`
+
+**Which kind of item a caller creates (P21).** An item the caller creates is off-list if and only if `canAddOffList` is `true` on the list: an ACTIVE MEMBER-role member creates off-list items, and an owner or co-owner (blind or not) creates normal items. Read `canAddOffList` to label the form; never send `offList`.  
+Source: `src/services/item.service.ts` (`createItem`)
+
+**Editing and deleting an item (P25).** Every `Item` carries two required booleans, on every response that returns an `Item` (create, list, read, edit and status): `canEdit` for `PATCH /items/{id}` and `canDelete` for `DELETE /items/{id}`. They say what the server accepts for the caller on that item now.
+
+| Caller | Item | `canEdit` | `canDelete` |
+|--------|------|-----------|-------------|
+| Owner or co-owner, blind or not | Normal item | `true` | `true`, except `false` when the caller can see gift activity and the item has purchases |
+| Creator of the item | Their own off-list item | `true` | `true`, except `false` when the item has purchases |
+| Anyone else | Any item | `false` | `false` |
+
+When `canDelete` is `false` only because of purchases, the server answers `422 CANNOT_DELETE_ITEM_WITH_PURCHASES`. Blind callers are never told about purchases, so for them `canDelete` follows the permission alone. Neither flag depends on the list status, so they are the same on an archived list (§6.6, L16). Blind callers and PUBLIC non-members never receive off-list items (§6.2), so those rows do not occur for them.  
+Source: `src/utils/itemPermissions.ts`, `src/services/item.service.ts`, `__tests__/integration/item-edit-delete-flags.test.ts`
+
+**Deleting an item.** `DELETE /items/{id}` is a soft delete: the item disappears from item lists and from `GET /items/{id}` (404 `ITEM_NOT_FOUND`), but its purchases are kept and still count in `totalSpent`, in budgets (`spent`, `remaining`, `isOverBudget`), in `GET /stats` and in `GET /purchases`. After an item delete there is nothing to refresh in budgets, stats or purchase history; just remove the item from the screen. A caller who can see gift activity cannot delete an item that has purchases, so the case arises when a blind owner or co-owner deletes an item that members already bought.  
+Source: `src/services/item.service.ts` (`deleteItem`), `src/services/budget.service.ts`, `src/services/stats.service.ts`, `src/utils/purchaseFilterBuilder.ts`
 
 ### 7.6 Purchase with Budget Confirmation Flow
 
@@ -743,6 +770,7 @@ Returns `StatsYearResponse`:
 ```
 
 `budget` is null if no budget has been set for the year.  
+`availableYears` lists every year in which you have a purchase or a budget, newest first, so a year that has a budget but no purchases is included (its `totalSpent` is 0).  
 Source: `src/services/stats.service.ts`, `__tests__/integration/stats.test.ts`
 
 **Purchase history (cursor-paginated):**
@@ -792,6 +820,30 @@ Content-Type: application/json
 
 All fields are optional. When `recipients` is included it replaces the current allocation entirely.  
 Source: `src/routes/budget.routes.ts`, `src/services/budget.service.ts`
+
+**Who can be a recipient (S16).** Each `recipientId` on `POST /budgets` and `PATCH /budgets/{year}` must be one of your own children or a person who shares a list with you, the same rule as `GET /users/{id}` (§7.10). Your own id, an unknown id and a person you are not connected to all return the identical `404 RECIPIENT_NOT_FOUND`: the body never contains a name and never says whether the account exists. The server checks every recipient before it answers, so the order in `recipients` does not matter, and a rejected request changes nothing. The same `recipientId` twice in one request returns `400 VALIDATION_ERROR`.  
+Allocations that already exist stay readable with their names even when you no longer share a list with the person, and `PATCH` with only `totalBudget` and `POST /budgets/{year}/duplicate` do not check them again. On `PATCH`, only a recipient that is not already allocated in that budget is checked, so an existing allocation can always be kept, changed or removed, even when you no longer share a list with the person. A request that also adds a new, unconnected recipient is rejected whole with the 404, and nothing changes.  
+Source: `src/services/budget.service.ts`, `src/services/user.service.ts` (`isConnectedPerson`), `__tests__/integration/budget-recipients.test.ts`
+
+**Which people a user can set limits for.** No endpoint lists them. Build the candidates on the client: the `recipient` of every list from `GET /lists` where `canPurchase` is `true` (this leaves out the user's own blind lists, where `canPurchase` is `false`), plus the recipients already in the budget. Every person in the first group passes the S16 check. A person who is only in the second group may no longer pass it, but their existing allocation can still be kept, changed or removed; the check applies only when you add them again as a new recipient.
+
+**Sum rule and the 422.** The sum of the `maxSpend` values must not exceed `totalBudget`; a `totalBudget` of 0 is checked like any other amount.
+
+| Request | Sum above the total |
+|---------|---------------------|
+| `POST /budgets` | `400 VALIDATION_ERROR` |
+| `PATCH /budgets/{year}` with both `totalBudget` and `recipients` | `400 VALIDATION_ERROR` |
+| `PATCH /budgets/{year}` with only `recipients` (checked against the stored total) | `422 RECIPIENT_BUDGET_SUM_EXCEEDS_TOTAL` (6003) |
+| `PATCH /budgets/{year}` with only `totalBudget` (checked against the stored allocations) | `422 RECIPIENT_BUDGET_SUM_EXCEEDS_TOTAL` (6003) |
+
+`PATCH /budgets/{year}` is the only operation that returns 6003; `POST /budgets/{year}/duplicate` never does.  
+Source: `src/types/schemas.ts`, `src/services/budget.service.ts`, `__tests__/integration/budget-sum-422.test.ts`
+
+**Reading a budget.** `remaining` is signed: it is negative when the spend is above the limit. `isOverBudget` is `true` exactly when `remaining` is below zero, for the budget total and for every recipient. A recipient also carries `overage`, the amount by which `spent` is above `maxSpend` (0 when it is not).  
+Source: `src/services/budget.service.ts` (`formatBudgetResponse`)
+
+**Deleting a budget.** `DELETE /budgets/{year}` returns `422 CANNOT_DELETE_BUDGET_WITH_PURCHASES` (6004) exactly when you have at least one purchase, as the purchaser, on an item of a list from that year. Soft-deleted items and archived lists count. Delete those purchases (`DELETE /purchases/{id}`; `GET /purchases?year=` lists them) and the budget can be deleted.  
+Source: `src/services/budget.service.ts` (`deleteBudget`), `src/services/purchase.service.ts` (`deletePurchase`), `src/utils/purchaseFilterBuilder.ts`
 
 ### 7.10 Profile, Children, and Users
 
