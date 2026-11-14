@@ -10,7 +10,9 @@
 //   - blind owner, blind co-owner, VIEWER-role member and PUBLIC non-member receive every item
 //     AVAILABLE with no updatedAt, no purchases and no off-list items;
 //   - owner, co-owner and MEMBER see real status, updatedAt and (canSeeOffList) off-list items.
-//  The mapper itself is flag-free: it must never invent a value, so absent stays nil.
+//  The mapper copies the server's per-item canEdit and canDelete as sent and never derives them
+//  (the list capability flags are handled by ItemPermissions). It must never invent a value, so
+//  absent stays nil.
 //
 //  Covers mapListItem, ListItem, ListItemPerson, ListItemPurchaseSummary and the ItemError cases it throws.
 //

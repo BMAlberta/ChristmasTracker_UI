@@ -128,7 +128,7 @@ nonisolated struct ItemListState: Equatable, Sendable {
         currencyCode: String = "USD",
         locale: Locale = Locale(identifier: "en_US")
     ) {
-        let permissions = ItemPermissions(capabilities: capabilities, currentUserId: currentUserId)
+        let permissions = ItemPermissions(capabilities: capabilities)
         let visible = permissions.visibleItems(items)
         func row(_ item: ListItem) -> ItemRowState {
             ItemRowState(item: item, permissions: permissions, currencyCode: currencyCode, locale: locale)
@@ -197,7 +197,7 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
         locale: Locale = Locale(identifier: "en_US"),
         now: Date
     ) {
-        let permissions = ItemPermissions(capabilities: capabilities, currentUserId: currentUserId)
+        let permissions = ItemPermissions(capabilities: capabilities)
         let showsActivity = permissions.canSeeGiftActivity
 
         title = item.name

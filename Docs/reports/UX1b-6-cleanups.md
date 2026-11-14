@@ -76,9 +76,44 @@ Test run with 212 tests in 16 suites passed
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After the (d) commit: see the line at the end of this part, added after the commit run.
+After commit 7c18189 (separate run): `--- tests: 4398 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===` (this line ships with the next commit).
 
 ### Gate 2 (d)
 - convention-reviewer: APPROVE, no findings.
 - acceptance-reviewer: APPROVE (behavior unchanged; only the property, its assignments and the unused bindings were removed).
 - Stuck detector: none.
+
+## Part (e): remove the unused ItemPermissions current user property (own commit)
+
+### What changed
+- Features/Items/ViewState/ItemPermissions.swift: removed `private let currentUserId: String?` (and its doc comment) and the init parameter and assignment; the init is now `init(capabilities: ListCapabilities)`. Call sites updated: Features/Items/ViewState/ItemViewState.swift (two constructions), Features/Items/Views/AddItemView.swift.
+- Stop condition checked and not triggered: in the pre-change version the only reader of the property was the init assignment (the acceptance-reviewer read every method: canAddItem, showsOffListNotice and visibleItems use flags and `ListItem.offList` only). Equatable: every production ItemPermissions is a local built from capabilities, and ItemListState/ItemRowState/ItemDetailState store neither ItemPermissions nor a user id, so no production equality or SwiftUI diff changes.
+- Tests (all in ItemPermissionsTests.swift; no whole test removed): `makeSUT` lost its `currentUserId` parameter; `canPurchaseIsTheFlagOnly` lost the line that only varied the removed parameter (same check kept on the line above and in `displayOutputsAreTheFlags`; title trimmed from "...and the user say" to "...say"); `equatable` lost the user-1 vs user-9 inequality (owner==owner and owner!=member kept; `personasOnActiveAndArchivedLists` also checks active==archived). A formatting defect from the edit (a closing brace on the same line as an `#expect`) was found by the convention-reviewer, fixed by the implementer, and re-reviewed.
+- Comments (comment lines only): ItemMappingTests.swift "flag-free" comment replaced by a true one (the mapper copies the server's per-item canEdit and canDelete as sent and never derives them; list capability flags are handled by ItemPermissions); Features/Items/Repositories/ItemMapping.swift long comment line wrapped onto two lines. Proof, raw: `git diff -U0 -- <ItemMapping.swift> <ItemMappingTests.swift> | grep -E '^[+-][^+-]' | grep -v -E '^[+-][[:space:]]*//'` printed nothing (run by the implementer, the convention-reviewer, the acceptance-reviewer and the Orchestrator).
+
+### Files
+Changed: Features/Items/ViewState/ItemPermissions.swift, ItemViewState.swift, Views/AddItemView.swift, Repositories/ItemMapping.swift (comment only); ChristmasTrackerTests/Features/Items/ItemPermissionsTests.swift, ItemMappingTests.swift (comment only); Docs/reports/UX1b-6-cleanups.md. Deleted: none. Added: none.
+
+### Test arithmetic (app suite)
+4398 + 0 new - 0 deleted (two assertions removed, one title trimmed) = 4398. Measured by scripts/verify.sh: 4398. Package 212, release scripts 92, destination scripts 17.
+
+### Raw output (from running commands)
+Before the (e) commit:
+```
+--- tests: 4398 passed, 0 failed, 0 skipped ---
+Test run with 212 tests in 16 suites passed
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+```
+After the (e) commit: see the line at the end of this part, added after the commit run.
+
+### Gate 2 (e)
+- convention-reviewer: REJECT once (the misplaced closing brace in ItemPermissionsTests.swift:162, routed to the Implementer), then APPROVE on re-review.
+- acceptance-reviewer: APPROVE.
+- Stuck detector: none.
+
+### Banked (B6 overall)
+- `ItemListState.init` (ItemViewState.swift:120 and :127) still takes a `currentUserId` parameter that its body never reads; callers still pass it (ItemsSectionView previews, tests). Out of the (e) scope (which names ItemPermissions); remove in a later cleanup.
+- (c) the orphaned Keychain item (see part a-c).
+- ListService.swift (about 1130 lines), ListDetailView.swift (about 446) and ChildrenView.swift (about 402) are over the file-length limits; split in a later package.

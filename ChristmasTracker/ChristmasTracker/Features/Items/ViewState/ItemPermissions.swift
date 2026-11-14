@@ -17,17 +17,14 @@ import Foundation
 nonisolated struct ItemPermissions: Equatable, Sendable {
     private let canCreateItem: Bool
     private let canAddOffList: Bool
-    /// Unused by any rule; kept only for the init signature and Equatable.
-    private let currentUserId: String?
 
     let canSeeGiftActivity: Bool
     let canSeeOffListItems: Bool
     let canPurchase: Bool
 
-    init(capabilities: ListCapabilities, currentUserId: String?) {
+    init(capabilities: ListCapabilities) {
         self.canCreateItem = capabilities.canCreateItem
         self.canAddOffList = capabilities.canAddOffList
-        self.currentUserId = currentUserId
         self.canSeeGiftActivity = capabilities.canSeeGiftActivity
         self.canSeeOffListItems = capabilities.canSeeOffList
         self.canPurchase = capabilities.canPurchase

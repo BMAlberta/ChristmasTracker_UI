@@ -26,11 +26,8 @@ struct ItemPermissionsTests {
 
     // MARK: - Factory
 
-    private func makeSUT(
-        _ capabilities: ListCapabilities,
-        currentUserId: String? = ItemFixtures.currentUserId
-    ) -> ItemPermissions {
-        ItemPermissions(capabilities: capabilities, currentUserId: currentUserId)
+    private func makeSUT(_ capabilities: ListCapabilities) -> ItemPermissions {
+        ItemPermissions(capabilities: capabilities)
     }
 
     // MARK: - Display outputs
@@ -57,7 +54,7 @@ struct ItemPermissionsTests {
         #expect(sut.showsOffListNotice == canAddOffList)
     }
 
-    @Test("canPurchase is the flag exactly, whatever the other flags and the user say")
+    @Test("canPurchase is the flag exactly, whatever the other flags say")
     func canPurchaseIsTheFlagOnly() {
         for canPurchase in [false, true] {
             for other in [false, true] {
@@ -66,7 +63,6 @@ struct ItemPermissionsTests {
                     canSeeGiftActivity: other, canSeeOffList: other, canPurchase: canPurchase
                 )
                 #expect(makeSUT(capabilities).canPurchase == canPurchase)
-                #expect(makeSUT(capabilities, currentUserId: nil).canPurchase == canPurchase)
             }
         }
     }
@@ -163,7 +159,7 @@ struct ItemPermissionsTests {
     func equatable() {
         let owner = ItemFixtures.Persona.owner.capabilities
         #expect(makeSUT(owner) == makeSUT(owner))
-        #expect(makeSUT(owner) != makeSUT(ItemFixtures.Persona.member.capabilities))
-        #expect(makeSUT(owner, currentUserId: "user-1") != makeSUT(owner, currentUserId: "user-9"))
+        let member = ItemFixtures.Persona.member.capabilities
+        #expect(makeSUT(owner) != makeSUT(member))
     }
 }
