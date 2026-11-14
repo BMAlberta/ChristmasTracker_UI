@@ -82,7 +82,7 @@ struct ListServiceMemberTests {
         let cached = await sut.store.getListDetail(id: H.listId)
         #expect(cached == refetched)
         #expect(sut.service.lists.first(where: { $0.id == H.listId })?.memberCount == 3)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("addMember to a list that is not the open one leaves currentListDetail alone")
@@ -114,12 +114,16 @@ struct ListServiceMemberTests {
         }
 
         #expect(sut.lists.fetchListDetailCount == 1, "no refetch after a failed add")
+        #expect(sut.service.listsLoadFailure == nil, "a mutation publishes nothing")
+        #expect(sut.service.detailLoadFailure == nil, "a mutation publishes nothing")
         #expect(sut.service.currentListDetail == initial)
         #expect(sut.service.lists.map(\.id) == [H.listId])
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("addMember that succeeds but whose refetch fails returns normally and sets the refetch error")
+    // REPLACED (UX1a U2): the old test asserted the refetch failure was published in `error`. That is
+    // removed on purpose: the failure is logged by operation name and published nowhere.
+    @Test("addMember that succeeds but whose refetch fails returns normally and publishes nothing")
     func addMemberRefetchFailure() async throws {
         let sut = await H.make()
         try await sut.loadInitial()
@@ -129,7 +133,8 @@ struct ListServiceMemberTests {
 
         try await sut.service.addMember(listId: H.listId, H.addInput)
 
-        #expect(sut.service.error == .network)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil, "the refetch failure is not published")
         #expect(sut.service.currentListDetail == initial, "a failed refetch must not blank or alter the detail")
         #expect(sut.service.isMutating == false)
     }
@@ -169,10 +174,11 @@ struct ListServiceMemberTests {
         let cached = await sut.store.getListDetail(id: H.listId)
         #expect(cached == refetched)
         #expect(sut.service.lists.first(where: { $0.id == H.listId })?.memberCount == 1)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
-    @Test("removeMember that succeeds but whose refetch fails returns normally and sets the refetch error")
+    // REPLACED (UX1a U2): see addMemberRefetchFailure.
+    @Test("removeMember that succeeds but whose refetch fails returns normally and publishes nothing")
     func removeMemberRefetchFailure() async throws {
         let sut = await H.make()
         try await sut.loadInitial()
@@ -182,7 +188,8 @@ struct ListServiceMemberTests {
 
         try await sut.service.removeMember(listId: H.listId, userId: MembersFixtures.memberUserId)
 
-        #expect(sut.service.error == .server)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil, "the refetch failure is not published")
         #expect(sut.service.currentListDetail == initial)
         #expect(sut.service.isMutating == false)
     }
@@ -236,6 +243,7 @@ struct ListServiceMemberTests {
         #expect(sut.lists.fetchListDetailCount == 1)
         #expect(sut.service.currentListDetail == initial)
         #expect(sut.service.lists.map(\.id) == [H.listId])
+        #expect(sut.service.anyLoadFailure == nil, "a mutation publishes nothing")
     }
 
     // MARK: - leaveList
@@ -350,7 +358,7 @@ struct ListServiceMemberTests {
         await sut.service.loadListDetail(id: H.listId)
 
         #expect(sut.service.currentListDetail == again)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         let cachedDetail = await sut.store.getListDetail(id: H.listId)
         #expect(cachedDetail == again)
     }
@@ -431,6 +439,7 @@ struct ListServiceMemberTests {
         #expect(sut.service.goneListId == nil)
         let cachedDetail = await sut.store.getListDetail(id: H.listId)
         #expect(cachedDetail == initial)
+        #expect(sut.service.anyLoadFailure == nil, "a mutation publishes nothing")
     }
 
     // MARK: - setCoOwner
@@ -473,7 +482,7 @@ struct ListServiceMemberTests {
         #expect(cached == returned)
         #expect(sut.service.lists.first(where: { $0.id == H.listId }) == returned.asGiftList())
         #expect(sut.lists.fetchListDetailCount == 1, "setCoOwner must not refetch")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("setCoOwner failing rethrows and leaves the state alone", arguments: [
@@ -492,6 +501,7 @@ struct ListServiceMemberTests {
         #expect(sut.service.currentListDetail == initial)
         #expect(sut.service.lists.map(\.id) == [H.listId])
         #expect(sut.service.goneListId == nil)
+        #expect(sut.service.anyLoadFailure == nil, "a mutation publishes nothing")
     }
 
     // MARK: - Gone list (notFound / archivedReadOnly)
@@ -518,6 +528,7 @@ struct ListServiceMemberTests {
         #expect(cachedDetail == nil)
         let cachedLists = await sut.store.getLists()
         #expect(cachedLists.isEmpty)
+        #expect(sut.service.anyLoadFailure == nil, "a mutation publishes nothing, even when it drops the list")
         #expect(sut.service.isMutating == false)
     }
 

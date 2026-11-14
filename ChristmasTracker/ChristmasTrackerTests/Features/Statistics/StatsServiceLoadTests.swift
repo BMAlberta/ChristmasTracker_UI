@@ -222,7 +222,8 @@ struct StatsServiceLoadTests {
         await sut.service.load(year: 2026)
 
         #expect(sut.service.stats(for: 2026)?.totalSpent == BudgetFixtures.dec("10"))
-        #expect(sut.service.loadFailure == .network)
+        // REWRITTEN (UX1a U2): the failure is keyed by the year that failed.
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .network))
     }
 
     // MARK: Failures
@@ -235,7 +236,8 @@ struct StatsServiceLoadTests {
 
         await sut.service.load(year: 2026)
 
-        #expect(sut.service.loadFailure == error)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: error))
+        #expect(sut.service.failure(forYear: 2026) == error)
         #expect(sut.service.stats(for: 2026) == nil)
         #expect(sut.service.isLoading == false)
     }
@@ -250,7 +252,8 @@ struct StatsServiceLoadTests {
         await sut.service.refresh(year: 2026)
 
         #expect(sut.service.stats(for: 2026)?.totalSpent == BudgetFixtures.dec("10"))
-        #expect(sut.service.loadFailure == error)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: error))
+        #expect(sut.service.failure(forYear: 2026) == error)
         #expect(sut.service.isLoading == false)
     }
 
@@ -265,7 +268,8 @@ struct StatsServiceLoadTests {
 
         #expect(sut.service.stats(for: 2025)?.totalSpent == BudgetFixtures.dec("25"))
         #expect(sut.service.stats(for: 2026) == nil)
-        #expect(sut.service.loadFailure == .server)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .server))
+        #expect(sut.service.failure(forYear: 2025) == nil, "the failure belongs to 2026 only")
     }
 
     @Test("a load after a failure with nothing cached tries again")
@@ -300,7 +304,7 @@ struct StatsServiceLoadTests {
         let sut = await makeStatsServiceSUT()
         sut.loader.enqueueFailure(BudgetError.network)
         await sut.service.load(year: 2026)
-        #expect(sut.service.loadFailure == .network)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .network))
         sut.loader.enqueue(StatsFix.year())
 
         await sut.service.load(year: 2026)
@@ -315,7 +319,7 @@ struct StatsServiceLoadTests {
         await sut.service.load(year: 2026)
         sut.loader.enqueueFailure(BudgetError.server)
         await sut.service.refresh(year: 2026)
-        #expect(sut.service.loadFailure == .server)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .server))
         sut.loader.enqueue(StatsFix.year(2026, spent: "12"))
 
         await sut.service.refresh(year: 2026)
@@ -331,11 +335,12 @@ struct StatsServiceLoadTests {
         await sut.service.load(year: 2026)
         sut.loader.enqueueFailure(BudgetError.network)
         await sut.service.refresh(year: 2026)
-        #expect(sut.service.loadFailure == .network)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .network))
 
         sut.service.clearLoadFailure()
 
         #expect(sut.service.loadFailure == nil)
+        #expect(sut.service.failure(forYear: 2026) == nil)
         #expect(sut.service.stats(for: 2026)?.totalSpent == BudgetFixtures.dec("10"))
     }
 

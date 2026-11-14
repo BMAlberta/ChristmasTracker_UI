@@ -13,7 +13,9 @@ internal final class ProfileBiometricToggleModel {
     // MARK: - Observable State
 
     var isEnabled: Bool
-    var errorMessage: String?
+    /// The failure of the last enable attempt, shown inline by the Profile screen. Cleared by
+    /// `dismissBanner()`, by the next toggle and when the screen disappears.
+    private(set) var banner: InlineErrorBannerState?
     var isDisabledForOtherUser: Bool
     var disabledMessage: String?
 
@@ -46,6 +48,7 @@ internal final class ProfileBiometricToggleModel {
         defer { transaction.finish() }
 
         guard !isDisabledForOtherUser else { return }
+        banner = nil
 
         if !newValue {
             try? authService.revokeEnrollment()
@@ -59,7 +62,7 @@ internal final class ProfileBiometricToggleModel {
         )
         guard authResult == .success else {
             isEnabled = false
-            errorMessage = "Biometric authentication failed. Try again or use your password."
+            banner = Self.failureBanner("Biometric authentication failed. Try again or use your password.")
             return
         }
 
@@ -68,7 +71,15 @@ internal final class ProfileBiometricToggleModel {
             isEnabled = true
         } catch {
             isEnabled = false
-            errorMessage = "Biometric enrollment failed. Try again or use your password."
+            banner = Self.failureBanner("Biometric enrollment failed. Try again or use your password.")
         }
+    }
+
+    func dismissBanner() {
+        banner = nil
+    }
+
+    private static func failureBanner(_ message: String) -> InlineErrorBannerState {
+        InlineErrorBannerState(message: message, canRetry: true, isDismissible: true)
     }
 }

@@ -26,8 +26,9 @@ final class StatsService {
     /// The cached statistics, by year.
     private(set) var statsByYear: [Int: StatsYear] = [:]
 
-    /// The last load error of the Statistics screen; nil when the last fetch succeeded.
-    private(set) var loadFailure: BudgetError?
+    /// The last load error of the Statistics screen and the year that failed; nil when the last
+    /// fetch of that year succeeded.
+    private(set) var loadFailure: StatsLoadFailure?
 
     /// True while any fetch runs.
     private(set) var isLoading: Bool = false
@@ -94,6 +95,29 @@ final class StatsService {
         loadFailure = nil
     }
 
+    /// The stored load error when it belongs to `year`; nil for any other year.
+    func failure(forYear year: Int) -> BudgetError? {
+        guard let loadFailure, loadFailure.year == year else { return nil }
+        return loadFailure.error
+    }
+
+    /// Removes the budget block of a cached year locally (after a successful delete), so a failed
+    /// follow-up refresh does not keep showing the deleted budget. No network call and no
+    /// generation change; does nothing when the year is not cached or has no budget block, and
+    /// nothing is cached after teardown.
+    func dropBudget(year: Int) {
+        guard let cached = statsByYear[year], cached.budget != nil else { return }
+        statsByYear[year] = StatsYear(
+            year: cached.year,
+            totalSpent: cached.totalSpent,
+            itemsPurchased: cached.itemsPurchased,
+            purchaseCount: cached.purchaseCount,
+            spendByRecipient: cached.spendByRecipient,
+            budget: nil,
+            availableYears: cached.availableYears
+        )
+    }
+
     /// Spending changed (a purchase was recorded or deleted): every cached year stays visible but
     /// the next `load` refetches it.
     func markSpendingStale() {
@@ -152,11 +176,11 @@ final class StatsService {
             landedSequenceByYear[year] = sequence
             statsByYear[year] = stats
             if epoch == staleEpoch { freshYears.insert(year) }
-            loadFailure = nil
+            if loadFailure?.year == year { loadFailure = nil }
         } catch {
             guard let failure = failure(error, generation: gen) else { return }
             if sequence < (landedSequenceByYear[year] ?? 0) { return }
-            loadFailure = failure
+            loadFailure = StatsLoadFailure(year: year, error: failure)
         }
     }
 
@@ -199,6 +223,12 @@ final class StatsService {
         LogError("load stats failed", category: .business)
         return (error as? BudgetError) ?? BudgetError.server
     }
+}
+
+/// A failed statistics load and the year it was for.
+nonisolated struct StatsLoadFailure: Equatable, Sendable {
+    let year: Int
+    let error: BudgetError
 }
 
 // MARK: - SessionClearable and SpendingCacheInvalidating

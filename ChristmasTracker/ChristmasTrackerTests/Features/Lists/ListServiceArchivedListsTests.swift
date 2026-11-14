@@ -69,7 +69,7 @@ struct ListServiceArchivedListsTests {
         #expect(sut.service.archivedLists.map(\.id) == ["list-z1", "list-z2"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a1", "list-z1", "list-d1", "list-z2", "list-a2"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
     }
 
     @Test("refreshLists keeps every list and derives the two groups")
@@ -108,7 +108,7 @@ struct ListServiceArchivedListsTests {
 
         #expect(sut.service.activeLists.isEmpty)
         #expect(sut.service.archivedLists.map(\.id) == ["list-z1"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
     }
 
     @Test("DRAFT counts as active and never as archived")
@@ -185,7 +185,7 @@ struct ListServiceArchivedListsTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail == detail)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == detail)

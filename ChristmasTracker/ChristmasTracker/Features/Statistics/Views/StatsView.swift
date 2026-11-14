@@ -54,7 +54,7 @@ struct StatsContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                if let stale = model.staleBanner {
+                ForEach(Array(model.staleBanners.enumerated()), id: \.offset) { _, stale in
                     InlineErrorBanner(
                         state: stale,
                         onTryAgain: { Task { await model.tryAgain() } },

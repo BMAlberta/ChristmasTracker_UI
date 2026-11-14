@@ -71,7 +71,7 @@ struct ListServiceLoadingFlagsTests {
         await task.value
 
         #expect(sut.service.isMutating == false)
-        #expect(sut.service.error == .server)
+        #expect(sut.service.anyLoadFailure == nil, "a mutation failure is thrown, never published")
     }
 
     // MARK: - Detail

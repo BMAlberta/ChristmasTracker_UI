@@ -30,6 +30,7 @@ struct BudgetCardView: View {
             if let cardBanner = model.budgetCardBanner {
                 InlineErrorBanner(
                     state: cardBanner,
+                    onTryAgain: { Task { await model.retryBudgetCardAction() } },
                     onDismiss: { model.dismissBudgetCardBanner() }
                 )
             }

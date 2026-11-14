@@ -51,7 +51,8 @@ struct ListServiceArchiveSessionSafetyTests {
     private func expectCleared(_ sut: SUT) async {
         #expect(sut.service.lists.isEmpty, "lists must stay empty")
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
-        #expect(sut.service.error == nil, "no error may be set after the session ended")
+        #expect(sut.service.listsLoadFailure == nil, "no failure may be set after the session ended")
+        #expect(sut.service.detailLoadFailure == nil, "no failure may be set after the session ended")
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.isMutating == false)
         let cachedLists = await sut.store.getLists()
@@ -168,7 +169,7 @@ struct ListServiceArchiveSessionSafetyTests {
         #expect(sut.service.lists.map(\.id) == ["list-b"], "A's data must not replace or join B's")
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
     }
 
@@ -190,7 +191,7 @@ struct ListServiceArchiveSessionSafetyTests {
         #expect(sut.service.lists == [active("list-a"), active("list-b")], "B's lists are untouched")
         let cached = await sut.store.getLists()
         #expect(cached == [active("list-a"), active("list-b")])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.repo.fetchListsCount == 2, "A's late archive started no reload of its own")
     }
 
@@ -209,7 +210,7 @@ struct ListServiceArchiveSessionSafetyTests {
         sut.repo.releaseAll()
         await task.value
 
-        #expect(sut.service.error == nil, "cancellation is not shown to the user")
+        #expect(sut.service.anyLoadFailure == nil, "cancellation is not shown to the user")
         #expect(sut.service.isMutating == false)
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
         #expect(sut.service.goneListId == nil)
@@ -229,7 +230,7 @@ struct ListServiceArchiveSessionSafetyTests {
         sut.repo.releaseAll()
         await task.value
 
-        #expect(sut.service.error == nil, "cancellation is not shown to the user")
+        #expect(sut.service.anyLoadFailure == nil, "cancellation is not shown to the user")
         #expect(sut.service.isMutating == false)
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"], "a cancelled reload writes nothing")
         #expect(sut.service.goneListId == nil)
@@ -244,7 +245,7 @@ struct ListServiceArchiveSessionSafetyTests {
 
         _ = try? await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.lists.map(\.id) == ["list-a"])
     }
@@ -259,7 +260,7 @@ struct ListServiceArchiveSessionSafetyTests {
 
         _ = try? await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -279,6 +280,6 @@ struct ListServiceArchiveSessionSafetyTests {
         await sut.service.loadLists()
 
         #expect(sut.service.activeLists.map(\.id) == ["list-a", "list-b"], "the stale archive left no record")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 }

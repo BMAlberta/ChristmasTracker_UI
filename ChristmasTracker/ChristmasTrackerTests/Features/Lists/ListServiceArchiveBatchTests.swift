@@ -72,7 +72,7 @@ struct ListServiceArchiveBatchTests {
         #expect(sut.service.lists.map(\.id) == ["list-a"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("every freshLists call fetches again")
@@ -104,7 +104,7 @@ struct ListServiceArchiveBatchTests {
         }
 
         #expect(sut.service.lists.map(\.id) == ["list-a"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("freshLists after the session was cleared mid-fetch throws CancellationError and writes nothing", arguments: [false, true])
@@ -129,7 +129,7 @@ struct ListServiceArchiveBatchTests {
 
         #expect(threwCancellation)
         #expect(sut.service.lists.isEmpty)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         let cached = await sut.store.getLists()
         #expect(cached.isEmpty)
     }
@@ -150,7 +150,7 @@ struct ListServiceArchiveBatchTests {
         #expect(sut.repo.deleteListCount == 3)
         #expect(sut.repo.fetchListsCount == 1)
         #expect(sut.service.archivedLists.map(\.id) == ["list-a", "list-b", "list-c"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -194,7 +194,7 @@ struct ListServiceArchiveBatchTests {
         #expect(result == ArchiveBatchResult(archivedCount: 3, totalCount: 3, failedId: nil, failure: nil))
         #expect(sut.repo.deleteListCount == 3)
         #expect(sut.repo.fetchListsCount == 1)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - archiveLists: empty input
@@ -208,7 +208,7 @@ struct ListServiceArchiveBatchTests {
         #expect(result == ArchiveBatchResult(archivedCount: 0, totalCount: 0, failedId: nil, failure: nil))
         #expect(sut.repo.deleteListCount == 0)
         #expect(sut.repo.fetchListsCount == 0)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -228,7 +228,7 @@ struct ListServiceArchiveBatchTests {
         #expect(sut.repo.deleteListCount == 2, "the third id must stay untouched")
         #expect(sut.repo.fetchListsCount == 1, "one reload at the end, also after a failure")
         #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
-        #expect(sut.service.error == nil, "the batch publishes no shared error")
+        #expect(sut.service.anyLoadFailure == nil, "the batch publishes nothing")
         #expect(sut.service.isMutating == false)
     }
 
@@ -244,12 +244,12 @@ struct ListServiceArchiveBatchTests {
         #expect(sut.repo.deleteListCount == 1)
         #expect(sut.repo.fetchListsCount == 1)
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
     @Test(
-        "every failure kind is reported in the result and never in the shared error",
+        "every failure kind is reported in the result and never published as a load failure",
         arguments: [ListError.forbidden, .unauthorized, .rateLimited(retryAfter: 5), .network, .invalidResponse, .server]
     )
     func failureKinds(error: ListError) async {
@@ -263,7 +263,7 @@ struct ListServiceArchiveBatchTests {
         #expect(result.failedId == "list-a")
         #expect(result.archivedCount == 0)
         #expect(result.totalCount == 1)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - archiveLists: session safety
@@ -286,7 +286,7 @@ struct ListServiceArchiveBatchTests {
         #expect(sut.repo.deleteListCount == 1, "a cleared session must not start the next archive")
         #expect(sut.repo.fetchListsCount == 0, "a cleared session must not reload")
         #expect(sut.service.lists.isEmpty)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
         let cached = await sut.store.getLists()
         #expect(cached.isEmpty)
@@ -312,7 +312,7 @@ struct ListServiceArchiveBatchTests {
         #expect(sut.repo.deleteListCount == 2)
         #expect(sut.repo.fetchListsCount == 0)
         #expect(sut.service.lists.isEmpty)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         let cached = await sut.store.getLists()
         #expect(cached.isEmpty)
     }

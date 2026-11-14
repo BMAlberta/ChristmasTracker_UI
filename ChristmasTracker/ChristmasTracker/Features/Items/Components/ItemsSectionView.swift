@@ -4,7 +4,7 @@
 //
 //  The items inside the list detail screen. Driven by `ItemListState` only: the Add button, the
 //  sections, the markers and the empty copy all come from the capability flags through the view
-//  state. An optional banner shows the load error the screen was handed.
+//  state. It shows no error of its own: the list detail screen shows one merged banner at its top.
 //
 
 import SwiftUI
@@ -12,18 +12,12 @@ import SwiftUI
 struct ItemsSectionView: View {
     let state: ItemListState
     let isLoading: Bool
-    let errorBanner: InlineErrorBannerState?
     let onSelect: (String) -> Void
     let onAdd: () -> Void
-    let onTryAgain: () -> Void
-    let onDismissError: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             header
-            if let errorBanner {
-                InlineErrorBanner(state: errorBanner, onTryAgain: onTryAgain, onDismiss: onDismissError)
-            }
             if isLoading && state.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -108,24 +102,18 @@ struct ItemsSectionView: View {
             currentUserId: MockItemRepository.defaultUser.id
         ),
         isLoading: false,
-        errorBanner: nil,
         onSelect: { _ in },
-        onAdd: { },
-        onTryAgain: { },
-        onDismissError: { }
+        onAdd: { }
     )
     .padding()
 }
 
-#Preview("Load error, empty") {
+#Preview("Empty, dark") {
     ItemsSectionView(
         state: ItemListState(items: [], capabilities: MockListData.ownerCapabilities, currentUserId: nil),
         isLoading: false,
-        errorBanner: ItemErrorPresentation.banner(for: .network, hasRetryAction: true),
         onSelect: { _ in },
-        onAdd: { },
-        onTryAgain: { },
-        onDismissError: { }
+        onAdd: { }
     )
     .padding()
     .preferredColorScheme(.dark)

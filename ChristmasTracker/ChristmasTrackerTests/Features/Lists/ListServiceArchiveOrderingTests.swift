@@ -95,7 +95,7 @@ struct ListServiceArchiveOrderingTests {
         #expect(sut.service.activeLists.isEmpty)
         let cached = await sut.store.getLists()
         #expect(cached == [archived("list-a"), archived("list-b")], "the older result must not reach the cache")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false, "false once the last mutation finished")
     }
 
@@ -114,7 +114,7 @@ struct ListServiceArchiveOrderingTests {
         try await archiveA.value
 
         #expect(sut.service.archivedLists.map(\.id) == ["list-a", "list-b"])
-        #expect(sut.service.error == nil, "a superseded reload reports nothing")
+        #expect(sut.service.anyLoadFailure == nil, "a superseded reload reports nothing")
         let cached = await sut.store.getLists()
         #expect(cached == [archived("list-a"), archived("list-b")])
     }
@@ -155,7 +155,7 @@ struct ListServiceArchiveOrderingTests {
         #expect(sut.service.currentListDetail == activeDetail("list-b"), "must not strand the screen on Loading")
         let cachedDetail = await sut.store.getListDetail(id: "list-b")
         #expect(cachedDetail == activeDetail("list-b"))
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
     }
@@ -177,7 +177,7 @@ struct ListServiceArchiveOrderingTests {
         #expect(sut.service.currentListDetail == archivedDetail("list-a"), "refreshed, never the stale active detail")
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == archivedDetail("list-a"))
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.repo.fetchListDetailCount == 2)
     }

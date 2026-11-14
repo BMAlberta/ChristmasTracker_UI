@@ -89,55 +89,6 @@ struct ListCountsView: View {
     }
 }
 
-// MARK: - Error banner
-
-/// An error from a list operation. Offers a retry only when the presentation says a retry can
-/// help, and a way out when the list is gone or read-only.
-struct ListErrorBanner: View {
-    let presentation: ListErrorPresentation
-    var onRetry: (() -> Void)?
-    var onLeave: (() -> Void)?
-    var onDismiss: (() -> Void)?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Label {
-                Text(presentation.message)
-                    .font(.appBody)
-                    .foregroundStyle(Color.textPrimaryColor)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Color.accentColor)
-            }
-
-            HStack(spacing: AppSpacing.md) {
-                if presentation.isRetryable, let onRetry {
-                    bannerButton("Try Again", systemImage: "arrow.clockwise", action: onRetry)
-                }
-                if presentation.shouldLeaveScreen, let onLeave {
-                    bannerButton("Close", systemImage: "xmark", action: onLeave)
-                } else if let onDismiss {
-                    bannerButton("Dismiss", systemImage: "xmark", action: onDismiss)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
-        .accessibilityElement(children: .contain)
-    }
-
-    private func bannerButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.appHeadline)
-                .frame(minHeight: 44)
-        }
-        .buttonStyle(.bordered)
-        .tint(.primaryColor)
-    }
-}
-
 // MARK: - Visibility description
 
 extension ListVisibility {

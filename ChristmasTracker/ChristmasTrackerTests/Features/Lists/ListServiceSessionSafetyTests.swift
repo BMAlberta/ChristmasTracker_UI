@@ -105,7 +105,8 @@ struct ListServiceSessionSafetyTests {
     private func expectCleared(_ sut: SUT) async {
         #expect(sut.service.lists.isEmpty, "lists must stay empty")
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
-        #expect(sut.service.error == nil, "no error may be set after the session ended")
+        #expect(sut.service.listsLoadFailure == nil, "no lists load failure may be set after the session ended")
+        #expect(sut.service.detailLoadFailure == nil, "no detail load failure may be set after the session ended")
         let cachedLists = await sut.store.getLists()
         #expect(cachedLists.isEmpty, "the cache must not receive a stale result")
         for id in ["list-a", "list-b", "list-new"] {
@@ -230,7 +231,7 @@ struct ListServiceSessionSafetyTests {
 
         #expect(sut.repo.fetchListsCount == before + 1)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("teardown with the data store also registered leaves service and cache empty after a late result")
@@ -266,16 +267,21 @@ struct ListServiceSessionSafetyTests {
         #expect(shouldRefresh, "a cleared cache must not look fresh")
     }
 
-    @Test("teardown clears an error left by a failed call")
+    // REWRITTEN (UX1a U2): both load failures are cleared at teardown (was: the shared `error`).
+    @Test("teardown clears the load failures left by failed loads")
     func teardownClearsError() async {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.failure(ListError.network))
+        sut.repo.enqueueFetchListDetail(.failure(ListError.server))
         await sut.service.loadLists()
-        #expect(sut.service.error == .network, "precondition")
+        await sut.service.loadListDetail(id: "list-a")
+        #expect(sut.service.listsLoadFailure == .network, "precondition")
+        #expect(sut.service.detailLoadFailure == .server, "precondition")
 
         await sut.manager.teardown(reason: .sessionExpired)
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
     }
 
     @Test("after teardown the next load goes to the repository, not to the old cache")
@@ -326,7 +332,7 @@ struct ListServiceSessionSafetyTests {
         #expect(sut.service.lists.map(\.id) == ["list-b"], "A's data must not replace or join B's")
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.repo.fetchListsCount == 2)
     }
 
@@ -353,7 +359,7 @@ struct ListServiceSessionSafetyTests {
         #expect(sut.service.lists.map(\.id) == ["list-b"])
         let cachedAfterB = await sut.store.getLists()
         #expect(cachedAfterB.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("user switch: B finishes first, then A's late result arrives and is discarded")
@@ -377,10 +383,10 @@ struct ListServiceSessionSafetyTests {
         #expect(sut.service.lists.map(\.id) == ["list-b"], "A's late result must not overwrite B's")
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
-    @Test("user switch: A's late failure does not put an error on B's session")
+    @Test("user switch: A's late failure does not put a load failure on B's session")
     func userSwitchLateFailureDoesNotLeak() async {
         let sut = await makeSUT()
         sut.repo.enqueueFetchLists(.failure(ListError.network), held: true)  // user A fails late
@@ -393,7 +399,7 @@ struct ListServiceSessionSafetyTests {
         sut.repo.releaseAll()
         await loadA.value
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
     }
 
@@ -413,7 +419,7 @@ struct ListServiceSessionSafetyTests {
         #expect(sut.service.currentListDetail?.id == "list-b")
         let staleDetail = await sut.store.getListDetail(id: "list-a")
         #expect(staleDetail == nil)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("user switch: a delete still in flight for A does not remove or alter B's lists")
@@ -434,6 +440,6 @@ struct ListServiceSessionSafetyTests {
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"], "A's late delete must not touch B's lists")
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a", "list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 }

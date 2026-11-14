@@ -90,8 +90,8 @@ struct ChildServiceSessionSafetyTests {
 
     private func expectCleared(_ sut: SUT) {
         #expect(sut.service.children.isEmpty, "children must stay empty")
-        #expect(sut.service.error == nil, "no error may be set after the session ended")
-        #expect(sut.service.phase == .idle, "the phase must stay idle after the session ended")
+        // UX1a U2: the shared `error` is gone; a stale failure could only appear as a failed phase.
+        #expect(sut.service.phase == .idle, "the phase (the load failure channel) must stay idle after the session ended")
         #expect(sut.service.isMutating == false)
     }
 
@@ -149,7 +149,6 @@ struct ChildServiceSessionSafetyTests {
         #expect(sut.repo.fetchChildrenCount == before + 1)
         #expect(sut.service.children == own)
         #expect(sut.service.phase == .loaded)
-        #expect(sut.service.error == nil)
     }
 
     // MARK: - User switch
@@ -172,10 +171,9 @@ struct ChildServiceSessionSafetyTests {
 
         #expect(sut.service.children == childOfB, "A's children must not replace or join B's")
         #expect(sut.service.phase == .loaded)
-        #expect(sut.service.error == nil)
     }
 
-    @Test("user switch: A's late failure does not put an error or a failed phase on B")
+    @Test("user switch: A's late failure does not put a failed phase on B")
     func userSwitchLateFailure() async {
         let sut = await makeSUT()
         let childOfB = [ChildFixtures.child(id: "child-b", firstName: "Bea", lastName: "Bee")]
@@ -189,7 +187,6 @@ struct ChildServiceSessionSafetyTests {
         sut.repo.gate.releaseAll()
         await loadA.value
 
-        #expect(sut.service.error == nil)
         #expect(sut.service.phase == .loaded)
         #expect(sut.service.children == childOfB)
     }
@@ -208,7 +205,7 @@ struct ChildServiceSessionSafetyTests {
         await deleteTask.value
 
         #expect(sut.service.children == ChildFixtures.twoChildren())
-        #expect(sut.service.error == nil)
+        #expect(sut.service.phase == .loaded)
     }
 
     @Test("user switch: A's add still in flight does not append to B's children")
@@ -230,7 +227,7 @@ struct ChildServiceSessionSafetyTests {
 
     // MARK: - Cancellation
 
-    @Test("cancelling the caller sets no error and no failed phase", arguments: ChildServiceOp.allCases)
+    @Test("cancelling the caller sets no failed phase", arguments: ChildServiceOp.allCases)
     func cancellationSetsNoError(op: ChildServiceOp) async {
         let sut = await makeLoadedSUT(honorsCancellation: true)
         op.script(sut.repo, failing: nil)
@@ -241,14 +238,13 @@ struct ChildServiceSessionSafetyTests {
         sut.repo.gate.releaseAll()
         await task.value
 
-        #expect(sut.service.error == nil, "cancellation is not shown to the user")
         #expect(sut.service.isMutating == false)
         if case .failed = sut.service.phase {
             Issue.record("a cancelled call must not leave the phase failed")
         }
     }
 
-    @Test("a repository that fails with CancellationError sets no error", arguments: ChildServiceOp.allCases)
+    @Test("a repository that fails with CancellationError sets no failed phase", arguments: ChildServiceOp.allCases)
     func repositoryCancellationErrorSetsNoError(op: ChildServiceOp) async {
         let sut = await makeLoadedSUT()
         switch op {
@@ -259,7 +255,6 @@ struct ChildServiceSessionSafetyTests {
 
         await op.run(sut.service)
 
-        #expect(sut.service.error == nil)
         #expect(sut.service.isMutating == false)
         if case .failed = sut.service.phase {
             Issue.record("a cancelled call must not leave the phase failed")
@@ -268,18 +263,21 @@ struct ChildServiceSessionSafetyTests {
 
     // MARK: - clearForSession
 
-    @Test("clearForSession empties children and error and returns the phase to idle")
+    // REWRITTEN (UX1a U2): there is no stored mutation error to clear any more; the failed delete is
+    // only thrown and leaves the loaded phase alone.
+    @Test("clearForSession empties children and returns the phase to idle")
     func clearForSessionEmptiesEverything() async throws {
         let sut = await makeLoadedSUT()
         sut.repo.enqueueDeleteChild(.failure(ChildError.childHasLists))
-        _ = try? await sut.service.deleteChild(id: "child-1")
-        #expect(sut.service.error != nil, "precondition")
+        await #expect(throws: ChildError.childHasLists) {
+            try await sut.service.deleteChild(id: "child-1")
+        }
+        #expect(sut.service.phase == .loaded, "precondition: the thrown failure did not touch the load channel")
         #expect(sut.service.children.isEmpty == false, "precondition")
 
         try await sut.service.clearForSession()
 
         #expect(sut.service.children.isEmpty)
-        #expect(sut.service.error == nil)
         #expect(sut.service.phase == .idle)
         #expect(sut.service.isMutating == false)
     }

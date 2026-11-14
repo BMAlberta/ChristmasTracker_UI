@@ -100,7 +100,7 @@ struct ListServiceArchiveTests {
         #expect(entry.capabilities.canCreateItem, "item flags survive the archive")
         #expect(!entry.capabilities.canEditList)
         #expect(!entry.capabilities.canDeleteList)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -156,7 +156,7 @@ struct ListServiceArchiveTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail == archivedDetail("list-a"))
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
     }
 
@@ -182,7 +182,7 @@ struct ListServiceArchiveTests {
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == archivedDetail("list-a"))
         #expect(sut.service.goneListId == nil, "archiving is not a gone-list drop")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("archiving a list that is not the open one does not refetch the open detail")
@@ -231,7 +231,7 @@ struct ListServiceArchiveTests {
         #expect(sut.service.activeLists.map(\.id) == ["list-b"])
         let cached = await sut.store.getLists()
         #expect(cached == [archived("list-a"), active("list-b")], "the stale result must not reach the cache")
-        #expect(sut.service.error == nil, "a discarded result sets no error")
+        #expect(sut.service.anyLoadFailure == nil, "a discarded result records no failure")
         #expect(sut.service.isRefreshing == false)
     }
 
@@ -252,7 +252,7 @@ struct ListServiceArchiveTests {
         #expect(sut.service.activeLists.map(\.id) == ["list-b"])
         let cached = await sut.store.getLists()
         #expect(cached == [archived("list-a"), active("list-b")])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isLoadingLists == false)
     }
 
@@ -274,7 +274,7 @@ struct ListServiceArchiveTests {
         #expect(sut.service.currentListDetail == archivedDetail("list-a"), "the screen gets the refetched detail")
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == archivedDetail("list-a"), "the stale active detail must not be cached")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
     }
@@ -315,7 +315,7 @@ struct ListServiceArchiveTests {
         await sut.service.refreshLists()
 
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b", "list-c"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("a detail load that starts after the archive completed is applied normally")
@@ -335,7 +335,10 @@ struct ListServiceArchiveTests {
 
     // MARK: - The archive succeeded but the reload fails
 
-    @Test("when the reload fails after a successful archive deleteList returns normally, the list leaves lists and the cache, and error is set")
+    // REPLACED (UX1a U2): the old test asserted that the follow-up reload failure was published in the
+    // shared `error`. That behavior is removed deliberately: the failure is logged by operation name
+    // only, nothing is published, and the mutation returns normally.
+    @Test("when the reload fails after a successful archive deleteList returns normally and publishes nothing")
     func reloadFailureAfterArchive() async throws {
         let sut = await loadedSUT()
         sut.repo.enqueueDeleteList(.success(()))
@@ -347,21 +350,25 @@ struct ListServiceArchiveTests {
         #expect(sut.service.archivedLists.isEmpty)
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
-        #expect(sut.service.error == .network, "the reload error is set")
+        #expect(sut.service.listsLoadFailure == nil, "the follow-up reload failure is not published")
+        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.repo.deleteListCount == 1)
+        #expect(sut.repo.fetchListsCount == 2, "the reload was attempted")
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("the reload error is the typed error of the reload", arguments: [
+    // REPLACED (UX1a U2): was "the reload error is the typed error of the reload" (stored in `error`).
+    @Test("a typed reload failure after a successful archive is published nowhere", arguments: [
         ListError.network, .server, .rateLimited(retryAfter: 3), .invalidResponse, .unauthorized
     ])
-    func reloadFailureIsTyped(error: ListError) async throws {
+    func reloadFailureIsNotPublished(error: ListError) async throws {
         let sut = await loadedSUT()
         sut.repo.enqueueDeleteList(.success(()))
         sut.repo.enqueueFetchLists(.failure(error))
 
         try await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.error == error)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
     }
 
@@ -377,12 +384,13 @@ struct ListServiceArchiveTests {
 
         #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
         #expect(sut.service.activeLists.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - The archive call itself fails
 
-    @Test("a failed archive changes nothing, sets the typed error and throws", arguments: [
+    // REWRITTEN (UX1a U2): throws the typed error and publishes nothing (was: also stored in `error`).
+    @Test("a failed archive changes nothing, throws the typed error and publishes nothing", arguments: [
         ListError.forbidden, .network, .server, .rateLimited(retryAfter: 3), .unauthorized
     ])
     func failedArchiveChangesNothing(error: ListError) async throws {
@@ -403,22 +411,27 @@ struct ListServiceArchiveTests {
         #expect(sut.repo.fetchListDetailCount == 1, "no detail refetch after a failed archive")
         let cached = await sut.store.getLists()
         #expect(cached == listsBefore)
-        #expect(sut.service.error == error)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("a successful archive clears a previous error")
-    func successClearsError() async throws {
+    // REWRITTEN (UX1a U2): a failed archive throws and a retry succeeds; neither publishes anything.
+    @Test("a failed archive followed by a successful retry publishes nothing at either step")
+    func successAfterFailurePublishesNothing() async throws {
         let sut = await loadedSUT()
         sut.repo.enqueueDeleteList(.failure(ListError.network))
-        _ = try? await sut.service.deleteList(id: "list-a")
-        #expect(sut.service.error == .network, "precondition")
+        await #expect(throws: ListError.network) {
+            try await sut.service.deleteList(id: "list-a")
+        }
+        #expect(sut.service.anyLoadFailure == nil, "precondition: the failure was only thrown")
         sut.repo.enqueueDeleteList(.success(()))
         sut.repo.enqueueFetchLists(.success([archived("list-a"), active("list-b")]))
 
         try await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
+        #expect(sut.service.archivedLists.map(\.id) == ["list-a"])
     }
 }

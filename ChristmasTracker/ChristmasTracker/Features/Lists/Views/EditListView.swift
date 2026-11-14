@@ -24,7 +24,7 @@ struct EditListView: View {
     @State private var isRemoving = false
 
     @State private var isSaving = false
-    @State private var errorPresentation: ListErrorPresentation?
+    @State private var errorBanner: InlineErrorBannerState?
     @State private var failedAction: EditFailedAction?
 
     init(list: ListDetail) {
@@ -82,11 +82,11 @@ struct EditListView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let errorPresentation {
+                if let errorBanner {
                     Section {
-                        ListErrorBanner(
-                            presentation: errorPresentation,
-                            onRetry: {
+                        InlineErrorBanner(
+                            state: errorBanner,
+                            onTryAgain: {
                                 Task {
                                     switch EditRetry.action(after: failedAction) {
                                     case .removeCoOwner: await removeCoOwner()
@@ -94,9 +94,8 @@ struct EditListView: View {
                                     }
                                 }
                             },
-                            onLeave: { dismiss() },
                             onDismiss: {
-                                self.errorPresentation = nil
+                                self.errorBanner = nil
                                 failedAction = nil
                             }
                         )
@@ -151,6 +150,10 @@ struct EditListView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(CoOwnerRemoveConfirmation.message(displayName: coOwnerState.currentCoOwnerName ?? "co-owner"))
+            }
+            .onDisappear {
+                errorBanner = nil
+                failedAction = nil
             }
             .onChange(of: listService.goneListId) { _, goneId in
                 if ListScreenExit.shouldDismissEdit(goneListId: goneId, editedListId: list.id) {
@@ -231,17 +234,17 @@ struct EditListView: View {
 
     private func removeCoOwner() async {
         isRemoving = true
-        errorPresentation = nil
+        errorBanner = nil
         failedAction = nil
         defer { isRemoving = false }
 
         do {
             try await listService.removeCoOwner(listId: list.id)
         } catch {
-            guard let presentation = CoOwnerRemoval.presentation(for: error) else { return }
-            errorPresentation = presentation
-            failedAction = .removeCoOwner
+            guard CoOwnerRemoval.presentation(for: error) != nil else { return }
             let listError = (error as? ListError) ?? .server
+            errorBanner = MutationBanner.state(for: listError)
+            failedAction = .removeCoOwner
             if ListScreenExit.shouldDismissEdit(for: listError) {
                 dismiss()
             }
@@ -251,7 +254,7 @@ struct EditListView: View {
     private func saveChanges() async {
         guard validity.isValid, let input = pendingInput else { return }
         isSaving = true
-        errorPresentation = nil
+        errorBanner = nil
         failedAction = nil
         defer { isSaving = false }
 
@@ -262,7 +265,7 @@ struct EditListView: View {
             return
         } catch {
             let listError = (error as? ListError) ?? .server
-            errorPresentation = ListErrorPresentation(listError)
+            errorBanner = MutationBanner.state(for: listError)
             failedAction = .save
             // The list is gone or read-only: close the sheet; the detail screen leaves as well.
             if ListScreenExit.shouldDismissEdit(for: listError) {

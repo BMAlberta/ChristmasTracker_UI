@@ -192,9 +192,8 @@ struct ChildDeletionFlowSessionTests {
 
         #expect(result == nil)
         #expect(sut.childService.children.isEmpty)
-        #expect(sut.childService.error == nil)
+        #expect(sut.sharedErrorsAreNil)
         #expect(sut.childService.isMutating == false)
-        #expect(sut.listService.error == nil)
     }
 
     @Test("the child session cleared during the archives stops the flow before the child delete", arguments: [false, true])
@@ -215,7 +214,6 @@ struct ChildDeletionFlowSessionTests {
         #expect(result == nil)
         #expect(sut.childRepo.deleteChildCount == 0, "the user switched: the new user's child list must not get a delete")
         #expect(sut.childService.children.isEmpty)
-        #expect(sut.childService.error == nil)
-        #expect(sut.listService.error == nil)
+        #expect(sut.sharedErrorsAreNil)
     }
 }

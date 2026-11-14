@@ -72,7 +72,7 @@ struct ListServiceTests {
         await service.loadLists()
         #expect(service.lists.count == 3)
         #expect(service.isLoadingLists == false)
-        #expect(service.error == nil)
+        #expect(service.listsLoadFailure == nil)
         // Verify cached
         let cached = await dataStore.getLists()
         #expect(cached.count == 3)
@@ -238,6 +238,7 @@ struct ListServiceTests {
     }
 
     // STRENGTHENED (I3a-L2): also asserts the typed error.
+    // REWRITTEN (UX1a U2): the failure of a lists load is the returned value and listsLoadFailure.
     @Test("Error handling sets appropriate error")
     func testErrorHandling() async {
         let mockRepo = MockListRepository()
@@ -245,14 +246,16 @@ struct ListServiceTests {
         await mockRepo.setShouldFail(true)
         let dataStore = ListDataStore()
         let service = ListService(repository: mockRepo, dataStore: dataStore)
-        await service.loadLists()
-        #expect(service.error != nil)
-        #expect(service.error == .server)
+        let failure = await service.loadLists()
+        #expect(failure == .server)
+        #expect(service.listsLoadFailure != nil)
+        #expect(service.listsLoadFailure == .server)
+        #expect(service.detailLoadFailure == nil)
         #expect(service.lists.isEmpty)
     }
 
     // REWRITTEN (I3b-K0): isLoading is replaced by isLoadingLists.
-    @Test("Failed repository fetch resets isLoadingLists and sets error")
+    @Test("Failed repository fetch resets isLoadingLists and sets the lists load failure")
     func testLoadListsFailureResetsIsLoadingLists() async {
         let mockRepo = MockListRepository()
         await mockRepo.setDelay(0)
@@ -261,7 +264,7 @@ struct ListServiceTests {
         let service = ListService(repository: mockRepo, dataStore: dataStore)
         await service.loadLists()
         #expect(service.isLoadingLists == false)
-        #expect(service.error != nil)
+        #expect(service.listsLoadFailure != nil)
     }
 
     // MARK: - Cache stale-data: create then loadLists
@@ -361,7 +364,7 @@ struct ListServiceTests {
         #expect(sut.service.lists.map(\.id) == ["list-active", "list-draft", "list-archived"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-active", "list-draft", "list-archived"], "archived lists are cached too")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
     }
 
     // CHANGED (I3c-A): was "refreshLists drops ARCHIVED lists and keeps ACTIVE and DRAFT ones".
@@ -390,7 +393,7 @@ struct ListServiceTests {
         await sut.service.loadLists()
 
         #expect(sut.service.lists.map(\.id) == ["list-archived"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
     }
 
     // MARK: - ADDED (I3a-L2 fix round): the cached branch hides ARCHIVED too
@@ -406,7 +409,7 @@ struct ListServiceTests {
 
         #expect(sut.service.lists.map(\.id) == ["list-archived"])
         #expect(sut.service.archivedLists.map(\.id) == ["list-archived"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
     }
 
     // CHANGED (I3c-A): was "... shows only the non-archived part of a mixed cache, without fetching".
@@ -421,7 +424,7 @@ struct ListServiceTests {
 
         #expect(sut.service.lists.map(\.id) == ["list-active", "list-archived", "list-draft"])
         #expect(sut.repo.fetchListsCount == 0, "a fresh non-empty cache is served without a fetch")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
     }
 
     // MARK: - ADDED (I3a-L2): delete removes locally and stays hidden
@@ -446,7 +449,7 @@ struct ListServiceTests {
         #expect(cached.first?.status == .archived)
         #expect(sut.repo.deleteListCount == 1)
         #expect(sut.repo.fetchListsCount == 2, "archive reloads from the server")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -512,7 +515,8 @@ struct ListServiceTests {
         #expect(cached.map(\.id) == ["list-a", "list-b"])
     }
 
-    @Test("a failed deleteList keeps the list, sets the typed error and rethrows")
+    // REWRITTEN (UX1a U2): the typed error is thrown and nothing is published.
+    @Test("a failed deleteList keeps the list, throws the typed error and publishes nothing")
     func failedDeleteKeepsList() async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
@@ -526,7 +530,8 @@ struct ListServiceTests {
         #expect(sut.service.lists.map(\.id) == ["list-a"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a"])
-        #expect(sut.service.error == .forbidden)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -556,11 +561,12 @@ struct ListServiceTests {
         #expect(cachedLists.contains(created.asGiftList()))
         let cachedDetail = await sut.store.getListDetail(id: "list-new")
         #expect(cachedDetail == created)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("a failed createList leaves lists unchanged, sets the typed error and rethrows")
+    // REWRITTEN (UX1a U2): throws the typed error, publishes nothing.
+    @Test("a failed createList leaves lists unchanged, throws the typed error and publishes nothing")
     func failedCreateKeepsLists() async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
@@ -573,7 +579,8 @@ struct ListServiceTests {
         }
 
         #expect(sut.service.lists.map(\.id) == ["list-a"])
-        #expect(sut.service.error == .duplicateRecipientYear)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -606,7 +613,7 @@ struct ListServiceTests {
         #expect(cachedDetail == updated)
         let cachedLists = await sut.store.getLists()
         #expect(cachedLists.first { $0.id == "list-a" } == updated.asGiftList())
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -626,7 +633,8 @@ struct ListServiceTests {
         #expect(sut.service.lists.first { $0.id == "list-b" }?.name == "B Renamed")
     }
 
-    @Test("a failed updateList leaves lists and currentListDetail unchanged, sets the typed error and rethrows")
+    // REWRITTEN (UX1a U2): throws the typed error, publishes nothing.
+    @Test("a failed updateList leaves lists and currentListDetail unchanged, throws the typed error and publishes nothing")
     func failedUpdateKeepsState() async {
         let sut = makeSUT()
         let currentDetail = ListFixtures.listDetail(id: "list-a", name: "Name of list-a")
@@ -643,7 +651,8 @@ struct ListServiceTests {
 
         #expect(sut.service.currentListDetail == currentDetail)
         #expect(sut.service.lists.map(\.name) == ["Name of list-a"])
-        #expect(sut.service.error == .forbidden)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
     }
 
     // MARK: - ADDED (I3a-L2): typed errors become the service error
@@ -654,43 +663,51 @@ struct ListServiceTests {
         .rateLimited(retryAfter: 3), .unauthorized, .network, .invalidResponse, .server
     ]
 
-    @Test("a typed repository error on loadLists becomes the service error with its userMessage", arguments: ListServiceTests.typedErrors)
+    // REWRITTEN (UX1a U2): the typed error is the returned failure and listsLoadFailure (was `error`).
+    @Test("a typed repository error on loadLists becomes the returned failure and listsLoadFailure with its userMessage", arguments: ListServiceTests.typedErrors)
     func loadListsTypedError(error: ListError) async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.failure(error))
 
-        await sut.service.loadLists()
+        let failure = await sut.service.loadLists()
 
-        #expect(sut.service.error == error)
-        #expect(sut.service.error?.userMessage == error.userMessage)
+        #expect(failure == error)
+        #expect(sut.service.listsLoadFailure == error)
+        #expect(sut.service.listsLoadFailure?.userMessage == error.userMessage)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.lists.isEmpty)
         #expect(sut.service.isLoadingLists == false)
     }
 
-    @Test("a typed repository error on refreshLists becomes the service error and keeps the lists", arguments: ListServiceTests.typedErrors)
+    // REWRITTEN (UX1a U2): see loadListsTypedError.
+    @Test("a typed repository error on refreshLists becomes the returned failure and listsLoadFailure and keeps the lists", arguments: ListServiceTests.typedErrors)
     func refreshListsTypedError(error: ListError) async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
         sut.repo.enqueueFetchLists(.failure(error))
         await sut.service.loadLists()
 
-        await sut.service.refreshLists()
+        let failure = await sut.service.refreshLists()
 
-        #expect(sut.service.error == error)
-        #expect(sut.service.error?.userMessage == error.userMessage)
+        #expect(failure == error)
+        #expect(sut.service.listsLoadFailure == error)
+        #expect(sut.service.listsLoadFailure?.userMessage == error.userMessage)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a"])
         #expect(sut.service.isRefreshing == false)
     }
 
-    @Test("a typed repository error on loadListDetail becomes the service error", arguments: ListServiceTests.typedErrors)
+    // REWRITTEN (UX1a U2): a detail load failure is recorded in detailLoadFailure only.
+    @Test("a typed repository error on loadListDetail becomes detailLoadFailure", arguments: ListServiceTests.typedErrors)
     func loadListDetailTypedError(error: ListError) async {
         let sut = makeSUT()
         sut.repo.enqueueFetchListDetail(.failure(error))
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.error == error)
-        #expect(sut.service.error?.userMessage == error.userMessage)
+        #expect(sut.service.detailLoadFailure == error)
+        #expect(sut.service.detailLoadFailure?.userMessage == error.userMessage)
+        #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.currentListDetail == nil)
         #expect(sut.service.isLoadingDetail == false)
     }
@@ -699,7 +716,8 @@ struct ListServiceTests {
     // from updateList now refetches the detail, so a refetch result is queued for that case. Without
     // it the refetch would fail with the repository default and the outcome would depend on how a
     // failed refetch is recorded, which this test is not about (see ListServiceArchivedReadOnlyTests).
-    @Test("a typed repository error on createList, updateList and deleteList becomes the service error", arguments: ListServiceTests.typedErrors)
+    // REWRITTEN (UX1a U2): the typed error is thrown and nothing is published (was: stored in `error`).
+    @Test("a typed repository error on createList, updateList and deleteList is thrown and publishes nothing", arguments: ListServiceTests.typedErrors)
     func writeTypedErrors(error: ListError) async {
         let sut = makeSUT()
         sut.repo.enqueueCreateList(.failure(error))
@@ -713,30 +731,32 @@ struct ListServiceTests {
         let input = CreateListInput(recipientId: "user-1", year: 2026, name: "N", theme: nil, visibility: .private)
 
         await #expect(throws: error) { try await sut.service.createList(input) }
-        #expect(sut.service.error == error)
-        #expect(sut.service.error?.userMessage == error.userMessage)
+        #expect(sut.service.anyLoadFailure == nil)
 
         await #expect(throws: error) {
             try await sut.service.updateList(id: "list-a", UpdateListInput(name: "X", theme: nil, visibility: nil))
         }
-        #expect(sut.service.error == error)
+        #expect(sut.service.anyLoadFailure == nil)
 
         await #expect(throws: error) { try await sut.service.deleteList(id: "list-a") }
-        #expect(sut.service.error == error)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("a successful call clears a previous error")
+    // REWRITTEN (UX1a U2): "error cleared at the start of the next operation" becomes "the lists
+    // load failure is cleared when the next lists load starts / when it succeeds".
+    @Test("a successful refresh clears the previous lists load failure")
     func successClearsError() async {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.failure(ListError.network))
         sut.repo.enqueueFetchLists(.success([list("list-a")]))
         await sut.service.loadLists()
-        #expect(sut.service.error == .network)
+        #expect(sut.service.listsLoadFailure == .network)
 
-        await sut.service.refreshLists()
+        let failure = await sut.service.refreshLists()
 
-        #expect(sut.service.error == nil)
+        #expect(failure == nil)
+        #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a"])
     }
 
@@ -747,9 +767,10 @@ struct ListServiceTests {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.failure(CancellationError()))
 
-        await sut.service.loadLists()
+        let failure = await sut.service.loadLists()
 
-        #expect(sut.service.error == nil)
+        #expect(failure == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.lists.isEmpty)
         #expect(sut.service.isLoadingLists == false)
     }
@@ -759,9 +780,10 @@ struct ListServiceTests {
         let sut = makeSUT()
         sut.repo.enqueueFetchLists(.failure(CancellationError()))
 
-        await sut.service.refreshLists()
+        let failure = await sut.service.refreshLists()
 
-        #expect(sut.service.error == nil)
+        #expect(failure == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isRefreshing == false)
     }
 
@@ -772,7 +794,7 @@ struct ListServiceTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.currentListDetail == nil)
         #expect(sut.service.isLoadingDetail == false)
     }
@@ -789,7 +811,7 @@ struct ListServiceTests {
         _ = try? await sut.service.updateList(id: "list-a", UpdateListInput(name: "X", theme: nil, visibility: nil))
         _ = try? await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
     }
 }
