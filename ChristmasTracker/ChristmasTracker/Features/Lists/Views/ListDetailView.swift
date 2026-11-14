@@ -123,7 +123,7 @@ struct ListDetailView: View {
                 dismissed.reset()
                 actionBanner = nil
                 failedAction = nil
-                listService.clearDetailLoadFailure()
+                listService.clearDetailLoadFailure(forListId: listId)
                 itemService.clearListLoadError()
             }
     }
@@ -134,7 +134,7 @@ struct ListDetailView: View {
     private var loadPresentation: ScreenLoadPresentation {
         ListDetailLoadState.make(
             hasDetail: currentDetail != nil,
-            detailFailure: listService.detailLoadFailure,
+            detailFailure: listService.detailLoadFailure(forListId: listId),
             refreshFailure: refreshFailure,
             itemsFailure: itemService.listLoadError,
             dismissed: dismissed
@@ -169,7 +169,7 @@ struct ListDetailView: View {
     private func refresh() async {
         dismissed.reset()
         refreshFailure = nil
-        listService.clearDetailLoadFailure()
+        listService.clearDetailLoadFailure(forListId: listId)
         refreshFailure = await listService.refreshListDetail(id: listId)
         switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
         case .refresh: await itemService.refreshItems()
@@ -187,7 +187,7 @@ struct ListDetailView: View {
     /// A forced fetch of the detail; a first load when nothing is cached yet.
     private func refetchDetail() async {
         refreshFailure = nil
-        listService.clearDetailLoadFailure()
+        listService.clearDetailLoadFailure(forListId: listId)
         if currentDetail == nil {
             await listService.loadListDetail(id: listId)
         } else {
@@ -401,6 +401,7 @@ struct ListDetailView: View {
         return ItemsSectionView(
             state: listState,
             isLoading: itemService.isLoadingItems,
+            itemsFailure: itemService.listLoadError,
             onSelect: { selectedItemId = $0 },
             onAdd: { showsAddItem = true }
         )

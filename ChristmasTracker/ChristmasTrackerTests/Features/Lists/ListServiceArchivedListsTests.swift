@@ -185,7 +185,7 @@ struct ListServiceArchivedListsTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail == detail)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.goneListId == nil)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == detail)

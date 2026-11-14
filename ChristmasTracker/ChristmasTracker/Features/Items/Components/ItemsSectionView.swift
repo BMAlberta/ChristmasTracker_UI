@@ -12,19 +12,34 @@ import SwiftUI
 struct ItemsSectionView: View {
     let state: ItemListState
     let isLoading: Bool
+    /// The items load failure of this screen, used only to tell "unavailable" from "empty".
+    var itemsFailure: ItemError?
     let onSelect: (String) -> Void
     let onAdd: () -> Void
+
+    private var availability: ItemsSectionAvailability {
+        ItemsSectionAvailability.make(isLoading: isLoading, hasRows: !state.isEmpty, itemsFailure: itemsFailure)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             header
-            if isLoading && state.isEmpty {
+            switch availability {
+            case .loading:
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.xl)
-            } else if state.isEmpty {
+            case .empty:
                 emptyState
-            } else {
+            case .unavailable:
+                Text(ItemsSectionAvailability.unavailableText)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textMutedColor)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.xl)
+                    .accessibilityIdentifier("listDetail.itemsUnavailable")
+            case .content:
                 ForEach(state.sections, id: \.title) { section in
                     sectionView(section)
                 }

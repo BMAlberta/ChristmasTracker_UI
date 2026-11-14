@@ -43,7 +43,7 @@ struct ListArchiveCompletionTests {
             ),
             ListDetailLoadState.make(
                 hasDetail: sut.service.currentListDetail != nil,
-                detailFailure: sut.service.detailLoadFailure,
+                detailFailure: sut.service.detailLoadFailure(forListId: H.listId),
                 refreshFailure: nil,
                 itemsFailure: nil,
                 dismissed: DismissedLoads()
@@ -56,6 +56,8 @@ struct ListArchiveCompletionTests {
         let sut = try await makeSUT()
         sut.lists.enqueueDeleteList(.success(()))
         sut.lists.enqueueFetchLists(.success([]))
+        // UX1b B0: an unscripted detail refetch fails and is now recorded, so script a good one.
+        sut.lists.enqueueFetchListDetail(.success(try H.detail(flags: H.managerFlags)))
 
         try await sut.service.deleteList(id: H.listId)
 
@@ -65,23 +67,26 @@ struct ListArchiveCompletionTests {
         }
     }
 
-    @Test("a failed reload after a successful archive is shown by no screen and does not block the dismissal",
+    // REWRITTEN (UX1b B0): the failed lists reload is now recorded as the dashboard's lists failure
+    // (it is not shown by the list detail screen) and still does not block the dismissal.
+    @Test("a failed reload after a successful archive is recorded for the dashboard only and does not block the dismissal",
           arguments: [ListError.network, .server, .rateLimited(retryAfter: 3), .invalidResponse, .unauthorized])
-    func reloadFailureIsNotShown(error: ListError) async throws {
+    func reloadFailureIsRecordedForTheDashboardOnly(error: ListError) async throws {
         let sut = try await makeSUT()
         sut.lists.enqueueDeleteList(.success(()))
         sut.lists.enqueueFetchLists(.failure(error))
+        // UX1b B0: an unscripted detail refetch fails and is now recorded, so script a good one.
+        sut.lists.enqueueFetchListDetail(.success(try H.detail(flags: H.managerFlags)))
 
         try await sut.service.deleteList(id: H.listId)   // must not throw: the screen dismisses
 
-        #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
-        for state in loadStates(sut) {
-            #expect(state.banners.isEmpty)
-            #expect(state.fullError == nil)
-            #expect(state.leavesScreen == false)
-            #expect(state.signInTakesOver == false)
-        }
+        #expect(sut.service.listsLoadFailure == error)
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == nil)
+        let detailState = loadStates(sut)[1]
+        #expect(detailState.banners.isEmpty)
+        #expect(detailState.fullError == nil)
+        #expect(detailState.leavesScreen == false)
+        #expect(detailState.signInTakesOver == false)
     }
 
     @Test("a thrown archive failure is the screen's own mutation banner and stays out of the load states",

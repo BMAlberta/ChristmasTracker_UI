@@ -39,7 +39,7 @@ struct ScopedMutationErrorStateTests {
     private func detailState(_ sut: MemberServiceHarness) -> ScreenLoadPresentation {
         ListDetailLoadState.make(
             hasDetail: sut.service.currentListDetail != nil,
-            detailFailure: sut.service.detailLoadFailure,
+            detailFailure: sut.service.detailLoadFailure(forListId: H.listId),
             refreshFailure: nil,
             itemsFailure: nil,
             dismissed: DismissedLoads()
@@ -63,7 +63,7 @@ struct ScopedMutationErrorStateTests {
         }
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == nil)
         expectEmpty(dashboardState(sut), "dashboard")
         expectEmpty(detailState(sut), "list detail")
     }

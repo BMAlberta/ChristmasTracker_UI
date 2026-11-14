@@ -70,7 +70,7 @@ struct ListServiceLoadFailureTests {
 
         #expect(failure == .network)
         #expect(sut.service.listsLoadFailure == .network)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("a failed refreshLists returns the failure and stores it in listsLoadFailure only")
@@ -82,7 +82,7 @@ struct ListServiceLoadFailureTests {
 
         #expect(failure == .server)
         #expect(sut.service.listsLoadFailure == .server)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("a failed loadListDetail stores the failure in detailLoadFailure only")
@@ -92,7 +92,7 @@ struct ListServiceLoadFailureTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.detailLoadFailure == .server)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .server)
         #expect(sut.service.listsLoadFailure == nil)
     }
 
@@ -100,12 +100,12 @@ struct ListServiceLoadFailureTests {
     func successfulLoadDoesNotTouchTheOtherFailure() async {
         let sut = await sutWithBothFailures()
         #expect(sut.service.listsLoadFailure == .network, "precondition")
-        #expect(sut.service.detailLoadFailure == .server, "precondition")
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .server, "precondition")
 
         // A successful DETAIL load clears the detail failure and leaves the lists failure.
         sut.repo.enqueueFetchListDetail(.success(detail("list-a")))
         await sut.service.loadListDetail(id: "list-a")
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.listsLoadFailure == .network)
 
         // A successful LISTS refresh clears the lists failure.
@@ -121,12 +121,12 @@ struct ListServiceLoadFailureTests {
         sut.repo.enqueueFetchListDetail(.failure(ListError.rateLimited(retryAfter: 3)))
         await sut.service.loadListDetail(id: "list-a")
         #expect(sut.service.listsLoadFailure == .network)
-        #expect(sut.service.detailLoadFailure == .rateLimited(retryAfter: 3))
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .rateLimited(retryAfter: 3))
 
         sut.repo.enqueueFetchLists(.failure(ListError.invalidResponse))
         await sut.service.refreshLists()
         #expect(sut.service.listsLoadFailure == .invalidResponse)
-        #expect(sut.service.detailLoadFailure == .rateLimited(retryAfter: 3))
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .rateLimited(retryAfter: 3))
     }
 
     // MARK: - reportingFailure: false
@@ -140,7 +140,7 @@ struct ListServiceLoadFailureTests {
 
         #expect(failure == .network)
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("loadLists(reportingFailure: false) returns nil on success and does not clear an existing lists failure")
@@ -233,17 +233,17 @@ struct ListServiceLoadFailureTests {
         let sut = await makeSUT()
         sut.repo.enqueueFetchListDetail(.failure(ListError.server))
         await sut.service.loadListDetail(id: "list-a")
-        #expect(sut.service.detailLoadFailure == .server, "precondition")
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .server, "precondition")
         sut.repo.enqueueFetchListDetail(.success(detail("list-a")), held: true)
 
         let task = Task { await sut.service.loadListDetail(id: "list-a") }
         await sut.repo.nextHeldCall()
 
-        #expect(sut.service.detailLoadFailure == nil, "cleared at the START of the load, before it ends")
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil, "cleared at the START of the load, before it ends")
         sut.repo.releaseAll()
         await task.value
         #expect(sut.service.currentListDetail?.id == "list-a")
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     // MARK: - Clear methods and teardown
@@ -255,7 +255,7 @@ struct ListServiceLoadFailureTests {
         sut.service.clearListsLoadFailure()
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == .server)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .server)
     }
 
     @Test("clearDetailLoadFailure clears only the detail failure")
@@ -264,7 +264,7 @@ struct ListServiceLoadFailureTests {
 
         sut.service.clearDetailLoadFailure()
 
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.listsLoadFailure == .network)
     }
 
@@ -285,7 +285,7 @@ struct ListServiceLoadFailureTests {
         try await sut.service.clearForSession()
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("clearCache clears both load failures")
@@ -295,7 +295,7 @@ struct ListServiceLoadFailureTests {
         await sut.service.clearCache()
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("teardown through the SessionManager clears both load failures for every reason", arguments: [
@@ -307,7 +307,7 @@ struct ListServiceLoadFailureTests {
         await sut.manager.teardown(reason: reason)
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     // MARK: - Revalidation with cached data
@@ -338,7 +338,7 @@ struct ListServiceLoadFailureTests {
         #expect(sut.repo.fetchListsCount == 0)
         #expect(failure == nil)
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a"])
     }
 
@@ -353,7 +353,7 @@ struct ListServiceLoadFailureTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.repo.fetchListDetailCount == 1, "the cached detail is always revalidated")
-        #expect(sut.service.detailLoadFailure == error)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == error)
         #expect(sut.service.currentListDetail == cached, "the cached detail stays visible")
         #expect(sut.service.listsLoadFailure == nil)
     }
@@ -372,7 +372,7 @@ struct ListServiceLoadFailureTests {
         await task.value
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("a load that fails after a user switch stores no failure and does not touch the new user's failure")
@@ -390,7 +390,7 @@ struct ListServiceLoadFailureTests {
         await loadA.value
 
         #expect(sut.service.listsLoadFailure == .network, "A's late failure must not replace B's")
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("a detail load that fails after a user switch does not set a failure for the new user")
@@ -406,7 +406,7 @@ struct ListServiceLoadFailureTests {
         sut.repo.releaseAll()
         await loadA.value
 
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.currentListDetail?.id == "list-a")
     }
 
@@ -423,6 +423,6 @@ struct ListServiceLoadFailureTests {
         await task.value
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 }

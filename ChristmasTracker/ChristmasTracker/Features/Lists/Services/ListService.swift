@@ -31,10 +31,17 @@ final class ListService {
     /// Set only by loadLists and refreshLists; cleared when one starts, by clearListsLoadFailure()
     /// and at teardown. A mutation never touches it.
     private(set) var listsLoadFailure: ListError?
-    /// The failure of the last list detail load (a revalidation failure while cached data is shown
-    /// included). Set only by loadListDetail; cleared when one starts, by clearDetailLoadFailure()
-    /// and at teardown. A mutation never touches it.
-    private(set) var detailLoadFailure: ListError?
+    /// The last detail failure per list id (a revalidation failure while cached data is shown
+    /// included). Set by loadListDetail and by a failed detail refetch after a successful member
+    /// change or archive; the entry of one id is cleared when a load of that id starts, when a
+    /// refetch of that id succeeds, by clearDetailLoadFailure(forListId:), and every entry by
+    /// clearDetailLoadFailure() and at teardown. A failure of one list is never read for another.
+    private(set) var detailLoadFailures: [String: ListError] = [:]
+
+    /// The detail failure stored for this list id only, or nil.
+    func detailLoadFailure(forListId id: String) -> ListError? {
+        detailLoadFailures[id]
+    }
     /// The id of the list the server reported gone (not found or read-only), or that a guarded
     /// load found gone. Screens compare it with their own list id to leave. Only the session
     /// reset clears it.
@@ -257,8 +264,14 @@ final class ListService {
         listsLoadFailure = nil
     }
 
+    /// Removes every stored detail failure.
     func clearDetailLoadFailure() {
-        detailLoadFailure = nil
+        detailLoadFailures = [:]
+    }
+
+    /// Removes the detail failure stored for this list id only.
+    func clearDetailLoadFailure(forListId id: String) {
+        detailLoadFailures[id] = nil
     }
 
     // Covered by the manual spans of its public callers (loadLists, refreshLists).
@@ -310,7 +323,7 @@ final class ListService {
                 detailLoadsInFlight[id, default: 1] -= 1
             }
         }
-        detailLoadFailure = nil
+        detailLoadFailures[id] = nil
         // A reload of the list that is already open keeps showing it; another list's detail is
         // never shown while this one loads.
         if currentListDetail?.id != id {
@@ -349,7 +362,7 @@ final class ListService {
                 await dropListIfGone(error, id: id, generation: gen)
             }
             if let failure = record(error, generation: gen, operation: "load list details") {
-                detailLoadFailure = failure
+                detailLoadFailures[id] = failure
             }
         }
     }
@@ -843,7 +856,7 @@ final class ListService {
         lists = []
         currentListDetail = nil
         listsLoadFailure = nil
-        detailLoadFailure = nil
+        detailLoadFailures = [:]
         let waiters = listsLoadWaiters
         listsLoadWaiters = []
         for waiter in waiters { waiter.resume(returning: .finished(nil)) }
@@ -939,11 +952,15 @@ final class ListService {
             if currentListDetail?.id == detail.id {
                 currentListDetail = detail
             }
+            detailLoadFailures[listId] = nil
         } catch {
             await dropListIfGone(error, id: listId, generation: gen)
-            if record(error, generation: gen, operation: "refresh list after member change") == nil {
+            guard let failure = record(error, generation: gen, operation: "refresh list after member change") else {
                 throw CancellationError()
             }
+            // The mutation succeeded: the failed refetch is recorded for the screen, never thrown.
+            // A list that turned out to be gone is left to the gone-list handling.
+            if goneListId != listId { detailLoadFailures[listId] = failure }
         }
     }
 
@@ -978,7 +995,9 @@ final class ListService {
             if error is CancellationError || gen != generation { throw CancellationError() }
             // A superseded reload reports nothing and removes nothing: the later one decides.
             if reloadToken == reloadTokenCounter {
-                _ = record(error, generation: gen, operation: "reload lists after archive")
+                if let failure = record(error, generation: gen, operation: "reload lists after archive") {
+                    listsLoadFailure = failure
+                }
                 lists.removeAll { $0.id == id }
                 await dataStore.removeList(id: id)
                 try ensureCurrent(gen)
@@ -993,9 +1012,12 @@ final class ListService {
             await dataStore.setListDetail(detail)
             try ensureCurrent(gen)
             currentListDetail = detail
+            detailLoadFailures[id] = nil
         } catch {
             if error is CancellationError || gen != generation { throw CancellationError() }
-            _ = record(error, generation: gen, operation: "refresh list after archive")
+            if let failure = record(error, generation: gen, operation: "refresh list after archive") {
+                detailLoadFailures[id] = failure
+            }
         }
     }
 
@@ -1032,7 +1054,7 @@ final class ListService {
 
     /// For a list removed after the load started (`start`): drops any cached or open copy,
     /// logs notFound, marks the list gone and returns true. With `storingFailure` (the detail
-    /// load) the notFound also goes into `detailLoadFailure`. Returns false when the list was not
+    /// load) the notFound also goes into the keyed `detailLoadFailures` entry of that id. Returns false when the list was not
     /// removed after the load started.
     // Covered by the manual spans of its public callers (loadListDetail, refreshListDetail).
     private func reportGuarded(
@@ -1047,7 +1069,7 @@ final class ListService {
             currentListDetail = nil
         }
         let failure = record(ListError.notFound, generation: gen, operation: "load list details")
-        if storingFailure, let failure { detailLoadFailure = failure }
+        if storingFailure, let failure { detailLoadFailures[id] = failure }
         await dataStore.removeList(id: id)
         return true
     }

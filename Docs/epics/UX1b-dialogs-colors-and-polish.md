@@ -111,7 +111,37 @@ Every story takes the FULL pipeline (isolated test-writer, implementer, conventi
 ## Gate 1: B0 UX1a leftovers
 - Acceptance: (1) a reload that fails after a successful mutation is recorded as a revalidation failure for that screen's load and shows "Couldn't update. Showing saved data." through the existing policy; the mutation stays a success. (2) Items never loaded plus an items load failure shows a neutral "Items unavailable" state in the items section, never the empty copy; a pure state function decides. (3) `detailLoadFailure` is keyed by list id; a failure for list A is never presented on list B; the F5 dismissed-count resurfacing is fixed if possible without changing the policy's category mapping, otherwise banked with the reason.
 - Scope: Features/Lists/Services/ListService (load outcome recording only), Features/Lists load state and policy inputs, ListDetailView and ItemsSectionView (presentation), the matching tests. No session guard, no policy category mapping change.
-- New interface: yes (the keyed failure accessor and the items-section state function). Interface signatures are fixed in the story before the test-writer runs, after reading the service.
+- New interface: yes (the keyed failure accessor and the items-section state function). Signatures, fixed after reading ListService.swift, ListDetailView.swift, ItemsSectionView.swift and StatsScreenModel.swift:
+
+  Gap 1 (recorded, not thrown). Today three post-mutation reloads only LOG a failure through `record(...)`: `refetchDetailAfterMemberChange` (addMember, removeMember; operation "refresh list after member change"), and in `reloadAfterArchive` both the lists reload ("reload lists after archive") and the detail refetch ("refresh list after archive"). New behavior, same two public methods, same return and throw behavior (the mutation still succeeds silently, never throws because of the reload):
+  - a failed detail refetch (a failure that `record` returns non-nil; not cancellation, not an ended session, not a gone list) after addMember, removeMember or archive stores that failure under the list's id in the keyed detail failures (below);
+  - a failed lists reload after archive sets `listsLoadFailure` to the recorded failure (the dashboard banner), still removing the archived list from `lists`;
+  - a SUCCESSFUL detail refetch (member change or archive) removes the keyed entry of that list id; the superseded-reload rule (`reloadToken`) is unchanged: a superseded reload records nothing.
+  - NOT changed: `refetchAfterArchivedReadOnly` (the mutation itself failed there), the session guards, the generation and epoch checks, the policy's category mapping.
+
+  Gap 3 (keyed by list id). In ListService replace `private(set) var detailLoadFailure: ListError?` with `private(set) var detailLoadFailures: [String: ListError]` and:
+  ```swift
+  func detailLoadFailure(forListId id: String) -> ListError?   // the entry for that id only
+  func clearDetailLoadFailure(forListId id: String)            // removes that id's entry
+  func clearDetailLoadFailure()                                // existing: removes every entry
+  ```
+  `loadListDetail(id:)` clears only that id's entry when it starts and stores its failure under that id (including the `reportGuarded(... storingFailure: true)` not-found); `resetSession` clears all. ListDetailView reads `listService.detailLoadFailure(forListId: listId)` and clears with the keyed clear on disappear and when it starts a load; existing call sites and tests of the old property are migrated mechanically to the keyed accessor with the id they already use (list each in the report as "rewritten").
+
+  F5 (dismissed-count resurfacing, `StatsScreenModel.noteLoadOutcome`: `failureCount` is incremented once per failed load outcome whether or not the failure is a new one). Fix only if it can be done inside StatsScreenModel/DismissedLoads without touching the policy's category mapping or `ScreenLoadPresentation`; otherwise bank it in the report with the exact reason.
+
+  Gap 2 (items unavailable). New pure function in Features/Items/ViewState (new file ItemsSectionAvailability.swift):
+  ```swift
+  nonisolated enum ItemsSectionAvailability: Equatable, Sendable {
+      case loading        // a load is running and there is nothing to show yet
+      case content        // there are rows to show (cached or fresh), failure or not
+      case empty          // the items loaded and are empty
+      case unavailable    // no rows AND the items load failed: neutral copy, never the empty copy
+      static func make(isLoading: Bool, hasRows: Bool, itemsFailure: ItemError?) -> ItemsSectionAvailability
+      static let unavailableText: String   // "Items unavailable. Pull to refresh or tap Try Again."
+  }
+  ```
+  Rules: hasRows -> content; else isLoading -> loading; else itemsFailure != nil -> unavailable; else empty. ItemsSectionView renders `.unavailable` as a neutral muted text in the items section (token styles), keeps the Add Item control rules unchanged, and shows the empty copy only for `.empty`; ListDetailView passes `itemService.listLoadError` in. No ItemService change.
+- Tests (deterministic, each pinned to the old behavior in its first comment line): (1) archive succeeds, detail refetch fails -> keyed failure for that id, archive returned without throwing (old: nothing recorded); (2) addMember and removeMember likewise; (3) lists reload fails after archive -> `listsLoadFailure` set, list removed (old: nothing stored); (4) a successful refetch clears the keyed entry; (5) failure for list A is not returned by `detailLoadFailure(forListId: B)` and loading B does not clear A's entry (old: single slot); (6) session reset clears all; (7) the `ItemsSectionAvailability` table including "failed with no rows is unavailable, not empty"; (8) F5 if fixed. No session-safety test weakened.
 
 ## Gate 1: B1 Anchored dialogs and stable presentation state
 - Acceptance: rows 1, 2, 4, 5, 6 of the inventory conform to rules 1 and 2; texts, buttons and outcomes unchanged; a re-render, reload, refresh or swipe close does not dismiss an open dialog; a vanished target resets to idle silently; session end and disappear reset. Scan tests for anchoring (with the allowlist A1 to A4) and for the absence of "set then clear".

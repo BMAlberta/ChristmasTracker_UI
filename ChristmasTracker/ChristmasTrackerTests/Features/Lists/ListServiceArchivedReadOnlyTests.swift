@@ -153,7 +153,7 @@ struct ListServiceArchivedReadOnlyTests {
         }
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == nil)
     }
 
     @Test("a later load of the list is not filtered: the 422 recorded no removal", arguments: ArchivedWriteOp.allCases)

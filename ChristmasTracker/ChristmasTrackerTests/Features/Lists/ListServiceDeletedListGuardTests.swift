@@ -195,7 +195,7 @@ struct ListServiceDeletedListGuardTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.detailLoadFailure == error)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == error)
         #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
         let cached = await sut.store.getLists()
@@ -246,7 +246,7 @@ struct ListServiceDeletedListGuardTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.detailLoadFailure == error)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == error)
         #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
         let cached = await sut.store.getLists()
@@ -295,7 +295,7 @@ struct ListServiceDeletedListGuardTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail?.id == "list-a")
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.isLoadingDetail == false)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail?.id == "list-a")
@@ -317,7 +317,7 @@ struct ListServiceDeletedListGuardTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail?.id == "list-a")
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.repo.fetchListDetailCount == 1, "the cached detail is revalidated, not trusted")
     }
@@ -336,7 +336,7 @@ struct ListServiceDeletedListGuardTests {
         sut.repo.releaseAll()
         await load.value
 
-        #expect(sut.service.detailLoadFailure == .notFound)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .notFound)
         #expect(sut.service.currentListDetail == nil)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == nil)
