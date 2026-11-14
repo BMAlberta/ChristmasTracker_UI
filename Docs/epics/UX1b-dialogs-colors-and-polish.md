@@ -226,7 +226,25 @@ Every story takes the FULL pipeline (isolated test-writer, implementer, conventi
 ## Gate 1: B5 Children Try Again re-confirms
 - Acceptance: Try Again recomputes the plan; any list id not in the confirmed plan returns to confirming with the new plan; a subset or equal plan continues; a blocked plan follows the existing blocked path; everything else (first-failure stop, child never deleted after a failed archive, cancel on disappear, session guards, red controls, announcements) is intact.
 - Scope: ChildDeletionPresentation, ChildrenView, ChildrenState (announcements, if needed), tests.
-- New interface: yes (a new transition on ChildDeletionPresentation).
+- New interface: yes. Signatures (pure, nonisolated; existing `planReady` is unchanged and still used by the first request):
+  ```swift
+  extension ChildDeletionPlan {
+      /// The list ids this plan would archive (empty for deleteNow and blocked).
+      var archiveListIds: [String] { get }
+      /// true when this plan would archive any list id that is NOT in `confirmed.archiveListIds`.
+      /// subset or equal: false; superset or disjoint: true; deleteNow: false; a confirmed plan that is deleteNow/blocked has no ids, so any archive list is unconfirmed.
+      func hasUnconfirmedLists(comparedTo confirmed: ChildDeletionPlan) -> Bool
+  }
+  extension ChildDeletionPresentation {
+      /// The planning result of a Try Again. Only from .planning(childId), else unchanged.
+      /// .blocked -> idle with banner .blocked (as planReady);
+      /// plan.hasUnconfirmedLists(comparedTo: confirmedPlan) -> .confirming(childId, plan), no banner, no plan to run;
+      /// otherwise -> .executing(childId) with plan to run.
+      func retryPlanReady(childId: String, plan: ChildDeletionPlan, confirmedPlan: ChildDeletionPlan) -> Transition
+  }
+  ```
+  ChildrenView remembers the plan the user last confirmed for the failed child (set in `confirm`, replaced when a re-confirmation is confirmed) in the screen-level failure value (`DeletionFailure` gains `confirmedPlan`), and `retryDeletion` uses `retryPlanReady`; when it returns confirming, the existing dialog opens with the new plan (the same dialog, title and message built from the new plan, button disabled rules unchanged), and no retry announcement is made. Cancel from that dialog is the existing `cancelConfirmation()` (idle; nothing archived is undone; the child is not deleted).
+- Tests (pure): hasUnconfirmedLists for subset, equal, superset, disjoint, empty-vs-nonempty, deleteNow, blocked, order-insensitive; retryPlanReady for each of subset/equal (executing with the plan), superset/disjoint (confirming with the NEW plan), blocked (idle + banner .blocked), deleteNow (executing), wrong phase/wrong child (unchanged); cancelConfirmation after a re-confirmation returns idle; double Try Again ignored (`requestDelete` from planning/confirming/executing is unchanged); a view scan that `retryDeletion` in ChildrenView.swift calls `retryPlanReady` and no longer passes `requiresConfirmation: false` to `planReady`.
 
 ## Gate 1: B6 Cleanups
 - Acceptance: (a) and (b) comment lines only, proven by the empty check; (c) not changed (the wipe is not a plain list; banked); (d) and (e) dead-code removal, each its own commit with its own verify runs and stop conditions.

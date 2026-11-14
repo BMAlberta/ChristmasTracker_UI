@@ -22,4 +22,18 @@ nonisolated enum ChildDeletionPlan: Equatable, Sendable {
         if active.contains(where: { !$0.capabilities.canDeleteList }) { return .blocked }
         return .archiveThenDelete(listIds: active.map(\.id))
     }
+
+    /// The list ids this plan would archive (empty for deleteNow and blocked).
+    var archiveListIds: [String] {
+        switch self {
+        case .archiveThenDelete(let listIds): listIds
+        case .deleteNow, .blocked: []
+        }
+    }
+
+    /// true when this plan would archive any list id that is not in `confirmed.archiveListIds`.
+    func hasUnconfirmedLists(comparedTo confirmed: ChildDeletionPlan) -> Bool {
+        let confirmedIds = Set(confirmed.archiveListIds)
+        return archiveListIds.contains { !confirmedIds.contains($0) }
+    }
 }

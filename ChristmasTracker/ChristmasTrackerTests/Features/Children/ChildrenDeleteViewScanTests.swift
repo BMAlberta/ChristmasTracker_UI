@@ -496,8 +496,8 @@ struct ChildrenDeleteViewScanTests {
                 "Try Again must start with the presentation's requestDelete")
         #expect(try !Self.matches(#"\.plan\s*\(\s*childId\s*:"#, in: retry).isEmpty, "Try Again must plan first")
         #expect(try !Self.matches(#"\.execute\s*\(\s*childId\s*:"#, in: retry).isEmpty, "Try Again must then execute")
-        #expect(try !Self.matches(#"requiresConfirmation\s*:\s*false"#, in: retry).isEmpty,
-                "Try Again continues without a new dialog")
+        #expect(retry.contains("retryPlanReady("),
+                "Try Again applies the plan through retryPlanReady (B5: it may reopen the dialog)")
         #expect(retry.contains("retryAnnouncement"), "Try Again announces from the recomputed plan")
         #expect(try Self.matches(Self.runCallPattern, in: retry).isEmpty)
         #expect(try !Self.matches(#"onTryAgain\s*:[^\n]*\bretry"#, in: text).isEmpty,
