@@ -9,7 +9,7 @@
 //  shown; an absent value shows nothing; there is NO already-purchased member or text, even when
 //  the item carries purchases and a totalQuantityPurchased.
 //
-//  Fails today because RecordPurchaseItemSummary does not exist yet.
+//  Covers RecordPurchaseItemSummary.
 //
 
 import Foundation

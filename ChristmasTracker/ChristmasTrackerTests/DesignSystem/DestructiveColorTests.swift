@@ -6,7 +6,7 @@
 //  In both appearances it must equal the resolved UIColor.systemRed. A fixed RGB cannot satisfy
 //  this, because systemRed differs between light and dark.
 //
-//  Fails today because Color.destructiveColor does not exist yet.
+//  Covers Color.destructiveColor in light and dark appearance.
 //
 
 import Testing

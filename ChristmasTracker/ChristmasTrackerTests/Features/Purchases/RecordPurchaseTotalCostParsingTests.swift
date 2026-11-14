@@ -7,7 +7,7 @@
 //  symbols and any other character are rejected; at most two fraction digits; the value must be
 //  above 0 and at most 999999.99. The result is an exact Decimal (no Double on the way).
 //
-//  Fails today because RecordPurchaseFormState does not exist yet.
+//  Covers RecordPurchaseFormState.parseTotalCost.
 //
 
 import Foundation

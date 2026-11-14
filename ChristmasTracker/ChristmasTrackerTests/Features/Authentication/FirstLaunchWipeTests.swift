@@ -4,9 +4,8 @@
 //
 //  Tests for Story I2a-3: first-launch wipe of 4.4 legacy data.
 //
-//  Expected failure state BEFORE Story 3 implementation:
-//  All tests fail at compile time because FirstLaunchWipe, KeychainWiping, and
-//  LiveKeychainWiper do not yet exist in the production target.
+//  Covers FirstLaunchWipe with the KeychainWiping protocol (LiveKeychainWiper in production,
+//  MockKeychainWiper here).
 //
 
 import Testing
@@ -111,8 +110,6 @@ struct FirstLaunchWipeTests {
 
     /// Pre-populate the isolated UserDefaults with "savedEmail". After performIfNeeded(),
     /// the key must be absent.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("savedEmail is removed from UserDefaults after first launch wipe")
     func savedEmailRemovedAfterWipe() {
         let (sut, defaults, _) = makeSUT()
@@ -130,8 +127,6 @@ struct FirstLaunchWipeTests {
 
     /// After performIfNeeded(), deleteAllGenericPasswords() must have been called on the
     /// keychain wiper.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("deleteAllGenericPasswords() is called during first launch wipe")
     func genericPasswordsDeletedAfterWipe() {
         let mock = MockKeychainWiper()
@@ -149,8 +144,6 @@ struct FirstLaunchWipeTests {
 
     /// After performIfNeeded(), deleteAllInternetPasswords() must have been called on the
     /// keychain wiper.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("deleteAllInternetPasswords() is called during first launch wipe")
     func internetPasswordsDeletedAfterWipe() {
         let mock = MockKeychainWiper()
@@ -167,8 +160,6 @@ struct FirstLaunchWipeTests {
     // MARK: - Test 4: marker written after successful wipe
 
     /// After a successful performIfNeeded(), the marker key must equal markerVersion (1).
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("Marker version 1 is written to UserDefaults after a successful wipe")
     func markerWrittenAfterSuccessfulWipe() {
         let (sut, defaults, _) = makeSUT()
@@ -185,8 +176,6 @@ struct FirstLaunchWipeTests {
 
     /// After the first successful wipe (marker written), re-writing "savedEmail" and
     /// calling performIfNeeded() again must leave "savedEmail" intact.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("Second call to performIfNeeded() is a no-op when marker is already at version 1")
     func secondLaunchIsNoOp() {
         let (sut, defaults, _) = makeSUT()
@@ -213,8 +202,6 @@ struct FirstLaunchWipeTests {
     // MARK: - Test 6: marker not written when Keychain wipe fails
 
     /// When deleteAllGenericPasswords() throws, the marker must NOT be written.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("Marker is not written when the Keychain wipe step fails")
     func markerNotWrittenWhenKeychainWipeFails() {
         let mock = MockKeychainWiper()
@@ -234,8 +221,6 @@ struct FirstLaunchWipeTests {
 
     /// First call: mock throws; marker not written. Second call: mock succeeds;
     /// "savedEmail" must be nil and the marker must be written.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("A retry after a failed wipe completes successfully")
     func retryAfterFailureCompletes() {
         let mock = MockKeychainWiper()
@@ -268,8 +253,6 @@ struct FirstLaunchWipeTests {
     // MARK: - Test 8: device-level defaults survive the wipe
 
     /// A key that is NOT in the wipe list must still be present after performIfNeeded().
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("Keys outside the wipe list survive the wipe")
     func deviceLevelDefaultsSurviveWipe() {
         let (sut, defaults, _) = makeSUT()
@@ -287,8 +270,6 @@ struct FirstLaunchWipeTests {
 
     /// On a fresh install (no legacy keys, no marker), performIfNeeded() must write the
     /// marker and not crash.
-    ///
-    /// FAILS before implementation: FirstLaunchWipe does not exist.
     @Test("Fresh install with no legacy data writes the marker without crashing")
     func freshInstallNoOpWithMarker() {
         let (sut, defaults, _) = makeSUT()

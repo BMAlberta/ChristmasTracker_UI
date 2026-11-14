@@ -11,7 +11,7 @@
 //   - unauthorized, an ended session and cancellation show nothing;
 //   - a second tap while saving is ignored.
 //
-//  Fails today because PurchaseDetailModel does not exist yet.
+//  Covers the shipping behavior of PurchaseDetailModel.
 //
 
 import Foundation

@@ -3,7 +3,7 @@
 //  ChristmasTrackerTests
 //
 //  UX1b Story B2: destructive controls had no shared token mapping (each view picked accent or
-//  nothing). Fails today because DestructiveActionKind and destructiveTint() do not exist yet.
+//  nothing). Covers DestructiveActionKind (five kinds) and its mapping to the destructive colour token.
 //
 
 import Testing

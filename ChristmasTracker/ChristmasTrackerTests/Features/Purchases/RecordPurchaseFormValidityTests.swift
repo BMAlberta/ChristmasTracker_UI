@@ -7,7 +7,7 @@
 //  and no maximum, totalCost above 0 and at most 999999.99 with two decimals, storeName 200,
 //  notes 1000, confirmationNumber 100, trackingNumber 100 (trimmed length).
 //
-//  Fails today because RecordPurchaseFormState and RecordPurchaseFormInput do not exist yet.
+//  Covers RecordPurchaseFormState and RecordPurchaseFormInput.
 //
 
 import Foundation

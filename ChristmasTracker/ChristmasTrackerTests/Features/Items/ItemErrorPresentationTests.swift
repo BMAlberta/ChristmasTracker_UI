@@ -5,7 +5,7 @@
 //  Story I3c-D: how an ItemError is presented. A table over EVERY ItemError case (the exhaustive
 //  switch in `expectation(for:)` makes a new case a compile error here).
 //
-//  Fails today because ItemErrorPresentation does not exist yet.
+//  Covers ItemErrorPresentation.
 //
 
 import Testing

@@ -5,7 +5,7 @@
 //  Story I4b-A: PurchaseShippingStatus (replaces RecordedShippingStatus) has four cases in a
 //  fixed CaseIterable order and plain display names.
 //
-//  Fails today because PurchaseShippingStatus does not exist yet.
+//  Covers PurchaseShippingStatus.
 //
 
 import Foundation

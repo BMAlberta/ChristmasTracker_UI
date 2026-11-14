@@ -6,7 +6,7 @@
 //  can be opened for management. True only when the signed-in user id is non-nil, non-empty and
 //  exactly (case sensitive) equal to the purchaser id. Roles never take part.
 //
-//  Fails today because PurchasePermissions does not exist yet.
+//  Covers PurchasePermissions.canManage.
 //
 
 import Foundation

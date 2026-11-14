@@ -15,7 +15,7 @@
 //  ItemPurchaseRowStateTests. The earlier scans (RecordPurchaseViewScanTests, ItemUIRulesScanTests)
 //  keep running over ItemDetailView and are not relaxed.
 //
-//  Fails today because ItemDetailView does not open the purchase detail yet.
+//  Scans the ItemDetailView source for how it opens the purchase detail.
 //
 
 import Foundation

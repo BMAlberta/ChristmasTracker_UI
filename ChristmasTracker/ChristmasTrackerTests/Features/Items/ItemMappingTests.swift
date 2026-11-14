@@ -12,8 +12,7 @@
 //   - owner, co-owner and MEMBER see real status, updatedAt and (canSeeOffList) off-list items.
 //  The mapper itself is flag-free: it must never invent a value, so absent stays nil.
 //
-//  Fails today because mapListItem, ListItem, ListItemPerson, ListItemPurchaseSummary and the
-//  new ItemError cases do not exist yet.
+//  Covers mapListItem, ListItem, ListItemPerson, ListItemPurchaseSummary and the ItemError cases it throws.
 //
 
 import Testing

@@ -9,7 +9,7 @@
 //   - a load error has its own banner (Try Again and Dismiss), cleared by a new load, by Dismiss and
 //     by disappear(); unauthorized, a ended session and cancellation show nothing.
 //
-//  Fails today because PurchaseDetailModel does not exist yet.
+//  Covers the load behavior of PurchaseDetailModel.
 //
 
 import Foundation

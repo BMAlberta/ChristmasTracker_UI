@@ -13,7 +13,7 @@
 //
 //  Determinism: held steps and the nextHeldCall() handshake; no sleeps, no yield loops.
 //
-//  Fails today because PurchaseRefreshRunner does not exist yet.
+//  Covers PurchaseRefreshRunner.
 //
 
 import Foundation

@@ -11,7 +11,7 @@
 //  The earlier RecordPurchaseViewScanTests keep running over the same files (one dialog on the
 //  Record button, no token reference, no raw styles, no log calls); nothing here relaxes them.
 //
-//  Fails today because the banner and the Record Purchase view are not yet wired.
+//  Scans the source of InlineErrorBanner, RecordPurchaseView and RecordPurchaseModel for the unconfirmed-purchase wiring.
 //
 
 import Foundation

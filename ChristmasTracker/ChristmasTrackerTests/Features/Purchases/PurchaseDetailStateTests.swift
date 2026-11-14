@@ -5,7 +5,7 @@
 //  Story I4b-A: the read-only core rows of the purchase detail and the fixed texts. Money is
 //  Decimal formatted with the same style as the item price text; the date is a medium date.
 //
-//  Fails today because PurchaseDetailState does not exist yet.
+//  Covers PurchaseDetailState.
 //
 
 import Foundation

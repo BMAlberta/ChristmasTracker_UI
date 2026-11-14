@@ -26,7 +26,7 @@ Test run with 212 tests in 16 suites passed
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After commit: see the line added at the end of this report after the commit run.
+After commit c2f0e4d (separate run): `--- tests: 4398 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===` (this line ships with the next commit).
 
 ## Gate 2
 - convention-reviewer: APPROVE. Warnings: ChildrenView.swift is 402 lines (soft 400, hard 600); the ChildrenView struct body was already over the type-body limit before this story; test display strings over 120 characters (ChildDeletionPlanUnconfirmedTests 76, 82, 101; ChildrenRetryScanTests 35, 42, 53; ChildDeletionPresentationRetryTests 29, 52, 67, 78, 144, 156, 164); a pre-existing #Preview line over 120.

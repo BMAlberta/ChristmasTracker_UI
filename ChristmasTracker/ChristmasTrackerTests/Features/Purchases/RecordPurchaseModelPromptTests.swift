@@ -7,7 +7,7 @@
 //  until confirmOverPurchase; zero remaining has its own wording; an absent quantityRemaining never
 //  prompts; the prompt never blocks a purchase.
 //
-//  Fails today because RecordPurchaseModel does not exist yet.
+//  Covers the over-purchase prompt of RecordPurchaseModel.
 //
 
 import Foundation

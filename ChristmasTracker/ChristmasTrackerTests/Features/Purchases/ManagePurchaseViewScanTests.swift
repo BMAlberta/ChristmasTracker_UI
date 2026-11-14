@@ -17,7 +17,7 @@
 //  The rule functions are the existing, already proven RecordPurchaseViewRules and ItemUIRules. A
 //  missing file is a failed expectation, never a pass over an empty set.
 //
-//  Fails today because the screen and its model do not exist yet.
+//  Scans the ManagePurchaseView files and PurchaseDetailModel source for the rules above.
 //
 
 import Foundation

@@ -6,12 +6,9 @@
 //  remove notification observers from AuthenticationService, and expose
 //  SessionManager.lastTeardownReason for verification.
 //
-//  Expected state BEFORE R1 implementation:
-//  - Tests 1–4: compile errors on `sessionManager.lastTeardownReason` (property does not
-//    exist yet on SessionManager). The compile error IS the red state for those tests.
-//    Tests 1–2 also verify behavioral assertions that will fail at runtime once the property
-//    is added but the reason-routing logic is not yet complete.
-//  - Test 5: compiles and passes today — regression guard.
+//  - Tests 1–4: assert the reason recorded in `sessionManager.lastTeardownReason`
+//    (tests 1–2 through the AuthenticationService paths, tests 3–4 through teardown directly).
+//  - Test 5: regression guard for the error-tolerant sign-out path.
 //
 
 import Testing
@@ -94,11 +91,6 @@ struct LogoutPathTests {
 
     /// `logout()` (no argument) must route through teardown with `.userLogout`, clearing
     /// any registered `ListDataStore` and recording the teardown reason.
-    ///
-    /// FAILS before R1:
-    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
-    ///   - After property is added but reason-routing is missing, the `lastTeardownReason`
-    ///     assertion fails because the default call path does not set the reason.
     @Test("logout() clears a registered ListDataStore and records .userLogout reason")
     func profileLogoutPathSendsTeardownWithUserLogoutReason() async throws {
         let repo = ThrowingLogoutRepository()
@@ -125,7 +117,7 @@ struct LogoutPathTests {
         let after = await listDataStore.getLists()
         #expect(after.isEmpty, "ListDataStore must be empty after authService.logout()")
 
-        // Requires R1: lastTeardownReason does not exist on SessionManager yet.
+        // The reason recorded by SessionManager.teardown(reason:).
         let reason = await sessionManager.lastTeardownReason
         #expect(reason == .userLogout, "teardown reason must be .userLogout for a direct logout() call")
     }
@@ -134,11 +126,6 @@ struct LogoutPathTests {
 
     /// When `refreshTokenIfNeeded()` fails, the resulting logout must call
     /// `teardown(reason: .sessionExpired)`, clearing registered stores and recording the reason.
-    ///
-    /// FAILS before R1:
-    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
-    ///   - After property is added, `refreshTokenIfNeeded()` still calls `logout()` (no reason
-    ///     param), so `lastTeardownReason` is `.userLogout`, not `.sessionExpired`.
     @Test("refreshTokenIfNeeded() failure calls logout with .sessionExpired reason")
     func refreshFailureCallsLogoutWithSessionExpiredReason() async throws {
         let repo = ThrowingLogoutRepository()
@@ -172,7 +159,7 @@ struct LogoutPathTests {
         let after = await listDataStore.getLists()
         #expect(after.isEmpty, "ListDataStore must be empty after refresh-failure logout")
 
-        // Requires R1: property does not exist yet and reason will be wrong until logic is changed.
+        // The refresh failure must record .sessionExpired, not .userLogout.
         let reason = await sessionManager.lastTeardownReason
         #expect(reason == .sessionExpired, "teardown reason must be .sessionExpired when refresh fails")
     }
@@ -181,9 +168,6 @@ struct LogoutPathTests {
 
     /// Calling `teardown(reason: .sessionExpired)` directly on `SessionManager` must invoke
     /// all registered clearables and record `.sessionExpired` as the teardown reason.
-    ///
-    /// FAILS before R1:
-    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
     @Test("teardown(.sessionExpired) clears registered clearable and records reason")
     func sessionExpiredTeardownClearsRegisteredClearable() async throws {
         let repo = ThrowingLogoutRepository()
@@ -196,7 +180,7 @@ struct LogoutPathTests {
         #expect(mockClearable.wasClearCalled, "clearForSession() must be invoked by teardown")
         #expect(mockClearable.clearCallCount == 1, "clearForSession() must be called exactly once")
 
-        // Requires R1: lastTeardownReason does not exist on SessionManager yet.
+        // The reason recorded by SessionManager.teardown(reason:).
         let reason = await sessionManager.lastTeardownReason
         #expect(reason == .sessionExpired, "lastTeardownReason must be .sessionExpired")
     }
@@ -205,9 +189,6 @@ struct LogoutPathTests {
 
     /// Calling `teardown(reason: .forcedUpdate)` directly on `SessionManager` must invoke
     /// all registered clearables and record `.forcedUpdate` as the teardown reason.
-    ///
-    /// FAILS before R1:
-    ///   - Compile error: `SessionManager` has no `lastTeardownReason` property.
     @Test("teardown(.forcedUpdate) clears registered clearable and records reason")
     func forcedUpdateTeardownClearsRegisteredClearable() async throws {
         let repo = ThrowingLogoutRepository()
@@ -220,7 +201,7 @@ struct LogoutPathTests {
         #expect(mockClearable.wasClearCalled, "clearForSession() must be invoked by teardown")
         #expect(mockClearable.clearCallCount == 1, "clearForSession() must be called exactly once")
 
-        // Requires R1: lastTeardownReason does not exist on SessionManager yet.
+        // The reason recorded by SessionManager.teardown(reason:).
         let reason = await sessionManager.lastTeardownReason
         #expect(reason == .forcedUpdate, "lastTeardownReason must be .forcedUpdate")
     }
@@ -230,8 +211,8 @@ struct LogoutPathTests {
     /// When the network logout call throws, `isAuthenticated` must still become `false`
     /// and `currentUser` must be nil.
     ///
-    /// This test passes today and acts as a regression guard to ensure R1 does not
-    /// accidentally break the error-tolerant sign-out path.
+    /// This test acts as a regression guard so the reason routing does not
+    /// break the error-tolerant sign-out path.
     @Test("Network logout failure does not prevent sign-out (regression guard)")
     func networkLogoutFailureDoesNotPreventSignOut() async throws {
         let repo = ThrowingLogoutRepository()

@@ -2,8 +2,8 @@
 //  InlineErrorBannerStateTests.swift
 //  ChristmasTrackerTests
 //
-//  Story I3c-D: the pure state behind InlineErrorBanner (UI rule 4). Fails today because
-//  InlineErrorBannerState and InlineErrorBannerAction do not exist yet.
+//  Story I3c-D: the pure state behind InlineErrorBanner (UI rule 4). Covers
+//  InlineErrorBannerState and InlineErrorBannerAction.
 //
 
 import Testing

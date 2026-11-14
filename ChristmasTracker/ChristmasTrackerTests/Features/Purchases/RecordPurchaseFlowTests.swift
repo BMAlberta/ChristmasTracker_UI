@@ -8,7 +8,7 @@
 //  the S12 replacement) are in RecordPurchaseFlowConfirmationTests; ignored events in
 //  RecordPurchaseFlowIgnoredEventsTests.
 //
-//  Fails today because RecordPurchaseFlow and its state, event and effect types do not exist yet.
+//  Covers RecordPurchaseFlow and its state, event and effect types.
 //
 
 import Foundation

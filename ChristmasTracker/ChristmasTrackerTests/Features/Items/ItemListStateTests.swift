@@ -9,7 +9,7 @@
 //  VIEWER-role member, PUBLIC non-member) the list is ONE "Items" section with no status
 //  marker, no completion state and no off-list section; the empty copy hints at nothing.
 //
-//  Fails today because ItemListState, ItemSectionKind and ItemSectionState do not exist yet.
+//  Covers ItemListState, ItemSectionKind and ItemSectionState.
 //
 
 import Testing

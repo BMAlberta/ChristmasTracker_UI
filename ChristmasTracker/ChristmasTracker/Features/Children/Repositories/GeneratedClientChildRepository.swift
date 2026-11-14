@@ -121,7 +121,8 @@ nonisolated final class GeneratedClientChildRepository: ChildRepository, Sendabl
                 throw ChildError.childNotFound
             case .unprocessableContent(let response):
                 let error = (try? response.body.json)?.error
-                // 422 CANNOT_DELETE_RESOURCE (6501): the child still has lists.
+                // 422 CANNOT_DELETE_RESOURCE (6501): a list of the child is still ACTIVE or DRAFT
+                // (ChildDeletionFlow archives those first; archived lists do not block).
                 if error?.errorCode == "CANNOT_DELETE_RESOURCE" || error?.code == 6501 {
                     throw ChildError.childHasLists
                 }

@@ -3,7 +3,7 @@
 //  ChristmasTrackerTests
 //
 //  Story I3b-K0: no silent mock fallback. The pure bootstrap decision and the configuration-error
-//  view state. Production does not exist yet; these tests do not compile until it does.
+//  view state (resolveBootstrap).
 //
 
 import Foundation

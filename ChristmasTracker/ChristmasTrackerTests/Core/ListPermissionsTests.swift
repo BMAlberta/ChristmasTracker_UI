@@ -9,7 +9,7 @@
 //  Part B: named privacy scenarios.
 //  Part C: ListCategory.
 //
-//  Fails today because ListCapabilities, ListPermissions and ListCategory do not exist yet.
+//  Covers ListCapabilities, ListPermissions and ListCategory.
 //
 
 import Testing

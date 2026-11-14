@@ -7,7 +7,7 @@
 //  the purchase, and every code not listed defaults to unconfirmed. `cancelled` is not classified
 //  (the repository turns it into a cancellation before the classifier) and is not asserted here.
 //
-//  Fails today because UnconfirmedPurchaseClassifier and PurchaseFailureKind do not exist yet.
+//  Covers UnconfirmedPurchaseClassifier and PurchaseFailureKind.
 //
 
 import Foundation

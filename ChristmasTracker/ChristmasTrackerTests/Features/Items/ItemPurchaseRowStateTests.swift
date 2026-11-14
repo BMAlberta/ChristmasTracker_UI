@@ -8,7 +8,7 @@
 //  owners, blind co-owners, viewer-role members and PUBLIC non-members get no rows at all. The
 //  list status is not an input: archived lists behave the same.
 //
-//  Fails today because PurchaseRowState has no canOpen or accessibilityHint yet.
+//  Covers PurchaseRowState.canOpen and accessibilityHint.
 //
 
 import Foundation

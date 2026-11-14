@@ -11,7 +11,7 @@
 //   - blind owner, blind co-owner, VIEWER-role member, PUBLIC non-member: nothing shown, and every
 //     model action is a no-op that never reaches the service.
 //
-//  Fails today because RecordPurchaseModel and RecordPurchaseItemSummary do not exist yet.
+//  Covers RecordPurchaseModel and RecordPurchaseItemSummary visibility.
 //
 
 import Foundation

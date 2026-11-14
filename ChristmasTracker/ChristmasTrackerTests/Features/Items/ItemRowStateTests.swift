@@ -6,7 +6,7 @@
 //  initialiser for ItemRowState, so rows are obtained through ItemListState (the only
 //  producer) and read back by id.
 //
-//  Fails today because ItemRowState and ItemListState do not exist yet.
+//  Covers ItemRowState and ItemListState.
 //
 
 import Testing

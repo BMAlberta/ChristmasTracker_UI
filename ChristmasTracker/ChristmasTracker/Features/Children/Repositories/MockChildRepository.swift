@@ -4,7 +4,7 @@
 //
 //  Deterministic children for mock mode and previews. It works on the SAME MockListRepository
 //  instance as the list repository (shared state): the mock starts with one child who has a
-//  list, a new child gets a deterministic id, and a child with a list cannot be deleted.
+//  list, a new child gets a deterministic id, and a child with an ACTIVE or DRAFT list cannot be deleted.
 //
 
 import Foundation
