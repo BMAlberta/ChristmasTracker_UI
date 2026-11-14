@@ -50,10 +50,13 @@ nonisolated enum ItemWire {
         createdById: String = "user-2",
         createdByName: String = "Casey Member",
         createdAt: String = "2026-01-05T08:30:00.000Z",
+        canEdit: Bool = true,
+        canDelete: Bool = true,
         updatedAt: String? = nil,
         quantityPurchased: Int? = nil,
         quantityRemaining: Int? = nil,
-        extra: String? = nil
+        extra: String? = nil,
+        omitting omitted: Set<String> = []
     ) -> String {
         var fields: [String] = [
             "\"id\": \"\(id)\"",
@@ -65,7 +68,9 @@ nonisolated enum ItemWire {
             "\"status\": \"\(status)\"",
             "\"offList\": \(offList ? "true" : "false")",
             "\"createdBy\": { \"id\": \"\(createdById)\", \"displayName\": \"\(createdByName)\" }",
-            "\"createdAt\": \"\(createdAt)\""
+            "\"createdAt\": \"\(createdAt)\"",
+            "\"canEdit\": \(canEdit ? "true" : "false")",
+            "\"canDelete\": \(canDelete ? "true" : "false")"
         ]
         if let url { fields.append("\"url\": \"\(url)\"") }
         if let imageUrl { fields.append("\"imageUrl\": \"\(imageUrl)\"") }
@@ -73,6 +78,9 @@ nonisolated enum ItemWire {
         if let updatedAt { fields.append("\"updatedAt\": \"\(updatedAt)\"") }
         if let quantityPurchased { fields.append("\"quantityPurchased\": \(quantityPurchased)") }
         if let quantityRemaining { fields.append("\"quantityRemaining\": \(quantityRemaining)") }
+        // I5b Story C: a field named in `omitting` is left out of the JSON (strictness tests);
+        // `extra` is appended afterwards, so it can replace an omitted field.
+        fields.removeAll { field in omitted.contains { field.hasPrefix("\"\($0)\":") } }
         if let extra { fields.append(extra) }
         return "{ " + fields.joined(separator: ", ") + " }"
     }

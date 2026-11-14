@@ -546,11 +546,11 @@
               },
               "canDeleteList": {
                 "type": "boolean",
-                "description": "True for the owner and the co-owner (blind or not), while the list is not ARCHIVED, the callers who may call DELETE /lists/{id}, which archives the list. False for everyone else, and false on an ARCHIVED list so that clients treat archived lists as read-only, although the server still accepts the call (P23, L14)"
+                "description": "True for the owner and the co-owner (blind or not), while the list is not ARCHIVED, the callers who may call DELETE /lists/{id}, which archives the list. False for everyone else, and false on an ARCHIVED list, because archiving closes list management only and not item or purchase actions (L16), although the server still accepts the call (P23, L14)"
               },
               "canManageMembers": {
                 "type": "boolean",
-                "description": "True for the owner and the co-owner (blind or not), while the list is not ARCHIVED, the callers who may call POST /lists/{id}/members and remove other members via DELETE /lists/{id}/members/{userId}. False for everyone else, and false on an ARCHIVED list so that clients treat archived lists as read-only, although the server still accepts those calls (P23, L8)"
+                "description": "True for the owner and the co-owner (blind or not), while the list is not ARCHIVED, the callers who may call POST /lists/{id}/members and remove other members via DELETE /lists/{id}/members/{userId}. False for everyone else, and false on an ARCHIVED list, because archiving closes list management only and not item or purchase actions (L16), although the server still accepts those calls (P23, L8)"
               },
               "canSetCoOwner": {
                 "type": "boolean",
@@ -679,7 +679,9 @@
           "status",
           "offList",
           "createdBy",
-          "createdAt"
+          "createdAt",
+          "canEdit",
+          "canDelete"
         ],
         "properties": {
           "id": {
@@ -742,6 +744,14 @@
             ],
             "format": "date-time",
             "description": "Omitted when canSeeGiftActivity is false (P17)"
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "True for the owner and the co-owner (blind or not) on a normal item and for the creator on their own off-list item, the callers who may call PATCH /items/{id}. False for everyone else. The list status plays no part (P25, L16)."
+          },
+          "canDelete": {
+            "type": "boolean",
+            "description": "True for the same callers as canEdit, the callers who may call DELETE /items/{id}, except that it is false for a caller who can see gift activity when the item has purchases (the server answers 422 CANNOT_DELETE_ITEM_WITH_PURCHASES). Blind callers are never told about purchases, so for them it depends on the permission alone. The list status plays no part (P25, L16)."
           },
           "quantityPurchased": {
             "type": "integer",
@@ -2309,7 +2319,7 @@
       "post": {
         "summary": "Create a budget",
         "operationId": "createBudget",
-        "description": "Create a new annual budget with per-recipient allocations",
+        "description": "Create a new annual budget with per-recipient allocations. Each recipient must be one of the caller's own children or a person who shares a list with the caller (decision S16). An unconnected, unknown or own recipient returns 404 RECIPIENT_NOT_FOUND with an identical body, and a repeated recipientId returns 400 VALIDATION_ERROR. A sum of allocations above the total returns 400.",
         "tags": [
           "Budgets"
         ],
@@ -2551,7 +2561,7 @@
       "patch": {
         "summary": "Update budget",
         "operationId": "updateBudget",
-        "description": "Update budget total or recipient allocations",
+        "description": "Update budget total or recipient allocations. Each recipient must be one of the caller's own children or a person who shares a list with the caller (decision S16). An unconnected, unknown or own recipient returns 404 RECIPIENT_NOT_FOUND with an identical body, and a repeated recipientId returns 400 VALIDATION_ERROR. When both totalBudget and recipients are sent, a sum above the total returns 400. When only one of them is sent, the sum is checked against the stored value and a violation returns 422 RECIPIENT_BUDGET_SUM_EXCEEDS_TOTAL. Recipients already in the budget are not re-checked, so an existing allocation can always be kept, changed or removed; only newly added recipients must be connected (S16).",
         "tags": [
           "Budgets"
         ],
@@ -2647,6 +2657,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityError"
           },
           "429": {
             "$ref": "#/components/responses/RateLimitError"
@@ -5352,7 +5365,7 @@
                           "type": "string"
                         },
                         "relationshipType": {
-                          "type": "string"
+                          "$ref": "#/components/schemas/RelationshipType"
                         }
                       }
                     },

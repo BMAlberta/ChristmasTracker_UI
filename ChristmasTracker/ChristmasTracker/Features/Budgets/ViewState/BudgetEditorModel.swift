@@ -39,7 +39,6 @@ final class BudgetEditorModel {
     private let mode: Mode
     private let budgetService: BudgetService
     private let listService: ListService
-    private let spend: [RecipientSpend]
     private let locale: Locale
     private let currencyCode: String
 
@@ -57,14 +56,12 @@ final class BudgetEditorModel {
         mode: Mode,
         budgetService: BudgetService,
         listService: ListService,
-        spend: [RecipientSpend],
         locale: Locale,
         currencyCode: String
     ) {
         self.mode = mode
         self.budgetService = budgetService
         self.listService = listService
-        self.spend = spend
         self.locale = locale
         self.currencyCode = currencyCode
         switch mode {
@@ -157,11 +154,11 @@ final class BudgetEditorModel {
             pickerLoad = .failed(presentation.fullError?.message ?? loadFailure.userMessage)
             return
         }
-        baseOptions = BudgetRecipientOptions.build(
-            lists: listService.lists,
-            existing: existingRecipients,
-            spend: spend
-        )
+        rebuildOptions()
+    }
+
+    private func rebuildOptions() {
+        baseOptions = BudgetRecipientOptions.build(lists: listService.lists, existing: existingRecipients)
         pickerLoad = .loaded
     }
 
@@ -221,6 +218,16 @@ final class BudgetEditorModel {
             return nil
         } catch let failure as BudgetError {
             banner = Self.bannerState(for: failure)
+            if failure == .recipientNotFound {
+                // The people may have changed: a forced load through the session-safe service path.
+                // Quiet (the Dashboard reads the service's failure), and the picker is rebuilt only
+                // when a refresh really ran and succeeded: not when it failed or was skipped.
+                let wasRefreshing = listService.isRefreshing
+                let refreshFailure = await listService.refreshLists(reportingFailure: false)
+                if !wasRefreshing, refreshFailure == nil {
+                    rebuildOptions()
+                }
+            }
             return nil
         } catch {
             banner = Self.bannerState(for: .server)

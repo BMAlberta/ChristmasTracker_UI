@@ -8,8 +8,8 @@
 //  Construction assumption (same as the list repository):
 //      GeneratedClientChildRepository(client: client)    // client from TrackerClientFactory.make
 //
-//  Wire facts the tests pin: the list response types relationshipType as the generated enum, the
-//  create response as a plain String (an unknown value is invalidResponse in both); a null
+//  Wire facts the tests pin: the list and create responses both type relationshipType as the generated
+//  enum (an unknown value is invalidResponse in both); a null
 //  displayName is legal; the create body sends displayName only when non-nil and relationshipType
 //  always.
 //
@@ -151,7 +151,7 @@ struct GeneratedClientChildRepositoryTests {
 
     // MARK: createChild success
 
-    @Test("createChild 201 maps the new child, whose relationshipType is a plain string", arguments: [
+    @Test("createChild 201 maps the new child and every relationshipType enum value", arguments: [
         ("PARENT", ChildRelationship.parent), ("GUARDIAN", ChildRelationship.guardian), ("CARETAKER", ChildRelationship.caretaker)
     ])
     func createChildSuccess(raw: String, expected: ChildRelationship) async throws {
@@ -177,7 +177,7 @@ struct GeneratedClientChildRepositoryTests {
         #expect(child.displayName == nil)
     }
 
-    @Test("createChild 201 with an unknown relationship string throws invalidResponse")
+    @Test("createChild 201 with an unknown relationshipType value throws invalidResponse")
     func createChildUnknownRelationship() async throws {
         let sut = try makeSUT()
         await sut.transport.enqueue(status: 201, json: try MembersWire.createChildJSON(relationshipType: "SIBLING"))

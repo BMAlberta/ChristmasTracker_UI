@@ -2,18 +2,14 @@
 //  ItemPermissions.swift
 //  ChristmasTracker
 //
-//  The ONE pure function that decides item rights. It reads only the list's capability flags,
-//  the item's offList and creator id, and the current user's id. No screen reads a role.
+//  Pure display rules driven only by the list's capability flags: canAddItem,
+//  showsOffListNotice, visibleItems, canSeeGiftActivity, canSeeOffListItems and canPurchase.
+//  No screen reads a role.
 //
-//  Source: Docs/privacy-matrix.md (item rows). A regular item is edited and deleted by the
-//  owner or co-owner (blind or not); a member's off-list item only by its creator (the owner
-//  and co-owner get 403); members, viewers and PUBLIC non-members never touch a regular item.
-//  In flag terms: canCreateItem without canAddOffList identifies the owner or co-owner write
-//  role, canAddOffList the member write role. The list status is not an input.
+//  Source: Docs/privacy-matrix.md (list capability flags).
 //
-//  MISSING PER-ITEM FLAGS: ItemResponse carries no canEdit or canDelete flag, so the rule above
-//  is derived from the list flags. Brian has asked the API chat to consider adding canEdit and
-//  canDelete to ItemResponse; if the contract adds them, this type becomes a thin read of them.
+//  PER-ITEM FLAGS: the item's own canEdit and canDelete come from the server (P25) and are read
+//  straight off ListItem. This type no longer derives edit or delete rights.
 //
 
 import Foundation
@@ -21,6 +17,7 @@ import Foundation
 nonisolated struct ItemPermissions: Equatable, Sendable {
     private let canCreateItem: Bool
     private let canAddOffList: Bool
+    /// Unused by any rule; kept only for the init signature and Equatable.
     private let currentUserId: String?
 
     let canSeeGiftActivity: Bool
@@ -40,18 +37,6 @@ nonisolated struct ItemPermissions: Equatable, Sendable {
 
     /// True when the add form should say the item will be hidden from the recipient.
     var showsOffListNotice: Bool { canAddOffList }
-
-    func canEdit(_ item: ListItem) -> Bool {
-        if item.offList {
-            guard let currentUserId else { return false }
-            return item.createdBy.id == currentUserId
-        }
-        return canCreateItem && !canAddOffList
-    }
-
-    func canDelete(_ item: ListItem) -> Bool {
-        canEdit(item)
-    }
 
     /// Drops off-list items when the viewer may not see them (the server already omits them;
     /// this is defensive). Order is kept.

@@ -3,7 +3,8 @@
 //  ChristmasTracker
 //
 //  Pure display state for the item screens. Views read these values and nothing else: every
-//  visibility decision comes from the capability flags (through ItemPermissions). When
+//  visibility decision comes from the capability flags (through ItemPermissions) and, for Edit
+//  and Delete, from the item's own server-sent canEdit and canDelete. When
 //  canSeeGiftActivity is false every item is a plain available entry: no status marker, no
 //  completion, no purchases, no progress, no updatedAt, and the copy hints at nothing hidden.
 //
@@ -240,8 +241,8 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
             updatedText = nil
         }
 
-        showsEdit = permissions.canEdit(item)
-        showsDelete = permissions.canDelete(item)
+        showsEdit = item.canEdit
+        showsDelete = item.canDelete
         showsPurchaseEntry = permissions.canPurchase
         linkURL = item.url.flatMap(URL.init(string:)).flatMap { link in
             let scheme = link.scheme?.lowercased()

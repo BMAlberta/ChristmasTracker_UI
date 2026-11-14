@@ -61,6 +61,11 @@ struct BudgetErrorTests {
         BudgetErrorCase(
             error: .hasPurchases(message: ""), message: "A budget with purchases can't be deleted.",
             isGone: false, isRetryable: false
+        ),
+        BudgetErrorCase(
+            error: .recipientNotFound,
+            message: "One of the people you chose can't be added to your budget right now. Check the list and try again.",
+            isGone: false, isRetryable: false
         )
     ]
 
@@ -119,6 +124,16 @@ struct BudgetErrorTests {
 
     @Test func errorDescriptionTrimsTheServerMessageToo() {
         #expect(BudgetError.hasPurchases(message: "  Has purchases.  ").errorDescription == "Has purchases.")
+    }
+
+    @Test func recipientNotFoundIsNotGoneAndNamesNobody() {
+        let error = BudgetError.recipientNotFound
+        #expect(!error.isGone)
+        #expect(!error.isRetryable)
+        #expect(error != BudgetError.notFound)
+        for name in ["Tommy", "Mike", "John", "Alex Giftee", "Casey Spender", "Drew Otherson"] {
+            #expect(!error.userMessage.contains(name))
+        }
     }
 
     @Test func rateLimitedIsRetryableRegardlessOfTheDelay() {

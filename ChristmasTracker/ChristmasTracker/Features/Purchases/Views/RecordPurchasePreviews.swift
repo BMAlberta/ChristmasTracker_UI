@@ -25,6 +25,8 @@ private enum RecordPurchasePreviewSupport {
             offList: false,
             createdBy: recipient,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            canEdit: false,
+            canDelete: false,
             quantityRemaining: remaining
         )
     }

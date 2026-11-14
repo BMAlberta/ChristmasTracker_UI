@@ -101,11 +101,12 @@ struct BudgetEditorModelListsLoadTests {
         #expect(sut.listRepo.fetchListsCount == 1)
     }
 
-    @Test("with the merged spend people the editor opened during a load still lists them with the people")
-    func openedDuringLoadMergesSpend() async {
-        let spend = [BudgetFixtures.spend(id: "p-c", name: "Casey Spender", spent: "40", items: 1)]
-        let sut = makeBudgetEditorSUT(spend: spend)
-        sut.listRepo.enqueueFetchLists(.success([EditorTest.list(EditorTest.alex)]), held: true)
+    @Test("an edit editor opened during a load lists the people from the lists and not those already in the budget")
+    func openedDuringLoadInEditMode() async {
+        let sut = makeEditEditorSUT()
+        sut.listRepo.enqueueFetchLists(
+            .success([EditorTest.list(EditorTest.alex), EditorTest.list(EditorTest.casey)]), held: true
+        )
         let dashboardLoad = Task { @MainActor in await sut.lists.loadLists() }
         await sut.listRepo.nextHeldCall()
 

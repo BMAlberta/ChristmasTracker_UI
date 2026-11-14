@@ -3,8 +3,8 @@
 //  ChristmasTracker
 //
 //  Pure mapping from the generated item schemas to the domain `ListItem`. This is the
-//  repository boundary: nothing past it sees a generated type. The mapper is flag-free and
-//  never invents a value: an absent updatedAt, purchases or totalQuantityPurchased stays nil.
+//  repository boundary: nothing past it sees a generated type. The mapper copies the server's
+//  per-item canEdit and canDelete and never derives them. It never invents a value: an absent updatedAt, purchases or totalQuantityPurchased stays nil.
 //  Money goes through the package helper; a value that cannot convert (NaN, infinite) throws
 //  `ItemError.invalidResponse`.
 //
@@ -59,6 +59,8 @@ private nonisolated func buildListItem(
         offList: item.offList,
         createdBy: mapListItemPerson(item.createdBy),
         createdAt: item.createdAt,
+        canEdit: item.canEdit,
+        canDelete: item.canDelete,
         updatedAt: item.updatedAt,
         purchases: purchases,
         totalQuantityPurchased: totalQuantityPurchased,

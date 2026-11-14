@@ -10,8 +10,8 @@ import Foundation
 /// Deterministic in-memory item repository for mock mode and previews. It mirrors the server's
 /// privacy rules for the capability flags returned for the list a call is about (privacy matrix,
 /// client guide 6.2 to 6.4): no gift activity hides status, updatedAt and purchases; no off-list
-/// visibility omits off-list items; create derives offList from canAddOffList; edit and delete
-/// follow the same rights as `ItemPermissions`.
+/// visibility omits off-list items; create derives offList from canAddOffList. Each item's
+/// canEdit and canDelete come from `mockFlags` (mock-only; the real server sends them).
 // Mock repository: intentionally uninstrumented.
 actor MockItemRepository: ItemRepository {
 
@@ -87,6 +87,8 @@ actor MockItemRepository: ItemRepository {
             offList: caps.canAddOffList,
             createdBy: currentUser,
             createdAt: now,
+            canEdit: false, // placeholder: hidden() overwrites it via mockFlags
+            canDelete: false,
             updatedAt: now
         )
         nextId += 1
@@ -100,7 +102,7 @@ actor MockItemRepository: ItemRepository {
         guard let index = items.firstIndex(where: { $0.id == id }) else { throw ItemError.notFound }
         let existing = items[index]
         let caps = capabilitiesForList(existing.listId)
-        guard mayChange(existing, caps) else { throw ItemError.forbidden }
+        guard mockFlags(existing, caps).canEdit else { throw ItemError.forbidden }
 
         let updated = ListItem(
             id: existing.id,
@@ -116,6 +118,8 @@ actor MockItemRepository: ItemRepository {
             offList: existing.offList,
             createdBy: existing.createdBy,
             createdAt: existing.createdAt,
+            canEdit: false, // placeholder: hidden() overwrites it via mockFlags
+            canDelete: false,
             updatedAt: Date(),
             purchases: existing.purchases,
             totalQuantityPurchased: existing.totalQuantityPurchased
@@ -128,25 +132,36 @@ actor MockItemRepository: ItemRepository {
     func deleteItem(id: String) async throws {
         try await Task.sleep(for: .seconds(delay))
         guard let index = items.firstIndex(where: { $0.id == id }) else { throw ItemError.notFound }
-        guard mayChange(items[index], capabilitiesForList(items[index].listId)) else { throw ItemError.forbidden }
+        guard mockFlags(items[index], capabilitiesForList(items[index].listId)).canDelete else {
+            throw ItemError.forbidden
+        }
         items.remove(at: index)
         LogDebug("Mock: Deleted item", category: .business)
     }
 
     // MARK: - Rules
 
-    /// A regular item: canCreateItem and not canAddOffList. An off-list item: its creator only.
-    private func mayChange(_ item: ListItem, _ caps: ListCapabilities) -> Bool {
-        if item.offList {
-            return item.createdBy.id == currentUser.id
-        }
-        return caps.canCreateItem && !caps.canAddOffList
+    /// MOCK ONLY. The real server sends canEdit and canDelete on every item (P25); this stands in
+    /// for it. Computed at call time from the list's capabilities and the stored item (which still
+    /// holds its purchases), so the flags always match the persona the mock is playing:
+    /// - edit: owner or co-owner (canCreateItem without canAddOffList) on a regular item, the
+    ///   creator on their own off-list item;
+    /// - delete: the same, but false for a caller who can see gift activity when the item has
+    ///   purchases (the server would answer 422); a blind caller's delete ignores purchases.
+    private func mockFlags(_ item: ListItem, _ caps: ListCapabilities) -> (canEdit: Bool, canDelete: Bool) {
+        let mayChange = item.offList
+            ? item.createdBy.id == currentUser.id
+            : caps.canCreateItem && !caps.canAddOffList
+        let hasPurchases = !(item.purchases ?? []).isEmpty
+        let blockedByPurchases = caps.canSeeGiftActivity && hasPurchases
+        return (mayChange, mayChange && !blockedByPurchases)
     }
 
     /// What the server sends: without gift activity every item is AVAILABLE with no updatedAt and
     /// no purchases. The list endpoint never carries purchase summaries.
     private func hidden(_ item: ListItem, _ caps: ListCapabilities, keepingPurchases: Bool) -> ListItem {
         let seesActivity = caps.canSeeGiftActivity
+        let flags = mockFlags(item, caps)
         let keep = seesActivity && keepingPurchases
         return ListItem(
             id: item.id,
@@ -162,6 +177,8 @@ actor MockItemRepository: ItemRepository {
             offList: item.offList,
             createdBy: item.createdBy,
             createdAt: item.createdAt,
+            canEdit: flags.canEdit,
+            canDelete: flags.canDelete,
             updatedAt: seesActivity ? item.updatedAt : nil,
             purchases: keep ? item.purchases : nil,
             totalQuantityPurchased: keep ? item.totalQuantityPurchased : nil
@@ -198,7 +215,9 @@ nonisolated enum MockItemSeed {
             id: id, listId: listId, name: name, description: "A fake description for \(name)",
             url: nil, imageUrl: nil, expectedUnitPrice: cents.map(money),
             quantityRequested: quantity, priority: priority, status: status, offList: offList,
-            createdBy: creator, createdAt: created, updatedAt: updated,
+            createdBy: creator, createdAt: created,
+            canEdit: false, canDelete: false, // placeholder: the repository overwrites it via mockFlags
+            updatedAt: updated,
             purchases: purchases, totalQuantityPurchased: buyer == nil ? nil : purchased
         )
     }

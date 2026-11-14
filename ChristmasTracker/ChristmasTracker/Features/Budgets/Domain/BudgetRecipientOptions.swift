@@ -3,7 +3,7 @@
 //  ChristmasTracker
 //
 //  I5a Story A: the people a user can set a budget limit for, derived from lists, existing
-//  allocations and the year's spend.
+//  allocations.
 //
 
 import Foundation
@@ -15,19 +15,17 @@ nonisolated struct BudgetRecipientOption: Identifiable, Equatable, Sendable {
 
 nonisolated enum BudgetRecipientOptions {
 
-    /// Sources in order: purchasable lists, existing allocations, spend rows. De-duplicated by id; the name
+    /// Sources in order: purchasable lists, existing allocations. De-duplicated by id; the name
     /// is the first non-blank one in that order; sorted by name case-insensitively, ties by id.
     static func build(
         lists: [GiftList],
-        existing: [RecipientBudget],
-        spend: [RecipientSpend]
+        existing: [RecipientBudget]
     ) -> [BudgetRecipientOption] {
         var candidates: [(id: String, name: String)] = []
         for list in lists where list.capabilities.canPurchase {
             candidates.append((list.recipient.id, list.recipient.displayName))
         }
         for item in existing { candidates.append((item.recipientId, item.recipientName)) }
-        for item in spend { candidates.append((item.recipientId, item.displayName)) }
 
         var order: [String] = []
         var names: [String: String] = [:]

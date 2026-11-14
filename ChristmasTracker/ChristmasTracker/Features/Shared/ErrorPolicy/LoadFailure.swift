@@ -97,7 +97,7 @@ nonisolated struct LoadFailure: Sendable, Equatable {
             self.init(.notFound, source, error.userMessage)
         case .sessionEnded, .unauthorized:
             self.init(.sessionEnded, source, error.userMessage)
-        case .validation, .alreadyExists, .sumExceedsTotal, .hasPurchases:
+        case .validation, .alreadyExists, .sumExceedsTotal, .hasPurchases, .recipientNotFound:
             self.init(.other, source, error.userMessage)
         }
     }

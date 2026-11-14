@@ -9,8 +9,19 @@
 //           totalQuantityPurchased nil; no canSeeOffList -> off-list items omitted.
 //    create: !canCreateItem -> .forbidden; otherwise offList = canAddOffList (the input has no
 //           offList), with the same hiding applied to the result.
-//    update / delete: a regular item needs canCreateItem && !canAddOffList; an off-list item needs
-//           its creator to be the mock's current user; otherwise .forbidden; unknown id .notFound.
+//    flags (I5b Story C): every item the mock returns carries canEdit and canDelete, produced by a
+//           mock-only function that is consistent with the mock list's capabilities (owner and
+//           co-owner: regular items; creator: their own off-list item). update / delete throw
+//           .forbidden when the item's flag is false and succeed when it is true; unknown id
+//           .notFound. The expected flag values below come from Docs/privacy-matrix.md, not from
+//           any private name, and are read through the public repository API.
+//
+//  I5b Story C rewrites: memberCannotTouchRegularItem and readOnlyViewersCannotEditOrDelete no
+//  longer flip the capabilities after creating the item (that pinned a derivation at call time);
+//  they act on a seeded regular item under the persona's flags and assert the flag as well.
+//  ownersEditAndDeleteRegularItems and memberOwnOffListItem gain flag assertions on the created
+//  item. New: createdItemFlags, seededFlagsFollowTheMatrix, seededFlagsForTheCreator,
+//  detailFlagsEqualListFlags, forbiddenExactlyWhenFlagIsFalse, updateAndDeleteSucceedWhenFlagIsTrue.
 //
 //  The tests derive the behavior from FLAGS (named personas are bundles of flags), never a role.
 //  The Gate 1 addendum fixes no seed content, so tests that need a seeded item discover it
@@ -161,6 +172,8 @@ struct MockItemRepositoryTests {
         try await repo.deleteItem(id: created.id)
 
         #expect(updated.name == "Renamed")
+        #expect(created.canEdit && created.canDelete)
+        #expect(updated.canEdit && updated.canDelete)
         let remaining = try await repo.fetchItems(listId: listId)
         #expect(!remaining.map(\.id).contains(created.id))
     }
@@ -221,6 +234,7 @@ struct MockItemRepositoryTests {
 
         #expect(created.offList == true)
         #expect(created.createdBy == ItemMockSupport.me)
+        #expect(created.canEdit && created.canDelete, "the creator may change their own off-list item")
         #expect(updated.name == "Renamed")
         let remaining = try await repo.fetchItems(listId: listId)
         #expect(!remaining.map(\.id).contains(created.id))
@@ -238,15 +252,15 @@ struct MockItemRepositoryTests {
 
     @Test("MEMBER cannot edit or delete a regular item (403)")
     func memberCannotTouchRegularItem() async throws {
-        let flags = CapabilitySwitch(ItemFixtures.Persona.owner.capabilities)
-        let repo = await ItemMockSupport.makeMock(flags)
-        let regular = try await repo.createItem(listId: listId, input())
-        #expect(regular.offList == false, "precondition: created under owner flags")
-        flags.current = ItemFixtures.Persona.member.capabilities
+        let seeded = try await ItemMockSupport.seededItems()
+        let regular = try #require(seeded.first { !$0.offList }, "the mock must seed a regular item")
+        let repo = await ItemMockSupport.makeMock(ItemFixtures.Persona.member.capabilities)
 
+        let listed = try #require(try await repo.fetchItems(listId: regular.listId).first { $0.id == regular.id })
+        #expect(!listed.canEdit)
+        #expect(!listed.canDelete)
         await #expect(throws: ItemError.forbidden) { _ = try await repo.updateItem(id: regular.id, UpdateItemInput(name: "X")) }
         await #expect(throws: ItemError.forbidden) { try await repo.deleteItem(id: regular.id) }
-        flags.current = ItemFixtures.Persona.owner.capabilities
         let still = try await repo.fetchItemDetail(id: regular.id)
         #expect(still.name == regular.name, "a refused update changes nothing")
     }
@@ -296,13 +310,188 @@ struct MockItemRepositoryTests {
         ItemFixtures.Persona.viewer, .publicNonMember
     ])
     func readOnlyViewersCannotEditOrDelete(persona: ItemFixtures.Persona) async throws {
-        let flags = CapabilitySwitch(ItemFixtures.Persona.owner.capabilities)
-        let repo = await ItemMockSupport.makeMock(flags)
-        let regular = try await repo.createItem(listId: listId, input())
-        flags.current = persona.capabilities
+        let seeded = try await ItemMockSupport.seededItems()
+        let regular = try #require(seeded.first { !$0.offList }, "the mock must seed a regular item")
+        let repo = await ItemMockSupport.makeMock(persona.capabilities)
 
+        let detail = try await repo.fetchItemDetail(id: regular.id)
+        #expect(!detail.canEdit, "\(persona)")
+        #expect(!detail.canDelete, "\(persona)")
         await #expect(throws: ItemError.forbidden) { _ = try await repo.updateItem(id: regular.id, UpdateItemInput(name: "X")) }
         await #expect(throws: ItemError.forbidden) { try await repo.deleteItem(id: regular.id) }
+    }
+
+    // MARK: - Flags (I5b Story C)
+
+    @Test("a created item carries flags consistent with the list capabilities: true for every creator",
+          arguments: [ItemFixtures.Persona.owner, .blindOwner, .coOwner, .blindCoOwner, .member])
+    func createdItemFlags(persona: ItemFixtures.Persona) async throws {
+        let repo = await ItemMockSupport.makeMock(persona.capabilities)
+
+        let created = try await repo.createItem(listId: listId, input())
+        let listed = try #require(try await repo.fetchItems(listId: listId).first { $0.id == created.id })
+        let detail = try await repo.fetchItemDetail(id: created.id)
+
+        for item in [created, listed, detail] {
+            #expect(item.canEdit, "\(persona)")
+            #expect(item.canDelete, "\(persona)")
+        }
+    }
+
+    @Test("seeded items carry the flags the matrix gives the persona (current user is not a seeded creator)",
+          arguments: ItemFixtures.Persona.allCases)
+    func seededFlagsFollowTheMatrix(persona: ItemFixtures.Persona) async throws {
+        let seededIds = try await ItemMockSupport.seededListIds()
+        let purchased = try await purchasedSeededItemIds()
+        let repo = await ItemMockSupport.makeMock(persona.capabilities)
+        let flags = persona.flags
+        // Owner and co-owner (blind or not) change regular items; nobody else does.
+        let regularExpected = flags.canCreateItem && !flags.canAddOffList
+
+        var seen = 0
+        for id in seededIds {
+            for item in try await repo.fetchItems(listId: id) {
+                seen += 1
+                // Off-list items seeded here are created by someone other than the test's user.
+                let mayChange = item.offList ? false : regularExpected
+                // P25: a caller who sees gift activity cannot delete an item that has purchases;
+                // a blind caller's delete never depends on purchases; edit never does.
+                let blockedByPurchases = flags.canSeeGiftActivity && purchased.contains(item.id)
+                #expect(item.canEdit == mayChange, "\(persona) \(item.id) canEdit")
+                #expect(item.canDelete == (mayChange && !blockedByPurchases), "\(persona) \(item.id) canDelete")
+            }
+        }
+        #expect(seen > 0)
+    }
+
+    /// Ids of seeded items that hold purchases, read with full visibility (the owner's detail).
+    private func purchasedSeededItemIds() async throws -> Set<String> {
+        let owner = await ItemMockSupport.makeMock(ItemFixtures.Persona.owner.capabilities)
+        var ids: Set<String> = []
+        for item in try await ItemMockSupport.seededItems() {
+            let detail = try await owner.fetchItemDetail(id: item.id)
+            if !(detail.purchases ?? []).isEmpty || (detail.totalQuantityPurchased ?? 0) > 0 { ids.insert(item.id) }
+        }
+        return ids
+    }
+
+    @Test("non-blind owner and co-owner: an item with purchases can be edited but not deleted (P25)",
+          arguments: [ItemFixtures.Persona.owner, .coOwner])
+    func nonBlindOwnersCannotDeleteItemsWithPurchases(persona: ItemFixtures.Persona) async throws {
+        let purchased = try await purchasedSeededItemIds()
+        let seeded = try await ItemMockSupport.seededItems()
+        let targets = seeded.filter { purchased.contains($0.id) && !$0.offList }
+        #expect(!targets.isEmpty, "the seed must hold a regular item with purchases")
+
+        for target in targets {
+            let repo = await ItemMockSupport.makeMock(persona.capabilities)
+            let listed = try #require(try await repo.fetchItems(listId: target.listId).first { $0.id == target.id })
+            let detail = try await repo.fetchItemDetail(id: target.id)
+            for item in [listed, detail] {
+                #expect(item.canEdit, "\(persona) \(target.id)")
+                #expect(!item.canDelete, "\(persona) \(target.id)")
+            }
+            await #expect(throws: ItemError.forbidden) { try await repo.deleteItem(id: target.id) }
+            let still = try await repo.fetchItemDetail(id: target.id)
+            #expect(still.id == target.id, "a refused delete removes nothing")
+            let updated = try await repo.updateItem(id: target.id, UpdateItemInput(name: "Renamed"))
+            #expect(updated.name == "Renamed")
+            #expect(updated.canEdit)
+            #expect(!updated.canDelete, "editing does not clear the purchases")
+        }
+    }
+
+    @Test("blind owner and co-owner: an item with purchases is still editable and deletable (P25)",
+          arguments: [ItemFixtures.Persona.blindOwner, .blindCoOwner])
+    func blindOwnersDeleteItemsWithPurchases(persona: ItemFixtures.Persona) async throws {
+        let purchased = try await purchasedSeededItemIds()
+        let seeded = try await ItemMockSupport.seededItems()
+        let targets = seeded.filter { purchased.contains($0.id) && !$0.offList }
+        #expect(!targets.isEmpty, "the seed must hold a regular item with purchases")
+
+        for target in targets {
+            let repo = await ItemMockSupport.makeMock(persona.capabilities)
+            let listed = try #require(try await repo.fetchItems(listId: target.listId).first { $0.id == target.id })
+            let detail = try await repo.fetchItemDetail(id: target.id)
+            for item in [listed, detail] {
+                #expect(item.purchases == nil, "a blind caller sees no purchases")
+                #expect(item.canEdit, "\(persona) \(target.id)")
+                #expect(item.canDelete, "\(persona) \(target.id)")
+            }
+            try await repo.deleteItem(id: target.id)
+            await #expect(throws: ItemError.notFound) { _ = try await repo.fetchItemDetail(id: target.id) }
+        }
+    }
+
+    @Test("the creator of a seeded off-list item can change it under member flags; nobody else's item")
+    func seededFlagsForTheCreator() async throws {
+        let seeded = try await ItemMockSupport.seededItems()
+        let theirs = try #require(seeded.first { $0.offList }, "the mock must seed an off-list item")
+        let creator = theirs.createdBy
+        let repo = await ItemMockSupport.makeMock(ItemFixtures.Persona.member.capabilities, currentUser: creator)
+
+        let fetched = try await repo.fetchItems(listId: theirs.listId)
+        let mine = try #require(fetched.first { $0.id == theirs.id })
+        #expect(mine.canEdit)
+        #expect(mine.canDelete)
+        for other in fetched where !(other.offList && other.createdBy == creator) {
+            #expect(!other.canEdit, "\(other.id)")
+            #expect(!other.canDelete, "\(other.id)")
+        }
+    }
+
+    @Test("the detail flags equal the list flags for every visible seeded item", arguments: ItemFixtures.Persona.allCases)
+    func detailFlagsEqualListFlags(persona: ItemFixtures.Persona) async throws {
+        let seededIds = try await ItemMockSupport.seededListIds()
+        let repo = await ItemMockSupport.makeMock(persona.capabilities)
+
+        for id in seededIds {
+            for item in try await repo.fetchItems(listId: id) {
+                let detail = try await repo.fetchItemDetail(id: item.id)
+                #expect(detail.canEdit == item.canEdit, "\(persona) \(item.id)")
+                #expect(detail.canDelete == item.canDelete, "\(persona) \(item.id)")
+            }
+        }
+    }
+
+    @Test("update and delete throw forbidden exactly when the item's flag is false", arguments: ItemFixtures.Persona.allCases)
+    func forbiddenExactlyWhenFlagIsFalse(persona: ItemFixtures.Persona) async throws {
+        let seededIds = try await ItemMockSupport.seededListIds()
+        let probe = await ItemMockSupport.makeMock(persona.capabilities)
+        var items: [ListItem] = []
+        for id in seededIds { items += try await probe.fetchItems(listId: id) }
+        #expect(!items.isEmpty)
+
+        for item in items where !item.canEdit {
+            let repo = await ItemMockSupport.makeMock(persona.capabilities)
+            await #expect(throws: ItemError.forbidden) { _ = try await repo.updateItem(id: item.id, UpdateItemInput(name: "X")) }
+        }
+        for item in items where !item.canDelete {
+            let repo = await ItemMockSupport.makeMock(persona.capabilities)
+            await #expect(throws: ItemError.forbidden) { try await repo.deleteItem(id: item.id) }
+            let still = try await repo.fetchItemDetail(id: item.id)
+            #expect(still.id == item.id, "a refused delete removes nothing")
+        }
+    }
+
+    @Test("update and delete succeed when the item's flag is true", arguments: [
+        ItemFixtures.Persona.owner, .blindOwner, .coOwner, .blindCoOwner
+    ])
+    func updateAndDeleteSucceedWhenFlagIsTrue(persona: ItemFixtures.Persona) async throws {
+        let seededIds = try await ItemMockSupport.seededListIds()
+        let probe = await ItemMockSupport.makeMock(persona.capabilities)
+        var items: [ListItem] = []
+        for id in seededIds { items += try await probe.fetchItems(listId: id) }
+        let changeable = items.filter { $0.canEdit && $0.canDelete }
+        #expect(!changeable.isEmpty, "\(persona) must be able to change at least one seeded item")
+
+        for item in changeable {
+            let repo = await ItemMockSupport.makeMock(persona.capabilities)
+            let updated = try await repo.updateItem(id: item.id, UpdateItemInput(name: "Renamed"))
+            #expect(updated.name == "Renamed")
+            try await repo.deleteItem(id: item.id)
+            await #expect(throws: ItemError.notFound) { _ = try await repo.fetchItemDetail(id: item.id) }
+        }
     }
 
     // MARK: - Hiding on seeded data

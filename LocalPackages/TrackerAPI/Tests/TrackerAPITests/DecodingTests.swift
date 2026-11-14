@@ -214,7 +214,9 @@ struct DecodingTests {
                 "id": "00000000-0000-0000-0000-000000000011",
                 "displayName": "Bob"
             },
-            "createdAt": "2026-11-02T00:00:00Z"
+            "createdAt": "2026-11-02T00:00:00Z",
+            "canEdit": true,
+            "canDelete": true
         }
         """
         let data = try #require(json.data(using: .utf8))
@@ -245,7 +247,9 @@ struct DecodingTests {
                 "id": "00000000-0000-0000-0000-000000000011",
                 "displayName": "Bob"
             },
-            "createdAt": "2026-11-02T00:00:00Z"
+            "createdAt": "2026-11-02T00:00:00Z",
+            "canEdit": true,
+            "canDelete": true
         }
         """
         let data = try #require(json.data(using: .utf8))

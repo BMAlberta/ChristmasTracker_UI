@@ -51,8 +51,7 @@ struct BudgetEditorSUT {
 
 @MainActor
 func makeBudgetEditorSUT(
-    mode: BudgetEditorModel.Mode = .create(years: [2026, 2027], defaultYear: 2026),
-    spend: [RecipientSpend] = []
+    mode: BudgetEditorModel.Mode = .create(years: [2026, 2027], defaultYear: 2026)
 ) -> BudgetEditorSUT {
     let manager = GatedBudgetManager()
     let listRepo = GatedListRepository()
@@ -62,7 +61,6 @@ func makeBudgetEditorSUT(
         mode: mode,
         budgetService: budgets,
         listService: lists,
-        spend: spend,
         locale: EditorTest.locale,
         currencyCode: "USD"
     )
@@ -71,8 +69,8 @@ func makeBudgetEditorSUT(
 
 /// An edit editor over `EditorTest.original()` (r1 Tommy 200.00, r2 Mike 250.00 of 500.00).
 @MainActor
-func makeEditEditorSUT(spend: [RecipientSpend] = []) -> BudgetEditorSUT {
-    makeBudgetEditorSUT(mode: .edit(EditorTest.original()), spend: spend)
+func makeEditEditorSUT() -> BudgetEditorSUT {
+    makeBudgetEditorSUT(mode: .edit(EditorTest.original()))
 }
 
 extension BudgetEditorSUT {
@@ -115,6 +113,11 @@ nonisolated enum MutationFailureCases {
         MutationFailureCase(
             name: "404 not found", error: .notFound,
             message: "That budget could not be found.", actions: [.dismiss]
+        ),
+        MutationFailureCase(
+            name: "404 recipient not found", error: .recipientNotFound,
+            message: "One of the people you chose can't be added to your budget right now. Check the list and try again.",
+            actions: [.dismiss]
         ),
         MutationFailureCase(
             name: "403 forbidden", error: .forbidden,

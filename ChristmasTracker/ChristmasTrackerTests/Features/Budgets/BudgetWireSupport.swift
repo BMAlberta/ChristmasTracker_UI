@@ -181,6 +181,22 @@ nonisolated enum BudgetWire {
     static let budgetNotFound = ListWire.errorJSON(
         code: 4007, errorCode: "BUDGET_NOT_FOUND", message: "Budget not found"
     )
+    /// 404 RECIPIENT_NOT_FOUND (4010): a person in the request cannot be added. Fake message, names nobody.
+    static let recipientNotFound = ListWire.errorJSON(
+        code: 4010, errorCode: "RECIPIENT_NOT_FOUND", message: "Recipient not found"
+    )
+    /// Code 4010 with an errorCode string the client does not know: the numeric code alone decides.
+    static let recipientNotFoundByCodeOnly = ListWire.errorJSON(
+        code: 4010, errorCode: "SOME_FUTURE_NAME", message: "Recipient not found"
+    )
+    /// errorCode RECIPIENT_NOT_FOUND with an unknown number: the string alone decides.
+    static let recipientNotFoundByNameOnly = ListWire.errorJSON(
+        code: 4999, errorCode: "RECIPIENT_NOT_FOUND", message: "Recipient not found"
+    )
+    /// Code 4007 with an errorCode string the client does not know: the numeric code alone decides.
+    static let budgetNotFoundByCodeOnly = ListWire.errorJSON(
+        code: 4007, errorCode: "SOME_FUTURE_NAME", message: "Budget not found"
+    )
     static let budgetAlreadyExists = ListWire.errorJSON(
         code: 5003, errorCode: "BUDGET_ALREADY_EXISTS", message: "Budget already exists"
     )

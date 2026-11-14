@@ -1,6 +1,6 @@
 # Christmas Tracker v2 Decision Log
 
-**Revision:** 34 (2026-11-12)
+**Revision:** 36 (2026-11-13)
 **Status:** Draft for owner review
 **Canonical copy:** `API_rewrite/Docs/DECISIONS.md`. The copies in `web-ui` and the iOS repo are read-only mirrors at the same relative path.
 **Applies to:** `API_rewrite` (backend), `web-ui`, and the iOS app
@@ -11,6 +11,16 @@
 - The PRD and design docs state intent. Where they conflict with this log, this log wins, and the PRD gets amended (section 11).
 - Each decision has an ID. Agents cite the ID in commits and acceptance checks.
 - Tags: **B** backend, **W** web, **I** iOS.
+
+### Changes in revision 36
+
+- **S16 (new)** [B W I]: a budget recipient must be the caller's own child or a person who shares a list with the caller; anything else is the same 404 RECIPIENT_NOT_FOUND.
+- **P25 (new)** [B W I]: Item carries the required booleans canEdit and canDelete, which say what the server accepts for the caller on that item now.
+
+### Changes in revision 35
+
+- **A17 (new)** [B]: sessions record their channel and client metadata; no IP address is stored.
+- **A18 (new)** [B]: sign-ins and session endings are recorded in auth_events and kept for 90 days.
 
 ### Changes in revision 34
 
@@ -238,6 +248,8 @@
 | A14 | `rememberMe: false` on login gives a session cookie (no `Max-Age`). `true` or omitted gives a persistent cookie with `maxAge` derived from `REFRESH_TOKEN_EXPIRY`. The choice is a signed claim in the refresh JWT and is preserved on every rotation. Tokens issued without the claim count as persistent. | B |
 | A15 | iOS keeps its Keychain refresh token across an explicit logout and sends neither a cookie nor a refresh token to POST /auth/logout, so the server session is not revoked. The handler revokes the chain for a refresh token sent in the cookie or, with no cookie, in the JSON body, so clients must never send one. Interim until the biometric credential (A9). | B, I |
 | A16 | `POST /auth/register` accepts an optional `rememberMe` boolean in the request body, with the same meaning and default as on login: `true` or omitted sets the persistent refresh cookie (7 days), `false` sets a session cookie. | B, W |
+| A17 | A session records its channel (`ios` when the request carries `X-Client-Platform: ios`, otherwise `web`; `admin-ui` and `cli` are reserved for admin tooling), the client version and build (the iOS headers `X-App-Version` and `X-Build`), a truncated `User-Agent` for web, and when it was last used. The values are client-asserted and informational. No IP address is stored. The data is internal to admin tooling: no response carries it. | B |
+| A18 | Sign-ins and session endings are recorded in `auth_events`: `login_success`, `login_failure` (with a reason and, for an unknown email, only a hash of it), `register`, `session_revoked` (with a reason), `account_locked` and `account_unlocked`, each with the channel, an optional actor and the request id; never passwords, tokens or IP addresses. Events older than 90 days are removed by a retention command. Recording an event never fails or delays a request beyond one insert. | B |
 
 ## 3. Version enforcement (API-based)
 
@@ -305,6 +317,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | P22 | `ListSummary` and `ListDetail` carry the required boolean `canSeeMembers`: `true` for the owner, the co-owner and MEMBER-role members (the callers who may call `GET /lists/{id}/members`), `false` for VIEWER-role members and PUBLIC non-members. `ListDetail.members` is returned only when `canSeeMembers` is `true` and is absent otherwise; `memberCount` is returned to everyone (C14). | B, W, I |
 | P23 | `ListSummary` and `ListDetail` carry five required booleans that say what the server accepts for the caller on this list now: `canEditList` (`PATCH /lists/{id}`), `canDeleteList` (`DELETE /lists/{id}`, L14) and `canManageMembers` (adding members and removing other members, L8), each `true` for the owner and the co-owner (blind or not) while the list is not ARCHIVED; `canSetCoOwner` (`coOwnerEmail`, L12), `true` for the owner only while the list is not ARCHIVED; and `canLeaveList` (removing yourself, L9), `true` for an ACTIVE MEMBER-role or VIEWER-role member on a list of any status and `false` for the owner, the co-owner and every non-member. On an ARCHIVED list `canEditList` and `canSetCoOwner` are `false` because the server refuses with 422 `CANNOT_EDIT_ARCHIVED_LIST`; `canDeleteList` and `canManageMembers` are also `false` so that clients treat archived lists as read-only, although the server still accepts those calls. The server enforces every action regardless of the flags. | B, W, I |
 | P24 | `Item` carries the integers `quantityPurchased` (the sum of `quantity` over all purchases of the item) and `quantityRemaining` (`max(0, quantityRequested - quantityPurchased)`) on every response that returns an `Item` or an `ItemDetail`. They are present only when the caller has `canSeeGiftActivity` and are omitted otherwise (P3). The server does not reject a purchase that exceeds the remaining quantity or a purchase on a PURCHASED item; clients use the counts to cap or warn. | B, W, I |
+| P25 | `Item` carries the required booleans `canEdit` and `canDelete`: what the server accepts for the caller on that item now. `canEdit` is `true` for the owner and the co-owner (blind or not) on a normal item and for the creator on their own off-list item, and `false` otherwise. `canDelete` has the same permission and is also `false` for a caller who can see gift activity when the item has purchases (the server answers 422 `CANNOT_DELETE_ITEM_WITH_PURCHASES`); blind callers are never told about purchases, so for them it depends on the permission alone. Neither flag depends on the list status (L16). | B, W, I |
 
 ## 6. Purchases, shipping, and budgets
 
@@ -325,6 +338,7 @@ The design exists in the Phase 3 requirements and the Phase 9.5 plan. The `app_v
 | S13 | A purchase never changes the status of an item that is `WRAPPED` or `GIFTED`. The purchase and the `quantityPurchased` and `quantityRemaining` counts (P24) are still recorded; only items that are `AVAILABLE`, `PARTIAL` or `PURCHASED` have their status recomputed from the purchases. | B, W, I |
 | S14 | A purchaser can delete their own purchase with `DELETE /purchases/{id}`. Anyone else gets 404 `PURCHASE_NOT_FOUND`, identical to a nonexistent id (P11). The core fields stay immutable (PRD 5.2): to correct a purchase, delete it and record a new one. Deleting removes the purchase and its shipping data, recomputes the item status from the remaining purchases (an item that is `WRAPPED` or `GIFTED` keeps its status, S13), and lowers the buyer's recorded spend, so `quantityPurchased`, `quantityRemaining` (P24) and the budget checks (S6, S12) follow. It works whether or not the purchaser can still see the item (for example after leaving the list or after the recipient removed the item). An audit event `PURCHASE_DELETED` records the ids, the quantity and the amount in cents. The response is the deleted purchase, as `GET /purchases/{id}` returns it; clients refetch the item as they do after creating a purchase. | B, W, I |
 | S15 | On `PATCH /purchases/{id}` and `PATCH /purchases/{id}/shipping`, an empty string for `notes` (the first operation only) or `trackingNumber` clears the field: it is stored and returned as `null`. An omitted field is left unchanged, and `null` is not accepted (400). | B, W, I |
+| S16 | `POST /budgets` and `PATCH /budgets/{year}` accept a recipient only when the caller is connected to that person by the same rule as `GET /users/{id}` (P19): one of the caller's own children, or a person who shares a list with the caller. The caller's own id, an unknown id and a person the caller is not connected to all get the identical 404 `RECIPIENT_NOT_FOUND`, so a budget never discloses a stranger's name or whether an account exists. The same `recipientId` twice in one request is a 400 `VALIDATION_ERROR`. `RECIPIENT_BUDGET_SUM_EXCEEDS_TOTAL` (422) is returned only by `PATCH /budgets/{year}` when just one of `totalBudget` and `recipients` is sent; a body with both is rejected earlier with 400. On `PATCH /budgets/{year}` only a recipient that is not already allocated in that budget is checked, so an existing allocation can always be kept, changed or removed. | B, W, I |
 
 ## 7. Statistics and purchase history
 
