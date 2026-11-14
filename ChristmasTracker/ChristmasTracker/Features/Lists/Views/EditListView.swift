@@ -214,6 +214,7 @@ struct EditListView: View {
                     } label: {
                         Text("Remove co-owner")
                     }
+                    .destructiveTint()
                     .frame(minHeight: 44)
                     .disabled(!removeDialog.isIdle || !canRemoveCoOwner)
                     .accessibilityLabel("Remove co-owner")
@@ -231,6 +232,7 @@ struct EditListView: View {
                         Button(CoOwnerRemoveConfirmation.confirmButtonTitle, role: .destructive) {
                             confirmRemoveCoOwner()
                         }
+                        .destructiveTint()
                         Button("Cancel", role: .cancel) {}
                     } message: {
                         Text(CoOwnerRemoveConfirmation.message(displayName: displayName))

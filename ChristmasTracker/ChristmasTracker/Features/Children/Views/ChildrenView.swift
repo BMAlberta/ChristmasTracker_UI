@@ -374,6 +374,7 @@ private struct ChildRow: View {
             Button(confirmation.confirmButtonTitle, role: .destructive) {
                 if let plan = confirmingPlan { onConfirm(plan) }
             }
+            .destructiveTint()
             Button("Cancel", role: .cancel) { }
         } message: { confirmation in
             Text(confirmation.message)

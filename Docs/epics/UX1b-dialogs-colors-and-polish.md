@@ -186,7 +186,14 @@ Every story takes the FULL pipeline (isolated test-writer, implementer, conventi
 ## Gate 1: B2 Destructive colors
 - Acceptance: every destructive control in the table above uses `role: .destructive` and the token; swipe actions carry the explicit tint; Sign out is neutral (no destructive role, no red). A DesignSystem helper maps destructive action kinds to the token. Scan tests per the Acceptance.
 - Scope: the views named in the table, DesignSystem, tests.
-- New interface: yes (the DesignSystem destructive-role helper).
+- New interface: yes (the DesignSystem destructive-role helper). Signatures, in DesignSystem/Components/DestructiveAction.swift:
+  ```swift
+  nonisolated enum DestructiveActionKind: CaseIterable, Sendable { case archive, delete, remove, leave, clear }
+  extension DestructiveActionKind { var color: Color { get } }   // every kind maps to Color.destructiveColor
+  extension View { func destructiveTint() -> some View }          // .tint(Color.destructiveColor)
+  ```
+  Changes (views; roles and texts stay): ListDetailView archive button (filled with the destructive token, not accent) and its dialog button; MembersSectionView Leave list button (tint destructive, not accent), the member Remove icon button (gets `role: .destructive` and the token) and the leave/remove dialog buttons; DashboardView Archive swipe action (explicit destructive tint) and its dialog button; EditListView Remove co-owner button and dialog button; ProfileView Logout: the dialog's Logout button loses `role: .destructive` and stays neutral (sign out is not destructive). Already conforming and only checked: ItemDetailView, BudgetCardMenu, BudgetEditorView, ManagePurchaseView, ChildrenView. A destructive control "has the token" when its own modifier chain contains `destructiveTint()`, `.tint(Color.destructiveColor)`, or `Color.destructiveColor` as its foreground or background style.
+  Scan tests (test target, pure scanners over a source String, fixture-tested, then run over every .swift file under Features/ and App/): (a) every `Button(... role: .destructive ...)` (button, swipe action, context-menu item, dialog button) has the token in its chain; (b) a destructive Button inside `.swipeActions` has an explicit tint; (c) sign out is neutral: ProfileView.swift contains no `role: .destructive`; (d) a destructive helper test: every `DestructiveActionKind` maps to `Color.destructiveColor`. Allowlist: none expected (state any with a reason).
 
 ## Gate 1: B3 The tab bar
 - Acceptance: `tabBarMinimizeBehavior(.onScrollDown)` set once on the TabView; nothing else about tabs changes; any tab whose root is not a vertical scroll view is noted. A scan test.

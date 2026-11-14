@@ -273,10 +273,10 @@ private struct LogoutButtonView: View {
                 Text("Logout")
             }
             .font(.appHeadline)
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.surfaceColor)
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppSpacing.md)
-            .background(.red, in: .rect(cornerRadius: 12))
+            .background(Color.primaryColor, in: .rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .padding(.top, AppSpacing.md)
@@ -286,7 +286,7 @@ private struct LogoutButtonView: View {
             isPresented: $isConfirming,
             titleVisibility: .visible
         ) {
-            Button("Logout", role: .destructive, action: onConfirm)
+            Button("Logout", action: onConfirm)
             Button("Cancel", role: .cancel) { }
         }
     }

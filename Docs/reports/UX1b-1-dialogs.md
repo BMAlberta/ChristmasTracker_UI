@@ -33,7 +33,7 @@ Test run with 212 tests in 16 suites passed after 0.021 seconds.
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After commit: see the line at the end of this report (added after the commit run).
+After commit 78aa67c (separate run): `--- tests: 4305 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===` (this line ships with the next commit).
 
 ## Gate 2
 - convention-reviewer: APPROVE. Soft-limit warnings: ListDetailView.swift 445 lines (soft 400, hard 600), DialogScannerTests.swift 354 lines, two test lines over 120 characters in DialogScanRealFilesTests.swift.

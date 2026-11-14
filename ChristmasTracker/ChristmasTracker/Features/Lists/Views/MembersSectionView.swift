@@ -87,7 +87,7 @@ struct MembersSectionView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
-        .tint(.accentColor)
+        .destructiveTint()
         .disabled(controlsDisabled)
         .accessibilityHint("Removes this list from your lists after you confirm")
         .accessibilityIdentifier("listDetail.leaveButton")
@@ -103,6 +103,7 @@ struct MembersSectionView: View {
             Button(MembersSectionState.leaveConfirmation.confirmButtonTitle, role: .destructive) {
                 onConfirm(.leave)
             }
+            .destructiveTint()
             Button("Cancel", role: .cancel) { }
         } message: {
             Text(MembersSectionState.leaveConfirmation.message)
@@ -136,11 +137,11 @@ private struct MemberRosterRow: View {
 
             if row.canRemove {
                 let confirmation = MembersSectionState.removeConfirmation(for: row)
-                Button(action: onRequest) {
+                Button(role: .destructive, action: onRequest) {
                     Label("Remove", systemImage: "person.badge.minus")
                         .labelStyle(.iconOnly)
                         .font(.appBody)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.destructiveColor)
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
@@ -158,6 +159,7 @@ private struct MemberRosterRow: View {
                     titleVisibility: .visible
                 ) {
                     Button(confirmation.confirmButtonTitle, role: .destructive, action: onConfirm)
+                        .destructiveTint()
                     Button("Cancel", role: .cancel) { }
                 } message: {
                     Text(confirmation.message)

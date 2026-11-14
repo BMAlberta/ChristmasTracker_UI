@@ -376,7 +376,7 @@ struct ListDetailView: View {
                 .foregroundStyle(Color.surfaceColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.vertical, AppSpacing.xs)
-                .background(Color.accentColor, in: .rect(cornerRadius: AppSpacing.md))
+                .background(Color.destructiveColor, in: .rect(cornerRadius: AppSpacing.md))
         }
         .disabled(listService.isMutating)
         .accessibilityHint("Moves this list to Archived after you confirm")
@@ -389,6 +389,7 @@ struct ListDetailView: View {
             Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
                 Task { await archiveList() }
             }
+            .destructiveTint()
             Button("Cancel", role: .cancel) { }
         } message: {
             Text(ListArchiveConfirmation.message)

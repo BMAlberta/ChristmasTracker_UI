@@ -294,6 +294,7 @@ struct DashboardView: View {
                 } label: {
                     Label("Archive", systemImage: "archivebox")
                 }
+                .destructiveTint()
             }
         }
         // Attached to the row's own trigger, not to the stack or the list.
@@ -308,6 +309,7 @@ struct DashboardView: View {
             Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
                 confirmArchive(listId: list.id)
             }
+            .destructiveTint()
             Button("Cancel", role: .cancel) { }
         } message: {
             Text(ListArchiveConfirmation.message)
