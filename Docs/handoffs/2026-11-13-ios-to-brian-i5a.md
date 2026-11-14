@@ -37,9 +37,90 @@ I5a (iOS, branch feat/i5a-stats-budgets, 4 commits plus this handoff commit, app
 ## Brian's real-mode check
 Restart the backend with `npm run dev` ONLY. Do not run the seed when you restart it: re-seeding creates new user ids and the app correctly signs you out. Re-seed once at step 1 to start clean.
 
-(1) start the backend on http://localhost:3010, re-seed once and confirm /livez, use the "ChristmasTracker (Real)" scheme copy that carries the launch argument -apiModeOverride real (never edit the shared scheme), run the Debug build on the simulator, log in as john.doe@example.com and open the Statistics tab: it shows the current year with nothing spent and a "No budget for <year>" card with a Create Budget button; (2) tap Create Budget: the year defaults to the current year; enter a total of 500; the Add person menu offers Tommy and Mike (the people John buys for) and NOT John himself; add Tommy with a limit of 300 and Mike with 150: the line reads that the limits are 450 of 500 with 50 unallocated; change Tommy to 400: the line turns to the error text that the limits add up to more than the total and Save is disabled; set Tommy back to 300 and Save: the Statistics screen shows the budget with remaining 500, a progress bar at zero, and the two people with their limits; (3) the budget is live: as john open list B (Tommy's list) and record the LEGO Technic Set (79.99): it is created with no budget panel; go back to the Statistics tab and pull to refresh: total spent 79.99, Tommy 79.99 of 300 with 220.01 remaining, total remaining 420.01; (4) the budget warning uses the new budget: record the Nintendo Switch OLED (339.99) on list B as john: the inline budget panel appears with a warning for Tommy (limit 300, already spent 79.99); Cancel; (5) edit: open the budget menu, Edit Budget, change the total to 600 and Tommy to 450 and Save: the screen updates (total 600, Tommy 450), and reopening the editor shows the saved values; try to set the total to 400 with the limits still 450 and 150: Save is disabled with the sum error; cancel the editor; (6) duplicate: Duplicate to Another Year, choose the next year and Duplicate: the year picker now includes that year, selecting it shows the same total and limits with nothing spent; (7) duplicate again to the same year: the year is no longer offered; if you can reach it, the server's message appears inside the sheet and nothing changes; (8) delete: on the next year's budget choose Delete Budget: the confirmation points at the control that opened it and the destructive button is red; confirm: the budget disappears and the year shows the Create Budget card; then try to delete the current year's budget (John has a purchase this year): the message that a budget with purchases cannot be deleted appears on the budget card and the budget stays; (9) as mike.johnson@example.com open the Statistics tab: total spent 619.98 against a budget of 600 shows "Over by 19.98" in text with the over-budget styling, and Tommy shows over his 600 limit by 19.98; (10) as jane.smith@example.com: spent 124.99 against 1000 with 875.01 remaining, and the John row shows 124.99 of 200 with 75.01 remaining, the Tommy and Mike rows show nothing spent; (11) as dana.owner@example.com (no purchases, no budget, no list she can buy on): the empty state; Create Budget works with only a total (the Add person menu is empty or shows that there is nobody to add yet) and saves; (12) errors: with the backend stopped open the Statistics tab and pull to refresh: one banner "Couldn't update. Showing saved data." with Try Again and Dismiss, and the saved data stays visible; with the backend stopped try to Save an edited budget: the error appears INSIDE the editor as the banner and nowhere else; restart the backend (no seed) and Try Again saves once; (13) disabled account: with the Statistics tab open as jane, run `set -a; source .env; set +a` then `npm run user:set-active -- --email jane.smith@example.com --active false` in the backend repo, then pull to refresh: the app returns to the login screen immediately; restore with `--active true`; (14) look at the Statistics tab and the editor in light and dark mode and at a large text size: nothing overlaps or truncates an amount, and the progress bar and the over-budget text are readable.
+1. **Start and log in as John.**
+   - Start the backend on http://localhost:3010, re-seed once and confirm /livez.
+   - Use the "ChristmasTracker (Real)" scheme copy that carries the launch argument -apiModeOverride real (never edit the shared scheme), and run the Debug build on the simulator.
+   - Log in as john.doe@example.com and open the Statistics tab.
+   - Expect: the current year with the explanation "Nothing spent in <year> yet. Create a budget to plan your spending." and a Create Budget button.
 
-### Known wording difference in step (1) (the check text above is unchanged)
+2. **Create a budget.**
+   - First open the Lists tab and let the lists finish loading (so the person picker has its data), then on the Statistics tab tap Create Budget.
+   - Expect: the year defaults to the current year.
+   - Enter a total of 500.
+   - Expect: the Add person menu offers Tommy and Mike (the people John buys for) and NOT John himself.
+   - Add Tommy with a limit of 300 and Mike with 150.
+   - Expect: the line reads that the limits are 450 of 500 with 50 unallocated.
+   - Change Tommy to 400.
+   - Expect: the line turns to the error text that the limits add up to more than the total, and Save is disabled.
+   - Set Tommy back to 300 and Save.
+   - Expect: the Statistics screen shows the budget with remaining 500, a progress bar at zero, and the two people with their limits.
+
+3. **The budget is live.**
+   - As John, open list B (Tommy's list) and record the LEGO Technic Set (79.99).
+   - Expect: it is created with no budget panel.
+   - Go back to the Statistics tab and pull to refresh.
+   - Expect: total spent 79.99, Tommy 79.99 of 300 with 220.01 remaining, total remaining 420.01.
+
+4. **The budget warning uses the new budget.**
+   - As John, record the Nintendo Switch OLED (339.99) on list B.
+   - Expect: the inline budget panel appears with a warning for Tommy (limit 300, already spent 79.99).
+   - Cancel.
+
+5. **Edit the budget.**
+   - Open the budget menu, choose Edit Budget, change the total to 600 and Tommy to 450, and Save.
+   - Expect: the screen updates (total 600, Tommy 450), and reopening the editor shows the saved values.
+   - Try to set the total to 400 with the limits still 450 and 150.
+   - Expect: Save is disabled with the sum error.
+   - Cancel the editor.
+
+6. **Duplicate the budget.**
+   - Choose Duplicate to Another Year, pick the next year and Duplicate.
+   - Expect: the year picker now includes that year, and selecting it shows the same total and limits with nothing spent.
+
+7. **Duplicate to the same year again.**
+   - Expect: the year is no longer offered.
+   - If you can reach it, the server's message appears inside the sheet and nothing changes.
+
+8. **Delete a budget.**
+   - On the next year's budget choose Delete Budget.
+   - Expect: the confirmation points at the control that opened it, and the destructive button is red.
+   - Confirm.
+   - Expect: the budget disappears and that year shows the same explanation card with the Create Budget button.
+   - Then try to delete the current year's budget (John has a purchase this year).
+   - Expect: the message that a budget with purchases cannot be deleted appears on the budget card, and the budget stays.
+
+9. **Over budget (Mike).**
+   - Log in as mike.johnson@example.com and open the Statistics tab.
+   - Expect: total spent 619.98 against a budget of 600 shows "Over by 19.98" in text with the over-budget styling, and Tommy shows over his 600 limit by 19.98.
+
+10. **Within budget (Jane).**
+    - Log in as jane.smith@example.com and open the Statistics tab.
+    - Expect: spent 124.99 against 1000 with 875.01 remaining; the John row shows 124.99 of 200 with 75.01 remaining; the Tommy and Mike rows show nothing spent.
+
+11. **No data (Dana).**
+    - Log in as dana.owner@example.com (no purchases, no budget, no list she can buy on).
+    - Expect: the empty state.
+    - Create Budget works with only a total (the Add person menu is empty or shows that there is nobody to add yet) and saves.
+
+12. **Errors.**
+    - With the backend stopped, open the Statistics tab and pull to refresh.
+    - Expect: one banner "Couldn't update. Showing saved data." with Try Again and Dismiss, and the saved data stays visible.
+    - With the backend stopped, try to Save an edited budget.
+    - Expect: the error appears INSIDE the editor as the banner and nowhere else.
+    - Restart the backend (no seed) and tap Try Again.
+    - Expect: the save succeeds once.
+
+13. **Disabled account.**
+    - With the Statistics tab open as Jane, run `set -a; source .env; set +a` and then `npm run user:set-active -- --email jane.smith@example.com --active false` in the backend repo.
+    - Pull to refresh.
+    - Expect: the app returns to the login screen immediately.
+    - Restore with `--active true`.
+
+14. **Appearance.**
+    - Look at the Statistics tab and the editor in light and dark mode and at a large text size.
+    - Expect: nothing overlaps or truncates an amount, and the progress bar and the over-budget text are readable.
+
+### Wording difference in step (1), resolved after review (steps (1), (2) and (8) above were reworded to match the built screen and to load the lists first; the original note follows)
 Step (1) expects a fresh John with nothing spent to see a "No budget for <year>" card. The built screen follows the brief's Decisions: with no purchases and no budget in the year it shows the short explanation "Nothing spent in <year> yet. Create a budget to plan your spending." with the Create Budget button and no summary card; the "No budget for <year>" card appears once the year has purchases but no budget. So at step (1) expect the explanation card (the Create Budget button and "nothing spent" parts match), and the "No budget for <year>" card after a purchase in a year without a budget. Steps (8) and (11) show the same explanation card. This is a disagreement inside the brief (Decisions versus the check text), not a code defect; decide whether to reword the check or change the empty state.
 
 ### Not part of this package
