@@ -312,7 +312,10 @@ struct SessionTeardownTests {
             lockController: lockController,
             childService: ChildService(repository: GatedChildRepository()),
             // EDITED (I4a-B): the new final parameter of makeProductionClearables.
-            purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown }))
+            purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown })),
+            // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
+            statsService: StatsService(repository: GatedStatsLoader()),
+            budgetService: BudgetService(repository: GatedBudgetManager())
         )
 
         // Updated from 5 → 6 for I2b-1 Story 2 (InactivityLockController added as clearable)
@@ -320,7 +323,9 @@ struct SessionTeardownTests {
         // signed-in user's children and must be cleared at teardown (appended last, no index moves).
         // Updated from 7 → 8 for I4a-B. Reason: the PurchaseService clearable is appended last (it
         // holds the in-flight purchase call of the signed-in user and must end at teardown).
-        #expect(clearables.count == 8, "Factory must return exactly 8 clearables")
+        // Updated from 8 → 10 for I5a-B. Reason: two session-safe services were added to the teardown
+        // list (StatsService at index 8, BudgetService at index 9).
+        #expect(clearables.count == 10, "Factory must return exactly 10 clearables")
         #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
         #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
         #expect(clearables[2] is ListService, "clearables[2] must be ListService")
@@ -328,6 +333,8 @@ struct SessionTeardownTests {
         #expect(clearables[4] is NetworkCache, "clearables[4] must be NetworkCache")
         #expect(clearables[5] is InactivityLockController, "clearables[5] must be InactivityLockController")
         #expect(clearables[7] is PurchaseService, "clearables[7] must be PurchaseService")
+        #expect(clearables[8] is StatsService, "clearables[8] must be StatsService")
+        #expect(clearables[9] is BudgetService, "clearables[9] must be BudgetService")
     }
 
     // MARK: - Test 10: Device-level UserDefaults survive teardown

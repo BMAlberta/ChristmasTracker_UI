@@ -42,18 +42,26 @@ struct PurchaseServiceManagementClearableTests {
             networkCache: NetworkCache(),
             lockController: InactivityLockController(policy: FakePolicy10()),
             childService: ChildService(repository: GatedChildRepository()),
-            purchaseService: purchaseService
+            purchaseService: purchaseService,
+            // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
+            statsService: StatsService(repository: GatedStatsLoader()),
+            budgetService: BudgetService(repository: GatedBudgetManager())
         )
         return SUT(clearables: clearables, purchaseService: purchaseService, management: management, recorder: recorder)
     }
 
-    @Test("makeProductionClearables still returns 8 clearables with the management-capable PurchaseService last")
+    // EDITED (I5a-B): count 8 -> 10 and the name no longer says "last". Reason: two session-safe services
+    // were added to the teardown list (StatsService at index 8, BudgetService at index 9); extending the
+    // PurchaseService itself still adds no clearable and it keeps index 7.
+    @Test("makeProductionClearables returns 10 clearables with the management-capable PurchaseService at index 7")
     func stillEightWithTheServiceLast() {
         let sut = makeSUT()
 
-        #expect(sut.clearables.count == 8, "extending the service must not add a clearable")
+        #expect(sut.clearables.count == 10, "extending the purchase service must not add a clearable of its own")
         #expect(sut.clearables[7] is PurchaseService)
         #expect(sut.clearables[7] === sut.purchaseService, "the registered clearable is the very instance passed in")
+        #expect(sut.clearables[8] is StatsService, "the StatsService clearable follows the PurchaseService")
+        #expect(sut.clearables[9] is BudgetService, "the BudgetService clearable is appended last")
     }
 
     @Test("clearing the registered clearable at index 7 ends an in-flight management call",

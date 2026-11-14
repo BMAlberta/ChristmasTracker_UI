@@ -31,11 +31,15 @@ import Testing
 @MainActor
 struct PurchaseDetailModelDeleteRefreshTests {
 
+    // EDITED (I5a-B): both arrays gain the final `.invalidateSpending` step appended by the plan (the names
+    // keep "three" for the three refresh steps; the fourth marks the spending caches stale).
     private static let threeStepsLoad: [PurchaseRefreshStep] = [
-        .itemDetail(id: PurchaseDetailTest.itemId), .itemsLoad(listId: PurchaseDetailTest.listId), .listDetail(id: PurchaseDetailTest.listId)
+        .itemDetail(id: PurchaseDetailTest.itemId), .itemsLoad(listId: PurchaseDetailTest.listId),
+        .listDetail(id: PurchaseDetailTest.listId), .invalidateSpending
     ]
     private static let threeStepsRefresh: [PurchaseRefreshStep] = [
-        .itemDetail(id: PurchaseDetailTest.itemId), .itemsRefresh, .listDetail(id: PurchaseDetailTest.listId)
+        .itemDetail(id: PurchaseDetailTest.itemId), .itemsRefresh,
+        .listDetail(id: PurchaseDetailTest.listId), .invalidateSpending
     ]
 
     private func makeSUT(probe: RefreshProbe) async -> PurchaseDetailSUT {
@@ -243,7 +247,8 @@ struct PurchaseDetailModelDeleteRefreshTests {
 
         await sut.model.confirmDelete()
 
-        #expect(probe.checkAnswers == [true, true, true])
+        // EDITED (I5a-B): four answers, one per step, because the plan gained the final .invalidateSpending step.
+        #expect(probe.checkAnswers == [true, true, true, true])
     }
 
     // MARK: (f) user switch

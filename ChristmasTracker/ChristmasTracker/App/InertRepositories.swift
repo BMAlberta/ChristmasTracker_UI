@@ -162,6 +162,47 @@ nonisolated final class InertPurchaseManager: PurchaseManaging {
     }
 }
 
+/// Typed itself (not ConfigurationError) because StatsLoading throws BudgetError only.
+nonisolated final class InertStatsLoader: StatsLoading {
+    @Instrumented
+    func yearStats(year: Int) async throws -> StatsYear {
+        throw BudgetError.server
+    }
+}
+
+/// Typed itself (not ConfigurationError) because BudgetManaging throws BudgetError only.
+nonisolated final class InertBudgetManager: BudgetManaging {
+    @Instrumented
+    func listBudgets() async throws -> [Budget] {
+        throw BudgetError.server
+    }
+
+    @Instrumented
+    func budget(year: Int) async throws -> Budget {
+        throw BudgetError.server
+    }
+
+    @Instrumented
+    func create(_ request: CreateBudgetRequest) async throws -> Budget {
+        throw BudgetError.server
+    }
+
+    @Instrumented
+    func update(_ request: UpdateBudgetRequest) async throws -> Budget {
+        throw BudgetError.server
+    }
+
+    @Instrumented
+    func delete(year: Int) async throws {
+        throw BudgetError.server
+    }
+
+    @Instrumented
+    func duplicate(_ request: DuplicateBudgetRequest) async throws -> Budget {
+        throw BudgetError.server
+    }
+}
+
 /// The version repository of the failed state: no check is ever made.
 nonisolated final class InertAppVersionRepository: AppVersionChecking {
     @Instrumented
