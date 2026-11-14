@@ -106,7 +106,7 @@ Test run with 212 tests in 16 suites passed
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After the (e) commit: see the line at the end of this part, added after the commit run.
+After commit 8675501 (separate run): `--- tests: 4398 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===`.
 
 ### Gate 2 (e)
 - convention-reviewer: REJECT once (the misplaced closing brace in ItemPermissionsTests.swift:162, routed to the Implementer), then APPROVE on re-review.
