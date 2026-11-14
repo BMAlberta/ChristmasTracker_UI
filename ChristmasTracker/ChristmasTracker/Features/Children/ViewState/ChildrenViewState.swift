@@ -63,7 +63,6 @@ nonisolated struct ChildrenState: Equatable, Sendable {
     let rows: [ChildRowState]
     let showsLoading: Bool
     let showsEmptyState: Bool
-    let errorMessage: String?
 
     var emptyText: String {
         "No children added yet."
@@ -88,19 +87,15 @@ nonisolated struct ChildrenState: Equatable, Sendable {
         case .idle:
             showsLoading = false
             showsEmptyState = false
-            errorMessage = nil
         case .loading:
             showsLoading = true
             showsEmptyState = false
-            errorMessage = nil
         case .loaded:
             showsLoading = false
             showsEmptyState = children.isEmpty
-            errorMessage = nil
-        case .failed(let error):
+        case .failed:
             showsLoading = false
             showsEmptyState = false
-            errorMessage = ChildErrorPresentation(error).message
         }
     }
 
@@ -257,7 +252,6 @@ nonisolated struct CreateListRecipientOptions: Equatable, Sendable {
     let options: [RecipientOption]
     let showsLoading: Bool
     let showsEmptyHint: Bool
-    let errorMessage: String?
 
     private let currentUserId: String
 
@@ -272,20 +266,16 @@ nonisolated struct CreateListRecipientOptions: Equatable, Sendable {
         case .idle:
             showsLoading = false
             showsEmptyHint = false
-            errorMessage = nil
         case .loading:
             showsLoading = true
             showsEmptyHint = false
-            errorMessage = nil
         case .loaded:
             offered += children.map { RecipientOption(id: $0.id, title: $0.shownName, isSelf: false) }
             showsLoading = false
             showsEmptyHint = children.isEmpty
-            errorMessage = nil
-        case .failed(let error):
+        case .failed:
             showsLoading = false
             showsEmptyHint = false
-            errorMessage = ChildErrorPresentation(error).message
         }
         options = offered
     }

@@ -61,16 +61,14 @@ struct CreateListRecipientOptionsTests {
         let state = makeSUT(children: ChildFixtures.twoChildren(), phase: .loading)
         #expect(state.options.map(\.id) == [currentUserId])
         #expect(state.showsLoading)
-        #expect(state.errorMessage == nil)
     }
 
-    @Test("A failed fetch still offers For me, shows the message and no children",
+    @Test("A failed fetch still offers For me and no children",
           arguments: [ChildError.network, .server, .unauthorized, .rateLimited(retryAfter: 10)])
     func failedKeepsForMe(error: ChildError) {
         let state = makeSUT(children: ChildFixtures.twoChildren(), phase: .failed(error))
         #expect(state.options.map(\.id) == [currentUserId])
         #expect(state.options.first?.isSelf == true)
-        #expect(state.errorMessage == ChildErrorPresentation(error).message)
         #expect(!state.showsLoading)
         #expect(!state.showsEmptyHint)
     }
@@ -81,7 +79,6 @@ struct CreateListRecipientOptionsTests {
         #expect(state.options.map(\.id) == [currentUserId])
         #expect(!state.showsLoading)
         #expect(!state.showsEmptyHint)
-        #expect(state.errorMessage == nil)
     }
 
     // MARK: - Empty and loaded
@@ -92,15 +89,13 @@ struct CreateListRecipientOptionsTests {
         #expect(state.showsEmptyHint)
         #expect(state.options.map(\.id) == [currentUserId])
         #expect(!state.showsLoading)
-        #expect(state.errorMessage == nil)
     }
 
-    @Test("Loaded with children shows no hint, no loading and no error")
+    @Test("Loaded with children shows no hint and no loading")
     func loadedWithChildren() {
         let state = makeSUT()
         #expect(!state.showsEmptyHint)
         #expect(!state.showsLoading)
-        #expect(state.errorMessage == nil)
     }
 
     // MARK: - Resolving the selection

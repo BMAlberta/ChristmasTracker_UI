@@ -39,7 +39,7 @@ Test run with 212 tests in 16 suites passed
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After commit: see the line added at the end of this section after the commit run.
+After commit 3a721df (separate run): `--- tests: 4398 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===` (this line ships with the next commit).
 
 ### Gate 2 ((a)+(b)+(c))
 - convention-reviewer: APPROVE (comment-only check empty; no .claude/.pbxproj/contract/LocalPackages/synced Docs; one 127-character comment line, wrapped afterwards).
@@ -50,3 +50,35 @@ After commit: see the line added at the end of this section after the commit run
 - The "Covers" lines were written from each file's old header; the acceptance-reviewer verified 12 files against test names and bodies, the other ~38 only against the type names. A line may be incomplete (for example ListMappingTests omits ListRole/ListStatus/ListVisibility) but none was found wrong.
 - Other "does not exist yet" wording may remain in test files outside the files named by the reviews; the assertion message strings in MembersChildrenViewScanTests (lines ~286, 306, 329: "Features/Children/Views does not exist yet") are runtime failure messages, not comments, and were left.
 - (c) banked as above.
+
+## Part (d): remove the dead error message properties (own commit)
+
+### What changed
+- Features/Children/ViewState/ChildrenViewState.swift: removed `ChildrenState.errorMessage` and `CreateListRecipientOptions.errorMessage` (the recipient options type) with their assignments (three `= nil` and one `= ChildErrorPresentation(error).message` in each), and the `error` binding in both `.failed(let error)` cases (now `.failed`), which only fed the message. `ChildErrorPresentation` is still used elsewhere (the banner path).
+- Stop condition checked and not triggered: the Orchestrator's grep, the implementer's re-grep and the acceptance-reviewer's repo-wide grep found no production reader (no view, view state or key path). The real readers of load state, CreateListView:43 and ChildrenView:39, use `ChildrenLoadState.make(phase:...)`.
+- Tests: no whole test was removed, because every affected test also asserts other things; only the `errorMessage` assertions were deleted, and three tests were retitled.
+  - ChildrenStateTests: loadingPhase, emptyPhase, loadedPhase, idlePhase (each lost `state.errorMessage == nil`); failedPhase (5 errors; lost `errorMessage == ChildErrorPresentation(error).message`; retitled "A failed load shows no empty state and no loading").
+  - CreateListRecipientOptionsTests: loadingKeepsForMe, idleOffersForMe, emptyHint (each lost `errorMessage == nil`); failedKeepsForMe (4 errors; lost the message assertion; retitled "A failed fetch still offers For me and no children"); loadedWithChildren (lost `errorMessage == nil`; retitled "Loaded with children shows no hint and no loading").
+- Equivalent coverage of the failure message text (acceptance-reviewer, file:line): ChildrenLoadStateTests.swift 46-110 (full error text on an empty screen for network, stale banner text, server and invalidResponse, the 403 text, the rate-limit text, session end, dismiss/reset); ChildErrorPresentationTests.swift 39-44 (`messageMatches`: `presentation.message == error.userMessage` for all 10 `ChildError` cases) and 51-54; ScreenLoadPresentationTests (policy mapping). Minor gap, not blocking: the full-error text on an empty screen is asserted directly only for network, forbidden and rate-limited; server, unauthorized and invalid-response are covered through the policy tests and `messageMatches`.
+
+### Files
+Changed: Features/Children/ViewState/ChildrenViewState.swift; ChristmasTrackerTests/Features/Children/ChildrenStateTests.swift, CreateListRecipientOptionsTests.swift; Docs/reports/UX1b-6-cleanups.md. Deleted: none. Added: none.
+
+### Test arithmetic (app suite)
+4398 + 0 new - 0 deleted (assertions removed from 10 tests, 3 retitled) = 4398. Measured by scripts/verify.sh: 4398. Package 212, release scripts 92, destination scripts 17.
+
+### Raw output (from running commands)
+Before the (d) commit:
+```
+--- tests: 4398 passed, 0 failed, 0 skipped ---
+Test run with 212 tests in 16 suites passed
+=== test-release.sh: 92 passed, 0 failed ===
+=== test-destination.sh: 17 passed, 0 failed ===
+=== verify: OK ===
+```
+After the (d) commit: see the line at the end of this part, added after the commit run.
+
+### Gate 2 (d)
+- convention-reviewer: APPROVE, no findings.
+- acceptance-reviewer: APPROVE (behavior unchanged; only the property, its assignments and the unused bindings were removed).
+- Stuck detector: none.

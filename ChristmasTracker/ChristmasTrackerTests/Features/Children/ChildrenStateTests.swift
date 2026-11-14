@@ -66,7 +66,6 @@ struct ChildrenStateTests {
         let state = makeSUT(children: [], phase: .loading)
         #expect(state.showsLoading)
         #expect(!state.showsEmptyState)
-        #expect(state.errorMessage == nil)
     }
 
     @Test("Loaded with no children shows the empty state")
@@ -75,7 +74,6 @@ struct ChildrenStateTests {
         #expect(state.showsEmptyState)
         #expect(!state.showsLoading)
         #expect(state.rows.isEmpty)
-        #expect(state.errorMessage == nil)
     }
 
     @Test("The empty text is plain")
@@ -89,7 +87,6 @@ struct ChildrenStateTests {
         #expect(!state.showsEmptyState)
         #expect(!state.showsLoading)
         #expect(state.rows.count == 2)
-        #expect(state.errorMessage == nil)
     }
 
     @Test("Idle with no children shows neither loading nor the empty state")
@@ -97,14 +94,12 @@ struct ChildrenStateTests {
         let state = makeSUT(children: [], phase: .idle)
         #expect(!state.showsLoading)
         #expect(!state.showsEmptyState)
-        #expect(state.errorMessage == nil)
     }
 
-    @Test("A failed load shows the presented message and no empty state",
+    @Test("A failed load shows no empty state and no loading",
           arguments: [ChildError.network, .server, .unauthorized, .rateLimited(retryAfter: 20), .invalidResponse])
     func failedPhase(error: ChildError) {
         let state = makeSUT(children: [], phase: .failed(error))
-        #expect(state.errorMessage == ChildErrorPresentation(error).message)
         #expect(!state.showsEmptyState)
         #expect(!state.showsLoading)
     }
