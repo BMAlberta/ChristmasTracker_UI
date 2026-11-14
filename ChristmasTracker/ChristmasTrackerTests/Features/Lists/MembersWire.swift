@@ -80,7 +80,7 @@ nonisolated enum MembersWire {
 
     static let emptyChildrenJSON = ListWire.success(data: "[]")
 
-    /// 201 body of POST /users/me/children (the relationship type is a plain string here).
+    /// 201 body of POST /users/me/children (the relationship type is the RelationshipType enum, as in the list response).
     static func createChildJSON(
         displayName: String? = "Tommy D.",
         relationshipType: String = "PARENT"
