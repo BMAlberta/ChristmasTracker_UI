@@ -99,8 +99,8 @@ nonisolated final class GeneratedClientBudgetRepository: BudgetManaging, Sendabl
                 throw BudgetError.unauthorized
             case .forbidden:
                 throw BudgetError.forbidden
-            case .notFound:
-                throw BudgetError.notFound
+            case .notFound(let response):
+                throw budgetWriteNotFound { try response.body.json }
             case .conflict(let response):
                 throw BudgetError.alreadyExists(message: budgetEnvelopeMessage { try response.body.json })
             case .tooManyRequests:
@@ -137,8 +137,8 @@ nonisolated final class GeneratedClientBudgetRepository: BudgetManaging, Sendabl
                 throw BudgetError.unauthorized
             case .forbidden:
                 throw BudgetError.forbidden
-            case .notFound:
-                throw BudgetError.notFound
+            case .notFound(let response):
+                throw budgetWriteNotFound { try response.body.json }
             case .unprocessableContent(let response):
                 throw BudgetError.sumExceedsTotal(message: budgetEnvelopeMessage { try response.body.json })
             case .tooManyRequests:
@@ -221,6 +221,16 @@ nonisolated final class GeneratedClientBudgetRepository: BudgetManaging, Sendabl
 nonisolated private func budgetEnvelopeMessage(_ read: () throws -> Components.Schemas._Error) -> String {
     let message = (try? read())?.error.message ?? ""
     return message.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// A 404 on create or update: RECIPIENT_NOT_FOUND (4010) means a chosen person cannot be added; every
+/// other 404 (BUDGET_NOT_FOUND 4007, another code, an unreadable body) is a plain not-found.
+nonisolated private func budgetWriteNotFound(_ read: () throws -> Components.Schemas._Error) -> BudgetError {
+    let envelope = try? read()
+    if envelope?.error.errorCode == "RECIPIENT_NOT_FOUND" || envelope?.error.code == 4010 {
+        return .recipientNotFound
+    }
+    return .notFound
 }
 
 /// A status the contract does not document: a 422 on a write is the sum rule (by status; the body

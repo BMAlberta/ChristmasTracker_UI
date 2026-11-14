@@ -89,7 +89,7 @@ enum LoadFailureFixtures {
         case .forbidden: return .forbidden
         case .notFound: return .notFound
         case .sessionEnded, .unauthorized: return .sessionEnded
-        case .validation, .alreadyExists, .sumExceedsTotal, .hasPurchases: return .other
+        case .validation, .alreadyExists, .sumExceedsTotal, .hasPurchases, .recipientNotFound: return .other
         }
     }
 
@@ -117,7 +117,7 @@ enum LoadFailureFixtures {
     static let allBudgetErrors: [BudgetError] = [
         .notFound, .unauthorized, .forbidden, .validation(message: "fake validation"),
         .alreadyExists(message: "fake exists"), .sumExceedsTotal(message: "fake sum"),
-        .hasPurchases(message: "fake purchases"), .rateLimited(retryAfter: 30), .sessionEnded,
-        .network, .invalidResponse, .server
+        .hasPurchases(message: "fake purchases"), .recipientNotFound, .rateLimited(retryAfter: 30),
+        .sessionEnded, .network, .invalidResponse, .server
     ]
 }

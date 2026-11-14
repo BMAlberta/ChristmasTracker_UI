@@ -51,29 +51,16 @@ struct BudgetEditorModelPickerTests {
         #expect(sut.model.picker == .ready([EditorTest.alex, EditorTest.casey]))
     }
 
-    @Test("ready merges the year's spend people with the people from the lists, without duplicates")
-    func readyMergesSpend() async {
-        let spend = [
-            BudgetFixtures.spend(id: "p-c", name: "Casey Spender", spent: "40", items: 1),
-            BudgetFixtures.spend(id: "p-a", name: "Alex Giftee", spent: "10", items: 1)
-        ]
-        let sut = makeBudgetEditorSUT(spend: spend)
-        sut.listRepo.enqueueFetchLists(.success([EditorTest.list(EditorTest.alex), EditorTest.list(EditorTest.drew)]))
+    @Test("ready lists only the purchasable lists' people, never a person known only from spending")
+    func readyHasNoSpendGroup() async {
+        let sut = makeBudgetEditorSUT()
+        sut.listRepo.enqueueFetchLists(.success([
+            EditorTest.list(EditorTest.alex), EditorTest.list(EditorTest.drew, canPurchase: false)
+        ]))
 
         await sut.model.loadOptions()
 
-        #expect(sut.model.picker == .ready([EditorTest.alex, EditorTest.casey, EditorTest.drew]))
-    }
-
-    @Test("ready offers a person of the year's spend even when no list says the user can buy for them")
-    func readyKeepsSpendOnlyPerson() async {
-        let spend = [BudgetFixtures.spend(id: "p-c", name: "Casey Spender", spent: "40", items: 1)]
-        let sut = makeBudgetEditorSUT(spend: spend)
-        sut.listRepo.enqueueFetchLists(.success([EditorTest.list(EditorTest.drew, canPurchase: false)]))
-
-        await sut.model.loadOptions()
-
-        #expect(sut.model.picker == .ready([EditorTest.casey]))
+        #expect(sut.model.picker == .ready([EditorTest.alex]))
     }
 
     @Test("ready for a user with no lists and no spend is an empty list, not a failure")

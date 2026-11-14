@@ -88,6 +88,13 @@ struct LoadFailureClassificationTests {
         #expect(LoadFailure(BudgetError.hasPurchases(message: "fake"), source: .budgets).category == .other)
     }
 
+    @Test func budgetRecipientNotFoundIsOtherAndNotNotFound() {
+        let failure = LoadFailure(BudgetError.recipientNotFound, source: .budgets)
+        #expect(failure.category == .other)
+        #expect(failure.category != .notFound)
+        #expect(failure.plainMessage == BudgetError.recipientNotFound.userMessage)
+    }
+
     @Test func noTypedErrorClassifiesAsTimeout() {
         let categories =
             F.allListErrors.map { LoadFailure($0, source: .lists).category }

@@ -271,7 +271,6 @@ final class StatsScreenModel {
 
     func makeEditorModel(for sheet: Sheet) -> BudgetEditorModel? {
         let mode: BudgetEditorModel.Mode
-        let spendYear: Int
         switch sheet {
         case .create:
             let budgetYears = Array(budgetService.budgetsByYear.keys)
@@ -279,10 +278,8 @@ final class StatsScreenModel {
                 years: BudgetYearChoices.createYears(budgetYears: budgetYears, currentYear: currentYear),
                 defaultYear: BudgetYearChoices.defaultCreateYear(budgetYears: budgetYears, currentYear: currentYear)
             )
-            spendYear = selectedYear
         case .edit(let budget):
             mode = .edit(budget)
-            spendYear = budget.year
         case .duplicate:
             return nil
         }
@@ -290,7 +287,6 @@ final class StatsScreenModel {
             mode: mode,
             budgetService: budgetService,
             listService: listService,
-            spend: statsService.stats(for: spendYear)?.spendByRecipient ?? [],
             locale: locale,
             currencyCode: currencyCode
         )

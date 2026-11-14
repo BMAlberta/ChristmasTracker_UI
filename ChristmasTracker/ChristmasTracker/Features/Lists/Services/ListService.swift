@@ -240,15 +240,17 @@ final class ListService {
     }
 
     // Actor-isolated (@MainActor): manual SentrySDK span, see loadLists.
-    /// Always fetches. Returns the failure, which is also stored in `listsLoadFailure`.
+    /// Always fetches (unless a refresh is already in flight). Returns the failure. With `reportingFailure`
+    /// true the failure is also stored in `listsLoadFailure` (cleared when the refresh starts); with
+    /// false it is stored nowhere and an existing `listsLoadFailure` is left alone.
     @discardableResult
-    func refreshLists() async -> ListError? {
+    func refreshLists(reportingFailure: Bool = true) async -> ListError? {
         let span = SentrySDK.startTransaction(
             name: "service.lists.refreshLists",
             operation: "service.lists.refreshLists"
         )
         defer { span.finish() }
-        return await performRefreshLists(reportingFailure: true)
+        return await performRefreshLists(reportingFailure: reportingFailure)
     }
 
     func clearListsLoadFailure() {

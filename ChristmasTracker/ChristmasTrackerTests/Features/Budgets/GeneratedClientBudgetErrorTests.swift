@@ -193,6 +193,116 @@ struct GeneratedClientBudgetErrorTests {
         }
     }
 
+    // MARK: 404 RECIPIENT_NOT_FOUND (I5b Story B)
+
+    nonisolated static let operationsThatTakeRecipients: [BudgetOp] = [.create, .update]
+    nonisolated static let operationsWithoutRecipients: [BudgetOp] = BudgetOp.allCases.filter {
+        !operationsThatTakeRecipients.contains($0)
+    }
+
+    @Test("createBudget and updateBudget 404 RECIPIENT_NOT_FOUND (4010) throw recipientNotFound",
+          arguments: operationsThatTakeRecipients)
+    func recipientNotFound(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.recipientNotFound)
+
+        await #expect(throws: BudgetError.recipientNotFound) {
+            try await sut.run(op)
+        }
+    }
+
+    @Test("a 404 whose numeric code is 4010 is recipientNotFound even with an unknown errorCode",
+          arguments: operationsThatTakeRecipients)
+    func recipientNotFoundByCode(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.recipientNotFoundByCodeOnly)
+
+        await #expect(throws: BudgetError.recipientNotFound) {
+            try await sut.run(op)
+        }
+    }
+
+    @Test("a 404 whose errorCode is RECIPIENT_NOT_FOUND is recipientNotFound even with an unknown number",
+          arguments: operationsThatTakeRecipients)
+    func recipientNotFoundByName(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.recipientNotFoundByNameOnly)
+
+        await #expect(throws: BudgetError.recipientNotFound) {
+            try await sut.run(op)
+        }
+    }
+
+    @Test("a 404 whose numeric code is 4007 is notFound even with an unknown errorCode",
+          arguments: operationsThatTakeRecipients)
+    func budgetNotFoundByCode(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.budgetNotFoundByCodeOnly)
+
+        await #expect(throws: BudgetError.notFound) {
+            try await sut.run(op)
+        }
+    }
+
+    @Test("updateBudget 404 BUDGET_NOT_FOUND is notFound and the error is gone", arguments: [BudgetOp.update])
+    func updateBudgetNotFoundIsGone(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.budgetNotFound)
+
+        let thrown = await sut.budgetError(op)
+
+        #expect(thrown == .notFound)
+        #expect(thrown?.isGone == true)
+    }
+
+    @Test("recipientNotFound from the wire is not gone and names nobody", arguments: operationsThatTakeRecipients)
+    func recipientNotFoundIsNotGone(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.recipientNotFound)
+
+        let thrown = await sut.budgetError(op)
+
+        #expect(thrown?.isGone == false)
+        #expect(thrown?.userMessage.contains("Tommy") == false)
+        #expect(thrown?.userMessage.contains("Recipient not found") == false, "the fixed text, not the server's")
+    }
+
+    @Test("a 404 RECIPIENT_NOT_FOUND on an operation without recipients stays notFound (duplicate included)",
+          arguments: operationsWithoutRecipients)
+    func recipientCodeOnOtherOperationsStaysNotFound(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: BudgetWire.recipientNotFound)
+
+        await #expect(throws: BudgetError.notFound) {
+            try await sut.run(op)
+        }
+    }
+
+    @Test("create and update 404 with another code or an unreadable body keep notFound",
+          arguments: operationsThatTakeRecipients,
+          [BudgetWire.userNotFound, ListWire.listNotFound, ListWire.personNotFound, "{ this is not json", ""])
+    func recipientOperationsOtherNotFound(op: BudgetOp, body: String) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 404, json: body)
+
+        await #expect(throws: BudgetError.notFound) {
+            try await sut.run(op)
+        }
+    }
+
+    @Test("create and update 400 for a repeated recipient is validation", arguments: operationsThatTakeRecipients)
+    func repeatedRecipientIsValidation(op: BudgetOp) async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(
+            status: 400,
+            json: ListWire.errorJSON(code: 3001, errorCode: "VALIDATION_ERROR", message: "Duplicate recipient")
+        )
+
+        await #expect(throws: BudgetError.validation(message: "Duplicate recipient")) {
+            try await sut.run(op)
+        }
+    }
+
     // MARK: 409
 
     @Test("409 BUDGET_ALREADY_EXISTS throws alreadyExists with the server's message", arguments: operationsWith409)

@@ -9,6 +9,9 @@ import Foundation
 
 nonisolated enum BudgetError: Error, LocalizedError, Equatable, Sendable {
     case notFound
+    /// A person in a create or update request cannot be added (404 RECIPIENT_NOT_FOUND); the budget
+    /// itself is not gone.
+    case recipientNotFound
     case unauthorized
     case forbidden
     case validation(message: String)
@@ -25,6 +28,8 @@ nonisolated enum BudgetError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .notFound:
             return "That budget could not be found."
+        case .recipientNotFound:
+            return "One of the people you chose can't be added to your budget right now. Check the list and try again."
         case .unauthorized:
             return "Please sign in again."
         case .forbidden:
@@ -55,8 +60,8 @@ nonisolated enum BudgetError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .notFound:
             return true
-        case .unauthorized, .forbidden, .validation, .alreadyExists, .sumExceedsTotal, .hasPurchases,
-             .rateLimited, .sessionEnded, .network, .invalidResponse, .server:
+        case .recipientNotFound, .unauthorized, .forbidden, .validation, .alreadyExists, .sumExceedsTotal,
+             .hasPurchases, .rateLimited, .sessionEnded, .network, .invalidResponse, .server:
             return false
         }
     }
@@ -65,8 +70,8 @@ nonisolated enum BudgetError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .network, .server, .rateLimited, .invalidResponse:
             return true
-        case .notFound, .unauthorized, .forbidden, .validation, .alreadyExists, .sumExceedsTotal,
-             .hasPurchases, .sessionEnded:
+        case .notFound, .recipientNotFound, .unauthorized, .forbidden, .validation, .alreadyExists,
+             .sumExceedsTotal, .hasPurchases, .sessionEnded:
             return false
         }
     }
