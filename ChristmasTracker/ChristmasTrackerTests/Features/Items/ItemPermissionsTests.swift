@@ -2,22 +2,19 @@
 //  ItemPermissionsTests.swift
 //  ChristmasTrackerTests
 //
-//  Story I3c-B: the one pure function that decides item rights from the list's capability
-//  flags, the item's offList and createdBy id, and the current user's id.
+//  Story I3c-B, narrowed by I5b Story C: the pure function that maps the list's capability
+//  flags to the display outputs (canAddItem, showsOffListNotice, visibleItems,
+//  canSeeGiftActivity, canSeeOffListItems, canPurchase).
 //
-//  TRUTH-TABLE REDUCTION (stated here as the Gate 1 addendum requires):
-//  The edit/delete result depends only on (canCreateItem, canAddOffList, item.offList,
-//  creator relation). canSeeGiftActivity, canSeeOffList and canPurchase only drive the display
-//  outputs (canSeeGiftActivity, canSeeOffListItems, canPurchase, visibleItems). So the table
-//  enumerates all 2^4 combinations of (canCreateItem, canAddOffList, canSeeGiftActivity,
-//  canSeeOffList) x offList {false, true} x creator relation {is the current user, is someone
-//  else, current user id is nil} against an independent oracle written from
-//  Docs/privacy-matrix.md (item rows), not from the production rule. canPurchase is
-//  enumerated separately over both values in every combination. The named personas are then
-//  checked as concrete fixtures on an ACTIVE and an ARCHIVED list, with identical results
-//  (the list status is not an input).
+//  Edit and delete rights are no longer derived here: the server sends canEdit and canDelete
+//  on every item. Those are pinned by ItemDetailStateTests (showsEdit and showsDelete read the
+//  item's flags), ItemFlagMappingTests and MockItemRepositoryTests.
 //
-//  Fails today because ItemPermissions and ListItem do not exist yet.
+//  Removed in I5b Story C (equivalent coverage in the files named above):
+//  fullTruthTable, nilCurrentUserIdNeverMatches, nilCurrentUserIdRegularItem, memberRights,
+//  ownersCannotTouchMemberOffListItems. Rewritten: personasOnActiveAndArchivedLists (edit and
+//  delete assertions dropped, the rest kept); the Expectation edit fields and the Creator
+//  oracle were removed with them.
 //
 
 import Testing
@@ -36,64 +33,7 @@ struct ItemPermissionsTests {
         ItemPermissions(capabilities: capabilities, currentUserId: currentUserId)
     }
 
-    private enum Creator: CaseIterable {
-        case currentUser
-        case someoneElse
-        case currentUserIdIsNil
-
-        var currentUserId: String? {
-            self == .currentUserIdIsNil ? nil : ItemFixtures.currentUserId
-        }
-
-        var creatorId: String {
-            self == .someoneElse ? ItemFixtures.otherUserId : ItemFixtures.currentUserId
-        }
-    }
-
-    /// Independent oracle from the privacy matrix: the owner or co-owner (blind or not) edits
-    /// and deletes regular items; a member edits and deletes only the off-list items they
-    /// created; the owner, co-owner, viewers and PUBLIC non-members never touch a member's
-    /// off-list item. In flag terms: canCreateItem without canAddOffList identifies the
-    /// owner/co-owner write role, canAddOffList the member write role.
-    private func oracle(canCreateItem: Bool, canAddOffList: Bool, offList: Bool, creator: Creator) -> Bool {
-        if offList {
-            return creator == .currentUser
-        }
-        return canCreateItem && !canAddOffList
-    }
-
-    // MARK: - Full truth table
-
-    @Test("Edit and delete over every flag combination, offList and creator relation",
-          arguments: 0..<16)
-    func fullTruthTable(bits: Int) {
-        let canCreateItem = bits & 1 != 0
-        let canAddOffList = bits & 2 != 0
-        let canSeeGiftActivity = bits & 4 != 0
-        let canSeeOffList = bits & 8 != 0
-
-        for offList in [false, true] {
-            for creator in Creator.allCases {
-                let capabilities = ItemFixtures.capabilities(
-                    canCreateItem: canCreateItem,
-                    canAddOffList: canAddOffList,
-                    canSeeGiftActivity: canSeeGiftActivity,
-                    canSeeOffList: canSeeOffList
-                )
-                let sut = makeSUT(capabilities, currentUserId: creator.currentUserId)
-                let item = ItemFixtures.item(
-                    offList: offList,
-                    createdBy: ItemFixtures.person(id: creator.creatorId)
-                )
-                let expected = oracle(canCreateItem: canCreateItem, canAddOffList: canAddOffList,
-                                      offList: offList, creator: creator)
-                let context = "create=\(canCreateItem) addOff=\(canAddOffList) gift=\(canSeeGiftActivity) "
-                    + "seeOff=\(canSeeOffList) offList=\(offList) creator=\(creator)"
-                #expect(sut.canEdit(item) == expected, "canEdit: \(context)")
-                #expect(sut.canDelete(item) == expected, "canDelete: \(context)")
-            }
-        }
-    }
+    // MARK: - Display outputs
 
     @Test("Display outputs are the flags and nothing else, over every combination",
           arguments: 0..<32)
@@ -129,26 +69,6 @@ struct ItemPermissionsTests {
                 #expect(makeSUT(capabilities, currentUserId: nil).canPurchase == canPurchase)
             }
         }
-    }
-
-    @Test("A nil current user id never matches a creator, even an empty creator id")
-    func nilCurrentUserIdNeverMatches() {
-        let capabilities = ItemFixtures.capabilities(canCreateItem: true, canAddOffList: true)
-        let sut = makeSUT(capabilities, currentUserId: nil)
-        let own = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.currentUserId))
-        let empty = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ""))
-        #expect(!sut.canEdit(own))
-        #expect(!sut.canDelete(own))
-        #expect(!sut.canEdit(empty))
-        #expect(!sut.canDelete(empty))
-    }
-
-    @Test("A nil current user id still lets the owner edit a regular item")
-    func nilCurrentUserIdRegularItem() {
-        let sut = makeSUT(ItemFixtures.Persona.owner.capabilities, currentUserId: nil)
-        let regular = ItemFixtures.item(offList: false)
-        #expect(sut.canEdit(regular))
-        #expect(sut.canDelete(regular))
     }
 
     // MARK: - visibleItems
@@ -191,43 +111,29 @@ struct ItemPermissionsTests {
         let canSeeOffListItems: Bool
         let canPurchase: Bool
         let showsOffListNotice: Bool
-        let editsRegularItem: Bool
-        let editsOwnOffListItem: Bool
-        let editsOthersOffListItem: Bool
     }
 
     private func expectation(for persona: ItemFixtures.Persona) -> Expectation {
         switch persona {
         case .owner, .coOwner:
             return Expectation(canAddItem: true, canSeeGiftActivity: true, canSeeOffListItems: true,
-                               canPurchase: true, showsOffListNotice: false,
-                               editsRegularItem: true, editsOwnOffListItem: true, editsOthersOffListItem: false)
+                               canPurchase: true, showsOffListNotice: false)
         case .blindOwner, .blindCoOwner:
             return Expectation(canAddItem: true, canSeeGiftActivity: false, canSeeOffListItems: false,
-                               canPurchase: false, showsOffListNotice: false,
-                               editsRegularItem: true, editsOwnOffListItem: true, editsOthersOffListItem: false)
+                               canPurchase: false, showsOffListNotice: false)
         case .member:
             return Expectation(canAddItem: true, canSeeGiftActivity: true, canSeeOffListItems: true,
-                               canPurchase: true, showsOffListNotice: true,
-                               editsRegularItem: false, editsOwnOffListItem: true, editsOthersOffListItem: false)
+                               canPurchase: true, showsOffListNotice: true)
         case .viewer, .publicNonMember:
             return Expectation(canAddItem: false, canSeeGiftActivity: false, canSeeOffListItems: false,
-                               canPurchase: false, showsOffListNotice: false,
-                               editsRegularItem: false, editsOwnOffListItem: true, editsOthersOffListItem: false)
+                               canPurchase: false, showsOffListNotice: false)
         }
     }
 
-    @Test("Named personas get the documented rights on an active and an archived list",
+    @Test("Named personas get the documented display rules on an active and an archived list",
           arguments: ItemFixtures.Persona.allCases)
     func personasOnActiveAndArchivedLists(persona: ItemFixtures.Persona) {
         let expected = expectation(for: persona)
-        let regular = ItemFixtures.item(id: "regular", offList: false)
-        let ownOffList = ItemFixtures.item(
-            id: "own", offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.currentUserId)
-        )
-        let othersOffList = ItemFixtures.item(
-            id: "others", offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.otherUserId)
-        )
 
         let active = makeSUT(persona.capabilities)
         let archived = makeSUT(persona.archivedCapabilities)
@@ -237,32 +143,8 @@ struct ItemPermissionsTests {
             #expect(sut.canSeeOffListItems == expected.canSeeOffListItems, "\(persona) \(label) seeOff")
             #expect(sut.canPurchase == expected.canPurchase, "\(persona) \(label) canPurchase")
             #expect(sut.showsOffListNotice == expected.showsOffListNotice, "\(persona) \(label) notice")
-            #expect(sut.canEdit(regular) == expected.editsRegularItem, "\(persona) \(label) edit regular")
-            #expect(sut.canDelete(regular) == expected.editsRegularItem, "\(persona) \(label) delete regular")
-            #expect(sut.canEdit(ownOffList) == expected.editsOwnOffListItem, "\(persona) \(label) edit own off-list")
-            #expect(sut.canDelete(ownOffList) == expected.editsOwnOffListItem, "\(persona) \(label) delete own off-list")
-            #expect(sut.canEdit(othersOffList) == expected.editsOthersOffListItem, "\(persona) \(label) edit other off-list")
-            #expect(sut.canDelete(othersOffList) == expected.editsOthersOffListItem, "\(persona) \(label) delete other off-list")
         }
         #expect(active == archived, "\(persona): the list status is not an input")
-    }
-
-    @Test("A MEMBER cannot edit or delete a regular item, only their own off-list item")
-    func memberRights() {
-        let sut = makeSUT(ItemFixtures.Persona.member.capabilities)
-        #expect(!sut.canEdit(ItemFixtures.item(offList: false)))
-        #expect(sut.canEdit(ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.currentUserId))))
-        #expect(!sut.canEdit(ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.otherUserId))))
-    }
-
-    @Test("The owner and co-owner (blind or not) get no rights over a member's off-list item")
-    func ownersCannotTouchMemberOffListItems() {
-        let memberItem = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.otherUserId))
-        for persona in [ItemFixtures.Persona.owner, .blindOwner, .coOwner, .blindCoOwner] {
-            let sut = makeSUT(persona.capabilities)
-            #expect(!sut.canEdit(memberItem), "\(persona) edit")
-            #expect(!sut.canDelete(memberItem), "\(persona) delete")
-        }
     }
 
     @Test("Personas see off-list items in visibleItems exactly as their flag says",

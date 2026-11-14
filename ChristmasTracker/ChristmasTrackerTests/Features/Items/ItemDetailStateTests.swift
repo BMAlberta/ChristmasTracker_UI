@@ -10,7 +10,7 @@
 //  depth: the server omits them, the client must not show them if one slips through).
 //  The purchase entry point is the canPurchase flag exactly.
 //
-//  Fails today because ItemDetailState and PurchaseRowState do not exist yet.
+//  I5b Story C: showsEdit and showsDelete read only the item's canEdit and canDelete flags.
 //
 
 import Testing
@@ -181,47 +181,117 @@ struct ItemDetailStateTests {
 
     // MARK: - Edit and delete controls
 
-    @Test("Edit and delete show from the permissions function for a regular item")
-    func editDeleteRegularItem() {
-        let regular = ItemFixtures.item(offList: false)
-        let expected: [ItemFixtures.Persona: Bool] = [
-            .owner: true, .blindOwner: true, .coOwner: true, .blindCoOwner: true,
-            .member: false, .viewer: false, .publicNonMember: false
-        ]
+    // I5b Story C: showsEdit == item.canEdit and showsDelete == item.canDelete, nothing else.
+    // Removed (derivation from list capabilities, createdBy and the current user): editDeleteRegularItem,
+    // editDeleteMemberOffListItem, ownerNoEditOnMemberOffListItem, nilUserOffListItem. They are
+    // replaced by the flag-driven tests below (editDeleteFollowTheItemFlags, handoffCases,
+    // listCapabilitiesAndUserDoNotChangeTheFlags, flagsIgnoreOffListCreatorPurchasesAndListStatus).
+
+    @Test("Edit and delete follow the item's two flags exactly",
+          arguments: [(true, true), (true, false), (false, true), (false, false)])
+    func editDeleteFollowTheItemFlags(canEdit: Bool, canDelete: Bool) {
+        let item = ItemFixtures.item(canEdit: canEdit, canDelete: canDelete)
         for persona in ItemFixtures.Persona.allCases {
-            let sut = makeSUT(regular, capabilities: persona.capabilities)
-            #expect(sut.showsEdit == expected[persona], "\(persona) edit")
-            #expect(sut.showsDelete == expected[persona], "\(persona) delete")
+            let sut = makeSUT(item, capabilities: persona.capabilities)
+            #expect(sut.showsEdit == canEdit, "\(persona) edit")
+            #expect(sut.showsDelete == canDelete, "\(persona) delete")
         }
     }
 
-    @Test("A member sees edit and delete on their own off-list item only")
-    func editDeleteMemberOffListItem() {
-        let capabilities = ItemFixtures.Persona.member.capabilities
-        let own = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.currentUserId))
-        let others = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.otherUserId))
-        #expect(makeSUT(own, capabilities: capabilities).showsEdit)
-        #expect(makeSUT(own, capabilities: capabilities).showsDelete)
-        #expect(!makeSUT(others, capabilities: capabilities).showsEdit)
-        #expect(!makeSUT(others, capabilities: capabilities).showsDelete)
+    /// The API-handoff cases, expressed as the flag values the server sends for each caller.
+    nonisolated struct HandoffCase: Sendable, CustomTestStringConvertible {
+        let name: String
+        let persona: ItemFixtures.Persona
+        let offList: Bool
+        let withPurchases: Bool
+        let canEdit: Bool
+        let canDelete: Bool
+        var testDescription: String { name }
     }
 
-    @Test("The owner and co-owner see no edit or delete on a member's off-list item")
-    func ownerNoEditOnMemberOffListItem() {
-        let others = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.otherUserId))
-        for persona in [ItemFixtures.Persona.owner, .blindOwner, .coOwner, .blindCoOwner] {
-            let sut = makeSUT(others, capabilities: persona.capabilities)
-            #expect(!sut.showsEdit, "\(persona)")
-            #expect(!sut.showsDelete, "\(persona)")
+    nonisolated static let handoffScenarios: [HandoffCase] = [
+        HandoffCase(name: "owner, regular item", persona: .owner, offList: false,
+                    withPurchases: false, canEdit: true, canDelete: true),
+        HandoffCase(name: "co-owner, regular item", persona: .coOwner, offList: false,
+                    withPurchases: false, canEdit: true, canDelete: true),
+        HandoffCase(name: "creator of an off-list item", persona: .member, offList: true,
+                    withPurchases: false, canEdit: true, canDelete: true),
+        HandoffCase(name: "member, normal item", persona: .member, offList: false,
+                    withPurchases: false, canEdit: false, canDelete: false),
+        HandoffCase(name: "non-blind caller, item with purchases (edit yes, delete no)", persona: .owner,
+                    offList: false, withPurchases: true, canEdit: true, canDelete: false),
+        HandoffCase(name: "blind caller, item with purchases (both yes)", persona: .blindOwner,
+                    offList: false, withPurchases: true, canEdit: true, canDelete: true)
+    ]
+
+    @Test("The API-handoff cases show Edit and Delete exactly as the item flags say", arguments: handoffScenarios)
+    func handoffCases(_ scenario: HandoffCase) {
+        let purchases = scenario.withPurchases ? [ItemFixtures.purchase()] : nil
+        let item = ItemFixtures.item(
+            offList: scenario.offList, canEdit: scenario.canEdit, canDelete: scenario.canDelete,
+            purchases: purchases, totalQuantityPurchased: scenario.withPurchases ? 1 : nil
+        )
+        let sut = makeSUT(item, capabilities: scenario.persona.capabilities)
+        #expect(sut.showsEdit == scenario.canEdit)
+        #expect(sut.showsDelete == scenario.canDelete)
+    }
+
+    @Test("Edit hidden when canEdit is false and Delete hidden when canDelete is false, both shown when both true")
+    func hiddenAndShown() {
+        let capabilities = ItemFixtures.Persona.owner.capabilities
+        let noEdit = makeSUT(ItemFixtures.item(canEdit: false, canDelete: true), capabilities: capabilities)
+        #expect(!noEdit.showsEdit)
+        #expect(noEdit.showsDelete)
+        let noDelete = makeSUT(ItemFixtures.item(canEdit: true, canDelete: false), capabilities: capabilities)
+        #expect(noDelete.showsEdit)
+        #expect(!noDelete.showsDelete)
+        let both = makeSUT(ItemFixtures.item(canEdit: true, canDelete: true), capabilities: capabilities)
+        #expect(both.showsEdit)
+        #expect(both.showsDelete)
+    }
+
+    @Test("Changing the list capabilities or the current user alone never changes showsEdit or showsDelete",
+          arguments: [(true, true), (true, false), (false, true), (false, false)])
+    func listCapabilitiesAndUserDoNotChangeTheFlags(canEdit: Bool, canDelete: Bool) {
+        let item = ItemFixtures.item(
+            offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.currentUserId),
+            canEdit: canEdit, canDelete: canDelete
+        )
+        let users: [String?] = [ItemFixtures.currentUserId, ItemFixtures.otherUserId, nil]
+        for persona in ItemFixtures.Persona.allCases {
+            for user in users {
+                let sut = makeSUT(item, capabilities: persona.capabilities, currentUserId: user)
+                #expect(sut.showsEdit == canEdit, "\(persona) \(String(describing: user))")
+                #expect(sut.showsDelete == canDelete, "\(persona) \(String(describing: user))")
+            }
         }
     }
 
-    @Test("Edit and delete never show with a nil current user for an off-list item")
-    func nilUserOffListItem() {
-        let item = ItemFixtures.item(offList: true, createdBy: ItemFixtures.person(id: ItemFixtures.currentUserId))
-        let sut = makeSUT(item, capabilities: ItemFixtures.Persona.member.capabilities, currentUserId: nil)
-        #expect(!sut.showsEdit)
-        #expect(!sut.showsDelete)
+    @Test("The flags ignore offList, createdBy, purchases and the list status")
+    func flagsIgnoreOffListCreatorPurchasesAndListStatus() {
+        let flagPairs = [(true, true), (true, false), (false, true), (false, false)]
+        for (canEdit, canDelete) in flagPairs {
+            for offList in [false, true] {
+                for creator in [ItemFixtures.currentUserId, ItemFixtures.otherUserId] {
+                    for withPurchases in [false, true] {
+                        let item = ItemFixtures.item(
+                            offList: offList, createdBy: ItemFixtures.person(id: creator),
+                            canEdit: canEdit, canDelete: canDelete,
+                            purchases: withPurchases ? [ItemFixtures.purchase()] : nil,
+                            totalQuantityPurchased: withPurchases ? 1 : nil
+                        )
+                        for persona in ItemFixtures.Persona.allCases {
+                            let active = makeSUT(item, capabilities: persona.capabilities)
+                            let archived = makeSUT(item, capabilities: persona.archivedCapabilities)
+                            #expect(active.showsEdit == canEdit)
+                            #expect(active.showsDelete == canDelete)
+                            #expect(archived.showsEdit == canEdit)
+                            #expect(archived.showsDelete == canDelete)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Purchase entry

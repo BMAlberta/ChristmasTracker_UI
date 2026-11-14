@@ -55,7 +55,8 @@ nonisolated enum ItemWire {
         updatedAt: String? = nil,
         quantityPurchased: Int? = nil,
         quantityRemaining: Int? = nil,
-        extra: String? = nil
+        extra: String? = nil,
+        omitting omitted: Set<String> = []
     ) -> String {
         var fields: [String] = [
             "\"id\": \"\(id)\"",
@@ -77,6 +78,9 @@ nonisolated enum ItemWire {
         if let updatedAt { fields.append("\"updatedAt\": \"\(updatedAt)\"") }
         if let quantityPurchased { fields.append("\"quantityPurchased\": \(quantityPurchased)") }
         if let quantityRemaining { fields.append("\"quantityRemaining\": \(quantityRemaining)") }
+        // I5b Story C: a field named in `omitting` is left out of the JSON (strictness tests);
+        // `extra` is appended afterwards, so it can replace an omitted field.
+        fields.removeAll { field in omitted.contains { field.hasPrefix("\"\($0)\":") } }
         if let extra { fields.append(extra) }
         return "{ " + fields.joined(separator: ", ") + " }"
     }
