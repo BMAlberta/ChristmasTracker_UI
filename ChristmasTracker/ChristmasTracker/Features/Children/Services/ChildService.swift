@@ -23,8 +23,8 @@ final class ChildService {
     private(set) var phase: ChildrenLoadPhase = .idle
     /// True only while addChild or deleteChild runs.
     private(set) var isMutating: Bool = false
-    /// The error of the last add or delete. Load failures are reported through `phase`.
-    private(set) var error: ChildError?
+    // `phase` is the Children screen's load channel: `.failed` is its load failure value. Add and
+    // delete failures are thrown and stored nowhere.
 
     // MARK: - Session safety
 
@@ -77,6 +77,12 @@ final class ChildService {
         }
     }
 
+    /// Turns a failed Children load back into idle (the screen calls it when it disappears). A
+    /// loaded or loading state is left alone, so it never clears the list.
+    func clearLoadFailure() {
+        if case .failed = phase { phase = .idle }
+    }
+
     // Actor-isolated (@MainActor): manual SentrySDK span, see loadChildren.
     func addChild(_ input: CreateChildInput) async throws {
         let span = SentrySDK.startTransaction(
@@ -88,7 +94,6 @@ final class ChildService {
         let gen = generation
         isMutating = true
         defer { if gen == generation { isMutating = false } }
-        error = nil
 
         do {
             let repository = self.repository
@@ -111,7 +116,6 @@ final class ChildService {
         let gen = generation
         isMutating = true
         defer { if gen == generation { isMutating = false } }
-        error = nil
 
         do {
             let repository = self.repository
@@ -148,7 +152,6 @@ final class ChildService {
         children = []
         phase = .idle
         isMutating = false
-        error = nil
     }
 
     // MARK: - Private Functions
@@ -178,15 +181,13 @@ final class ChildService {
         (error as? ChildError) ?? .server
     }
 
-    /// The error a throwing operation rethrows: the typed ChildError (also recorded in `error`),
-    /// or CancellationError when the call was cancelled or its session ended.
+    /// The error a throwing operation rethrows: the typed ChildError (stored nowhere), or
+    /// CancellationError when the call was cancelled or its session ended.
     private func failure(_ error: any Error, generation gen: Int) -> any Error {
         if error is CancellationError || gen != generation {
             return CancellationError()
         }
-        let childError = childError(error)
-        self.error = childError
-        return childError
+        return childError(error)
     }
 }
 

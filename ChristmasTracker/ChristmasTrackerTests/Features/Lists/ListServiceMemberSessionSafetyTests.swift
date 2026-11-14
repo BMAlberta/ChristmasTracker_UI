@@ -24,7 +24,8 @@ struct ListServiceMemberSessionSafetyTests {
     private func expectCleared(_ sut: MemberServiceHarness) async {
         #expect(sut.service.lists.isEmpty, "lists must stay empty")
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
-        #expect(sut.service.error == nil, "no error may be set after the session ended")
+        #expect(sut.service.listsLoadFailure == nil, "no failure may be set after the session ended")
+        #expect(sut.service.detailLoadFailure == nil, "no failure may be set after the session ended")
         #expect(sut.service.goneListId == nil, "a stale call must not mark a list gone")
         #expect(sut.service.isMutating == false)
         let cachedLists = await sut.store.getLists()
@@ -128,7 +129,7 @@ struct ListServiceMemberSessionSafetyTests {
 
         #expect(sut.lists.fetchListsCount == before + 1)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - User switch
@@ -149,7 +150,7 @@ struct ListServiceMemberSessionSafetyTests {
 
         #expect(sut.service.lists.map(\.id) == ["list-b"], "A's data must not replace or join B's")
         #expect(sut.service.currentListDetail == nil)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
@@ -192,7 +193,7 @@ struct ListServiceMemberSessionSafetyTests {
         op.releaseAll(sut)
         await task.value
 
-        #expect(sut.service.error == nil, "cancellation is not shown to the user")
+        #expect(sut.service.anyLoadFailure == nil, "cancellation is not shown to the user")
         #expect(sut.service.isMutating == false)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.lists.map(\.id) == [H.listId], "a cancelled operation drops nothing")
@@ -212,7 +213,7 @@ struct ListServiceMemberSessionSafetyTests {
 
         await op.run(sut)
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.lists.map(\.id) == [H.listId])
         #expect(sut.service.currentListDetail == initial)

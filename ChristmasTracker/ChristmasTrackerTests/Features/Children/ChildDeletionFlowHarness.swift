@@ -57,8 +57,10 @@ struct ChildDeletionFlowHarness {
         childList(id, .archived, canDelete: false)
     }
 
-    /// Nothing the flow may publish: both services' shared errors stay nil.
+    /// Nothing the flow may publish. REWRITTEN (UX1a U2): the shared `error` properties are gone, so
+    /// this now means: the child load channel is not failed and neither list load failure is set.
     var sharedErrorsAreNil: Bool {
-        childService.error == nil && listService.error == nil
+        if case .failed = childService.phase { return false }
+        return listService.listsLoadFailure == nil && listService.detailLoadFailure == nil
     }
 }

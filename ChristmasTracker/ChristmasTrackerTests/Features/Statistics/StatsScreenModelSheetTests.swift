@@ -35,7 +35,8 @@ struct StatsScreenModelSheetTests {
         let budget = BudgetServiceFix.budget(2026)
         let sut = await makeLoadedStatsScreenSUT(budgets: [budget])
 
-        sut.model.presentEdit()
+        // EDITED (UX1a U2): `await` because presentEdit may now load the budget first (finding A).
+        await sut.model.presentEdit()
 
         #expect(sut.model.presentedSheet == .edit(budget))
     }
@@ -45,7 +46,8 @@ struct StatsScreenModelSheetTests {
         let budget = BudgetServiceFix.budget(2026)
         let sut = await makeLoadedStatsScreenSUT(budgets: [budget])
 
-        sut.model.presentDuplicate()
+        // EDITED (UX1a U2): `await`, see presentEdit.
+        await sut.model.presentDuplicate()
 
         #expect(sut.model.presentedSheet == .duplicate(budget))
     }
@@ -53,11 +55,15 @@ struct StatsScreenModelSheetTests {
     @Test("presentEdit and presentDuplicate do nothing when the selected year has no budget")
     func editAndDuplicateNeedABudget() async {
         let sut = await makeLoadedStatsScreenSUT(stats: StatsScreenTest.statsWithoutBudget(), budgets: [])
+        // EDITED (UX1a U2): `await`, and a scripted empty budget list so the test is deterministic
+        // whether or not the model asks the server first: the answer still has no budget.
+        sut.manager.enqueueList([])
+        sut.manager.enqueueList([])
 
-        sut.model.presentEdit()
+        await sut.model.presentEdit()
         #expect(sut.model.presentedSheet == nil)
 
-        sut.model.presentDuplicate()
+        await sut.model.presentDuplicate()
         #expect(sut.model.presentedSheet == nil)
     }
 
@@ -133,7 +139,7 @@ struct StatsScreenModelSheetTests {
     @Test("after an edit save the sheet closes, the returned budget shows at once and the stats refresh")
     func didSaveShowsReturnedBudgetImmediately() async throws {
         let sut = await makeLoadedStatsScreenSUT(stats: StatsFix.year(2026, spent: "100"), budgets: [BudgetServiceFix.budget(2026)])
-        sut.model.presentEdit()
+        await sut.model.presentEdit()
         sut.manager.enqueue(BudgetServiceFix.budget(2026, total: "1200"))
         let saved = try await sut.budgets.update(BudgetServiceFix.updateRequest(year: 2026, total: "1200"))
         sut.loader.enqueue(StatsFix.year(2026, spent: "100"), held: true)
@@ -192,7 +198,7 @@ struct StatsScreenModelSheetTests {
     func didDuplicateSelectsTargetYear() async throws {
         let source = BudgetServiceFix.budget(2026)
         let sut = await makeLoadedStatsScreenSUT(budgets: [source])
-        sut.model.presentDuplicate()
+        await sut.model.presentDuplicate()
         sut.manager.enqueue(BudgetServiceFix.budget(2027, total: "1000"))
         let copy = try await sut.budgets.duplicate(BudgetServiceFix.duplicateRequest(from: 2026, to: 2027))
         sut.loader.enqueue(StatsScreenTest.emptyStats(year: 2027))
@@ -209,7 +215,7 @@ struct StatsScreenModelSheetTests {
     @Test("a refresh that fails after a save leaves the sheet closed and the returned budget on screen")
     func didSaveFailureKeepsReturnedBudget() async throws {
         let sut = await makeLoadedStatsScreenSUT(stats: StatsFix.year(2026, spent: "100"), budgets: [BudgetServiceFix.budget(2026)])
-        sut.model.presentEdit()
+        await sut.model.presentEdit()
         sut.manager.enqueue(BudgetServiceFix.budget(2026, total: "1200"))
         let saved = try await sut.budgets.update(BudgetServiceFix.updateRequest(year: 2026, total: "1200"))
         sut.loader.enqueueFailure(BudgetError.network)

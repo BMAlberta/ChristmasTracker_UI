@@ -56,7 +56,7 @@ struct ListServiceRefreshDetailTests {
 
     private func expectUntouched(_ sut: SUT) async {
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
         for id in ["list-a", "list-b"] {
             let cached = await sut.store.getListDetail(id: id)
@@ -105,7 +105,7 @@ struct ListServiceRefreshDetailTests {
         #expect(sut.service.currentListDetail?.name == "Fresh")
         let cached = await sut.store.getListDetail(id: "list-a")
         #expect(cached?.name == "Fresh")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isLoadingDetail == false)
     }
 
@@ -135,7 +135,7 @@ struct ListServiceRefreshDetailTests {
 
         #expect(first == .network)
         #expect(second == nil)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.currentListDetail?.name == "Fresh")
     }
 
@@ -156,17 +156,19 @@ struct ListServiceRefreshDetailTests {
         #expect(sut.service.goneListId == nil)
     }
 
-    @Test("a failure does not set ListService.error", arguments: ListServiceRefreshDetailTests.failures)
+    // REWRITTEN (UX1a U2): the refresh stores neither load failure (it only returns its failure).
+    @Test("a failure stores neither listsLoadFailure nor detailLoadFailure", arguments: ListServiceRefreshDetailTests.failures)
     func failureDoesNotSetServiceError(error: ListError) async {
         let sut = await loadedSUT()
         sut.repo.enqueueFetchListDetail(.failure(error))
 
         await sut.service.refreshListDetail(id: "list-a")
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
     }
 
-    @Test("a failure with nothing open or cached returns the error and sets no service error")
+    @Test("a failure with nothing open or cached returns the error and stores no load failure")
     func failureWithoutDetail() async {
         let sut = await makeSUT()
         sut.repo.enqueueFetchListDetail(.failure(ListError.server))
@@ -174,7 +176,7 @@ struct ListServiceRefreshDetailTests {
         let result = await sut.service.refreshListDetail(id: "list-a")
 
         #expect(result == .server)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.currentListDetail == nil)
     }
 
@@ -278,7 +280,7 @@ struct ListServiceRefreshDetailTests {
         _ = await older.value
 
         #expect(sut.service.currentListDetail?.name == "Newer")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - Session safety
@@ -345,7 +347,7 @@ struct ListServiceRefreshDetailTests {
         #expect(sut.service.currentListDetail?.name == "User B")
         let cached = await sut.store.getListDetail(id: "list-a")
         #expect(cached?.name == "User B")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("cancelling the caller returns nil and writes nothing")
@@ -364,7 +366,7 @@ struct ListServiceRefreshDetailTests {
         #expect(sut.service.currentListDetail == before)
         let cached = await sut.store.getListDetail(id: "list-a")
         #expect(cached == before)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("a repository that fails with CancellationError returns nil and sets no error")
@@ -375,7 +377,7 @@ struct ListServiceRefreshDetailTests {
         let result = await sut.service.refreshListDetail(id: "list-a")
 
         #expect(result == nil)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - Archive epoch

@@ -195,7 +195,8 @@ struct ListServiceDeletedListGuardTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.error == error)
+        #expect(sut.service.detailLoadFailure == error)
+        #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
@@ -221,7 +222,8 @@ struct ListServiceDeletedListGuardTests {
             try await sut.service.updateList(id: "list-a", UpdateListInput(name: "X", theme: nil, visibility: nil))
         }
 
-        #expect(sut.service.error == error)
+        // REWRITTEN (UX1a U2): the mutation's error is the thrown one above; nothing is published.
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
@@ -244,7 +246,8 @@ struct ListServiceDeletedListGuardTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.error == error)
+        #expect(sut.service.detailLoadFailure == error)
+        #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a", "list-b"])
@@ -264,7 +267,7 @@ struct ListServiceDeletedListGuardTests {
             try await sut.service.updateList(id: "list-a", UpdateListInput(name: "X", theme: nil, visibility: nil))
         }
 
-        #expect(sut.service.error == error)
+        #expect(sut.service.anyLoadFailure == nil, "a mutation publishes nothing")
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a", "list-b"])
@@ -292,7 +295,7 @@ struct ListServiceDeletedListGuardTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail?.id == "list-a")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.isLoadingDetail == false)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail?.id == "list-a")
@@ -314,7 +317,7 @@ struct ListServiceDeletedListGuardTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail?.id == "list-a")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.isLoadingDetail == false)
         #expect(sut.repo.fetchListDetailCount == 1, "the cached detail is revalidated, not trusted")
     }
@@ -333,7 +336,7 @@ struct ListServiceDeletedListGuardTests {
         sut.repo.releaseAll()
         await load.value
 
-        #expect(sut.service.error == .notFound)
+        #expect(sut.service.detailLoadFailure == .notFound)
         #expect(sut.service.currentListDetail == nil)
         let cachedDetail = await sut.store.getListDetail(id: "list-a")
         #expect(cachedDetail == nil)

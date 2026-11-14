@@ -160,7 +160,7 @@ struct StatsServiceOverlappingFetchTests {
         sut.loader.gate.release(at: 1)
         await fetchB.value
 
-        #expect(sut.service.loadFailure == .network)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .network))
     }
 
     // MARK: Different years
@@ -203,7 +203,8 @@ struct StatsServiceOverlappingFetchTests {
         sut.loader.gate.release(at: 0)
         await fetchA.value
 
-        #expect(sut.service.loadFailure == .network, "2026 landing first does not outrank a 2025 fetch")
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2025, error: .network), "2026 landing first does not outrank a 2025 fetch")
+        #expect(sut.service.failure(forYear: 2026) == nil, "the failure is keyed to 2025")
         #expect(sut.service.stats(for: 2026)?.totalSpent == BudgetFixtures.dec("26"))
     }
 

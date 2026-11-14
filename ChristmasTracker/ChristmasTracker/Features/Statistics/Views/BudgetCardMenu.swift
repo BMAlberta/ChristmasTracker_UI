@@ -17,12 +17,12 @@ struct BudgetCardMenu: View {
     var body: some View {
         Menu {
             Button {
-                model.presentEdit()
+                Task { await model.presentEdit() }
             } label: {
                 Label("Edit Budget", systemImage: "pencil")
             }
             Button {
-                model.presentDuplicate()
+                Task { await model.presentDuplicate() }
             } label: {
                 Label("Duplicate to Another Year", systemImage: "doc.on.doc")
             }

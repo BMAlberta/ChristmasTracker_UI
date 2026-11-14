@@ -15,6 +15,7 @@ struct DashboardView: View {
     @State private var segment = ListSegment.active
     @State private var searchText = ""
     @State private var errorDismissal = ListErrorDismissal()
+    @State private var archiveFailure: ListError?
     @State private var lastOperation = Operation.load
 
     /// The last operation the dashboard started, so Retry is offered only where it means the same.
@@ -65,6 +66,10 @@ struct DashboardView: View {
                         await listService.loadLists()
                     }
                 }
+                .onDisappear {
+                    listService.clearListsLoadFailure()
+                    archiveFailure = nil
+                }
         }
     }
 
@@ -78,7 +83,7 @@ struct DashboardView: View {
             ListErrorBanner(
                 presentation: ListErrorPresentation(error),
                 onRetry: retryAction,
-                onDismiss: { errorDismissal.dismiss(error) }
+                onDismiss: { dismiss(error) }
             )
             .padding(EdgeInsets.appScreenPadding)
             .frame(maxHeight: .infinity, alignment: .top)
@@ -104,14 +109,20 @@ struct DashboardView: View {
         }
     }
 
-    /// The service error, unless the user dismissed this same error. The service keeps its error
-    /// until the next operation, so dismissal is remembered here and reset by every new operation.
+    /// The archive failure of this screen, else the lists load failure, unless the user dismissed
+    /// this same error. Dismissal is remembered here and reset by every new operation.
     private var visibleError: ListError? {
-        errorDismissal.visible(listService.error)
+        errorDismissal.visible(archiveFailure ?? listService.listsLoadFailure)
+    }
+
+    private func dismiss(_ error: ListError) {
+        archiveFailure = nil
+        errorDismissal.dismiss(error)
     }
 
     private func begin(_ operation: Operation) {
         lastOperation = operation
+        archiveFailure = nil
         errorDismissal.reset()
     }
 
@@ -153,8 +164,16 @@ struct DashboardView: View {
         listToArchive = nil
         begin(.archive)
         Task {
-            // A failure is kept by the service as its typed error and shown in the banner.
-            try? await listService.deleteList(id: list.id)
+            // The service throws the failure; the dashboard keeps it in local state for the banner.
+            do {
+                try await listService.deleteList(id: list.id)
+            } catch is CancellationError {
+                return
+            } catch let failure as ListError {
+                archiveFailure = failure
+            } catch {
+                archiveFailure = .server
+            }
         }
     }
 
@@ -235,7 +254,7 @@ struct DashboardView: View {
                 ListErrorBanner(
                     presentation: ListErrorPresentation(error),
                     onRetry: retryAction,
-                    onDismiss: { errorDismissal.dismiss(error) }
+                    onDismiss: { dismiss(error) }
                 )
                 .dashboardRow()
             }

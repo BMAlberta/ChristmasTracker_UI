@@ -140,15 +140,20 @@ struct ListServiceArchivedReadOnlyTests {
         #expect(cachedLists.map(\.id) == [H.listId])
     }
 
-    @Test("a 422 is recorded in error when the refetch succeeds", arguments: ArchivedWriteOp.allCases)
-    func errorIsRecorded(op: ArchivedWriteOp) async throws {
+    // REPLACED (UX1a U2): was "a 422 is recorded in error when the refetch succeeds". The 422 is
+    // thrown to the initiating view (asserted in refetchRefreshesFlags) and published nowhere.
+    @Test("a 422 is thrown and not published as a load failure when the refetch succeeds", arguments: ArchivedWriteOp.allCases)
+    func errorIsNotPublished(op: ArchivedWriteOp) async throws {
         let sut = try await makeSUT()
         op.script(sut, failing: .archivedReadOnly)
         sut.lists.enqueueFetchListDetail(.success(archivedDetail()))
 
-        _ = try? await op.run(sut)
+        await #expect(throws: ListError.archivedReadOnly) {
+            try await op.run(sut)
+        }
 
-        #expect(sut.service.error == .archivedReadOnly)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
     }
 
     @Test("a later load of the list is not filtered: the 422 recorded no removal", arguments: ArchivedWriteOp.allCases)

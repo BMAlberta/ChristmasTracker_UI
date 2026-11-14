@@ -41,6 +41,7 @@ final class StatsScreenModel {
     // MARK: - Strings
 
     static let staleMessage = "Couldn't update. Showing saved data."
+    static let budgetNotFoundMessage = "Couldn't find that budget. Try again."
     static let deleteMessage = "Your spending is not affected. This can't be undone."
     static let deleteButtonTitle = "Delete Budget"
 
@@ -72,6 +73,19 @@ final class StatsScreenModel {
     /// Counts the loads that ended with a failure, so a new identical failure is a new event.
     private var failureCount = 0
     private var dismissedFailureCount: Int?
+
+    /// The in-flight loads this model started, so onDisappear can cancel them.
+    private var loadTasks: [UUID: Task<Void, Never>] = [:]
+
+    /// The key in `loadTasks` of the Edit or Duplicate load-first task, which select(year:) cancels.
+    private var loadFirstTaskId: UUID?
+
+    /// The Edit or Duplicate step that Try Again of the card banner repeats.
+    private var pendingBudgetStep: BudgetCardStep?
+
+    private enum BudgetCardStep {
+        case edit, duplicate
+    }
 
     // MARK: - Initialization
 
@@ -117,9 +131,10 @@ final class StatsScreenModel {
 
     var showsCreateBudget: Bool { screenState?.showsCreateBudget ?? false }
 
-    /// The failure of the last load: the stats service's, else this screen's own.
+    /// The failure of the last load of the SELECTED year: the stats service's failure for that
+    /// year, else this screen's own. A failure of another year never shows here.
     private var loadError: BudgetError? {
-        statsService.loadFailure ?? budgetListFailure
+        statsService.failure(forYear: selectedYear) ?? budgetListFailure
     }
 
     var loadPhase: LoadPhase {
@@ -148,10 +163,12 @@ final class StatsScreenModel {
     }
 
     func onDisappear() {
+        for task in loadTasks.values { task.cancel() }
         statsService.clearLoadFailure()
         budgetListFailure = nil
         dismissedFailureCount = nil
         budgetCardBanner = nil
+        pendingBudgetStep = nil
     }
 
     /// Pull to refresh: both fetches are forced.
@@ -165,7 +182,9 @@ final class StatsScreenModel {
 
     func select(year: Int) async {
         selectedYear = year
+        if let id = loadFirstTaskId { loadTasks[id]?.cancel() }
         budgetCardBanner = nil
+        pendingBudgetStep = nil
         await load(force: false)
     }
 
@@ -182,6 +201,7 @@ final class StatsScreenModel {
     func confirmDelete() async {
         isShowingDeleteConfirmation = false
         budgetCardBanner = nil
+        pendingBudgetStep = nil
         let year = selectedYear
         do {
             try await budgetService.delete(year: year)
@@ -194,12 +214,14 @@ final class StatsScreenModel {
             budgetCardBanner = InlineErrorBannerState(message: BudgetError.server.userMessage, actions: [.dismiss])
             return
         }
-        await statsService.refresh(year: year)
-        noteLoadOutcome()
+        // The follow-up refresh may fail: the deleted budget must not stay in the stats cache.
+        statsService.dropBudget(year: year)
+        await refreshStats(year: year)
     }
 
     func dismissBudgetCardBanner() {
         budgetCardBanner = nil
+        pendingBudgetStep = nil
     }
 
     // MARK: - Sheets
@@ -208,14 +230,23 @@ final class StatsScreenModel {
         presentedSheet = .create
     }
 
-    func presentEdit() {
-        guard let budget = budgetService.budget(for: selectedYear) else { return }
-        presentedSheet = .edit(budget)
+    /// Opens the edit sheet. When the budget cache lacks the selected year (the stats show a
+    /// budget the cache does not hold) the budgets are loaded first; a failed load sets a
+    /// retryable card banner and opens nothing.
+    func presentEdit() async {
+        await present(.edit)
     }
 
-    func presentDuplicate() {
-        guard let budget = budgetService.budget(for: selectedYear) else { return }
-        presentedSheet = .duplicate(budget)
+    /// Like presentEdit, for the duplicate sheet.
+    func presentDuplicate() async {
+        await present(.duplicate)
+    }
+
+    /// Try Again of the card banner: repeats the step that failed (edit or duplicate). Does
+    /// nothing when no step is pending.
+    func retryBudgetCardAction() async {
+        guard let step = pendingBudgetStep else { return }
+        await present(step)
     }
 
     func makeEditorModel(for sheet: Sheet) -> BudgetEditorModel? {
@@ -270,21 +301,89 @@ final class StatsScreenModel {
     private func finishSheet(showing budget: Budget) async {
         presentedSheet = nil
         budgetCardBanner = nil
+        pendingBudgetStep = nil
         selectedYear = budget.year
-        await statsService.refresh(year: budget.year)
-        noteLoadOutcome()
+        await refreshStats(year: budget.year)
     }
 
     private func load(force: Bool) async {
-        budgetListFailure = nil
-        let year = selectedYear
-        budgetListFailure = await budgetService.loadBudgets(force: force)
-        if force {
-            await statsService.refresh(year: year)
-        } else {
-            await statsService.load(year: year)
+        await runTracked { [self] in
+            budgetListFailure = nil
+            let year = selectedYear
+            let listFailure = await budgetService.loadBudgets(force: force)
+            if Task.isCancelled { return }
+            if year == selectedYear { budgetListFailure = listFailure }
+            if force {
+                await statsService.refresh(year: year)
+            } else {
+                await statsService.load(year: year)
+            }
+            if Task.isCancelled { return }
+            noteLoadOutcome()
         }
-        noteLoadOutcome()
+    }
+
+    private func refreshStats(year: Int) async {
+        await runTracked { [self] in
+            await statsService.refresh(year: year)
+            if Task.isCancelled { return }
+            noteLoadOutcome()
+        }
+    }
+
+    /// Runs `work` in a task the model owns, so onDisappear can cancel it. A cancelled task writes
+    /// no failure (the services record nothing for a cancelled call) and the work skips its
+    /// bookkeeping. Cancelling the caller cancels the task too.
+    private func runTracked(isLoadFirst: Bool = false, _ work: @escaping @MainActor () async -> Void) async {
+        let id = UUID()
+        let task = Task { @MainActor in await work() }
+        loadTasks[id] = task
+        if isLoadFirst { loadFirstTaskId = id }
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        loadTasks[id] = nil
+        if loadFirstTaskId == id { loadFirstTaskId = nil }
+    }
+
+    private func present(_ step: BudgetCardStep) async {
+        let year = selectedYear
+        if let budget = budgetService.budget(for: year) {
+            open(step, budget)
+            return
+        }
+        pendingBudgetStep = step
+        await runTracked(isLoadFirst: true) { [self] in
+            let failure = await budgetService.loadBudgets(force: true)
+            // A late completion of another year's step must neither open a sheet nor set a banner.
+            if Task.isCancelled || year != selectedYear { return }
+            if let failure {
+                budgetCardBanner = InlineErrorBannerState(
+                    message: failure.userMessage,
+                    actions: [.tryAgain, .dismiss]
+                )
+                return
+            }
+            guard let budget = budgetService.budget(for: year) else {
+                budgetCardBanner = InlineErrorBannerState(
+                    message: Self.budgetNotFoundMessage,
+                    actions: [.tryAgain, .dismiss]
+                )
+                return
+            }
+            open(step, budget)
+        }
+    }
+
+    private func open(_ step: BudgetCardStep, _ budget: Budget) {
+        budgetCardBanner = nil
+        pendingBudgetStep = nil
+        switch step {
+        case .edit: presentedSheet = .edit(budget)
+        case .duplicate: presentedSheet = .duplicate(budget)
+        }
     }
 
     private func noteLoadOutcome() {

@@ -142,12 +142,14 @@ final class BudgetEditorModel {
 
     /// Cache-first: the lists are fetched only when the service has none.
     func loadOptions() async {
+        var loadFailure: ListError?
         if listService.lists.isEmpty {
             pickerLoad = .loading
-            await listService.loadLists()
+            // The editor's failure goes to the picker state only: nothing the Lists screen reads.
+            loadFailure = await listService.loadLists(reportingFailure: false)
         }
-        if listService.lists.isEmpty, let failure = listService.error {
-            pickerLoad = .failed(failure.userMessage)
+        if listService.lists.isEmpty, let loadFailure {
+            pickerLoad = .failed(loadFailure.userMessage)
             return
         }
         baseOptions = BudgetRecipientOptions.build(

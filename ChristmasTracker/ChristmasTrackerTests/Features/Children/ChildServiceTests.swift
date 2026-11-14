@@ -7,8 +7,9 @@
 //  Determinism: a gated ChildRepository fake with the nextHeldCall() handshake. No sleeps, no
 //  yield loops. Session safety lives in ChildServiceSessionSafetyTests.
 //
-//  Assumption flagged in the report: `error` is set when add or delete fail (as ListService
-//  does for its mutations); load failures are asserted through `phase` only.
+//  UX1a Story U2 (named): the shared `ChildService.error` is gone. Add and delete failures are
+//  only THROWN and leave `phase` (the load channel) alone; load failures are asserted through
+//  `phase`. Each rewritten test is marked "REWRITTEN (UX1a U2)".
 //
 
 import Foundation
@@ -46,13 +47,13 @@ struct ChildServiceTests {
 
     // MARK: - Initial state
 
-    @Test("a new service is idle with no children, no error and not mutating")
+    // REWRITTEN (UX1a U2): "no error" is now "phase is idle (no failed load)".
+    @Test("a new service is idle with no children, no failed load and not mutating")
     func initialState() {
         let sut = makeSUT()
 
         #expect(sut.service.phase == .idle)
         #expect(sut.service.children.isEmpty)
-        #expect(sut.service.error == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.repo.fetchChildrenCount == 0)
     }
@@ -76,7 +77,6 @@ struct ChildServiceTests {
 
         #expect(sut.service.phase == .loaded)
         #expect(sut.service.children == ChildFixtures.twoChildren())
-        #expect(sut.service.error == nil)
     }
 
     @Test("loadChildren with no children is loaded and empty")
@@ -148,13 +148,13 @@ struct ChildServiceTests {
 
         #expect(sut.service.children == ChildFixtures.twoChildren() + [newChild()])
         #expect(sut.service.phase == .loaded)
-        #expect(sut.service.error == nil)
         #expect(sut.repo.createdInputs == [newInput()])
         #expect(sut.repo.fetchChildrenCount == 1, "add does not refetch")
         #expect(sut.service.isMutating == false)
     }
 
-    @Test("addChild failing rethrows, appends nothing and records the error", arguments: [
+    // REWRITTEN (UX1a U2): the typed error is thrown; nothing is stored, the load channel is untouched.
+    @Test("addChild failing throws the typed error, appends nothing and leaves the load phase alone", arguments: [
         ChildError.validation(message: "First name is required"), .rateLimited(retryAfter: 3), .network, .forbidden, .server
     ])
     func addFailure(error: ChildError) async {
@@ -166,8 +166,7 @@ struct ChildServiceTests {
         }
 
         #expect(sut.service.children == ChildFixtures.twoChildren())
-        #expect(sut.service.phase == .loaded)
-        #expect(sut.service.error == error)
+        #expect(sut.service.phase == .loaded, "a mutation failure never becomes a load failure")
         #expect(sut.service.isMutating == false)
     }
 
@@ -183,7 +182,6 @@ struct ChildServiceTests {
         #expect(sut.service.children.map(\.id) == ["child-2"])
         #expect(sut.repo.deletedIds == ["child-1"])
         #expect(sut.service.phase == .loaded)
-        #expect(sut.service.error == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -210,7 +208,7 @@ struct ChildServiceTests {
         }
 
         #expect(sut.service.children == ChildFixtures.twoChildren())
-        #expect(sut.service.error == .childHasLists)
+        #expect(sut.service.phase == .loaded, "the thrown error is not a load failure")
         #expect(sut.service.isMutating == false)
     }
 
@@ -227,7 +225,7 @@ struct ChildServiceTests {
         }
 
         #expect(sut.service.children == ChildFixtures.twoChildren())
-        #expect(sut.service.error == error)
+        #expect(sut.service.phase == .loaded, "the thrown error is not a load failure")
     }
 
     @Test("deleteChild removes only the matching child, keeping the order of the rest")

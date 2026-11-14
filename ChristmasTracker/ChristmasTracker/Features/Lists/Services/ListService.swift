@@ -27,7 +27,14 @@ final class ListService {
     /// True only while createList, updateList or deleteList runs.
     private(set) var isMutating: Bool = false
     private(set) var isRefreshing: Bool = false
-    private(set) var error: ListError?
+    /// The failure of the last lists load or refresh that reported it (the dashboard's load failure).
+    /// Set only by loadLists and refreshLists; cleared when one starts, by clearListsLoadFailure()
+    /// and at teardown. A mutation never touches it.
+    private(set) var listsLoadFailure: ListError?
+    /// The failure of the last list detail load (a revalidation failure while cached data is shown
+    /// included). Set only by loadListDetail; cleared when one starts, by clearDetailLoadFailure()
+    /// and at teardown. A mutation never touches it.
+    private(set) var detailLoadFailure: ListError?
     /// The id of the list the server reported gone (not found or read-only), or that a guarded
     /// load found gone. Screens compare it with their own list id to leave. Only the session
     /// reset clears it.
@@ -81,6 +88,18 @@ final class ListService {
     /// Monotonic token handed to each archive's reload; only the latest token's result is applied.
     private var reloadTokenCounter = 0
 
+    /// Callers of loadLists that arrived while a lists load was in flight. They are resumed with
+    /// that load's outcome when it ends, and with a finished-without-failure outcome at teardown.
+    private var listsLoadWaiters: [CheckedContinuation<ListsLoadOutcome, Never>] = []
+
+    /// What a waiting loadLists caller learns when the load it waited for ends.
+    private enum ListsLoadOutcome {
+        /// The load ended with this result (nil: success, or a session that ended).
+        case finished(ListError?)
+        /// The load was cancelled before it finished, so it says nothing about the lists.
+        case cancelled
+    }
+
     // MARK: - Filtering
 
     enum FilterType {
@@ -127,79 +146,145 @@ final class ListService {
 
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No list data goes into the span.
-    func loadLists() async {
-        guard !isLoadingLists else { return }
+    /// Loads the lists cache-first and revalidates a stale cache. When a lists load is already in
+    /// flight, waits for that load and returns its result without a second fetch. Returns the failure
+    /// of the fetch this call performed or waited for (nil on success, cancellation or an ended
+    /// session). With `reportingFailure` true the failure is also stored in `listsLoadFailure`
+    /// (which is cleared when the load starts); with false it is stored nowhere and an existing
+    /// `listsLoadFailure` is left alone.
+    @discardableResult
+    func loadLists(reportingFailure: Bool = true) async -> ListError? {
+        await loadLists(reportingFailure: reportingFailure, mayRetryAfterCancelledLoad: true)
+    }
+
+    // Covered by the manual span below (the waiting path does no work of its own).
+    private func loadLists(reportingFailure: Bool, mayRetryAfterCancelledLoad: Bool) async -> ListError? {
+        if isLoadingLists {
+            let gen = generation
+            let outcome = await withCheckedContinuation { (continuation: CheckedContinuation<ListsLoadOutcome, Never>) in
+                listsLoadWaiters.append(continuation)
+            }
+            switch outcome {
+            case .finished(let failure):
+                return failure
+            case .cancelled:
+                // The load we waited for was cancelled, not failed: with nothing loaded, this
+                // session still alive and this caller not cancelled, load once ourselves.
+                guard mayRetryAfterCancelledLoad, gen == generation, !Task.isCancelled, lists.isEmpty else {
+                    return nil
+                }
+                return await loadLists(reportingFailure: reportingFailure, mayRetryAfterCancelledLoad: false)
+            }
+        }
         let span = SentrySDK.startTransaction(name: "service.lists.loadLists", operation: "service.lists.loadLists")
         defer { span.finish() }
 
         let gen = generation
+        isLoadingLists = true
+        if reportingFailure { listsLoadFailure = nil }
+
+        var wasCancelled = false
+        let result = await performLoadLists(generation: gen, reportingFailure: reportingFailure, cancelled: &wasCancelled)
+        guard gen == generation else { return nil }
+        isLoadingLists = false
+        let waiters = listsLoadWaiters
+        listsLoadWaiters = []
+        let outcome: ListsLoadOutcome = wasCancelled ? .cancelled : .finished(result)
+        for waiter in waiters { waiter.resume(returning: outcome) }
+        return result
+    }
+
+    // Covered by the manual span of its public caller (loadLists).
+    private func performLoadLists(
+        generation gen: Int,
+        reportingFailure: Bool,
+        cancelled: inout Bool
+    ) async -> ListError? {
         let start = operationSequence
         let epoch = archiveEpoch
-        isLoadingLists = true
-        defer { if gen == generation { isLoadingLists = false } }
-        error = nil
 
         do {
             // Check cache
             let cached = await dataStore.getLists()
-            guard gen == generation, epoch == archiveEpoch else { return }
+            guard gen == generation, epoch == archiveEpoch else { return nil }
             if !cached.isEmpty {
                 lists = visibleLists(cached, since: start)
 
                 // Background refresh
                 if await dataStore.shouldRefresh(), gen == generation {
-                    await refreshLists()
+                    return await performRefreshLists(reportingFailure: reportingFailure)
                 }
-                return
+                return nil
             }
 
             // Fetch from repository
             let repository = self.repository
             let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
-            guard gen == generation, epoch == archiveEpoch else { return }
+            guard gen == generation, epoch == archiveEpoch else { return nil }
 
             // Update cache
             await dataStore.setLists(fetched)
-            guard gen == generation, epoch == archiveEpoch else { return }
+            guard gen == generation, epoch == archiveEpoch else { return nil }
             lists = visibleLists(fetched, since: start)
             lastUpdated = Date()
 
             LogInfo("Loaded \(fetched.count) lists", category: .business)
+            return nil
         } catch {
-            guard epoch == archiveEpoch else { return }
-            _ = record(error, generation: gen, operation: "load lists")
+            guard epoch == archiveEpoch else { return nil }
+            if error is CancellationError, gen == generation { cancelled = true }
+            let failure = record(error, generation: gen, operation: "load lists")
+            if reportingFailure, let failure { listsLoadFailure = failure }
+            return failure
         }
     }
 
     // Actor-isolated (@MainActor): manual SentrySDK span, see loadLists.
-    func refreshLists() async {
-        guard !isRefreshing else { return }
+    /// Always fetches. Returns the failure, which is also stored in `listsLoadFailure`.
+    @discardableResult
+    func refreshLists() async -> ListError? {
         let span = SentrySDK.startTransaction(
             name: "service.lists.refreshLists",
             operation: "service.lists.refreshLists"
         )
         defer { span.finish() }
+        return await performRefreshLists(reportingFailure: true)
+    }
 
+    func clearListsLoadFailure() {
+        listsLoadFailure = nil
+    }
+
+    func clearDetailLoadFailure() {
+        detailLoadFailure = nil
+    }
+
+    // Covered by the manual spans of its public callers (loadLists, refreshLists).
+    private func performRefreshLists(reportingFailure: Bool) async -> ListError? {
+        guard !isRefreshing else { return nil }
         let gen = generation
         let start = operationSequence
         let epoch = archiveEpoch
         isRefreshing = true
         defer { if gen == generation { isRefreshing = false } }
-        error = nil
+        if reportingFailure { listsLoadFailure = nil }
 
         do {
             let repository = self.repository
             let fetched = visibleLists(try await perform { try await repository.fetchLists() }, since: start)
-            guard gen == generation, epoch == archiveEpoch else { return }
+            guard gen == generation, epoch == archiveEpoch else { return nil }
             await dataStore.setLists(fetched)
-            guard gen == generation, epoch == archiveEpoch else { return }
+            guard gen == generation, epoch == archiveEpoch else { return nil }
             lists = visibleLists(fetched, since: start)
             lastUpdated = Date()
 
             LogInfo("Refreshed \(fetched.count) lists", category: .business)
+            return nil
         } catch {
-            guard epoch == archiveEpoch else { return }
-            _ = record(error, generation: gen, operation: "refresh lists")
+            guard epoch == archiveEpoch else { return nil }
+            let failure = record(error, generation: gen, operation: "refresh lists")
+            if reportingFailure, let failure { listsLoadFailure = failure }
+            return failure
         }
     }
 
@@ -223,7 +308,7 @@ final class ListService {
                 detailLoadsInFlight[id, default: 1] -= 1
             }
         }
-        error = nil
+        detailLoadFailure = nil
         // A reload of the list that is already open keeps showing it; another list's detail is
         // never shown while this one loads.
         if currentListDetail?.id != id {
@@ -236,7 +321,7 @@ final class ListService {
             // flags and the roster must be fresh, and a gone list must be noticed.
             let cached = await dataStore.getListDetail(id: id)
             guard gen == generation else { return }
-            guard await !reportGuarded(id, since: start, generation: gen) else { return }
+            guard await !reportGuarded(id, since: start, generation: gen, storingFailure: true) else { return }
             if let cached {
                 currentListDetail = cached
                 shownCached = true
@@ -245,11 +330,11 @@ final class ListService {
             let repository = self.repository
             let detail = try await perform { try await repository.fetchListDetail(id: id) }
             guard gen == generation, epoch == archivedListEpoch[id, default: 0] else { return }
-            guard await !reportGuarded(id, since: start, generation: gen) else { return }
+            guard await !reportGuarded(id, since: start, generation: gen, storingFailure: true) else { return }
 
             await dataStore.setListDetail(detail)
             guard gen == generation, epoch == archivedListEpoch[id, default: 0] else { return }
-            guard await !reportGuarded(id, since: start, generation: gen) else { return }
+            guard await !reportGuarded(id, since: start, generation: gen, storingFailure: true) else { return }
             currentListDetail = detail
 
             LogInfo("Loaded list detail", category: .business)
@@ -261,7 +346,9 @@ final class ListService {
             } else {
                 await dropListIfGone(error, id: id, generation: gen)
             }
-            _ = record(error, generation: gen, operation: "load list details")
+            if let failure = record(error, generation: gen, operation: "load list details") {
+                detailLoadFailure = failure
+            }
         }
     }
 
@@ -326,7 +413,6 @@ final class ListService {
         let gen = generation
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let repository = self.repository
@@ -364,7 +450,6 @@ final class ListService {
         let start = operationSequence
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let repository = self.repository
@@ -410,7 +495,6 @@ final class ListService {
         let start = operationSequence
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let repository = self.repository
@@ -447,8 +531,8 @@ final class ListService {
     // so a manual SentrySDK span is used. No list data goes into the span.
     /// Archives a list (the server's delete), then reloads the lists with a fresh fetch so the list
     /// shows under Archived with the server's flags. No removal is recorded and no status is
-    /// synthesized locally. If the archive succeeded but the reload fails, returns normally with
-    /// `error` set to the reload error.
+    /// synthesized locally. If the archive succeeded but the reload fails, returns normally: the
+    /// failure is logged by operation name only and left to the next load.
     func deleteList(id: String) async throws {
         let span = SentrySDK.startTransaction(
             name: "service.lists.deleteList",
@@ -460,7 +544,6 @@ final class ListService {
         let start = operationSequence
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let repository = self.repository
@@ -610,8 +693,8 @@ final class ListService {
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
     // so a manual SentrySDK span is used. No member data goes into the span.
     /// Adds a member, then refetches the detail: the roster is never built from the add response.
-    /// If the add succeeded but the refetch fails, returns normally with `error` set to the
-    /// refetch error.
+    /// If the add succeeded but the refetch fails, returns normally: the failure is logged by
+    /// operation name only and left to the next load.
     func addMember(listId: String, _ input: AddMemberInput) async throws {
         let span = SentrySDK.startTransaction(
             name: "service.lists.addMember",
@@ -622,7 +705,6 @@ final class ListService {
         let gen = generation
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let members = self.memberRepository
@@ -650,7 +732,6 @@ final class ListService {
         let gen = generation
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let members = self.memberRepository
@@ -681,7 +762,6 @@ final class ListService {
         let gen = generation
         beginMutation()
         defer { endMutation(generation: gen) }
-        error = nil
 
         do {
             let members = self.memberRepository
@@ -760,7 +840,11 @@ final class ListService {
 
         lists = []
         currentListDetail = nil
-        error = nil
+        listsLoadFailure = nil
+        detailLoadFailure = nil
+        let waiters = listsLoadWaiters
+        listsLoadWaiters = []
+        for waiter in waiters { waiter.resume(returning: .finished(nil)) }
         operationSequence = 0
         removalSequence = [:]
         goneListId = nil
@@ -909,9 +993,7 @@ final class ListService {
             currentListDetail = detail
         } catch {
             if error is CancellationError || gen != generation { throw CancellationError() }
-            if self.error == nil {
-                _ = record(error, generation: gen, operation: "refresh list after archive")
-            }
+            _ = record(error, generation: gen, operation: "refresh list after archive")
         }
     }
 
@@ -947,16 +1029,23 @@ final class ListService {
     }
 
     /// For a list removed after the load started (`start`): drops any cached or open copy,
-    /// records notFound through the normal error path, marks the list gone and returns true.
-    /// Returns false when the list was not removed after the load started.
-    // Covered by the manual span of its public caller (loadListDetail).
-    private func reportGuarded(_ id: String, since start: Int, generation gen: Int) async -> Bool {
+    /// logs notFound, marks the list gone and returns true. With `storingFailure` (the detail
+    /// load) the notFound also goes into `detailLoadFailure`. Returns false when the list was not
+    /// removed after the load started.
+    // Covered by the manual spans of its public callers (loadListDetail, refreshListDetail).
+    private func reportGuarded(
+        _ id: String,
+        since start: Int,
+        generation gen: Int,
+        storingFailure: Bool = false
+    ) async -> Bool {
         guard isRemoved(id, since: start) else { return false }
         goneListId = id
         if currentListDetail?.id == id {
             currentListDetail = nil
         }
-        _ = record(ListError.notFound, generation: gen, operation: "load list details")
+        let failure = record(ListError.notFound, generation: gen, operation: "load list details")
+        if storingFailure, let failure { detailLoadFailure = failure }
         await dataStore.removeList(id: id)
         return true
     }
@@ -981,14 +1070,14 @@ final class ListService {
         if gen != generation { throw CancellationError() }
     }
 
-    /// Records the error of a failed call and returns it. Returns nil for cancellation and for a
-    /// call that belongs to a session that has ended: neither is shown to the user.
+    /// Classifies the error of a failed call, logs the operation name and returns the typed error.
+    /// Stores nothing. Returns nil for cancellation and for a call that belongs to a session that
+    /// has ended: neither is shown to the user.
     private func record(_ error: any Error, generation gen: Int, operation: String) -> ListError? {
         if error is CancellationError || gen != generation { return nil }
         let listError = (error as? ListError) ?? .server
         // Only the operation name is logged: no ids, names, emails or server text.
         LogError("\(operation) failed", category: .business)
-        self.error = listError
         return listError
     }
 

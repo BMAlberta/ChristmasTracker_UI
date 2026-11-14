@@ -98,6 +98,7 @@ struct ChildrenView: View {
         }
         .onDisappear {
             cancelAndReset()
+            childService.clearLoadFailure()
         }
     }
 

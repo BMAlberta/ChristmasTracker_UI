@@ -147,7 +147,7 @@ struct StatsServiceSessionSafetyTests {
         await sut.service.load(year: 2026)
         sut.loader.enqueueFailure(BudgetError.network)
         await sut.service.refresh(year: 2026)
-        #expect(sut.service.loadFailure == .network, "precondition")
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .network), "precondition")
         #expect(sut.service.statsByYear.count == 2, "precondition")
 
         await sut.manager.teardown(reason: reason)
@@ -276,7 +276,7 @@ struct StatsServiceSessionSafetyTests {
 
         await sut.service.load(year: 2026)
 
-        #expect(sut.service.loadFailure == .network)
+        #expect(sut.service.loadFailure == StatsLoadFailure(year: 2026, error: .network))
     }
 
     @Test("clearForSession on an idle service is harmless and repeatable, and calls still work")

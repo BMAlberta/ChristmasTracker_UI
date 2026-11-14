@@ -88,7 +88,8 @@ struct ListServiceRevalidationTests {
         #expect(cachedAfter == nil)
         #expect(sut.service.currentListDetail == nil)
         #expect(sut.service.goneListId == "list-a")
-        #expect(sut.service.error == error)
+        #expect(sut.service.detailLoadFailure == error, "a revalidation failure with cached data is recorded")
+        #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
         let cachedLists = await sut.store.getLists()
         #expect(cachedLists.map(\.id) == ["list-b"])
@@ -117,7 +118,7 @@ struct ListServiceRevalidationTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.error == .forbidden)
+        #expect(sut.service.detailLoadFailure == .forbidden)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a", "list-b"])
         let cachedLists = await sut.store.getLists()
@@ -143,7 +144,7 @@ struct ListServiceRevalidationTests {
         #expect(cachedDetail == nil)
         #expect(sut.service.currentListDetail == nil)
         #expect(sut.service.goneListId == "list-a")
-        #expect(sut.service.error == .notFound)
+        #expect(sut.service.detailLoadFailure == .notFound)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
         #expect(sut.service.isLoadingDetail == false)
     }
@@ -182,7 +183,7 @@ struct ListServiceRevalidationTests {
         await load.value
 
         #expect(sut.service.currentListDetail?.name == "Second user's view")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.detailLoadFailure == nil)
     }
 
     @Test("a new session whose first fetch of the same id fails shows no detail from the previous user")
@@ -194,6 +195,6 @@ struct ListServiceRevalidationTests {
         await sut.service.loadListDetail(id: "list-a")
 
         #expect(sut.service.currentListDetail == nil)
-        #expect(sut.service.error == .network)
+        #expect(sut.service.detailLoadFailure == .network)
     }
 }

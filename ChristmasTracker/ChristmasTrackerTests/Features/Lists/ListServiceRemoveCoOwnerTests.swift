@@ -66,7 +66,8 @@ struct ListServiceRemoveCoOwnerTests {
     private func expectCleared(_ sut: MemberServiceHarness) async {
         #expect(sut.service.lists.isEmpty, "lists must stay empty")
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
-        #expect(sut.service.error == nil, "no error may be set after the session ended")
+        #expect(sut.service.listsLoadFailure == nil, "no failure may be set after the session ended")
+        #expect(sut.service.detailLoadFailure == nil, "no failure may be set after the session ended")
         #expect(sut.service.goneListId == nil, "a stale call must not mark a list gone")
         #expect(sut.service.isMutating == false)
         let cachedLists = await sut.store.getLists()
@@ -109,7 +110,7 @@ struct ListServiceRemoveCoOwnerTests {
         #expect(sut.service.lists.first(where: { $0.id == H.listId }) == returned.asGiftList())
         #expect(sut.lists.fetchListDetailCount == fetchesBefore, "removeCoOwner must not refetch the detail")
         #expect(sut.lists.fetchListsCount == listFetchesBefore, "removeCoOwner must not refetch the lists")
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.isMutating == false)
     }
@@ -128,22 +129,27 @@ struct ListServiceRemoveCoOwnerTests {
         #expect(sut.service.lists.map(\.id) == [H.listId], "an unknown list is not added to the lists")
     }
 
-    @Test("removeCoOwner clears a previous error")
+    // REWRITTEN (UX1a U2): the failure is thrown (never stored), so a retry that succeeds has
+    // nothing to clear; neither step publishes a load failure.
+    @Test("removeCoOwner failing then succeeding publishes nothing at either step")
     func clearsPreviousError() async throws {
         let sut = try await makeSUT()
         sut.lists.enqueueRemoveCoOwner(.failure(ListError.network))
-        _ = try? await sut.service.removeCoOwner(listId: H.listId)
-        #expect(sut.service.error == .network, "precondition")
+        await #expect(throws: ListError.network) {
+            try await sut.service.removeCoOwner(listId: H.listId)
+        }
+        #expect(sut.service.anyLoadFailure == nil, "precondition: the failure was only thrown")
         sut.lists.enqueueRemoveCoOwner(.success(try withoutCoOwner()))
 
         try await sut.service.removeCoOwner(listId: H.listId)
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     // MARK: - Failure
 
-    @Test("removeCoOwner failing rethrows, records the error and leaves the state alone", arguments: [
+    // REWRITTEN (UX1a U2): throws the typed error, publishes nothing.
+    @Test("removeCoOwner failing rethrows, publishes nothing and leaves the state alone", arguments: [
         ListError.forbidden, .network, .server, .unauthorized, .invalidResponse, .rateLimited(retryAfter: 3)
     ])
     func failureLeavesStateAlone(error: ListError) async throws {
@@ -155,7 +161,8 @@ struct ListServiceRemoveCoOwnerTests {
             try await sut.service.removeCoOwner(listId: H.listId)
         }
 
-        #expect(sut.service.error == error)
+        #expect(sut.service.listsLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure == nil)
         #expect(sut.service.currentListDetail == initial)
         #expect(sut.service.lists.map(\.id) == [H.listId])
         #expect(sut.service.goneListId == nil)
@@ -180,7 +187,7 @@ struct ListServiceRemoveCoOwnerTests {
         #expect(sut.service.lists.isEmpty)
         #expect(sut.service.currentListDetail == nil)
         #expect(sut.service.goneListId == H.listId)
-        #expect(sut.service.error == error)
+        #expect(sut.service.anyLoadFailure == nil, "a mutation publishes nothing, even when it drops the list")
         let cachedDetail = await sut.store.getListDetail(id: H.listId)
         #expect(cachedDetail == nil)
         let cachedLists = await sut.store.getLists()
@@ -290,7 +297,7 @@ struct ListServiceRemoveCoOwnerTests {
 
         #expect(sut.lists.fetchListsCount == before + 1)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 
     @Test("user switch: A's late result never touches B's lists, cache or error")
@@ -308,7 +315,7 @@ struct ListServiceRemoveCoOwnerTests {
 
         #expect(sut.service.lists.map(\.id) == ["list-b"], "A's data must not replace or join B's")
         #expect(sut.service.currentListDetail == nil)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.goneListId == nil)
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
@@ -348,7 +355,7 @@ struct ListServiceRemoveCoOwnerTests {
         sut.lists.releaseAll()
         await task.value
 
-        #expect(sut.service.error == nil, "cancellation is not shown to the user")
+        #expect(sut.service.anyLoadFailure == nil, "cancellation is not shown to the user")
         #expect(sut.service.isMutating == false)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.lists.map(\.id) == [H.listId])
@@ -363,7 +370,7 @@ struct ListServiceRemoveCoOwnerTests {
 
         _ = try? await sut.service.removeCoOwner(listId: H.listId)
 
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
         #expect(sut.service.isMutating == false)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.lists.map(\.id) == [H.listId])
@@ -429,6 +436,6 @@ struct ListServiceRemoveCoOwnerTests {
         #expect(sut.service.lists.first(where: { $0.id == H.listId }) == returned.asGiftList())
         let cached = await sut.store.getListDetail(id: H.listId)
         #expect(cached == returned)
-        #expect(sut.service.error == nil)
+        #expect(sut.service.anyLoadFailure == nil)
     }
 }

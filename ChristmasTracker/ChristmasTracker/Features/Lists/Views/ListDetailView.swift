@@ -116,6 +116,7 @@ struct ListDetailView: View {
             }
             .onDisappear {
                 refreshError = nil
+                listService.clearDetailLoadFailure()
                 itemService.clearListLoadError()
             }
     }
@@ -126,7 +127,7 @@ struct ListDetailView: View {
     private func content(detail: ListDetail?, state: ListDetailState?) -> some View {
         if let detail, let state {
             detailContent(detail: detail, state: state)
-        } else if !listService.isLoadingDetail, let error = listService.error {
+        } else if !listService.isLoadingDetail, let error = listService.detailLoadFailure {
             ListErrorBanner(
                 presentation: ListErrorPresentation(error),
                 onRetry: { Task { await load() } },
@@ -159,15 +160,8 @@ struct ListDetailView: View {
         actionError = nil
         do {
             try await listService.deleteList(id: listId)
-            // A failed reload still archived the list but leaves the error for the screen to show.
-            switch ListArchiveCompletion.after(serviceError: listService.error) {
-            case .dismiss:
-                dismiss()
-            case .showError(let presentation):
-                // No retry: repeating the action would archive again.
-                failedAction = nil
-                actionError = presentation
-            }
+            // A failed follow-up reload is no longer published: the archive itself succeeded.
+            dismiss()
         } catch is CancellationError {
             return
         } catch {

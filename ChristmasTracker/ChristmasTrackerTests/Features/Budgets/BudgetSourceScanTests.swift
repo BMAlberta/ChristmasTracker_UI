@@ -312,7 +312,10 @@ struct BudgetSourceScanTests {
 
         #expect(budgetErrors.isEmpty, "BudgetService must not publish an error (lines \(budgetErrors))")
         #expect(statsErrors.count == 1, "StatsService publishes exactly loadFailure (lines \(statsErrors))")
-        #expect(stats.code.contains("loadFailure: BudgetError?"))
+        // EDITED (UX1a U2): the declaration is now keyed by year (StatsLoadFailure(year:error:)); it is
+        // still the one and only stored property named *Error*/*Failure* in StatsService.
+        #expect(stats.code.contains("loadFailure: StatsLoadFailure?"))
+        #expect(!stats.code.contains("loadFailure: BudgetError?"), "the BudgetError-typed property is replaced")
     }
 
     @Test("the budget service's mutation methods are throwing and its load returns the failure")

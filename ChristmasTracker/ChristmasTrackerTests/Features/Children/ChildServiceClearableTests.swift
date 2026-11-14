@@ -103,24 +103,22 @@ struct ChildServiceClearableTests {
 
         #expect(sut.childService.children.isEmpty)
         #expect(sut.childService.phase == .idle)
-        #expect(sut.childService.error == nil)
         #expect(sut.childService.isMutating == false)
     }
 
-    @Test("teardown also clears a ChildService that holds an error", arguments: [TeardownReason.userLogout, .sessionExpired, .forcedUpdate, .lockFallback])
+    // REWRITTEN (UX1a U2): the stored mutation error is gone. The precondition is now a FAILED LOAD
+    // (the only failure a ChildService holds, in `phase`), and teardown returns the phase to idle.
+    @Test("teardown also clears a ChildService that holds a failed load", arguments: [TeardownReason.userLogout, .sessionExpired, .forcedUpdate, .lockFallback])
     func teardownClearsErrorForEveryReason(reason: TeardownReason) async {
         let sut = makeSUT()
-        sut.repo.enqueueFetchChildren(.success(ChildFixtures.twoChildren()))
+        sut.repo.enqueueFetchChildren(.failure(ChildError.server))
         await sut.childService.loadChildren()
-        sut.repo.enqueueDeleteChild(.failure(ChildError.childHasLists))
-        _ = try? await sut.childService.deleteChild(id: "child-1")
-        #expect(sut.childService.error != nil, "precondition")
+        #expect(sut.childService.phase == .failed(.server), "precondition")
         let manager = SessionManager(initialClearables: sut.clearables)
 
         await manager.teardown(reason: reason)
 
         #expect(sut.childService.children.isEmpty)
-        #expect(sut.childService.error == nil)
         #expect(sut.childService.phase == .idle)
     }
 }
