@@ -50,6 +50,8 @@ nonisolated enum ItemWire {
         createdById: String = "user-2",
         createdByName: String = "Casey Member",
         createdAt: String = "2026-01-05T08:30:00.000Z",
+        canEdit: Bool = true,
+        canDelete: Bool = true,
         updatedAt: String? = nil,
         quantityPurchased: Int? = nil,
         quantityRemaining: Int? = nil,
@@ -65,7 +67,9 @@ nonisolated enum ItemWire {
             "\"status\": \"\(status)\"",
             "\"offList\": \(offList ? "true" : "false")",
             "\"createdBy\": { \"id\": \"\(createdById)\", \"displayName\": \"\(createdByName)\" }",
-            "\"createdAt\": \"\(createdAt)\""
+            "\"createdAt\": \"\(createdAt)\"",
+            "\"canEdit\": \(canEdit ? "true" : "false")",
+            "\"canDelete\": \(canDelete ? "true" : "false")"
         ]
         if let url { fields.append("\"url\": \"\(url)\"") }
         if let imageUrl { fields.append("\"imageUrl\": \"\(imageUrl)\"") }

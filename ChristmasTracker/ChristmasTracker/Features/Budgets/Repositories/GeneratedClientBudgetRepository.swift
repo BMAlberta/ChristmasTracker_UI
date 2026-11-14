@@ -8,8 +8,9 @@
 //  file sees a generated type. Money crosses the wire only through the package helpers. Nothing is
 //  logged: amounts, names and ids never reach a log.
 //
-//  Contract issue 3: createBudget, updateBudget and duplicateBudget document no 422, so a 422 on
-//  them arrives as an undocumented status and is the sum rule by status (the body is not parsed).
+//  Contract issue 3: only updateBudget documents a 422 (the sum rule, typed). createBudget and
+//  duplicateBudget document none, so a 422 on them arrives as an undocumented status and is the
+//  sum rule by status (the body is not parsed).
 //
 
 import Foundation
@@ -138,6 +139,8 @@ nonisolated final class GeneratedClientBudgetRepository: BudgetManaging, Sendabl
                 throw BudgetError.forbidden
             case .notFound:
                 throw BudgetError.notFound
+            case .unprocessableContent(let response):
+                throw BudgetError.sumExceedsTotal(message: budgetEnvelopeMessage { try response.body.json })
             case .tooManyRequests:
                 throw BudgetError.rateLimited(retryAfter: 0)
             case .internalServerError:
@@ -146,7 +149,8 @@ nonisolated final class GeneratedClientBudgetRepository: BudgetManaging, Sendabl
                 throw budgetUndocumentedFailure(statusCode, isSumRuleWrite: true)
             }
         } catch {
-            throw budgetFailure(error)
+            // On update a 422 is the sum rule, so an unreadable 422 body maps to it too.
+            throw budgetFailure(error, unprocessableFailure: .sumExceedsTotal(message: ""))
         }
     }
 
@@ -230,19 +234,24 @@ nonisolated private func budgetUndocumentedFailure(_ statusCode: Int, isSumRuleW
 
 /// The documented error statuses whose body could not be decoded: the status decides. A 422 is the
 /// one documented on deleteBudget (a budget with purchases).
-nonisolated private let budgetUnreadableBodyFailures: [Int: BudgetError] = [
-    400: .validation(message: ""),
-    403: .forbidden,
-    404: .notFound,
-    409: .alreadyExists(message: ""),
-    422: .hasPurchases(message: ""),
-    500: .server
-]
+nonisolated private func budgetUnreadableBodyFailures(unprocessable: BudgetError) -> [Int: BudgetError] {
+    [
+        400: .validation(message: ""),
+        403: .forbidden,
+        404: .notFound,
+        409: .alreadyExists(message: ""),
+        422: unprocessable,
+        500: .server
+    ]
+}
 
 /// Turns anything thrown while calling the client into a BudgetError, except cancellation, which is
 /// passed through unchanged. The OpenAPI runtime wraps transport, middleware and decoding errors in
 /// `ClientError`; the root cause is its `underlyingError`.
-nonisolated private func budgetFailure(_ error: any Error) -> any Error {
+nonisolated private func budgetFailure(
+    _ error: any Error,
+    unprocessableFailure: BudgetError = .hasPurchases(message: "")
+) -> any Error {
     if let budgetError = error as? BudgetError {
         return budgetError
     }
@@ -251,7 +260,7 @@ nonisolated private func budgetFailure(_ error: any Error) -> any Error {
         // status decides, not the unreadable body (a 404 stays "not found").
         if clientError.underlyingError is DecodingError,
            let status = clientError.response?.status.code,
-           let failure = budgetUnreadableBodyFailures[status] {
+           let failure = budgetUnreadableBodyFailures(unprocessable: unprocessableFailure)[status] {
             return failure
         }
         return classifyBudgetRootCause(clientError.underlyingError, wrappedByClient: true)

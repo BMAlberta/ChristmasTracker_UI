@@ -87,6 +87,8 @@ actor MockItemRepository: ItemRepository {
             offList: caps.canAddOffList,
             createdBy: currentUser,
             createdAt: now,
+            canEdit: true,
+            canDelete: true,
             updatedAt: now
         )
         nextId += 1
@@ -116,6 +118,8 @@ actor MockItemRepository: ItemRepository {
             offList: existing.offList,
             createdBy: existing.createdBy,
             createdAt: existing.createdAt,
+            canEdit: existing.canEdit,
+            canDelete: existing.canDelete,
             updatedAt: Date(),
             purchases: existing.purchases,
             totalQuantityPurchased: existing.totalQuantityPurchased
@@ -162,6 +166,8 @@ actor MockItemRepository: ItemRepository {
             offList: item.offList,
             createdBy: item.createdBy,
             createdAt: item.createdAt,
+            canEdit: mayChange(item, caps),
+            canDelete: mayChange(item, caps),
             updatedAt: seesActivity ? item.updatedAt : nil,
             purchases: keep ? item.purchases : nil,
             totalQuantityPurchased: keep ? item.totalQuantityPurchased : nil
@@ -198,7 +204,8 @@ nonisolated enum MockItemSeed {
             id: id, listId: listId, name: name, description: "A fake description for \(name)",
             url: nil, imageUrl: nil, expectedUnitPrice: cents.map(money),
             quantityRequested: quantity, priority: priority, status: status, offList: offList,
-            createdBy: creator, createdAt: created, updatedAt: updated,
+            createdBy: creator, createdAt: created, canEdit: creator == me, canDelete: creator == me,
+            updatedAt: updated,
             purchases: purchases, totalQuantityPurchased: buyer == nil ? nil : purchased
         )
     }

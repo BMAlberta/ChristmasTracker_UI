@@ -72,14 +72,14 @@ nonisolated final class GeneratedClientChildRepository: ChildRepository, Sendabl
             switch output {
             case .created(let response):
                 let created = try response.body.json.data
-                // The created child's relationship is a plain string on the wire: an unknown
-                // value is an unreadable response.
+                // The created child's relationship is the generated enum: an unknown value fails
+                // decoding and is an unreadable response.
                 return try requireChild(mapChild(
                     id: created.id,
                     firstName: created.firstName,
                     lastName: created.lastName,
                     displayName: created.displayName,
-                    relationshipRaw: created.relationshipType
+                    relationshipRaw: created.relationshipType.rawValue
                 ))
             case .badRequest(let response):
                 throw ChildError.validation(message: (try? response.body.json)?.error.message ?? "")

@@ -59,6 +59,8 @@ private nonisolated func buildListItem(
         offList: item.offList,
         createdBy: mapListItemPerson(item.createdBy),
         createdAt: item.createdAt,
+        canEdit: item.canEdit,
+        canDelete: item.canDelete,
         updatedAt: item.updatedAt,
         purchases: purchases,
         totalQuantityPurchased: totalQuantityPurchased,

@@ -56,6 +56,8 @@ nonisolated enum ItemFixtures {
         offList: Bool = false,
         createdBy: ListItemPerson = person(),
         createdAt: Date = createdDate,
+        canEdit: Bool = true,
+        canDelete: Bool = true,
         updatedAt: Date? = nil,
         purchases: [ListItemPurchaseSummary]? = nil,
         totalQuantityPurchased: Int? = nil,
@@ -76,6 +78,8 @@ nonisolated enum ItemFixtures {
             offList: offList,
             createdBy: createdBy,
             createdAt: createdAt,
+            canEdit: canEdit,
+            canDelete: canDelete,
             updatedAt: updatedAt,
             purchases: purchases,
             totalQuantityPurchased: totalQuantityPurchased,
@@ -120,6 +124,8 @@ nonisolated enum ItemFixtures {
         offList: Bool = false,
         createdBy: Components.Schemas.PersonRef = wirePerson(),
         createdAt: Date = createdDate,
+        canEdit: Bool = true,
+        canDelete: Bool = true,
         updatedAt: Date? = nil,
         quantityPurchased: Int? = nil,
         quantityRemaining: Int? = nil
@@ -139,6 +145,8 @@ nonisolated enum ItemFixtures {
             createdBy: createdBy,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            canEdit: canEdit,
+            canDelete: canDelete,
             quantityPurchased: quantityPurchased,
             quantityRemaining: quantityRemaining
         )

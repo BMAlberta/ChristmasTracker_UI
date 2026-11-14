@@ -14,7 +14,8 @@
 //    404 (BUDGET_NOT_FOUND, any other body)  -> .notFound, never forbidden
 //    409 (create, duplicate)                 -> .alreadyExists(message: envelope message)
 //    422 on deleteBudget (documented)        -> .hasPurchases(message: envelope message)
-//    422 on create, update, duplicate        -> .sumExceedsTotal(message: "") BY STATUS (the body is
+//    422 on updateBudget (documented)        -> .sumExceedsTotal(message: envelope message)
+//    422 on create, duplicate (undocumented) -> .sumExceedsTotal(message: "") BY STATUS (the body is
 //                                               not hand-parsed; the fixed fallback text shows)
 //    422 on a read                           -> .invalidResponse
 //    429 / thrown rateLimited                -> .rateLimited(retryAfter:)
@@ -27,7 +28,8 @@
 //
 //  A 429 RESPONSE is pinned for the operations the rate limit middleware does not retry (a GET is
 //  retried after a sleep, which no test waits for); the thrown rateLimited error is pinned for all.
-//  Spec observation: updateBudget documents no 422 and no 409; a 422 is still the sum rule.
+//  Spec observation: updateBudget documents a 422 (the sum rule) and no 409; create and duplicate
+//  document no 422, and a 422 on them is still the sum rule.
 //
 
 import Foundation
@@ -41,7 +43,10 @@ struct GeneratedClientBudgetErrorTests {
 
     nonisolated static let operationsWith400: [BudgetOp] = BudgetOp.allCases.filter(\.documents400)
     nonisolated static let operationsWith409: [BudgetOp] = BudgetOp.allCases.filter(\.documents409)
-    nonisolated static let sumRuleWrites: [BudgetOp] = BudgetOp.allCases.filter(\.isSumRuleWrite)
+    /// Create and duplicate document no 422 (update documents a typed one).
+    nonisolated static let undocumentedSumRuleWrites: [BudgetOp] = BudgetOp.allCases.filter {
+        $0.isSumRuleWrite && $0 != .update
+    }
     nonisolated static let operationsNotRetriedOn429: [BudgetOp] = BudgetOp.allCases.filter { !$0.isRetriedOn429 }
     nonisolated static let readOperations: [BudgetOp] = [.stats, .list, .get]
 
@@ -240,8 +245,8 @@ struct GeneratedClientBudgetErrorTests {
         #expect(thrown?.userMessage == "A budget with purchases can't be deleted.")
     }
 
-    @Test("an undocumented 422 on create, update or duplicate is sumExceedsTotal by status, with no hand-parsed message",
-          arguments: sumRuleWrites)
+    @Test("an undocumented 422 on create or duplicate is sumExceedsTotal by status, with no hand-parsed message",
+          arguments: undocumentedSumRuleWrites)
     func undocumented422IsTheSumRule(op: BudgetOp) async throws {
         let sut = try makeBudgetWireSUT()
         await sut.transport.enqueue(status: 422, json: BudgetWire.sumExceedsTotal)
@@ -251,13 +256,38 @@ struct GeneratedClientBudgetErrorTests {
         }
     }
 
-    @Test("the sum rule error reads as the fixed fallback text", arguments: sumRuleWrites)
+    @Test("the undocumented sum rule error on create or duplicate reads as the fixed fallback text",
+          arguments: undocumentedSumRuleWrites)
     func sumRuleMessage(op: BudgetOp) async throws {
         let sut = try makeBudgetWireSUT()
         await sut.transport.enqueue(status: 422, json: BudgetWire.sumExceedsTotal)
 
         let thrown = await sut.budgetError(op)
 
+        #expect(thrown?.userMessage == "Limits add up to more than the total")
+    }
+
+    @Test("updateBudget 422 is the typed sum rule with the server's message")
+    func updateTypedSumRule() async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 422, json: BudgetWire.sumExceedsTotal)
+
+        await #expect(throws: BudgetError.sumExceedsTotal(message: "Recipient budget sum exceeds total budget")) {
+            try await sut.run(.update)
+        }
+    }
+
+    @Test("updateBudget 422 with no readable message is sumExceedsTotal, never hasPurchases")
+    func updateTypedSumRuleNoMessage() async throws {
+        let sut = try makeBudgetWireSUT()
+        await sut.transport.enqueue(status: 422, json: "{ this is not json")
+
+        let thrown = await sut.budgetError(.update)
+
+        guard case .sumExceedsTotal = thrown else {
+            Issue.record("expected .sumExceedsTotal, got \(String(describing: thrown))")
+            return
+        }
         #expect(thrown?.userMessage == "Limits add up to more than the total")
     }
 

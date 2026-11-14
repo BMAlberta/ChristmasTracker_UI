@@ -37,6 +37,9 @@ nonisolated struct ListItem: Identifiable, Equatable, Hashable, Sendable {
     let offList: Bool
     let createdBy: ListItemPerson
     let createdAt: Date
+    /// The server's rights for the caller on this item (required on the wire).
+    let canEdit: Bool
+    let canDelete: Bool
     let updatedAt: Date?
     let purchases: [ListItemPurchaseSummary]?
     let totalQuantityPurchased: Int?
@@ -58,6 +61,8 @@ nonisolated struct ListItem: Identifiable, Equatable, Hashable, Sendable {
         offList: Bool,
         createdBy: ListItemPerson,
         createdAt: Date,
+        canEdit: Bool,
+        canDelete: Bool,
         updatedAt: Date? = nil,
         purchases: [ListItemPurchaseSummary]? = nil,
         totalQuantityPurchased: Int? = nil,
@@ -77,6 +82,8 @@ nonisolated struct ListItem: Identifiable, Equatable, Hashable, Sendable {
         self.offList = offList
         self.createdBy = createdBy
         self.createdAt = createdAt
+        self.canEdit = canEdit
+        self.canDelete = canDelete
         self.updatedAt = updatedAt
         self.purchases = purchases
         self.totalQuantityPurchased = totalQuantityPurchased
