@@ -11,9 +11,17 @@ import SwiftUI
 struct MembersSectionView: View {
     let state: MembersSectionState
     let isMutating: Bool
+    /// The screen owns this value; the dialogs are shown from it and report through the closures.
+    let dialog: ConfirmationPresentation<MembersDialogTarget>
     let onAdd: () -> Void
-    let onRemove: (MemberRowState) -> Void
-    let onLeave: () -> Void
+    let onRequest: (MembersDialogTarget) -> Void
+    let onCancel: () -> Void
+    let onConfirm: (MembersDialogTarget) -> Void
+
+    /// Competing member controls are off while a mutation runs or a dialog is open.
+    private var controlsDisabled: Bool {
+        isMutating || !dialog.isIdle
+    }
 
     var body: some View {
         VStack(spacing: AppSpacing.xl) {
@@ -40,7 +48,14 @@ struct MembersSectionView: View {
                     .foregroundStyle(Color.textMutedColor)
             }
             ForEach(state.rows) { row in
-                MemberRosterRow(row: row, isMutating: isMutating, onRemove: { onRemove(row) })
+                MemberRosterRow(
+                    row: row,
+                    controlsDisabled: controlsDisabled,
+                    isConfirming: dialog.isConfirming(.removeMember(userId: row.userId)),
+                    onRequest: { onRequest(.removeMember(userId: row.userId)) },
+                    onCancel: onCancel,
+                    onConfirm: { onConfirm(.removeMember(userId: row.userId)) }
+                )
             }
             if state.showsAdd {
                 addButton
@@ -58,22 +73,40 @@ struct MembersSectionView: View {
         }
         .buttonStyle(.bordered)
         .tint(.primaryColor)
-        .disabled(isMutating)
+        .disabled(controlsDisabled)
         .accessibilityHint("Invites a person to this list by email")
         .accessibilityIdentifier("listDetail.addMemberButton")
     }
 
     private var leaveButton: some View {
-        Button(role: .destructive, action: onLeave) {
+        Button(role: .destructive) {
+            onRequest(.leave)
+        } label: {
             Label("Leave list", systemImage: "rectangle.portrait.and.arrow.right")
                 .font(.appHeadline)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
         .tint(.accentColor)
-        .disabled(isMutating)
+        .disabled(controlsDisabled)
         .accessibilityHint("Removes this list from your lists after you confirm")
         .accessibilityIdentifier("listDetail.leaveButton")
+        // Attached to this trigger, not to the screen.
+        .confirmationDialog(
+            MembersSectionState.leaveConfirmation.title,
+            isPresented: Binding(
+                get: { dialog.isConfirming(.leave) },
+                set: { if !$0 { onCancel() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(MembersSectionState.leaveConfirmation.confirmButtonTitle, role: .destructive) {
+                onConfirm(.leave)
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(MembersSectionState.leaveConfirmation.message)
+        }
     }
 }
 
@@ -81,8 +114,11 @@ struct MembersSectionView: View {
 
 private struct MemberRosterRow: View {
     let row: MemberRowState
-    let isMutating: Bool
-    let onRemove: () -> Void
+    let controlsDisabled: Bool
+    let isConfirming: Bool
+    let onRequest: () -> Void
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
 
     var body: some View {
         HStack(spacing: AppSpacing.md) {
@@ -99,7 +135,8 @@ private struct MemberRosterRow: View {
             .accessibilityLabel(row.accessibilityLabel)
 
             if row.canRemove {
-                Button(action: onRemove) {
+                let confirmation = MembersSectionState.removeConfirmation(for: row)
+                Button(action: onRequest) {
                     Label("Remove", systemImage: "person.badge.minus")
                         .labelStyle(.iconOnly)
                         .font(.appBody)
@@ -107,10 +144,24 @@ private struct MemberRosterRow: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
-                .disabled(isMutating)
+                .disabled(controlsDisabled)
                 .accessibilityLabel("Remove \(row.displayName)")
                 .accessibilityHint("Asks you to confirm before removing this person")
                 .accessibilityIdentifier("listDetail.removeMemberButton")
+                // Attached to this row's own Remove button, not to the screen.
+                .confirmationDialog(
+                    confirmation.title,
+                    isPresented: Binding(
+                        get: { isConfirming },
+                        set: { if !$0 { onCancel() } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button(confirmation.confirmButtonTitle, role: .destructive, action: onConfirm)
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text(confirmation.message)
+                }
             }
         }
         .frame(minHeight: 44)

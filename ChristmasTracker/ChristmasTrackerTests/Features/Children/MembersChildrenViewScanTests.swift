@@ -352,8 +352,10 @@ struct MembersChildrenViewScanTests {
         let detail = scope.file("ListDetailView.swift", in: scope.lists)
         try requireText("MembersSectionState(", in: detail, label: "ListDetailView")
         try requireText("isMutating", in: detail, label: "ListDetailView")
-        try requireText("removeConfirmation(for", in: detail, label: "ListDetailView")
-        try requireText("leaveConfirmation", in: detail, label: "ListDetailView")
+        // UX1b B1: the dialogs are anchored to the Leave and Remove buttons in the members section.
+        let membersSection = scope.file("MembersSectionView.swift", in: scope.lists)
+        try requireText("removeConfirmation(for", in: membersSection, label: "MembersSectionView")
+        try requireText("leaveConfirmation", in: membersSection, label: "MembersSectionView")
 
         let edit = scope.file("EditListView.swift", in: scope.lists)
         try requireText("CoOwnerSectionState(", in: edit, label: "EditListView")

@@ -33,7 +33,7 @@ Test run with 212 tests in 16 suites passed after 0.026 seconds.
 === verify: OK ===
 ```
 `swift test --package-path "LocalPackages/TrackerAPI"`: `Test run with 212 tests in 16 suites passed after 0.022 seconds.`
-After commit: recorded in the next section once run.
+After commit f9379b0 (separate run): `--- tests: 4250 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===`. (This line was added after the commit and ships with the next commit.)
 
 ## Gate 2
 - convention-reviewer: APPROVE. Warnings: one new doc-comment line over 120 characters in ListService.swift (soft limit); ListService.swift is 1130 lines (hard limit 600, pre-existing, banked as a follow-up split); ListDetailView.swift 440 lines (soft limit).

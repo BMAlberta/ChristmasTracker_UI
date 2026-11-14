@@ -146,7 +146,42 @@ Every story takes the FULL pipeline (isolated test-writer, implementer, conventi
 ## Gate 1: B1 Anchored dialogs and stable presentation state
 - Acceptance: rows 1, 2, 4, 5, 6 of the inventory conform to rules 1 and 2; texts, buttons and outcomes unchanged; a re-render, reload, refresh or swipe close does not dismiss an open dialog; a vanished target resets to idle silently; session end and disappear reset. Scan tests for anchoring (with the allowlist A1 to A4) and for the absence of "set then clear".
 - Scope: ListDetailView, MembersSectionView, DashboardView, EditListView, ProfileView, new pure presentation values under Features/Lists and Features/Dashboard, the scan test.
-- New interface: yes (pure presentation values with transition tables).
+- New interface: yes (pure presentation values with transition tables). Signatures:
+
+  One generic pure value, owned by the screen (`@State`), shared by the four screens that need it. New file Features/Shared/Presentation/ConfirmationPresentation.swift:
+  ```swift
+  nonisolated struct ConfirmationPresentation<Target: Hashable & Sendable>: Equatable, Sendable {
+      let target: Target?                         // nil = idle
+      static var idle: ConfirmationPresentation { get }
+      var isIdle: Bool { get }
+      func isConfirming(_ target: Target) -> Bool
+      func requesting(_ target: Target) -> ConfirmationPresentation          // only from idle; otherwise unchanged
+      func cancelled() -> ConfirmationPresentation                           // always idle
+      func confirmed(_ target: Target) -> (presentation: ConfirmationPresentation, run: Target?)
+          // from confirming(target): (idle, target); any other phase or another target: (unchanged, nil)
+      func targetsChanged(existing: Set<Target>) -> ConfirmationPresentation // idle only if the target is no longer in existing; same ids re-rendered or reloaded: unchanged
+      func reset() -> ConfirmationPresentation                               // idle (session end, screen disappear)
+  }
+  ```
+  Targets (nonisolated, Hashable, Sendable): `MembersDialogTarget { case leave; case removeMember(userId: String) }` (Features/Lists/ViewState), `EditListDialogTarget { case removeCoOwner }` (Features/Lists/ViewState). The Dashboard archive uses `ConfirmationPresentation<String>` keyed by list id.
+
+  Screens:
+  - ListDetailView (leave, remove member): `@State private var membersDialog = ConfirmationPresentation<MembersDialogTarget>.idle`. The leave dialog is attached to the Leave list button and the remove dialog to each roster row's Remove button (both inside MembersSectionView; the screen passes the presentation and closures in). `isPresented` for each is derived from `isConfirming(...)`, and its setter only ever calls `cancelled()` when the dialog dismisses without a confirm (no flag is set and then cleared). While not idle, Add member, Leave and every Remove are disabled. The roster's user ids feed `targetsChanged(existing:)` on every roster change; `reset()` on disappear and when the session ends. The archive dialog (row 3) stays a Bool on its own button (plain tap, non-list container).
+  - DashboardView (archive swipe): `@State private var archiveDialog = ConfirmationPresentation<String>.idle` replaces `listToArchive` and `archiveDialogBinding`. The dialog stays attached to the row; confirm runs `confirmed(listId)`; `targetsChanged(existing:)` with the visible list ids; `reset()` on disappear/session end.
+  - EditListView (remove co-owner): the Form is a list container, so the dialog moves onto the Remove co-owner button and its state becomes `ConfirmationPresentation<EditListDialogTarget>`; competing controls (Save, Cancel, the remove button) disabled while not idle.
+  - ProfileView (log out): plain Button in a ScrollView/VStack, so Bool is allowed, but the dialog moves from the ScrollView onto the Log out button inside LogoutButtonView (the button keeps its present look; rule 3 is B2).
+  Pure scan helpers live in the TEST target, are pure functions over a source String, and are themselves tested with bad and good fixture snippets before being run over the real files:
+  ```swift
+  enum DialogScanner {
+      struct Violation: Equatable { let line: Int; let modifier: String; let receiver: String }
+      /// confirmationDialog/alert modifiers whose receiver chain head is List, ScrollView, Form, NavigationStack, TabView, or the screen's root view (the first expression of `var body`).
+      static func containerAnchoredViolations(in source: String) -> [Violation]
+      /// a Bool set to true and cleared back to false in the same synchronous scope (e.g. `flag = true` followed by `flag = false`), the "set then clear" pattern
+      static func setThenClearViolations(in source: String) -> [Int]
+  }
+  ```
+  The real-file scan walks Features/ and App/ under ChristmasTracker/ChristmasTracker and has an allowlist (relative file path to reason), initially: LoginView.swift and RegistrationView.swift (the auth screens keep their own error and explanation alerts: brief non-goal).
+- Transition-table tests (pure): idle/requesting/second request ignored/cancelled/confirmed(right target, wrong target, from idle)/targetsChanged (same ids, extra ids, target gone)/reset; the dialog-target enums; "events that must not reset it" = re-render and reload with the same ids.
 
 ## Gate 1: B2 Destructive colors
 - Acceptance: every destructive control in the table above uses `role: .destructive` and the token; swipe actions carry the explicit tint; Sign out is neutral (no destructive role, no red). A DesignSystem helper maps destructive action kinds to the token. Scan tests per the Acceptance.
