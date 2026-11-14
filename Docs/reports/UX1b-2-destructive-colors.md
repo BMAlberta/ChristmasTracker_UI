@@ -35,7 +35,7 @@ Test run with 212 tests in 16 suites passed after 0.018 seconds.
 === test-destination.sh: 17 passed, 0 failed ===
 === verify: OK ===
 ```
-After commit: see the line added at the end of this report after the commit run.
+After commit 6f599d5 (separate run): `--- tests: 4340 passed, 0 failed, 0 skipped ---`, `Test run with 212 tests in 16 suites passed`, `test-release.sh: 92 passed, 0 failed`, `test-destination.sh: 17 passed, 0 failed`, `=== verify: OK ===` (this line ships with the next commit).
 
 ## Gate 2
 - convention-reviewer: APPROVE (twice: first diff and the revised diff). Warnings: test lines over 120 characters in DestructiveRealFilesTests.swift (53, 72, 81, 104) and DestructiveScannerTests.swift (354); DestructiveScannerTests.swift 386 lines (soft limit 400); ProfileView logout background keeps a raw corner radius `12` carried over from the old line (not changed; a radius, not spacing); ListDetailView.swift 446 lines (soft limit; banked split).
