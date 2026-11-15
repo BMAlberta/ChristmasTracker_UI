@@ -42,4 +42,5 @@ nonisolated enum LoadSource: Sendable, Equatable, Hashable, CaseIterable {
     case stats
     case budgets
     case people
+    case purchaseHistory
 }

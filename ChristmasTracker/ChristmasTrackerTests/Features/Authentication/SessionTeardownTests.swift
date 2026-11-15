@@ -310,7 +310,9 @@ struct SessionTeardownTests {
             purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown })),
             // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
             statsService: StatsService(repository: GatedStatsLoader()),
-            budgetService: BudgetService(repository: GatedBudgetManager())
+            budgetService: BudgetService(repository: GatedBudgetManager()),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: PurchaseHistoryService(repository: GatedPurchaseHistoryLoader())
         )
 
         // Updated from 5 → 6 for I2b-1 Story 2 (InactivityLockController added as clearable)
@@ -320,7 +322,9 @@ struct SessionTeardownTests {
         // holds the in-flight purchase call of the signed-in user and must end at teardown).
         // Updated from 8 → 10 for I5a-B. Reason: two session-safe services were added to the teardown
         // list (StatsService at index 8, BudgetService at index 9).
-        #expect(clearables.count == 10, "Factory must return exactly 10 clearables")
+        // EDITED (PH1-H1): count 10 -> 11. Reason: the PurchaseHistoryService clearable is appended last
+        // (index 10), so no index moves.
+        #expect(clearables.count == 11, "Factory must return exactly 11 clearables")
         #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
         #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
         #expect(clearables[2] is ListService, "clearables[2] must be ListService")

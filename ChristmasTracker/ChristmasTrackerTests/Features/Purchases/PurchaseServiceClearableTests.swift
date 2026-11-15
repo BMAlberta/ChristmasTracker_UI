@@ -44,7 +44,9 @@ struct PurchaseServiceClearableTests {
             purchaseService: purchaseService,
             // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
             statsService: StatsService(repository: GatedStatsLoader()),
-            budgetService: BudgetService(repository: GatedBudgetManager())
+            budgetService: BudgetService(repository: GatedBudgetManager()),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: PurchaseHistoryService(repository: InertPurchaseHistoryLoader())
         )
         return SUT(clearables: clearables, purchaseService: purchaseService, repo: repo)
     }
@@ -52,15 +54,19 @@ struct PurchaseServiceClearableTests {
     // EDITED (I5a-B): count 8 -> 10 and the name no longer says "last". Reason: two session-safe services
     // were added to the teardown list (StatsService at index 8, BudgetService at index 9); the
     // PurchaseService keeps index 7.
-    @Test("makeProductionClearables returns 10 clearables with the PurchaseService at index 7")
+    // EDITED (PH1-H1): count 10 -> 11. Reason: the PurchaseHistoryService was appended at index 10; the
+    // PurchaseService keeps index 7 and the Stats and Budget services keep 8 and 9.
+    @Test("makeProductionClearables returns 11 clearables with the PurchaseService at index 7")
     func purchaseServiceIsEighthAndLast() {
         let sut = makeSUT()
 
-        #expect(sut.clearables.count == 10)
+        #expect(sut.clearables.count == 11)
         #expect(sut.clearables[7] is PurchaseService, "the PurchaseService must come after the ChildService")
         #expect(sut.clearables[7] === sut.purchaseService, "the registered clearable is the very instance passed in")
         #expect(sut.clearables[8] is StatsService, "the StatsService clearable follows the PurchaseService")
-        #expect(sut.clearables[9] is BudgetService, "the BudgetService clearable is appended last")
+        #expect(sut.clearables[9] is BudgetService, "the BudgetService clearable follows the StatsService")
+        // EDITED (PH1-H1): the PurchaseHistoryService clearable is now the last one.
+        #expect(sut.clearables[10] is PurchaseHistoryService, "the PurchaseHistoryService clearable is appended last")
     }
 
     @Test("the existing seven clearables keep their indices")
