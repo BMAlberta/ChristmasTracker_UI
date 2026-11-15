@@ -86,6 +86,15 @@ nonisolated struct ChildDeletionPresentation: Equatable, Sendable {
         )
     }
 
+    /// The planning result of a Try Again: lists the user did not confirm go back to confirming.
+    func retryPlanReady(childId: String, plan: ChildDeletionPlan, confirmedPlan: ChildDeletionPlan) -> Transition {
+        planReady(
+            childId: childId,
+            plan: plan,
+            requiresConfirmation: plan.hasUnconfirmedLists(comparedTo: confirmedPlan)
+        )
+    }
+
     func planFailed(childId: String, error: ChildError) -> Transition {
         guard phase == .planning(childId: childId) else { return unchanged }
         return Transition(presentation: .idle, banner: .failed(error), plan: nil)

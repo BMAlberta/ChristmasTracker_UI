@@ -56,8 +56,8 @@ struct ProfileView: View {
                         }
                     )
 
-                    LogoutButtonView {
-                        showLogoutConfirmation = true
+                    LogoutButtonView(isConfirming: $showLogoutConfirmation) {
+                        Task { await authService.logout() }
                     }
                 }
                 .padding(EdgeInsets.appScreenPadding)
@@ -75,18 +75,6 @@ struct ProfileView: View {
             }
             .onDisappear {
                 toggleModel?.dismissBanner()
-            }
-            .confirmationDialog(
-                "Are you sure you want to logout?",
-                isPresented: $showLogoutConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Logout", role: .destructive) {
-                    Task {
-                        await authService.logout()
-                    }
-                }
-                Button("Cancel", role: .cancel) { }
             }
         }
     }
@@ -273,22 +261,34 @@ private struct AboutSectionView: View {
 
 private struct LogoutButtonView: View {
 
-    let action: () -> Void
+    @Binding var isConfirming: Bool
+    let onConfirm: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            isConfirming = true
+        } label: {
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                 Text("Logout")
             }
             .font(.appHeadline)
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.surfaceColor)
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppSpacing.md)
-            .background(.red, in: .rect(cornerRadius: 12))
+            .background(Color.primaryColor, in: .rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .padding(.top, AppSpacing.md)
+        // Attached to this trigger, not to the screen's scroll view.
+        .confirmationDialog(
+            "Are you sure you want to logout?",
+            isPresented: $isConfirming,
+            titleVisibility: .visible
+        ) {
+            Button("Logout", action: onConfirm)
+            Button("Cancel", role: .cancel) { }
+        }
     }
 }
 

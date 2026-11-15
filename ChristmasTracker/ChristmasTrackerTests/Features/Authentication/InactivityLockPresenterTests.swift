@@ -13,8 +13,7 @@ import Foundation
 
 // MARK: - Fakes
 
-/// FakeLockPresenter conforming to InactivityLockPresenting (does not exist yet — will
-/// fail to compile until the implementer creates the protocol).
+/// FakeLockPresenter conforming to InactivityLockPresenting.
 @MainActor
 private final class FakeLockPresenter: InactivityLockPresenting {
     private(set) var presentCallCount = 0

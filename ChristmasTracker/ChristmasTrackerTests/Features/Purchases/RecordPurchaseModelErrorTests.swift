@@ -11,7 +11,7 @@
 //   - retry goes out WITHOUT a token and with the identical draft; dismissError returns to editing;
 //   - the error is held in the model only: the service publishes nothing.
 //
-//  Fails today because RecordPurchaseModel does not exist yet.
+//  Covers the error handling of RecordPurchaseModel.
 //
 
 import Foundation

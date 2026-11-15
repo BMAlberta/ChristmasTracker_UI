@@ -8,7 +8,7 @@
 //  panel, the error banner or the summary. The token lives only inside the flow's pending
 //  confirmation and in the local value handed to the one service call.
 //
-//  Fails today because RecordPurchaseModel does not exist yet.
+//  Covers token hiding and in-flight action handling in RecordPurchaseModel.
 //
 
 import Foundation

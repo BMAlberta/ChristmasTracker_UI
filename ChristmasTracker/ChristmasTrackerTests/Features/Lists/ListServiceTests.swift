@@ -250,7 +250,7 @@ struct ListServiceTests {
         #expect(failure == .server)
         #expect(service.listsLoadFailure != nil)
         #expect(service.listsLoadFailure == .server)
-        #expect(service.detailLoadFailure == nil)
+        #expect(service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(service.lists.isEmpty)
     }
 
@@ -531,7 +531,7 @@ struct ListServiceTests {
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-a"])
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -580,7 +580,7 @@ struct ListServiceTests {
 
         #expect(sut.service.lists.map(\.id) == ["list-a"])
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.isMutating == false)
     }
 
@@ -652,7 +652,7 @@ struct ListServiceTests {
         #expect(sut.service.currentListDetail == currentDetail)
         #expect(sut.service.lists.map(\.name) == ["Name of list-a"])
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     // MARK: - ADDED (I3a-L2): typed errors become the service error
@@ -674,7 +674,7 @@ struct ListServiceTests {
         #expect(failure == error)
         #expect(sut.service.listsLoadFailure == error)
         #expect(sut.service.listsLoadFailure?.userMessage == error.userMessage)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.lists.isEmpty)
         #expect(sut.service.isLoadingLists == false)
     }
@@ -692,7 +692,7 @@ struct ListServiceTests {
         #expect(failure == error)
         #expect(sut.service.listsLoadFailure == error)
         #expect(sut.service.listsLoadFailure?.userMessage == error.userMessage)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.lists.map(\.id) == ["list-a"])
         #expect(sut.service.isRefreshing == false)
     }
@@ -705,8 +705,8 @@ struct ListServiceTests {
 
         await sut.service.loadListDetail(id: "list-a")
 
-        #expect(sut.service.detailLoadFailure == error)
-        #expect(sut.service.detailLoadFailure?.userMessage == error.userMessage)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == error)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a")?.userMessage == error.userMessage)
         #expect(sut.service.listsLoadFailure == nil)
         #expect(sut.service.currentListDetail == nil)
         #expect(sut.service.isLoadingDetail == false)

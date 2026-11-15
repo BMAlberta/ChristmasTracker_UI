@@ -9,7 +9,7 @@
 //  - keepsScreenOpen is true for everything except notFound, sessionEnded and unauthorized.
 //  - isRetryable is true only for network, server, rateLimited and invalidResponse.
 //
-//  Fails today because PurchaseManagementError does not exist yet.
+//  Covers PurchaseManagementError.
 //
 
 import Foundation

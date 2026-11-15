@@ -7,7 +7,7 @@
 //  EDITED (I5a-B): both plans gained the same final `.invalidateSpending` step; the equality between
 //  the two plans stays, and the concrete arrays only gained that appended step.
 //
-//  Fails today because PurchaseRefreshPlan.stepsAfterDelete does not exist yet.
+//  Covers PurchaseRefreshPlan.stepsAfterDelete.
 //
 
 import Foundation

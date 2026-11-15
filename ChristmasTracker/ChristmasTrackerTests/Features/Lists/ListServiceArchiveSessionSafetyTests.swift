@@ -52,7 +52,7 @@ struct ListServiceArchiveSessionSafetyTests {
         #expect(sut.service.lists.isEmpty, "lists must stay empty")
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
         #expect(sut.service.listsLoadFailure == nil, "no failure may be set after the session ended")
-        #expect(sut.service.detailLoadFailure == nil, "no failure may be set after the session ended")
+        #expect(sut.service.detailLoadFailures.isEmpty, "no failure may be set after the session ended")
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.isMutating == false)
         let cachedLists = await sut.store.getLists()

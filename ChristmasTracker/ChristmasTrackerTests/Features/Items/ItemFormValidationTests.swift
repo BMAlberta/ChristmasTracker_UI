@@ -10,7 +10,7 @@
 //  en_US_POSIX into a Decimal from 0 to 999999.99 with at most two fraction digits; quantity
 //  1...999; priority 1...10.
 //
-//  Fails today because ItemFormValidation, ItemFormValidity and ItemFormCopy do not exist yet.
+//  Covers ItemFormValidation, ItemFormValidity and ItemFormCopy.
 //
 
 import Testing

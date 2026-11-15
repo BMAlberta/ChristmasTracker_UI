@@ -7,7 +7,7 @@
 //  table does not list for that stage). In particular cancel is ignored while a request is in
 //  flight, and recorded is terminal.
 //
-//  Fails today because RecordPurchaseFlow and its types do not exist yet.
+//  Covers the ignored events of RecordPurchaseFlow.
 //
 
 import Foundation

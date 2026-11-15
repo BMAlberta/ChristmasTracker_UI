@@ -62,6 +62,7 @@ struct LoginView: View {
     @State private var showForgotPassword: Bool = false
     @State private var showError: Bool = false
     @State private var biometricModel: LoginBiometricModel? = nil
+    @State private var hint = LoginFaceIDHintState.none
 
     init() {
         let initial = loginInitialState(remembered: RememberedEmailStore().rememberedEmail)
@@ -114,6 +115,9 @@ struct LoginView: View {
                 Text("Sign in with your password to enable \(authService.biometricType.displayName) for future logins.")
             }
             .onChange(of: authService.error) { _, e in showError = e != nil }
+            .onChange(of: email) { _, _ in hint = hint.fieldEdited() }
+            .onChange(of: password) { _, _ in hint = hint.fieldEdited() }
+            .onDisappear { hint = hint.reset() }
             .onChange(of: authService.biometricSignInState) { _, _ in
                 biometricModel?.syncFromService()
             }
@@ -147,6 +151,12 @@ struct LoginView: View {
                 isFormValid: isFormValid,
                 onLogin: handleLogin
             )
+            if let text = hint.text {
+                Text(text)
+                    .font(.appCaption1)
+                    .foregroundStyle(Color.textMutedColor)
+                    .multilineTextAlignment(.center)
+            }
             if let model = biometricModel, model.buttonState != .hidden {
                 BiometricButtonSection(model: model, biometricType: authService.biometricType)
             }
@@ -156,11 +166,17 @@ struct LoginView: View {
 
     // MARK: - Actions
     private func handleLogin() {
+        hint = hint.signInStarted()
         Task {
             await authService.login(
                 email: email,
                 password: password,
                 rememberEmail: rememberEmail
+            )
+            hint = hint.signInFailed(
+                error: authService.error,
+                buttonState: biometricModel?.buttonState ?? .hidden,
+                biometricName: authService.biometricType.displayName
             )
         }
     }

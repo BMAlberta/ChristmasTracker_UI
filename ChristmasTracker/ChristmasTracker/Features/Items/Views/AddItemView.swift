@@ -27,7 +27,7 @@ struct AddItemView: View {
     @State private var creationError: ItemError?
 
     private var permissions: ItemPermissions {
-        ItemPermissions(capabilities: context.capabilities, currentUserId: nil)
+        ItemPermissions(capabilities: context.capabilities)
     }
 
     private var input: CreateItemInput? {

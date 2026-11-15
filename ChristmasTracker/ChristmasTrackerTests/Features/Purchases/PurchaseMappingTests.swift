@@ -12,7 +12,7 @@
 //  confirmation_required needs at least one warning and a non-empty token (the first non-empty
 //  token) and NEVER becomes `created`; a 200 body carrying `created` maps to `created`.
 //
-//  Fails today because the purchase domain and the mapping functions do not exist yet.
+//  Covers the purchase domain types and the mapping functions.
 //
 
 import Foundation

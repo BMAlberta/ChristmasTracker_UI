@@ -11,7 +11,7 @@ struct DashboardView: View {
     @Environment(\.listService) private var listService
     @State private var selectedListId: String?
     @State private var showCreateSheet = false
-    @State private var listToArchive: GiftList?
+    @State private var archiveDialog = ConfirmationPresentation<String>.idle
     @State private var segment = ListSegment.active
     @State private var searchText = ""
     @State private var dismissed = DismissedLoads()
@@ -59,7 +59,14 @@ struct DashboardView: View {
                         await listService.loadLists()
                     }
                 }
+                .onChange(of: listService.lists.map(\.id)) {
+                    archiveDialog = archiveDialog.targetsChanged(existing: Set(segmentState.lists.map(\.id)))
+                }
+                .onChange(of: listService.sessionGeneration) {
+                    archiveDialog = archiveDialog.reset()
+                }
                 .onDisappear {
+                    archiveDialog = archiveDialog.reset()
                     listService.clearListsLoadFailure()
                     dismissed.reset()
                     archiveFailure = nil
@@ -154,20 +161,12 @@ struct DashboardView: View {
         showCreateSheet = true
     }
 
-    /// True while the archive confirmation of this very row is shown.
-    private func archiveDialogBinding(for list: GiftList) -> Binding<Bool> {
-        Binding(
-            get: { listToArchive?.id == list.id },
-            set: { isPresented in
-                if !isPresented, listToArchive?.id == list.id { listToArchive = nil }
-            }
-        )
-    }
-
-    private func confirmArchive() {
-        guard let list = listToArchive else { return }
-        listToArchive = nil
-        archive(listId: list.id)
+    private func confirmArchive(listId: String) {
+        let result = archiveDialog.confirmed(listId)
+        archiveDialog = result.presentation
+        if let confirmedId = result.run {
+            archive(listId: confirmedId)
+        }
     }
 
     private func retryArchive() {
@@ -291,24 +290,27 @@ struct DashboardView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if state.showsDeleteAction {
                 Button(role: .destructive) {
-                    listToArchive = list
+                    archiveDialog = archiveDialog.requesting(list.id)
                 } label: {
                     Label("Archive", systemImage: "archivebox")
                 }
+                .destructiveTint()
             }
         }
         // Attached to the row's own trigger, not to the stack or the list.
         .confirmationDialog(
             ListArchiveConfirmation.title,
-            isPresented: archiveDialogBinding(for: list),
+            isPresented: Binding(
+                get: { archiveDialog.isConfirming(list.id) },
+                set: { if !$0 { archiveDialog = archiveDialog.cancelled() } }
+            ),
             titleVisibility: .visible
         ) {
             Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
-                confirmArchive()
+                confirmArchive(listId: list.id)
             }
-            Button("Cancel", role: .cancel) {
-                listToArchive = nil
-            }
+            .destructiveTint()
+            Button("Cancel", role: .cancel) { }
         } message: {
             Text(ListArchiveConfirmation.message)
         }

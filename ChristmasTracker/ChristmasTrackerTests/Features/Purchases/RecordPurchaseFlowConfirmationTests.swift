@@ -9,7 +9,7 @@
 //  confirmation (new warnings, new token, new issuedAt, the notice), sends nothing by itself, and
 //  needs a NEW explicit confirm.
 //
-//  Fails today because RecordPurchaseFlow and its types do not exist yet.
+//  Covers the confirmation and expired states of RecordPurchaseFlow.
 //
 
 import Foundation

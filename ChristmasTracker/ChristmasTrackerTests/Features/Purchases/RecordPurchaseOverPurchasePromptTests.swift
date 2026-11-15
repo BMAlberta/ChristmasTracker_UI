@@ -7,7 +7,7 @@
 //  accepts any quantity of at least 1), and an unknown remaining quantity never produces a prompt
 //  or any computed value.
 //
-//  Fails today because RecordPurchaseFormState and OverPurchasePrompt do not exist yet.
+//  Covers RecordPurchaseFormState and OverPurchasePrompt.
 //
 
 import Foundation

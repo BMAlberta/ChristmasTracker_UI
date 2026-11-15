@@ -165,7 +165,7 @@ struct ListServiceRefreshDetailTests {
         await sut.service.refreshListDetail(id: "list-a")
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("a failure with nothing open or cached returns the error and stores no load failure")

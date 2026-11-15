@@ -5,8 +5,7 @@
 //  Story I4b-A: PurchaseError.unconfirmed ("the server may have recorded the purchase")
 //  and the failure kind of every case, plus the banner and the two-action presentation.
 //
-//  Fails today because PurchaseError.unconfirmed, failureKind and the presentation
-//  additions do not exist yet.
+//  Covers PurchaseError.unconfirmed, failureKind and the presentation additions.
 //
 
 import Foundation

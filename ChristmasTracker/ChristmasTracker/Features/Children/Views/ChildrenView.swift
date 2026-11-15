@@ -18,12 +18,16 @@ struct ChildrenView: View {
     @State private var deletion = ChildDeletionPresentation.idle
     @State private var deletionFailure: DeletionFailure?
     @State private var deletionTask: Task<Void, Never>?
+    // The plan the user last confirmed, by child. Missing means nothing was confirmed.
+    @State private var confirmedPlans: [String: ChildDeletionPlan] = [:]
     @State private var dismissedLoads = DismissedLoads()
 
     /// A deletion that did not remove the child, held only in this screen's state.
     private struct DeletionFailure: Equatable {
         let childId: String
         let banner: ChildDeletionBanner
+        /// The plan the user last confirmed for this child; Try Again compares against it.
+        let confirmedPlan: ChildDeletionPlan
     }
 
     private var state: ChildrenState {
@@ -192,7 +196,8 @@ struct ChildrenView: View {
     }
 
     private func showBanner(_ banner: ChildDeletionBanner?, for childId: String) {
-        deletionFailure = banner.map { DeletionFailure(childId: childId, banner: $0) }
+        let confirmed = confirmedPlans[childId] ?? .deleteNow
+        deletionFailure = banner.map { DeletionFailure(childId: childId, banner: $0, confirmedPlan: confirmed) }
     }
 
     /// Applies a finished deletion: announces success, or holds the banner. nil shows nothing.
@@ -216,6 +221,7 @@ struct ChildrenView: View {
     private func cancelAndReset() {
         deletionTask?.cancel()
         deletionTask = nil
+        confirmedPlans = [:]
         deletion = deletion.reset()
     }
 
@@ -259,6 +265,7 @@ struct ChildrenView: View {
 
     private func requestDelete(childId: String) {
         guard deletion.isIdle else { return }
+        confirmedPlans[childId] = nil
         showBanner(nil, for: childId)
         deletion = deletion.requestDelete(childId: childId)
         announce(ChildrenState.planningAnnouncement)
@@ -279,6 +286,7 @@ struct ChildrenView: View {
         let transition = deletion.confirm(childId: childId, plan: plan)
         deletion = transition.presentation
         guard let confirmedPlan = transition.plan else { return }
+        confirmedPlans[childId] = confirmedPlan
         announce(ChildrenState.progressAnnouncement(for: confirmedPlan))
         startDeletionWork {
             let result = await makeFlow().execute(childId: childId, plan: confirmedPlan)
@@ -287,7 +295,8 @@ struct ChildrenView: View {
         }
     }
 
-    /// Try Again: plans afresh and continues without a new dialog. A no-op unless idle.
+    /// Try Again: plans afresh; continues unless it would archive a list the user did not confirm,
+    /// in which case the dialog reopens with the new plan. A no-op unless idle.
     private func retryDeletion(_ failure: DeletionFailure) {
         guard deletion.isIdle else { return }
         let childId = failure.childId
@@ -306,8 +315,11 @@ struct ChildrenView: View {
                 apply(deletion.planFailed(childId: childId, error: childError), for: childId)
                 return
             }
-            let planned = applyPlanReady(childId: childId, plan: plan, requiresConfirmation: false)
-            guard let planToRun = planned else { return }
+            // Lists the user did not confirm reopen the dialog with the new plan (no plan to run).
+            let transition = deletion.retryPlanReady(childId: childId, plan: plan, confirmedPlan: failure.confirmedPlan)
+            apply(transition, for: childId)
+            deletion = deletion.childrenChanged(existingIds: childService.children.map(\.id))
+            guard let planToRun = transition.plan else { return }
             announce(ChildrenState.retryAnnouncement(for: planToRun))
             let result = await flow.execute(childId: childId, plan: planToRun)
             deletion = deletion.executionFinished(childId: childId)
@@ -374,6 +386,7 @@ private struct ChildRow: View {
             Button(confirmation.confirmButtonTitle, role: .destructive) {
                 if let plan = confirmingPlan { onConfirm(plan) }
             }
+            .destructiveTint()
             Button("Cancel", role: .cancel) { }
         } message: { confirmation in
             Text(confirmation.message)

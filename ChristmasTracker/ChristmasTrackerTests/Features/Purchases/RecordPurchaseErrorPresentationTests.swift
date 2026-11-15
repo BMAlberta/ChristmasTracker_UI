@@ -6,7 +6,7 @@
 //  Try Again only when the error is retryable, always dismissible, and no banner at all for
 //  .sessionEnded (the sign-in flow takes over).
 //
-//  Fails today because RecordPurchaseErrorPresentation does not exist yet.
+//  Covers RecordPurchaseErrorPresentation.
 //
 
 import Foundation

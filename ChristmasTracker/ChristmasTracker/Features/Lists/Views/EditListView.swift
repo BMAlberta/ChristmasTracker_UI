@@ -20,7 +20,7 @@ struct EditListView: View {
     @State private var visibility: ListVisibility
 
     @State private var coOwnerEmail = ""
-    @State private var showsRemoveConfirmation = false
+    @State private var removeDialog = ConfirmationPresentation<EditListDialogTarget>.idle
     @State private var isRemoving = false
 
     @State private var isSaving = false
@@ -75,8 +75,13 @@ struct EditListView: View {
         )
     }
 
+    private var canRemoveCoOwner: Bool {
+        CoOwnerRemoval.canRemove(isMutating: listService.isMutating, isSaving: isSaving || isRemoving)
+    }
+
     private var canSave: Bool {
         validity.isValid && coOwnerInputAllowsSave && pendingInput != nil && !isSaving && !listService.isMutating
+            && removeDialog.isIdle
     }
 
     var body: some View {
@@ -139,19 +144,13 @@ struct EditListView: View {
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Edit List")
             .navigationBarTitleDisplayMode(.inline)
-            .confirmationDialog(
-                CoOwnerRemoveConfirmation.title(displayName: coOwnerState.currentCoOwnerName ?? "co-owner"),
-                isPresented: $showsRemoveConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(CoOwnerRemoveConfirmation.confirmButtonTitle, role: .destructive) {
-                    Task { await removeCoOwner() }
+            .onChange(of: coOwnerState.showsRemove) { _, offered in
+                if !offered {
+                    removeDialog = removeDialog.targetsChanged(existing: [])
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(CoOwnerRemoveConfirmation.message(displayName: coOwnerState.currentCoOwnerName ?? "co-owner"))
             }
             .onDisappear {
+                removeDialog = removeDialog.reset()
                 errorBanner = nil
                 failedAction = nil
             }
@@ -166,7 +165,7 @@ struct EditListView: View {
                         dismiss()
                     }
                     .frame(minHeight: 44)
-                    .disabled(isSaving)
+                    .disabled(isSaving || !removeDialog.isIdle)
                     .accessibilityIdentifier("editList.cancelButton")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -209,16 +208,35 @@ struct EditListView: View {
                     }
                 }
                 if state.showsRemove {
+                    let displayName = state.currentCoOwnerName ?? "co-owner"
                     Button(role: .destructive) {
-                        showsRemoveConfirmation = true
+                        removeDialog = removeDialog.requesting(.removeCoOwner)
                     } label: {
                         Text("Remove co-owner")
                     }
+                    .destructiveTint()
                     .frame(minHeight: 44)
-                    .disabled(!CoOwnerRemoval.canRemove(isMutating: listService.isMutating, isSaving: isSaving || isRemoving))
+                    .disabled(!removeDialog.isIdle || !canRemoveCoOwner)
                     .accessibilityLabel("Remove co-owner")
                     .accessibilityHint("Asks you to confirm before removing the co-owner from this list.")
                     .accessibilityIdentifier("editList.removeCoOwnerButton")
+                    // Attached to this button, not to the Form.
+                    .confirmationDialog(
+                        CoOwnerRemoveConfirmation.title(displayName: displayName),
+                        isPresented: Binding(
+                            get: { removeDialog.isConfirming(.removeCoOwner) },
+                            set: { if !$0 { removeDialog = removeDialog.cancelled() } }
+                        ),
+                        titleVisibility: .visible
+                    ) {
+                        Button(CoOwnerRemoveConfirmation.confirmButtonTitle, role: .destructive) {
+                            confirmRemoveCoOwner()
+                        }
+                        .destructiveTint()
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text(CoOwnerRemoveConfirmation.message(displayName: displayName))
+                    }
                 }
             }
         }
@@ -231,6 +249,14 @@ struct EditListView: View {
     }
 
     // MARK: - Actions
+
+    private func confirmRemoveCoOwner() {
+        let result = removeDialog.confirmed(.removeCoOwner)
+        removeDialog = result.presentation
+        if result.run != nil {
+            Task { await removeCoOwner() }
+        }
+    }
 
     private func removeCoOwner() async {
         isRemoving = true

@@ -3,10 +3,8 @@
 //  ChristmasTrackerTests
 //
 //  Story I3c-B: the expanded ItemError and its plain-message function (Gate 1 addendum).
-//  The four legacy cases (fetchFailed, createFailed, updateFailed, deleteFailed) stay until
-//  Story C and are not touched here.
 //
-//  Fails today because the new cases, Equatable conformance and userMessage do not exist yet.
+//  Covers the ItemError cases, its Equatable conformance and userMessage.
 //
 
 import Testing

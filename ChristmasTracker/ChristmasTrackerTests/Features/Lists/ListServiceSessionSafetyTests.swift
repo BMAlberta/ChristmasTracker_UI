@@ -106,7 +106,7 @@ struct ListServiceSessionSafetyTests {
         #expect(sut.service.lists.isEmpty, "lists must stay empty")
         #expect(sut.service.currentListDetail == nil, "currentListDetail must stay nil")
         #expect(sut.service.listsLoadFailure == nil, "no lists load failure may be set after the session ended")
-        #expect(sut.service.detailLoadFailure == nil, "no detail load failure may be set after the session ended")
+        #expect(sut.service.detailLoadFailures.isEmpty, "no detail load failure may be set after the session ended")
         let cachedLists = await sut.store.getLists()
         #expect(cachedLists.isEmpty, "the cache must not receive a stale result")
         for id in ["list-a", "list-b", "list-new"] {
@@ -276,12 +276,12 @@ struct ListServiceSessionSafetyTests {
         await sut.service.loadLists()
         await sut.service.loadListDetail(id: "list-a")
         #expect(sut.service.listsLoadFailure == .network, "precondition")
-        #expect(sut.service.detailLoadFailure == .server, "precondition")
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == .server, "precondition")
 
         await sut.manager.teardown(reason: .sessionExpired)
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
     }
 
     @Test("after teardown the next load goes to the repository, not to the old cache")

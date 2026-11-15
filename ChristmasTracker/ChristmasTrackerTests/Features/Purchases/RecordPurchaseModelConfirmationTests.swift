@@ -15,7 +15,7 @@
 //
 //  Tokens are the distinctive fakes "tok-DISTINCT-123" and "tok-DISTINCT-456".
 //
-//  Fails today because RecordPurchaseModel does not exist yet.
+//  Covers the budget confirmation path of RecordPurchaseModel.
 //
 
 import Foundation

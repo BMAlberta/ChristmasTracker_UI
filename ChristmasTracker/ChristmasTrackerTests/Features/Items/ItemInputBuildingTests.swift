@@ -12,7 +12,7 @@
 //  The memberwise initialiser of UpdateItemInput is used once, for the isEmpty checks; its
 //  argument order is the declaration order in the Gate 1 addendum.
 //
-//  Fails today because CreateItemInput, UpdateItemInput and the make functions do not exist yet.
+//  Covers CreateItemInput, UpdateItemInput and the make functions.
 //
 
 import Testing

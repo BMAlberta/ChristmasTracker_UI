@@ -10,7 +10,7 @@
 //  The construction and the `editing` copy are the assumed shape (see the story report):
 //  `PurchaseNotesSectionState(purchase:)` and `editing(text:)`.
 //
-//  Fails today because PurchaseNotesSectionState does not exist yet.
+//  Covers PurchaseNotesSectionState.
 //
 
 import Foundation

@@ -7,7 +7,7 @@
 //  with no call; `expiryReached` moves to expired when due; the expired message has one way back to
 //  editing; `expiryDelay` is the time left, never negative, and nil outside awaitingConfirmation.
 //
-//  Fails today because RecordPurchaseModel does not exist yet.
+//  Covers the confirmation expiry of RecordPurchaseModel.
 //
 
 import Foundation

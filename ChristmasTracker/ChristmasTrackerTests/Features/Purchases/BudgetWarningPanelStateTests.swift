@@ -6,8 +6,7 @@
 //  same order, plain labels, Decimal amounts formatted with the user's currency, the optional
 //  notice, the three button titles, and an announcement that carries no amounts and no names.
 //
-//  Fails today because BudgetWarningPanelState, BudgetWarningRowState and RecordPurchaseCopy do
-//  not exist yet.
+//  Covers BudgetWarningPanelState, BudgetWarningRowState and RecordPurchaseCopy.
 //
 
 import Foundation

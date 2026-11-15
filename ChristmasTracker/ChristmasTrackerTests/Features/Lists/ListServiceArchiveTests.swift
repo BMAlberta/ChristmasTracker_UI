@@ -335,10 +335,9 @@ struct ListServiceArchiveTests {
 
     // MARK: - The archive succeeded but the reload fails
 
-    // REPLACED (UX1a U2): the old test asserted that the follow-up reload failure was published in the
-    // shared `error`. That behavior is removed deliberately: the failure is logged by operation name
-    // only, nothing is published, and the mutation returns normally.
-    @Test("when the reload fails after a successful archive deleteList returns normally and publishes nothing")
+    // REWRITTEN (UX1b B0): the follow-up reload failure is recorded as `listsLoadFailure` (the
+    // dashboard banner); the mutation still returns normally and the list is still removed.
+    @Test("when the reload fails after a successful archive deleteList returns normally and records the lists failure")
     func reloadFailureAfterArchive() async throws {
         let sut = await loadedSUT()
         sut.repo.enqueueDeleteList(.success(()))
@@ -350,25 +349,26 @@ struct ListServiceArchiveTests {
         #expect(sut.service.archivedLists.isEmpty)
         let cached = await sut.store.getLists()
         #expect(cached.map(\.id) == ["list-b"])
-        #expect(sut.service.listsLoadFailure == nil, "the follow-up reload failure is not published")
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.listsLoadFailure == .network, "REWRITTEN (UX1b B0): the follow-up reload failure is recorded")
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.repo.deleteListCount == 1)
         #expect(sut.repo.fetchListsCount == 2, "the reload was attempted")
         #expect(sut.service.isMutating == false)
     }
 
-    // REPLACED (UX1a U2): was "the reload error is the typed error of the reload" (stored in `error`).
-    @Test("a typed reload failure after a successful archive is published nowhere", arguments: [
+    // REWRITTEN (UX1b B0): the typed reload error is recorded as `listsLoadFailure` only.
+    @Test("a typed reload failure after a successful archive is recorded as the lists failure only", arguments: [
         ListError.network, .server, .rateLimited(retryAfter: 3), .invalidResponse, .unauthorized
     ])
-    func reloadFailureIsNotPublished(error: ListError) async throws {
+    func reloadFailureIsRecordedAsListsFailure(error: ListError) async throws {
         let sut = await loadedSUT()
         sut.repo.enqueueDeleteList(.success(()))
         sut.repo.enqueueFetchLists(.failure(error))
 
         try await sut.service.deleteList(id: "list-a")
 
-        #expect(sut.service.anyLoadFailure == nil)
+        #expect(sut.service.listsLoadFailure == error)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.lists.map(\.id) == ["list-b"])
     }
 
@@ -412,7 +412,7 @@ struct ListServiceArchiveTests {
         let cached = await sut.store.getLists()
         #expect(cached == listsBefore)
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: "list-a") == nil)
         #expect(sut.service.goneListId == nil)
         #expect(sut.service.isMutating == false)
     }

@@ -15,8 +15,8 @@
 //
 //  Determinism: the GatedPurchaseRecorder script and its handshake; no sleeps.
 //
-//  Fails today because RecordPurchaseFinish.checkItem, checkItem(), recordAgain() and the new
-//  InlineErrorBannerState initializer do not exist yet.
+//  Covers RecordPurchaseFinish.checkItem, checkItem(), recordAgain() and the actions-based
+//  InlineErrorBannerState initializer.
 //
 
 import Foundation

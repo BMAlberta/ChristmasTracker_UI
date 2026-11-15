@@ -129,7 +129,7 @@ struct BudgetEditorModelListsLoadTests {
 
         #expect(sut.model.picker == .failed(message: ListError.network.userMessage))
         #expect(sut.lists.listsLoadFailure == nil, "the Lists screen must never see the editor's failure")
-        #expect(sut.lists.detailLoadFailure == nil)
+        #expect(sut.lists.detailLoadFailures.isEmpty)
     }
 
     @Test("the editor's failure is stored nowhere for every kind of lists failure", arguments: [
@@ -143,7 +143,7 @@ struct BudgetEditorModelListsLoadTests {
 
         #expect(sut.model.picker == .failed(message: error.userMessage))
         #expect(sut.lists.listsLoadFailure == nil)
-        #expect(sut.lists.detailLoadFailure == nil)
+        #expect(sut.lists.detailLoadFailures.isEmpty)
     }
 
     @Test("a lists failure the dashboard holds survives the editor's failed load")

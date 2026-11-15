@@ -6,8 +6,7 @@
 //  takes the actions directly. The existing initializer (canRetry, isDismissible) and its order
 //  (Try Again, then Dismiss) are unchanged; InlineErrorBannerStateTests covers them.
 //
-//  Fails today because InlineErrorBannerAction.checkItem and .recordAgain and
-//  InlineErrorBannerState.init(message:actions:) do not exist yet.
+//  Covers InlineErrorBannerAction.checkItem and .recordAgain and InlineErrorBannerState.init(message:actions:).
 //
 
 import Foundation

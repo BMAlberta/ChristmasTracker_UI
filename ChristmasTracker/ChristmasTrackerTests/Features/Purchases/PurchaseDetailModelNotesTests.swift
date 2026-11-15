@@ -11,7 +11,7 @@
 //   - a success updates the notes section from the RETURNED purchase;
 //   - an error goes only to notesBanner.
 //
-//  Fails today because PurchaseDetailModel does not exist yet.
+//  Covers the notes behavior of PurchaseDetailModel.
 //
 
 import Foundation

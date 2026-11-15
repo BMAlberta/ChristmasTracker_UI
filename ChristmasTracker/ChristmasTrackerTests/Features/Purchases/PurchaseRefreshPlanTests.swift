@@ -9,7 +9,7 @@
 //  EDITED (I5a-B): the plan gained ONE final step, `.invalidateSpending` (the cache hook that marks
 //  the stats and budget caches stale). Every exact array below only gained that appended step.
 //
-//  Fails today because PurchaseRefreshPlan and PurchaseRefreshStep do not exist yet.
+//  Covers PurchaseRefreshPlan and PurchaseRefreshStep.
 //
 
 import Foundation

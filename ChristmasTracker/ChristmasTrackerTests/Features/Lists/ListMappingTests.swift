@@ -5,8 +5,7 @@
 //  Story I3a-L1: the pure mapping from the generated list schemas to the domain models.
 //
 //  Fixtures are literal JSON decoded with the generated Codable types (see ListFixtures).
-//  Fails today because mapListSummary, mapListDetail, mapListPerson, ListCapabilities,
-//  ListMemberRole and ListMemberStatus do not exist yet.
+//  Covers mapListSummary, mapListDetail, mapListPerson, ListCapabilities, ListMemberRole and ListMemberStatus.
 //
 
 import Testing

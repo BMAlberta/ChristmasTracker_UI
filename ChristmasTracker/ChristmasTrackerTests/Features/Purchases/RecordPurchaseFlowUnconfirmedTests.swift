@@ -10,8 +10,7 @@
 //    cancel behave as for any failure.
 //  - recordAgain and checkItem are ignored in every other state and after any other failure.
 //
-//  Fails today because .unconfirmed, .recordAgain, .checkItem and the checkItem effect do not
-//  exist yet.
+//  Covers .unconfirmed, .recordAgain, .checkItem and the checkItem effect.
 //
 
 import Foundation

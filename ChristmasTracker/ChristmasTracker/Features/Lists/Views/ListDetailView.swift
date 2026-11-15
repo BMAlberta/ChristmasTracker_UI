@@ -20,8 +20,7 @@ struct ListDetailView: View {
     @State private var actionBanner: InlineErrorBannerState?
     @State private var failedAction: FailedAction?
     @State private var showsAddMember = false
-    @State private var memberToRemove: MemberRowState?
-    @State private var showLeaveConfirmation = false
+    @State private var membersDialog = ConfirmationPresentation<MembersDialogTarget>.idle
     @State private var showsAddItem = false
     @State private var refreshFailure: ListError?
     @State private var dismissed = DismissedLoads()
@@ -75,39 +74,18 @@ struct ListDetailView: View {
                     AddItemView(listId: listId, context: ItemListContext(detail: detail))
                 }
             }
-            .confirmationDialog(
-                MembersSectionState.leaveConfirmation.title,
-                isPresented: $showLeaveConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(MembersSectionState.leaveConfirmation.confirmButtonTitle, role: .destructive) {
-                    Task { await leaveList() }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text(MembersSectionState.leaveConfirmation.message)
-            }
-            .confirmationDialog(
-                memberToRemove.map { MembersSectionState.removeConfirmation(for: $0).title } ?? "",
-                isPresented: Binding(
-                    get: { memberToRemove != nil },
-                    set: { if !$0 { memberToRemove = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: memberToRemove
-            ) { row in
-                Button(MembersSectionState.removeConfirmation(for: row).confirmButtonTitle, role: .destructive) {
-                    Task { await removeMember(row) }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: { row in
-                Text(MembersSectionState.removeConfirmation(for: row).message)
-            }
             .onChange(of: listService.goneListId) { _, goneId in
                 // This list is gone: leave. The service has already dropped it.
                 if ListScreenExit.shouldDismissDetail(goneListId: goneId, openListId: listId) {
+                    membersDialog = membersDialog.reset()
                     dismiss()
                 }
+            }
+            .onChange(of: rosterTargets) { _, targets in
+                membersDialog = membersDialog.targetsChanged(existing: targets)
+            }
+            .onChange(of: listService.sessionGeneration) {
+                membersDialog = membersDialog.reset()
             }
             .refreshable {
                 await refresh()
@@ -119,11 +97,12 @@ struct ListDetailView: View {
                 await load()
             }
             .onDisappear {
+                membersDialog = membersDialog.reset()
                 refreshFailure = nil
                 dismissed.reset()
                 actionBanner = nil
                 failedAction = nil
-                listService.clearDetailLoadFailure()
+                listService.clearDetailLoadFailure(forListId: listId)
                 itemService.clearListLoadError()
             }
     }
@@ -134,7 +113,7 @@ struct ListDetailView: View {
     private var loadPresentation: ScreenLoadPresentation {
         ListDetailLoadState.make(
             hasDetail: currentDetail != nil,
-            detailFailure: listService.detailLoadFailure,
+            detailFailure: listService.detailLoadFailure(forListId: listId),
             refreshFailure: refreshFailure,
             itemsFailure: itemService.listLoadError,
             dismissed: dismissed
@@ -169,7 +148,7 @@ struct ListDetailView: View {
     private func refresh() async {
         dismissed.reset()
         refreshFailure = nil
-        listService.clearDetailLoadFailure()
+        listService.clearDetailLoadFailure(forListId: listId)
         refreshFailure = await listService.refreshListDetail(id: listId)
         switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
         case .refresh: await itemService.refreshItems()
@@ -187,7 +166,7 @@ struct ListDetailView: View {
     /// A forced fetch of the detail; a first load when nothing is cached yet.
     private func refetchDetail() async {
         refreshFailure = nil
-        listService.clearDetailLoadFailure()
+        listService.clearDetailLoadFailure(forListId: listId)
         if currentDetail == nil {
             await listService.loadListDetail(id: listId)
         } else {
@@ -355,10 +334,36 @@ struct ListDetailView: View {
         MembersSectionView(
             state: MembersSectionState(detail: detail),
             isMutating: listService.isMutating,
+            dialog: membersDialog,
             onAdd: { showsAddMember = true },
-            onRemove: { memberToRemove = $0 },
-            onLeave: { showLeaveConfirmation = true }
+            onRequest: { membersDialog = membersDialog.requesting($0) },
+            onCancel: { membersDialog = membersDialog.cancelled() },
+            onConfirm: { confirmMembersDialog($0) }
         )
+    }
+
+    /// The dialog targets that still exist: Leave, plus one Remove per roster member.
+    private var rosterTargets: Set<MembersDialogTarget> {
+        guard let detail = currentDetail else { return [] }
+        let rows = MembersSectionState(detail: detail).rows
+        let removals = rows.map { MembersDialogTarget.removeMember(userId: $0.userId) }
+        return Set(removals).union([.leave])
+    }
+
+    private func confirmMembersDialog(_ target: MembersDialogTarget) {
+        let result = membersDialog.confirmed(target)
+        membersDialog = result.presentation
+        switch result.run {
+        case .leave:
+            Task { await leaveList() }
+        case .removeMember(let userId):
+            guard let detail = currentDetail else { return }
+            let rows = MembersSectionState(detail: detail).rows
+            guard let row = rows.first(where: { $0.userId == userId }) else { return }
+            Task { await removeMember(row) }
+        case nil:
+            break
+        }
     }
 
     /// The confirmation dialog is attached to this trigger, not to the screen.
@@ -371,7 +376,7 @@ struct ListDetailView: View {
                 .foregroundStyle(Color.surfaceColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.vertical, AppSpacing.xs)
-                .background(Color.accentColor, in: .rect(cornerRadius: AppSpacing.md))
+                .background(Color.destructiveColor, in: .rect(cornerRadius: AppSpacing.md))
         }
         .disabled(listService.isMutating)
         .accessibilityHint("Moves this list to Archived after you confirm")
@@ -384,6 +389,7 @@ struct ListDetailView: View {
             Button(ListArchiveConfirmation.confirmButtonTitle, role: .destructive) {
                 Task { await archiveList() }
             }
+            .destructiveTint()
             Button("Cancel", role: .cancel) { }
         } message: {
             Text(ListArchiveConfirmation.message)
@@ -401,6 +407,7 @@ struct ListDetailView: View {
         return ItemsSectionView(
             state: listState,
             isLoading: itemService.isLoadingItems,
+            itemsFailure: itemService.listLoadError,
             onSelect: { selectedItemId = $0 },
             onAdd: { showsAddItem = true }
         )

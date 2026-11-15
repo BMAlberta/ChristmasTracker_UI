@@ -4,13 +4,8 @@
 //
 //  Tests for Story I2a: session teardown and clearable stores.
 //
-//  All tests intentionally fail before the implementation is written:
-//  - SessionClearable protocol does not exist yet.
-//  - SessionManager.register(_:) does not exist yet.
-//  - SessionManager.teardown(reason:) does not exist yet.
-//  - The clearForSession() conformances on stores/services do not exist yet.
-//
-//  Compile-time failures ARE the expected "failing for the right reason".
+//  Covers the SessionClearable protocol, SessionManager.register(_:) and teardown(reason:),
+//  and the clearForSession() conformances on the stores and services.
 //
 
 import Testing

@@ -20,7 +20,7 @@
 //  allowed look-alikes), then run over the real files. The existence checks make the real-file
 //  tests non-vacuous: a missing file is a failure, never a pass over an empty set.
 //
-//  Fails today because the view files are not rewritten and the new view-state files do not exist.
+//  Scans the Record Purchase view and view-state files listed above (and ItemDetailView) for the rules above.
 //
 
 import Foundation

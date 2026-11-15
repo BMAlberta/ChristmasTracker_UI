@@ -61,6 +61,6 @@ struct ChildDeletionFlowHarness {
     /// this now means: the child load channel is not failed and neither list load failure is set.
     var sharedErrorsAreNil: Bool {
         if case .failed = childService.phase { return false }
-        return listService.listsLoadFailure == nil && listService.detailLoadFailure == nil
+        return listService.listsLoadFailure == nil && listService.detailLoadFailures.isEmpty
     }
 }

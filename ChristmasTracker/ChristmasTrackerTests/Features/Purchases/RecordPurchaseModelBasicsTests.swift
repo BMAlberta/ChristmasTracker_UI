@@ -8,7 +8,7 @@
 //  No test assumes that counts, statuses or quantities change after a purchase: the model does
 //  not refresh anything, and the refresh plan only lists refreshes.
 //
-//  Fails today because RecordPurchaseModel does not exist yet.
+//  Covers the basics of RecordPurchaseModel.
 //
 
 import Foundation

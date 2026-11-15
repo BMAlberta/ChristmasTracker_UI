@@ -95,7 +95,7 @@ struct ListServiceMutationPublishesNothingTests {
     func failureThrowsAndLeavesLoadFailuresUntouched(op: ListMutation) async throws {
         let sut = try await makeSUT()
         #expect(sut.service.listsLoadFailure == .network, "precondition")
-        #expect(sut.service.detailLoadFailure == .server, "precondition")
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == .server, "precondition")
         op.script(sut, failing: .forbidden)
 
         await #expect(throws: ListError.forbidden) {
@@ -103,7 +103,7 @@ struct ListServiceMutationPublishesNothingTests {
         }
 
         #expect(sut.service.listsLoadFailure == .network, "a mutation must not replace or clear the lists failure")
-        #expect(sut.service.detailLoadFailure == .server, "a mutation must not replace or clear the detail failure")
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == .server, "a mutation must not replace or clear the detail failure")
         #expect(sut.service.isMutating == false)
     }
 
@@ -119,7 +119,7 @@ struct ListServiceMutationPublishesNothingTests {
         }
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == nil)
     }
 
     @Test("a mutation that is rejected as notFound still throws it and publishes nothing",
@@ -135,7 +135,7 @@ struct ListServiceMutationPublishesNothingTests {
 
         #expect(sut.service.goneListId == H.listId, "the existing gone-list handling is unchanged")
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == nil)
     }
 
     @Test("a mutation cancelled by the repository publishes nothing", arguments: ListMutation.allCases)
@@ -154,7 +154,7 @@ struct ListServiceMutationPublishesNothingTests {
         _ = try? await op.run(sut)
 
         #expect(sut.service.listsLoadFailure == nil)
-        #expect(sut.service.detailLoadFailure == nil)
+        #expect(sut.service.detailLoadFailure(forListId: H.listId) == nil)
         #expect(sut.service.isMutating == false)
     }
 }

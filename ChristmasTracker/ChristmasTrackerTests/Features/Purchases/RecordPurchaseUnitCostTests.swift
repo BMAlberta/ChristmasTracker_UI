@@ -6,7 +6,7 @@
 //  (no Double), rounded to two places, formatted with the user's currency, and present only when
 //  the form is valid.
 //
-//  Fails today because RecordPurchaseFormState does not exist yet.
+//  Covers the unit-cost line of RecordPurchaseFormState.
 //
 
 import Foundation
