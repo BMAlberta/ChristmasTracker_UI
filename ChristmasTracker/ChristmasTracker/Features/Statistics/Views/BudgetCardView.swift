@@ -21,10 +21,10 @@ struct BudgetCardView: View {
             BudgetAmountLine(title: "Spent", value: card.spentText)
             Text(card.statusText)
                 .font(.appHeadline)
-                .foregroundStyle(card.isOver ? Color.destructiveColor : Color.textPrimaryColor)
+                .foregroundStyle(BudgetLevelColors.text(for: card.level))
                 .fixedSize(horizontal: false, vertical: true)
             ProgressView(value: card.progress)
-                .tint(card.isOver ? Color.destructiveColor : Color.primaryColor)
+                .tint(BudgetLevelColors.bar(for: card.level))
                 .accessibilityLabel("Budget progress")
                 .accessibilityValue(card.progressAccessibilityLabel)
             if let cardBanner = model.budgetCardBanner {
@@ -75,12 +75,28 @@ struct BudgetPersonRowView: View {
             BudgetAmountLine(title: "Spent", value: row.spentText)
             Text(row.statusText)
                 .font(.appSubheadline)
-                .foregroundStyle(row.isOver ? Color.destructiveColor : Color.textMutedColor)
+                .foregroundStyle(BudgetLevelColors.text(for: row.level))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.accessibilityLabel)
+    }
+}
+
+/// The colors a budget level uses. The bar takes the level's token. Text stays in the primary text
+/// color except over budget: the gold token fails contrast as text, and the over token as text on the
+/// surface is the accepted exception recorded in the contrast tests. The words always render.
+private enum BudgetLevelColors {
+    static func bar(for level: BudgetLevel) -> Color {
+        Color.budget(level: level)
+    }
+
+    static func text(for level: BudgetLevel) -> Color {
+        switch level {
+        case .under, .nearLimit: return Color.textPrimaryColor
+        case .over: return Color.budgetOverColor
+        }
     }
 }
 

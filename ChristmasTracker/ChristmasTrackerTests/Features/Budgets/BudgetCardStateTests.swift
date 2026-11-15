@@ -40,7 +40,7 @@ struct BudgetCardStateTests {
     @Test func budgetExactlyAtTotalIsNotOver() {
         let state = card(BudgetFixtures.budget(total: "500", spent: "500"))
         #expect(!state.isOver)
-        #expect(state.statusText == "$0.00 remaining")
+        #expect(state.statusText == "Near limit. $0.00 remaining")
         #expect(state.progress == 1)
     }
 
@@ -129,7 +129,7 @@ struct BudgetCardStateTests {
     @Test func statsBudgetAtTotal() {
         let state = card(BudgetFixtures.statsBudget(total: "600", spent: "600"))
         #expect(!state.isOver)
-        #expect(state.statusText == "$0.00 remaining")
+        #expect(state.statusText == "Near limit. $0.00 remaining")
         #expect(state.progress == 1)
     }
 
@@ -171,7 +171,7 @@ struct BudgetCardStateTests {
         )
         let row = try #require(card(budget).rows.first)
         #expect(!row.isOver)
-        #expect(row.statusText == "$0.00 remaining")
+        #expect(row.statusText == "Near limit. $0.00 remaining")
     }
 
     @Test func personOverTheirLimitWhileBudgetIsNotOver() throws {

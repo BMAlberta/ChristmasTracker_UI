@@ -223,9 +223,7 @@ struct ItemDetailView: View {
                     .background(Color.highlightColor.opacity(0.25), in: .rect(cornerRadius: AppSpacing.xs))
             }
             if let marker = state.statusMarker {
-                Label(marker.displayName, systemImage: marker.icon)
-                    .font(.appHeadline)
-                    .foregroundStyle(marker.tokenColor)
+                StatusPill(status: marker)
             }
             if let updated = state.updatedText {
                 Text(updated)

@@ -122,7 +122,7 @@ struct StatsScreenStateTests {
         let over = make(stats: BudgetFixtures.statsYear(totalSpent: "130", purchaseCount: 1), budget: BudgetFixtures.budget(total: "100", spent: "130"))
         #expect(try #require(under.budgetCard).isOver == false)
         #expect(try #require(at.budgetCard).isOver == false)
-        #expect(try #require(at.budgetCard).statusText == "$0.00 remaining")
+        #expect(try #require(at.budgetCard).statusText == "Near limit. $0.00 remaining")
         let overCard = try #require(over.budgetCard)
         #expect(overCard.isOver)
         #expect(overCard.statusText == "Over by $30.00")
