@@ -27,6 +27,15 @@ nonisolated enum ItemFormMode: Equatable, Sendable {
 nonisolated struct ItemImageLookup: Equatable, Sendable {
     let token: Int
     let url: String
+    /// True for the lookup the user asked for with "Add image" (IMG1-P5).
+    var isExplicit = false
+}
+
+/// The state of the explicit "Add image" action. `running` is derived from the in-flight lookup.
+nonisolated enum ItemAddImageStatus: Equatable, Sendable {
+    case idle
+    case running
+    case failed
 }
 
 nonisolated struct ItemImageFillState: Equatable, Sendable {
@@ -38,6 +47,13 @@ nonisolated struct ItemImageFillState: Equatable, Sendable {
     private var lastLookedUpUrl: String?
     /// The last value this state handed out as a fill, to recognise its echo from the text field.
     private var lastFilled: String?
+    /// Set when an explicit lookup ended without a usable image; cleared by the next action.
+    private var addImageFailed = false
+
+    var addImageStatus: ItemAddImageStatus {
+        if inFlight?.isExplicit == true { return .running }
+        return addImageFailed ? .failed : .idle
+    }
 
     var isLooking: Bool { inFlight != nil }
 
@@ -60,6 +76,34 @@ nonisolated struct ItemImageFillState: Equatable, Sendable {
         let lookup = ItemImageLookup(token: lastToken, url: page)
         inFlight = lookup
         lastLookedUpUrl = page
+        addImageFailed = false
+        return lookup
+    }
+
+    // MARK: - Add image (explicit)
+
+    /// Edit only, a blank image text and a valid page URL. Stays true while the lookup runs and
+    /// after a failure.
+    func addImageVisible(url: String, imageUrl: String) -> Bool {
+        guard case .edit = mode, Self.isBlank(imageUrl) else { return false }
+        return LinkPreviewInput.validated(Self.trimmed(url)) != nil
+    }
+
+    /// Visible and no lookup in flight.
+    func addImageEnabled(url: String, imageUrl: String) -> Bool {
+        addImageVisible(url: url, imageUrl: imageUrl) && inFlight == nil
+    }
+
+    /// A tap on "Add image": an explicit lookup even when the URL equals the saved one, or nil.
+    mutating func addImageRequested(url: String, imageUrl: String) -> ItemImageLookup? {
+        guard addImageEnabled(url: url, imageUrl: imageUrl),
+              let page = LinkPreviewInput.validated(Self.trimmed(url)) else { return nil }
+
+        lastToken += 1
+        let lookup = ItemImageLookup(token: lastToken, url: page, isExplicit: true)
+        inFlight = lookup
+        lastLookedUpUrl = page
+        addImageFailed = false
         return lookup
     }
 
@@ -70,8 +114,11 @@ nonisolated struct ItemImageFillState: Equatable, Sendable {
     mutating func lookupFinished(_ lookup: ItemImageLookup, result: String?, url: String, imageUrl: String) -> String? {
         guard lookup == inFlight else { return nil }
         inFlight = nil
-        guard Self.trimmed(url) == lookup.url, mayFill(imageUrl: imageUrl),
-              let accepted = LinkPreviewImageFilter.accepted(result) else { return nil }
+        guard Self.trimmed(url) == lookup.url, mayFill(imageUrl: imageUrl) else { return nil }
+        guard let accepted = LinkPreviewImageFilter.accepted(result) else {
+            if lookup.isExplicit { addImageFailed = true }
+            return nil
+        }
         source = .fetched
         lastFilled = accepted
         return accepted
@@ -80,12 +127,14 @@ nonisolated struct ItemImageFillState: Equatable, Sendable {
     /// Forgets the in-flight lookup so its result is dropped.
     mutating func cancel() {
         inFlight = nil
+        addImageFailed = false
     }
 
     // MARK: - Image text
 
     /// Called for every change of the image field text.
     mutating func imageTextChanged(to text: String) {
+        if !(source == .fetched && text == lastFilled) { addImageFailed = false }
         if Self.isBlank(text) {
             source = .empty
         } else if source == .fetched, text == lastFilled {

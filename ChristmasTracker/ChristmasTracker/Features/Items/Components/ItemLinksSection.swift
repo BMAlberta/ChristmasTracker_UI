@@ -65,7 +65,7 @@ struct ItemLinksSection: View {
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
-                if imageFill.isLooking {
+                if imageFill.isLooking && imageFill.addImageStatus != .running {
                     ProgressView()
                         .accessibilityLabel(ItemFormCopy.lookingForImage)
                 }
@@ -75,6 +75,10 @@ struct ItemLinksSection: View {
             }
             if validity.imageUrlInvalid {
                 invalidLine(ItemFormCopy.invalidImageUrl)
+            }
+            // Edit only (the state returns false on Add); see ItemAddImageButton.
+            if imageFill.state.addImageVisible(url: url, imageUrl: imageUrl) {
+                ItemAddImageButton(url: $url, imageUrl: $imageUrl, imageFill: imageFill)
             }
         }
     }

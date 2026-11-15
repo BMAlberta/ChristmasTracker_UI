@@ -18,6 +18,9 @@ nonisolated enum ItemFormCopy {
     static let invalidUrl = "Enter a web address that starts with http:// or https://."
     static let invalidImageUrl = "The image address must start with https://."
     static let lookingForImage = "Looking for a product image"
+    static let addImageTitle = "Add image"
+    static let addImageHint = "Looks for a picture on the product page."
+    static let addImageFailure = "Couldn't find an image for this link."
 }
 
 nonisolated struct ItemFormValidity: Equatable, Sendable {

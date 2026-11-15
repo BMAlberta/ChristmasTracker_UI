@@ -34,10 +34,40 @@ final class ItemImageFillModel {
         apply: @escaping @MainActor (String) -> Void
     ) {
         guard let lookup = state.urlEditingFinished(url: url, imageUrl: imageUrl) else { return }
+        run(lookup, service: service, current: current, apply: apply)
+    }
+
+    var addImageStatus: ItemAddImageStatus { state.addImageStatus }
+
+    /// The explicit "Add image" tap (Edit only; the state decides). Same task handling as the
+    /// automatic lookup.
+    func addImageRequested(
+        url: String,
+        imageUrl: String,
+        service: LinkPreviewService,
+        current: @escaping @MainActor () -> (url: String, imageUrl: String),
+        apply: @escaping @MainActor (String) -> Void
+    ) {
+        guard let lookup = state.addImageRequested(url: url, imageUrl: imageUrl) else { return }
+        run(lookup, service: service, current: current, apply: apply)
+    }
+
+    private func run(
+        _ lookup: ItemImageLookup,
+        service: LinkPreviewService,
+        current: @escaping @MainActor () -> (url: String, imageUrl: String),
+        apply: @escaping @MainActor (String) -> Void
+    ) {
         task?.cancel()
+        let generation = service.sessionGeneration
         task = Task { [weak self] in
             let result = await service.imageUrl(for: lookup.url)
             guard !Task.isCancelled, let self else { return }
+            // A session end looks like "no image"; drop it silently instead of showing a failure.
+            guard service.sessionGeneration == generation else {
+                state.cancel()
+                return
+            }
             let now = current()
             if let fill = state.lookupFinished(lookup, result: result, url: now.url, imageUrl: now.imageUrl) {
                 apply(fill)
