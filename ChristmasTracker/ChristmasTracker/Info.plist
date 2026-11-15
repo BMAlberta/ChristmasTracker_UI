@@ -20,6 +20,13 @@
     <string>$(APP_ENVIRONMENT)</string>
     <key>INACTIVITY_LOCK_MINUTES</key>
     <string>$(INACTIVITY_LOCK_MINUTES)</string>
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchBackground</string>
+        <key>UIImageName</key>
+        <string>LaunchGlyph</string>
+    </dict>
     <key>NSFaceIDUsageDescription</key>
     <string>Use Face ID to unlock Christmas Tracker.</string>
     <key>NSAppTransportSecurity</key>
