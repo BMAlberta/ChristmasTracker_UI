@@ -23,6 +23,7 @@ struct AddItemView: View {
     @State private var priceText = ""
     @State private var quantityRequested = 1
     @State private var priority = 5
+    @State private var imageFill = ItemImageFillModel(mode: .add)
     @State private var isCreating = false
     @State private var creationError: ItemError?
 
@@ -66,6 +67,7 @@ struct AddItemView: View {
                     priceText: $priceText,
                     quantity: $quantityRequested,
                     priority: $priority,
+                    imageFill: imageFill,
                     showsOffListNotice: permissions.showsOffListNotice
                 )
             }
@@ -93,6 +95,7 @@ struct AddItemView: View {
                 }
             }
             .onDisappear {
+                imageFill.cancel()
                 creationError = nil
             }
         }
@@ -100,6 +103,7 @@ struct AddItemView: View {
 
     private func createItem() async {
         guard let input, !isCreating else { return }
+        imageFill.cancel()
         creationError = nil
         isCreating = true
         defer { isCreating = false }
@@ -125,6 +129,7 @@ struct AddItemView: View {
             repository: MockItemRepository(),
             dataStore: ItemDataStore()
         ))
+        .environment(\.linkPreviewService, LinkPreviewService(repository: MockLinkPreviewRepository()))
 }
 
 #Preview("Member (surprise item)") {
@@ -133,4 +138,5 @@ struct AddItemView: View {
             repository: MockItemRepository(),
             dataStore: ItemDataStore()
         ))
+        .environment(\.linkPreviewService, LinkPreviewService(repository: MockLinkPreviewRepository()))
 }

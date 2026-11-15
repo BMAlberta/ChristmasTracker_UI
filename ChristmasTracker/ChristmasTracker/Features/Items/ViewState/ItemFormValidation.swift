@@ -15,6 +15,9 @@ import Foundation
 
 nonisolated enum ItemFormCopy {
     static let offListSentence = "This item will be hidden from the recipient."
+    static let invalidUrl = "Enter a web address that starts with http:// or https://."
+    static let invalidImageUrl = "The image address must start with https://."
+    static let lookingForImage = "Looking for a product image"
 }
 
 nonisolated struct ItemFormValidity: Equatable, Sendable {
@@ -103,8 +106,9 @@ nonisolated enum ItemFormValidation {
         )
     }
 
-    /// Only the fields that differ from `original` are set. Clearing an optional field is not a
-    /// change: the generated update body cannot clear a field.
+    /// Only the fields that differ from `original` are set. url and imageUrl are sent only when
+    /// the trimmed value differs from the trimmed original (nil equals empty); clearing a field
+    /// that had a value sends an empty string, never nil (decision 17).
     static func makeUpdateInput(
         original: ListItem,
         name: String,
@@ -122,15 +126,13 @@ nonisolated enum ItemFormValidation {
 
         let newName = trimmed(name)
         let newDescription = trimmed(description)
-        let newUrl = nilIfEmpty(url)
-        let newImageUrl = nilIfEmpty(imageUrl)
         let newPrice = parsePrice(priceText)
 
         let input = UpdateItemInput(
             name: newName != trimmed(original.name) ? newName : nil,
             description: newDescription != trimmed(original.description) ? newDescription : nil,
-            url: newUrl != nil && newUrl != original.url.flatMap(nilIfEmpty) ? newUrl : nil,
-            imageUrl: newImageUrl != nil && newImageUrl != original.imageUrl.flatMap(nilIfEmpty) ? newImageUrl : nil,
+            url: changedValue(url, original: original.url),
+            imageUrl: changedValue(imageUrl, original: original.imageUrl),
             expectedUnitPrice: newPrice != nil && newPrice != original.expectedUnitPrice ? newPrice : nil,
             quantityRequested: quantity != original.quantityRequested ? quantity : nil,
             priority: priority != original.priority ? priority : nil
@@ -147,6 +149,12 @@ nonisolated enum ItemFormValidation {
     private static func nilIfEmpty(_ text: String) -> String? {
         let value = trimmed(text)
         return value.isEmpty ? nil : value
+    }
+
+    /// The trimmed new value when it differs from the trimmed original, else nil (omitted).
+    private static func changedValue(_ text: String, original: String?) -> String? {
+        let new = trimmed(text)
+        return new == trimmed(original ?? "") ? nil : new
     }
 
     private static func lengthIsValid(_ text: String, max: Int) -> Bool {
