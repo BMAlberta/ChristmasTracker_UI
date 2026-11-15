@@ -36,9 +36,9 @@
 | 1015 | `INVALID_BIOMETRIC_TOKEN` | 401 | Invalid biometric token | — | UNUSED | re-login |
 | 1016 | `INVALID_RESET_TOKEN` | 401 | Invalid or expired reset token | — | UNUSED | re-login |
 | 1017 | `REGISTRATION_CODE_INVALID` | 403 | Invalid registration code | src/services/auth.service.ts | ACTIVE | show message |
-| 2001 | `FORBIDDEN` | 403 | Access forbidden | src/services/item.service.ts, src/services/list.service.ts, src/services/purchase.service.ts | ACTIVE | show message |
+| 2001 | `FORBIDDEN` | 403 | Access forbidden | src/services/admin/coOwnerAdmin.ts, src/services/admin/membershipPolicy.ts, src/services/item.service.ts, src/services/list.service.ts, src/services/purchase.service.ts | ACTIVE | show message |
 | 2002 | `INSUFFICIENT_PERMISSIONS` | 403 | Insufficient permissions | src/middleware/auth.ts | ACTIVE | show message |
-| 2003 | `NOT_LIST_OWNER` | 403 | Only the list owner can perform this action | src/services/item.service.ts, src/services/list.service.ts | ACTIVE | show message |
+| 2003 | `NOT_LIST_OWNER` | 403 | Only the list owner can perform this action | src/services/admin/coOwnerAdmin.ts, src/services/item.service.ts, src/services/list.service.ts | ACTIVE | show message |
 | 2004 | `NOT_LIST_MEMBER` | 403 | You are not a member of this list | — | UNUSED | show message |
 | 2005 | `CANNOT_VIEW_LIST` | 403 | You cannot view this list | — | UNUSED | show message |
 | 2006 | `CANNOT_EDIT_LIST` | 403 | You cannot edit this list | — | UNUSED | show message |
@@ -64,19 +64,19 @@
 | 3015 | `INVALID_STATUS_TRANSITION` | 400 | Invalid status transition | src/services/item.service.ts | ACTIVE | show message |
 | 4001 | `RESOURCE_NOT_FOUND` | 404 | Resource not found | src/middleware/errorHandler.ts, src/services/user.service.ts | ACTIVE | treat as not found |
 | 4002 | `USER_NOT_FOUND` | 404 | User not found | src/middleware/auth.ts, src/services/auth.service.ts, src/services/user.service.ts | ACTIVE | re-login |
-| 4003 | `LIST_NOT_FOUND` | 404 | List not found | src/services/item.service.ts, src/services/list.service.ts, src/services/purchase.service.ts | ACTIVE | treat as not found |
+| 4003 | `LIST_NOT_FOUND` | 404 | List not found | src/services/admin/coOwnerAdmin.ts, src/services/admin/membershipPolicy.ts, src/services/item.service.ts, src/services/list.service.ts, src/services/purchase.service.ts | ACTIVE | treat as not found |
 | 4004 | `ITEM_NOT_FOUND` | 404 | Item not found | src/services/item.service.ts, src/services/purchase.service.ts | ACTIVE | treat as not found |
 | 4005 | `PURCHASE_NOT_FOUND` | 404 | Purchase not found | src/services/purchase.service.ts | ACTIVE | treat as not found |
 | 4006 | `MEMBERSHIP_NOT_FOUND` | 404 | Membership not found | src/services/list.service.ts | ACTIVE | treat as not found |
 | 4007 | `BUDGET_NOT_FOUND` | 404 | Budget not found | src/services/budget.service.ts | ACTIVE | treat as not found |
 | 4008 | `RECIPIENT_BUDGET_NOT_FOUND` | 404 | Recipient budget not found | — | UNUSED | treat as not found |
-| 4009 | `MEMBER_EMAIL_NOT_FOUND` | 404 | Member email not found | src/services/list.service.ts | ACTIVE | show message |
+| 4009 | `MEMBER_EMAIL_NOT_FOUND` | 404 | Member email not found | src/services/admin/coOwnerAdmin.ts, src/services/list.service.ts | ACTIVE | show message |
 | 4010 | `RECIPIENT_NOT_FOUND` | 404 | Recipient not found | src/services/budget.service.ts, src/services/list.service.ts | ACTIVE | treat as not found |
 | 4011 | `PERSON_NOT_FOUND` | 404 | Person not found | src/services/user.service.ts | ACTIVE | treat as not found |
 | 5001 | `DUPLICATE_RESOURCE` | 409 | Duplicate resource | src/middleware/errorHandler.ts | ACTIVE | show message |
 | 5002 | `LIST_ALREADY_EXISTS` | 409 | List already exists | src/services/list.service.ts | ACTIVE | show message |
 | 5003 | `BUDGET_ALREADY_EXISTS` | 409 | Budget already exists | src/services/budget.service.ts | ACTIVE | show message |
-| 5004 | `MEMBERSHIP_ALREADY_EXISTS` | 409 | Membership already exists | src/services/list.service.ts | ACTIVE | show message |
+| 5004 | `MEMBERSHIP_ALREADY_EXISTS` | 409 | Membership already exists | src/services/admin/membershipPolicy.ts, src/services/list.service.ts | ACTIVE | show message |
 | 5005 | `DUPLICATE_EMAIL` | 409 | Duplicate email | src/services/user.service.ts | ACTIVE | show message |
 | 5006 | `RECIPIENT_ALREADY_HAS_LIST` | 409 | Recipient already has a list for this year | — | UNUSED | show message |
 | 6001 | `BUDGET_EXCEEDED` | 422 | Budget exceeded | — | UNUSED | show message |
@@ -96,7 +96,7 @@
 | 6304 | `ALREADY_LIST_MEMBER` | 422 | Already a list member | — | UNUSED | show message |
 | 6305 | `MEMBERSHIP_REMOVED` | 403 | Your membership has been removed | — | UNUSED | show message |
 | 6401 | `LIST_ARCHIVED` | 422 | List is archived | — | UNUSED | show message |
-| 6402 | `CANNOT_EDIT_ARCHIVED_LIST` | 422 | Cannot edit an archived list | src/services/list.service.ts | ACTIVE | show message |
+| 6402 | `CANNOT_EDIT_ARCHIVED_LIST` | 422 | Cannot edit an archived list | src/services/admin/coOwnerAdmin.ts, src/services/list.service.ts | ACTIVE | show message |
 | 6501 | `CANNOT_DELETE_RESOURCE` | 422 | Cannot delete resource | src/services/user.service.ts | ACTIVE | show message |
 | 7001 | `EMAIL_SERVICE_ERROR` | 503 | Email service error | — | UNUSED | back off and retry |
 | 7002 | `PUSH_NOTIFICATION_ERROR` | 503 | Push notification error | — | UNUSED | back off and retry |

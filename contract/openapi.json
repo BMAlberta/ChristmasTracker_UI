@@ -58,6 +58,10 @@
     {
       "name": "Version",
       "description": "App version enforcement"
+    },
+    {
+      "name": "Link preview",
+      "description": "Product image lookup from a page URL"
     }
   ],
   "components": {
@@ -777,6 +781,22 @@
             "type": "integer",
             "minimum": 0,
             "description": "max(0, quantityRequested - quantityPurchased). Present only when the caller can see gift activity; omitted otherwise (P24, P3)."
+          }
+        }
+      },
+      "LinkPreview": {
+        "type": "object",
+        "required": [
+          "imageUrl"
+        ],
+        "properties": {
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048,
+            "description": "An https image URL found on the page, or null. Null covers a page without an image, a blocked target and every fetch problem, with identical bodies (C18)."
           }
         }
       },
@@ -3171,7 +3191,8 @@
                   },
                   "url": {
                     "type": "string",
-                    "format": "uri"
+                    "maxLength": 2048,
+                    "description": "Product page link (C19). Scheme must be http or https; no userinfo (user:pass@). An empty string clears the field (stored and returned as null); null is rejected."
                   },
                   "expectedUnitPrice": {
                     "$ref": "#/components/schemas/MoneyAmount"
@@ -3184,7 +3205,8 @@
                   },
                   "imageUrl": {
                     "type": "string",
-                    "format": "uri"
+                    "maxLength": 2048,
+                    "description": "Product image link (C19). Scheme must be https; no userinfo (user:pass@). An empty string clears the field (stored and returned as null); null is rejected."
                   }
                 }
               }
@@ -3413,6 +3435,90 @@
         }
       }
     },
+    "/tracker/v2/link-preview": {
+      "post": {
+        "summary": "Find a product image for a page URL",
+        "operationId": "getLinkPreview",
+        "description": "Fetches the page and returns the URL of its product image, or null (C18). A page without an\nimage, a blocked target, a timeout, a busy server and every other fetch problem all answer\n200 with `imageUrl: null` and an identical body, so a caller learns nothing about the\ninternal network or why a lookup failed. The server fetches only public http and https\naddresses. Images are hotlinked, never stored. Limited to 10 requests per minute per user.\n",
+        "tags": [
+          "Link preview"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "description": "Product page link (C19). Scheme must be http or https; no userinfo (user:pass@).",
+                    "example": "https://www.example.com/product/123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lookup finished; imageUrl is null when no image could be found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LinkPreview"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/tracker/v2/lists/{listId}/items": {
       "post": {
         "summary": "Create a new item",
@@ -3463,7 +3569,9 @@
                   },
                   "url": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "description": "Product page link (C19). Scheme must be http or https; no userinfo (user:pass@)."
                   },
                   "expectedUnitPrice": {
                     "$ref": "#/components/schemas/MoneyAmount"
@@ -3482,7 +3590,9 @@
                   },
                   "imageUrl": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "description": "Product image link (C19). Scheme must be https; no userinfo (user:pass@)."
                   }
                 }
               }

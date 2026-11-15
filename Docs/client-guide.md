@@ -599,6 +599,34 @@ Content-Type: application/json
 Response (201): `ItemResponse` with server-derived `offList` flag (`true` when caller is a member adding to someone else's list).  
 Source: `src/routes/list-items.routes.ts:99-118`, `src/services/item.service.ts` (P21)
 
+**`url` and `imageUrl` rules (C19).** On create and on update:
+
+- `url` must be `http` or `https`; `imageUrl` must be `https`. Both are at most 2048 characters and must not carry userinfo (`user:pass@host`). Anything else is a `400` validation error (`javascript:`, `data:`, `ftp:`, an `http` image, a longer value).
+- On create an empty string is a `400`; leave the field out instead.
+- On `PATCH /items/{id}` an empty string clears the field: it is stored and returned as `null`, as with the purchase fields (S15). `null` is a `400`, and an omitted field is left unchanged.
+- **Send only the fields the user changed on PATCH.** Stored values are never re-validated, so a legacy value that no longer passes these rules (an `http` image URL, say) is returned as it is, and resending it unchanged would be rejected.
+- On the web, add `rel="noopener noreferrer"` to every link built from `url`.
+
+Source: `src/types/schemas.ts` (`itemLinkUrlSchema`, `itemImageUrlSchema`), `src/services/item.service.ts` (`updateItem`), `__tests__/integration/item-url-validation.test.ts`
+
+**Buying an off-list item at creation takes two calls (S17).** There is no atomic create-and-purchase field in V1. Create the item as above, then record the purchase:
+
+```
+POST /tracker/v2/items/<itemId>/purchases
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "quantity": 2, "totalCost": 19.98 }
+```
+
+- `quantity` is the item's `quantityRequested` (from the create response).
+- `totalCost` is the unit price times the quantity, sent as a decimal amount in dollars with at most two decimals (S11). Compute it in integer cents and divide by 100 to avoid floating-point error: `6.67 * 3` is `20.009999999999998` and would be refused, while `Math.round(6.67 * 100) * 3 / 100` is `20.01`.
+- When the item has no `expectedUnitPrice`, the user enters the cost.
+- The creator of an off-list item may purchase it. The item becomes `PURCHASED` once the purchase covers `quantityRequested`.
+- If the first call succeeds and the second fails, the item exists and is still `AVAILABLE`; let the user retry the purchase from the item.
+
+Source: `__tests__/integration/off-list-purchase.test.ts`
+
 **Purchase counts (P24).** Every response that returns an `Item` (the create, list, read, edit and status endpoints) carries two optional integers:
 
 - `quantityPurchased`: the sum of `quantity` over all purchases of the item, whoever made them.
@@ -620,6 +648,9 @@ Source: `src/services/item.service.ts` (`createItem`)
 
 When `canDelete` is `false` only because of purchases, the server answers `422 CANNOT_DELETE_ITEM_WITH_PURCHASES`. Blind callers are never told about purchases, so for them `canDelete` follows the permission alone. Neither flag depends on the list status, so they are the same on an archived list (§6.6, L16). Blind callers and PUBLIC non-members never receive off-list items (§6.2), so those rows do not occur for them.  
 Source: `src/utils/itemPermissions.ts`, `src/services/item.service.ts`, `__tests__/integration/item-edit-delete-flags.test.ts`
+
+**Off-list items you cannot see (P26).** A caller who cannot see off-list items (`canSeeOffList` is `false`: the recipient, the owner or co-owner of a list whose recipient can log in, a VIEWER-role member, a non-member of a PUBLIC list) gets `404 ITEM_NOT_FOUND` with the message `Item not found` for an off-list item on `PATCH /items/{id}`, `DELETE /items/{id}`, `PATCH /items/{id}/status` and `POST /items/{id}/purchases`, exactly like a nonexistent id and whatever the request body. This also applies to a creator who can no longer see the item (for example a member whose role was changed to VIEWER). `403 CANNOT_EDIT_OFF_LIST_ITEM` is returned only to a caller who can see the item and did not create it (another member, and the owner and co-owner of a child's list, P21 and P25). Clients never show these items to such callers, so no client change is needed; the behavior is visible only to someone probing an item id they cannot see. `GET /lists/{listId}/items?offList=true` returns `200` with an empty array for such a caller; without the filter or with `offList=false` they get the normal items as before.  
+Source: `src/utils/privacy.ts` (`isHiddenOffListItem`), `src/services/item.service.ts`, `src/services/purchase.service.ts`, `__tests__/integration/hidden-off-list-404.test.ts`
 
 **Deleting an item.** `DELETE /items/{id}` is a soft delete: the item disappears from item lists and from `GET /items/{id}` (404 `ITEM_NOT_FOUND`), but its purchases are kept and still count in `totalSpent`, in budgets (`spent`, `remaining`, `isOverBudget`), in `GET /stats` and in `GET /purchases`. After an item delete there is nothing to refresh in budgets, stats or purchase history; just remove the item from the screen. A caller who can see gift activity cannot delete an item that has purchases, so the case arises when a blind owner or co-owner deletes an item that members already bought.  
 Source: `src/services/item.service.ts` (`deleteItem`), `src/services/budget.service.ts`, `src/services/stats.service.ts`, `src/utils/purchaseFilterBuilder.ts`
@@ -927,6 +958,35 @@ A stranger or an unknown id returns `404 PERSON_NOT_FOUND` with an identical bod
 
 Source: `src/routes/user.routes.ts:484-494`, `src/services/user.service.ts`, `Docs/privacy-matrix.md` (`GET /users/{id}` rows)
 
+### 7.11 Product image from a page URL
+
+`POST /link-preview` (operation `getLinkPreview`, C18) looks for a product image on the page a user pasted as an item's `url`.
+
+```
+POST /tracker/v2/link-preview
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "url": "https://www.example.com/product/123" }
+```
+
+Response (200): `{ "success": true, "data": { "imageUrl": "https://..." | null }, "meta": { ... } }`
+
+Rules for clients:
+
+1. **When to call.** Call it when the user finishes entering a product URL (blur on the web, end of editing on iOS) **and** the image field is empty or was not typed by the user. Never overwrite an image the user typed or chose.
+2. **Abort the previous call.** If the user edits the URL again while a call is in flight, abort the earlier request and ignore its result.
+3. **`null`, 429 and any error mean "no image".** Leave the field editable and show nothing. A page without an image, a blocked target, a timeout, a busy server and every other failure all answer `200` with `imageUrl: null` and an identical body, so there is nothing more to learn from them. The call is limited to 10 per minute per user; on `429` simply skip the lookup.
+4. **The user can remove a wrong image.** Clear it with an empty string on `PATCH /items/{id}` (`"imageUrl": ""`, C19).
+5. **Hotlink the returned URL; do not store or proxy it.** It is always `https` and at most 2048 characters, so it already passes the item `imageUrl` rule. On the web use `referrerpolicy="no-referrer"` on the `<img>`.
+6. **The server never fetches private addresses** and never reports why a lookup failed. Some retailers return no image, so the image field is always editable and the lookup is only a convenience.
+
+Some retailers block automated page fetches. On 2026-11-15 the server returned an image for Amazon, a bot-challenge page for Menards (Imperva), HTTP 403 for Home Depot, Lowe's and Etsy, and no response for Best Buy. The v1 image-fetch code, run the same day, got the same results. For every blocked case the endpoint returns `imageUrl: null`.
+
+Treat `null` as a normal and frequent result, not an error: keep the image field editable and make the no-image state look finished. Retailers change their protection without notice, so do not build on this list. Any fallback (an on-device fetch on iOS, or a favicon badge from the host of the item's `url`) is a client decision and needs no API change.
+
+Source: `src/routes/link-preview.routes.ts`, `src/services/link-preview.service.ts`, `src/utils/safeFetch.ts`, `__tests__/integration/link-preview.test.ts`
+
 ---
 
 ## 8. Version Check Usage
@@ -991,6 +1051,7 @@ Source: `__tests__/integration/version-enforcement.test.ts`, `__tests__/integrat
 | Auth | 15 min | 5 req | `/auth/register`, `/auth/login` — keyed per IP + email |
 | General | 15 min | 100 req | All other routes — keyed per session ID or IP |
 | Version check | 1 min | 60 req | `/app/version-check` |
+| Link preview | 1 min | 10 req | `POST /link-preview` — keyed per user (C18) |
 
 Source: `src/middleware/rateLimiter.ts:11-48, 55-92`, `src/routes/app-version.routes.ts:10-15`
 
