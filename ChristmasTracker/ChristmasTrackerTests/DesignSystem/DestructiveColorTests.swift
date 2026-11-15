@@ -2,9 +2,8 @@
 //  DestructiveColorTests.swift
 //  ChristmasTrackerTests
 //
-//  Story I3c-D (UI rule 3): Color.destructiveColor is system red, resolved per trait collection.
-//  In both appearances it must equal the resolved UIColor.systemRed. A fixed RGB cannot satisfy
-//  this, because systemRed differs between light and dark.
+//  Story TH1-T1 (replaces the I3c-D system-red test): Color.destructiveColor is the accent
+//  colorset (Cranberry), resolved per trait collection: #B23A48 in light, #E06A75 in dark.
 //
 //  Covers Color.destructiveColor in light and dark appearance.
 //
@@ -17,7 +16,7 @@ import UIKit
 @Suite("destructiveColor Tests")
 struct DestructiveColorTests {
 
-    private struct RGBA: Equatable {
+    private struct RGBA {
         var r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat
 
         func isClose(to other: RGBA) -> Bool {
@@ -34,20 +33,30 @@ struct DestructiveColorTests {
         return RGBA(r: r, g: g, b: b, a: a)
     }
 
-    @Test("Resolves to the system red in the given appearance", arguments: [UIUserInterfaceStyle.light, .dark])
-    func matchesSystemRed(style: UIUserInterfaceStyle) {
-        let actual = components(UIColor(Color.destructiveColor), style: style)
-        let expected = components(UIColor.systemRed, style: style)
-        #expect(actual.isClose(to: expected), "\(style.rawValue): \(actual) vs \(expected)")
+    private func expected(hex: String) throws -> RGBA {
+        let rgb = try #require(ThemeRGB(hex: hex))
+        return RGBA(r: CGFloat(rgb.red) / 255, g: CGFloat(rgb.green) / 255, b: CGFloat(rgb.blue) / 255, a: 1)
     }
 
-    @Test("Tracks the light and dark difference of system red (not a fixed RGB)")
-    func followsSystemRedAcrossAppearances() {
-        let token = Color.destructiveColor
-        let lightDiffersFromDarkForSystemRed = !components(UIColor.systemRed, style: .light)
-            .isClose(to: components(UIColor.systemRed, style: .dark))
-        let tokenLight = components(UIColor(token), style: .light)
-        let tokenDark = components(UIColor(token), style: .dark)
-        #expect(tokenLight.isClose(to: tokenDark) == !lightDiffersFromDarkForSystemRed)
+    @Test("Resolves to the accent colorset value in the given appearance", arguments: [UIUserInterfaceStyle.light, .dark])
+    func matchesAccent(style: UIUserInterfaceStyle) throws {
+        let hex = style == .dark ? "#E06A75" : "#B23A48"
+        let actual = components(UIColor(Color.destructiveColor), style: style)
+        let wanted = try expected(hex: hex)
+        #expect(actual.isClose(to: wanted), "\(style.rawValue): \(actual) vs \(wanted)")
+    }
+
+    @Test("Is the same color as the accent token in both appearances", arguments: [UIUserInterfaceStyle.light, .dark])
+    func equalsAccentToken(style: UIUserInterfaceStyle) {
+        let destructive = components(UIColor(Color.destructiveColor), style: style)
+        let accent = components(UIColor(Color("accentColor")), style: style)
+        #expect(destructive.isClose(to: accent))
+    }
+
+    @Test("Differs between light and dark (not a fixed RGB)")
+    func differsAcrossAppearances() {
+        let light = components(UIColor(Color.destructiveColor), style: .light)
+        let dark = components(UIColor(Color.destructiveColor), style: .dark)
+        #expect(!light.isClose(to: dark))
     }
 }
