@@ -59,10 +59,13 @@ struct BiometricSetupView: View {
 private struct BiometricHeaderView: View {
     let biometricType: BiometricType
 
+    /// Decorative icon size: 96pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 96
+
     var body: some View {
         VStack(spacing: AppSpacing.sm) {
             Image(systemName: biometricType == .faceID ? "faceid" : "touchid")
-                .font(.system(size: 96))
+                .font(.system(size: heroSize))
                 .foregroundStyle(Color.primaryColor)
             Text("Enable \(biometricType.displayName)?")
                 .font(.appTitle1)

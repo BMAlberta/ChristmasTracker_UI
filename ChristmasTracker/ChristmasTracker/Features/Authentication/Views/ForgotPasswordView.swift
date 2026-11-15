@@ -9,11 +9,14 @@ import SwiftUI
 struct ForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// Decorative icon size: 64pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 64
+
     var body: some View {
         NavigationStack {
             VStack(spacing: AppSpacing.xl) {
                 Image(systemName: "envelope.badge.shield.half.filled")
-                    .font(.appIconHero)
+                    .font(.system(size: heroSize))
                     .foregroundStyle(Color.primaryColor)
                 Text("Forgot Password?")
                     .font(.appTitle2)

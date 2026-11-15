@@ -11,12 +11,15 @@ struct ErrorStateView: View {
     
     let error: Error
     let onRetry: () -> Void
-    
+
+    /// Decorative icon size: 64pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 64
+
     var body: some View {
         VStack(spacing: AppSpacing.xl) {
             // Error icon
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 64))
+                .font(.system(size: heroSize))
                 .foregroundColor(.red)
             
             // Error message

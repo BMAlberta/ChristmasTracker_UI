@@ -88,15 +88,18 @@ private struct UserInfoCardView: View {
 
     let user: User
 
+    /// Avatar diameter: 80pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .title) private var avatarSize: CGFloat = 80
+
     var body: some View {
         CardContainerView {
             VStack(spacing: AppSpacing.lg) {
                 Circle()
                     .fill(Color.primaryColor.opacity(0.2))
-                    .frame(width: 80, height: 80)
+                    .frame(width: avatarSize, height: avatarSize)
                     .overlay(
                         Text(user.initials)
-                            .font(.system(size: 32, weight: .semibold))
+                            .font(.appTitle1)
                             .foregroundStyle(Color.primaryColor)
                     )
 
@@ -316,6 +319,12 @@ private struct SettingsRowView: View {
     let showChevron: Bool
     let action: (() -> Void)?
 
+    /// Row icon size and slot width: 20pt and 28pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 20
+    @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 28
+    /// Chevron size: 14pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var chevronSize: CGFloat = 14
+
     var body: some View {
         Group {
             if let action {
@@ -334,9 +343,9 @@ private struct SettingsRowView: View {
     private var rowContent: some View {
         HStack(spacing: AppSpacing.md) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: iconSize))
                 .foregroundStyle(.accent)
-                .frame(width: 28)
+                .frame(minWidth: iconSlotWidth)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -352,7 +361,7 @@ private struct SettingsRowView: View {
 
             if showChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: chevronSize, weight: .semibold))
                     .foregroundStyle(Color.textMutedColor)
             }
         }

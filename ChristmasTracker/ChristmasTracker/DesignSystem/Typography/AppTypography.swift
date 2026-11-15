@@ -7,20 +7,23 @@
 
 import SwiftUI
 extension Font {
-    // MARK: - Icon sizes (SF Symbol hero headers)
-    static let appIconHero = Font.system(size: 64)
-    // MARK: - System Fonts (Inter/SF Pro)
-    static let appLargeTitle = Font.system(size: 34, weight: .bold, design: .default)
-    static let appTitle1 = Font.system(size: 28, weight: .semibold, design: .default)
-    static let appTitle2 = Font.system(size: 22, weight: .semibold, design: .default)
-    static let appTitle3 = Font.system(size: 20, weight: .semibold, design: .default)
-    static let appHeadline = Font.system(size: 17, weight: .semibold, design: .default)
-    static let appBody = Font.system(size: 17, weight: .regular, design: .default)
-    static let appCallout = Font.system(size: 16, weight: .regular, design: .default)
-    static let appSubheadline = Font.system(size: 15, weight: .regular, design: .default)
-    static let appFootnote = Font.system(size: 13, weight: .regular, design: .default)
-    static let appCaption1 = Font.system(size: 12, weight: .regular, design: .default)
-    static let appCaption2 = Font.system(size: 11, weight: .regular, design: .default)
+    // MARK: - Text-style fonts
+    // Every token is built from a text style, so all of them scale with Dynamic Type.
+    // The table lives in TypographyToken.
+    static let appLargeTitle = Font.largeTitle.weight(.bold)
+    static let appTitle1 = Font.title.weight(.semibold)
+    static let appTitle2 = Font.title2.weight(.semibold)
+    static let appTitle3 = Font.title3.weight(.semibold)
+    static let appHeadline = Font.headline.weight(.semibold)
+    static let appBody = Font.body.weight(.regular)
+    static let appCallout = Font.callout.weight(.regular)
+    static let appSubheadline = Font.subheadline.weight(.regular)
+    static let appFootnote = Font.footnote.weight(.regular)
+    static let appCaption1 = Font.caption.weight(.regular)
+    static let appCaption2 = Font.caption2.weight(.regular)
+
+    // MARK: - Serif accent (app name and empty-state titles only); also scales with Dynamic Type
+    static let appBrand = Font.system(.title, design: .serif, weight: .semibold)
 }
 extension Text {
     func appLargeTitle() -> Text {

@@ -101,13 +101,16 @@ struct RegisterView: View {
 }
 // MARK: - Header
 private struct RegisterHeaderView: View {
+    /// Decorative icon size: 64pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 64
+
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             Image(systemName: "person.crop.circle.badge.plus")
-                .font(.appIconHero)
+                .font(.system(size: heroSize))
                 .foregroundStyle(Color.primaryColor)
             Text("Join Christmas Tracker")
-                .font(.appTitle2)
+                .font(.appBrand)
                 .foregroundStyle(Color.textPrimaryColor)
         }
     }
