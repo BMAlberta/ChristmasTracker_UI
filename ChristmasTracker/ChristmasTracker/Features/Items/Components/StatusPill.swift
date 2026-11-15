@@ -28,6 +28,11 @@ struct StatusPill: View {
             .padding(.horizontal, AppSpacing.sm)
             .padding(.vertical, AppSpacing.xs)
             .background(Color(token: style.fill), in: .capsule)
+            .overlay {
+                if let edge = style.edge {
+                    Capsule().strokeBorder(Color(token: edge), lineWidth: StatusStyle.edgeWidth)
+                }
+            }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(style.accessibilityLabel)

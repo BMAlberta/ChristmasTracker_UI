@@ -74,7 +74,7 @@ struct BudgetStateStyleTests {
     @Test func nearLimitStyle() {
         let style = BudgetStateStyle.style(for: .nearLimit)
         #expect(style.level == .nearLimit)
-        #expect(style.token == .budgetWarning)
+        #expect(style.token == .budgetWarningBar)
         #expect(style.label == "Near limit")
         #expect(style.accessibilityLabel == "Budget: Near limit")
     }

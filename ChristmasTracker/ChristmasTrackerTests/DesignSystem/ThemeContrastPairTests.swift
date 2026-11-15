@@ -7,7 +7,7 @@
 //  list for text any more). Supplementary graphic pairs (status and budget fills against surfaces)
 //  should reach 3.0 because a state is always also stated in words; the light status fills that
 //  cannot are exactly the ones `ThemeEdgeRule` marks for a graphic edge, and the one pinned
-//  exception is the light budgetWarning fill, which no graphic uses after PAL1-P2.
+//  exception is the light budgetWarning fill, which no view uses since PAL1-P2.
 //
 
 import Testing
@@ -33,8 +33,10 @@ struct ThemeContrastPairTests {
     }
 
     /// The light budgetWarning fill (#D6B25E) stays below 3.0 on the page and card backgrounds. It is
-    /// pinned, not excused: after PAL1-P2 the near-limit bar uses budgetWarningBar, so no graphic
-    /// draws budgetWarning. Floors are the measured values rounded down to 2 decimals.
+    /// pinned, not excused. Since PAL1-P2 the near-limit bar uses budgetWarningBar, so no view draws
+    /// budgetWarning (BudgetWarningBarScanTests checks that `budgetWarningColor` is referenced by no
+    /// view file); the token and its colorset stay. Floors are the measured values rounded down to
+    /// 2 decimals.
     private static let budgetWarningLightExceptions: [Pinned] = [
         Pinned(mode: "light", foreground: "budgetWarning", background: "surface", floor: 2.02),
         Pinned(mode: "light", foreground: "budgetWarning", background: "backgroundPrimary", floor: 1.92)

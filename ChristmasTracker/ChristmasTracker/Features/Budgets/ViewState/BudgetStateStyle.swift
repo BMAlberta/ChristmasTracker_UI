@@ -38,7 +38,7 @@ nonisolated enum BudgetStateStyle {
         let label: String
         switch level {
         case .under: (token, label) = (.budgetSafe, "Under budget")
-        case .nearLimit: (token, label) = (.budgetWarning, "Near limit")
+        case .nearLimit: (token, label) = (.budgetWarningBar, "Near limit")
         case .over: (token, label) = (.budgetOver, "Over budget")
         }
         return BudgetStyle(level: level, token: token, label: label, accessibilityLabel: "Budget: \(label)")
