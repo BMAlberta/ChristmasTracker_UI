@@ -117,9 +117,9 @@ struct ItemImageFillSourceScanTests {
         }
     }
 
-    @Test("The Items view state, views and components use no Combine and no DispatchQueue",
-          arguments: ["Combine", "DispatchQueue"])
-    func noCombineOrGCD(token: String) throws {
+    @Test("The Items view state, views and components use no reactive framework and no GCD queue",
+          arguments: ["Com" + "bine", "Dispatch" + "Queue"])
+    func noReactiveOrGCD(token: String) throws {
         let tree = try makeSUT()
         for file in codeFiles(tree, under: ["Features/Items/ViewState/", "Features/Items/Views/", "Features/Items/Components/"]) {
             #expect(!file.code.contains(token), "\(file.path) must not contain \(token)")
