@@ -11,9 +11,19 @@ import Testing
 @Suite("ThemeToken and table Tests")
 struct ThemeTokenTableTests {
 
-    @Test("There are 18 tokens")
+    @Test("There are 20 tokens")
     func tokenCount() {
-        #expect(ThemeToken.allCases.count == 18)
+        #expect(ThemeToken.allCases.count == 20)
+    }
+
+    @Test("The two PAL1 tokens have the revised values and colorset names")
+    func pal1Tokens() {
+        #expect(ThemeToken.highlightStrong.colorsetName == "highlightStrongColor")
+        #expect(ThemeToken.budgetWarningBar.colorsetName == "budgetWarningBarColor")
+        for token in [ThemeToken.highlightStrong, .budgetWarningBar] {
+            #expect(ThemeTokenTable.rgb(token, .light).hex == "#9C7A2E")
+            #expect(ThemeTokenTable.rgb(token, .dark).hex == "#E4C76A")
+        }
     }
 
     @Test("Each token maps to its colorset name", arguments: ThemeToken.allCases)

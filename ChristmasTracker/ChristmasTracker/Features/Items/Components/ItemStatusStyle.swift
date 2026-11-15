@@ -87,6 +87,8 @@ extension Color {
         case .budgetSafe: self = .budgetSafeColor
         case .budgetWarning: self = .budgetWarningColor
         case .budgetOver: self = .budgetOverColor
+        case .highlightStrong: self = .highlightStrongColor
+        case .budgetWarningBar: self = .budgetWarningBarColor
         }
     }
 
