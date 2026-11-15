@@ -100,7 +100,7 @@ struct AppDependencies: Sendable {
     nonisolated(unsafe) let trackerClient: (any APIProtocol)?
 
     /// Build mock dependencies (used in .mock mode and when generatedClient is unavailable).
-    static func makeMock() -> AppDependencies {
+    static func makeMock(versionState: MockVersionState? = nil) -> AppDependencies {
         // One list mock is shared, so members and children act on the lists the app shows.
         let lists = MockListRepository()
         // The recorder and the manager share one store, seeded with the mock user's own purchases
@@ -126,7 +126,7 @@ struct AppDependencies: Sendable {
             purchaseManager: MockPurchaseManager(store: purchaseStore, currentUserId: { MockItemRepository.defaultUser.id }),
             statsLoader: MockStatsRepository(store: budgetStore),
             budgetManager: MockBudgetRepository(store: budgetStore),
-            appVersionRepository: MockAppVersionRepository(),
+            appVersionRepository: versionState.map { MockAppVersionRepository(state: $0) } ?? MockAppVersionRepository(),
             trackerClient: nil
         )
     }
@@ -175,7 +175,8 @@ struct AppDependencies: Sendable {
     static func resolve(
         mode: APIMode,
         generatedClient: (any APIProtocol)?,
-        reporter: any BootstrapFailureReporting
+        reporter: any BootstrapFailureReporting,
+        mockVersionState: MockVersionState? = nil
     ) -> (state: BootstrapState, dependencies: AppDependencies) {
         let state = resolveBootstrap(mode: mode, clientAvailable: generatedClient != nil)
         switch state {
@@ -186,7 +187,7 @@ struct AppDependencies: Sendable {
             if mode == .real, let client = generatedClient {
                 return (state, makeReal(generatedClient: client))
             }
-            return (state, makeMock())
+            return (state, makeMock(versionState: mockVersionState))
         }
     }
 }
@@ -246,6 +247,9 @@ struct ChristmasTrackerApp: App {
     private let lockController: InactivityLockController
     private let lockCoordinator: LockCoordinator
     private let sharedLocalAuth: LocalAuthenticationService
+    /// True when version checks run: real mode with a client, or mock mode with a debug state.
+    private let versionChecksEnabled: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     // nonisolated(unsafe): written exactly once during init on MainActor;
     // read in deinit where the app is exclusively owned — no concurrent access.
@@ -266,7 +270,8 @@ struct ChristmasTrackerApp: App {
         FirstLaunchWipe().performIfNeeded()
 
         // Build versionGate before anything else so it can be passed into the client factory.
-        let vg = VersionGate()
+        let updateSequence = UpdateSequence()
+        let vg = VersionGate(sequence: updateSequence)
         _versionGate = State(initialValue: vg)
 
         // Start the privacy cover before any app data or session state is built.
@@ -312,10 +317,18 @@ struct ChristmasTrackerApp: App {
 
         // Build AppDependencies. Real mode without a client NEVER falls back to mock data: the
         // state is .failed and the dependencies are inert (the body shows only the error screen).
+        // Debug start for the update screens: -mockVersionState <ok|recommended|required|requiredNoLink>.
+        // parse returns nil in production, so a release build never reads this.
+        let mockVersionState: MockVersionState? = AppConfiguration.apiMode == .mock
+            ? MockVersionState.parse(
+                UserDefaults.standard.string(forKey: "mockVersionState"),
+                environment: AppConfiguration.appEnvironment)
+            : nil
         let resolved = AppDependencies.resolve(
             mode: AppConfiguration.apiMode,
             generatedClient: builtClient,
-            reporter: SentryBootstrapFailureReporter()
+            reporter: SentryBootstrapFailureReporter(),
+            mockVersionState: mockVersionState
         )
         let dependencies = resolved.dependencies
         bootstrapState = resolved.state
@@ -382,11 +395,14 @@ struct ChristmasTrackerApp: App {
         seams.box.value = auth  // seam closures can now reach auth
         authService = auth
 
-        let vs = VersionService(repository: dependencies.appVersionRepository)
+        let vs = VersionService(repository: dependencies.appVersionRepository, sequence: updateSequence)
         _versionService = State(initialValue: vs)
 
-        // In real mode with a client, start the version-check launch task.
-        if AppConfiguration.apiMode == .real, builtClient != nil {
+        // Start the version-check launch task: real mode with a client, or mock mode with a debug state.
+        let checksEnabled = (AppConfiguration.apiMode == .real && builtClient != nil)
+            || (AppConfiguration.apiMode == .mock && mockVersionState != nil)
+        versionChecksEnabled = checksEnabled
+        if checksEnabled {
             let realVS = vs
             Task { @MainActor [weak realVS] in
                 await realVS?.check()
@@ -452,7 +468,8 @@ struct ChristmasTrackerApp: App {
     }
 
     private var appContent: some View {
-        ContentView()
+        let installed = makeClientInfo(from: Bundle.main.infoDictionary)
+        return ContentView()
                 // The one app tint: login, tabs and sheets inherit it.
                 .tint(Color.primaryColor)
                 .environment(\.authenticationService, authService)
@@ -463,6 +480,16 @@ struct ChristmasTrackerApp: App {
                 .environment(\.statsService, statsService)
                 .environment(\.budgetService, budgetService)
                 .environment(\.spendingCacheInvalidator, spendingCacheInvalidator)
+                .updatePrompt(
+                    service: versionService,
+                    gate: versionGate,
+                    installedVersion: installed.version,
+                    installedBuild: installed.build
+                )
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active, versionChecksEnabled else { return }
+                    Task { await versionService.checkIfDue() }
+                }
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         lockController.authService = authService
