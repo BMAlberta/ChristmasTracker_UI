@@ -270,13 +270,9 @@ private struct LogoutButtonView: View {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                 Text("Logout")
             }
-            .font(.appHeadline)
-            .foregroundStyle(Color.surfaceColor)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.primaryColor, in: .rect(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PrimaryButtonStyle())
         .padding(.top, AppSpacing.md)
         // Attached to this trigger, not to the screen's scroll view.
         .confirmationDialog(

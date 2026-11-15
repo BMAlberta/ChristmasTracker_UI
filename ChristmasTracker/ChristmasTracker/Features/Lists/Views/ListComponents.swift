@@ -59,7 +59,6 @@ struct ListCountsView: View {
 
             if let progress {
                 ProgressView(value: progress)
-                    .tint(.primaryColor)
                     .accessibilityLabel("Progress")
                     .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
             }

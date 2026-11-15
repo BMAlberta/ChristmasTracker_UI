@@ -373,11 +373,10 @@ struct ListDetailView: View {
         } label: {
             Label(ListArchiveConfirmation.actionTitle, systemImage: "archivebox")
                 .font(.appHeadline)
-                .foregroundStyle(Color.surfaceColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .padding(.vertical, AppSpacing.xs)
-                .background(Color.destructiveColor, in: .rect(cornerRadius: AppSpacing.md))
         }
+        .buttonStyle(.bordered)
+        .destructiveTint()
         .disabled(listService.isMutating)
         .accessibilityHint("Moves this list to Archived after you confirm")
         .accessibilityIdentifier("listDetail.archiveButton")

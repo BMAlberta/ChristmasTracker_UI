@@ -315,21 +315,17 @@ private struct RegistrationActionSection: View {
 
     var body: some View {
         Button(action: onRegister) {
-            if isLoading {
-                ProgressView()
-                    .tint(Color.white)
-            } else {
-                Text("Create Account")
+            Group {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text("Create Account")
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .font(.appHeadline)
-        .foregroundStyle(Color.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.md)
-        .background(Color.primaryColor)
-        .clipShape(.rect(cornerRadius: 12))
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(isLoading || !isFormValid)
-        .opacity(isFormValid ? 1.0 : 0.5)
     }
 }
 #Preview {

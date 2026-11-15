@@ -32,15 +32,13 @@ struct BudgetWarningPanel: View {
                         .font(.appHeadline)
                         .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.primaryColor)
+                .buttonStyle(PrimaryButtonStyle())
                 Button(action: onEdit) {
                     Text(state.editTitle)
                         .font(.appHeadline)
                         .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
                 }
                 .buttonStyle(.bordered)
-                .tint(Color.primaryColor)
                 Button(action: onCancel) {
                     Text(state.cancelTitle)
                         .font(.appHeadline)

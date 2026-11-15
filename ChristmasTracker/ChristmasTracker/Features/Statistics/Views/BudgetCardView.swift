@@ -177,8 +177,7 @@ struct CreateBudgetButton: View {
                 .font(.appHeadline)
                 .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Color.primaryColor)
+        .buttonStyle(PrimaryButtonStyle())
     }
 }
 

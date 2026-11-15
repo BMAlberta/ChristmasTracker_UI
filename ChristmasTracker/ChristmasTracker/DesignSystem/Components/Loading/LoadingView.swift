@@ -17,7 +17,6 @@ struct LoadingView: View {
     var body: some View {
         VStack(spacing: AppSpacing.lg) {
             ProgressView()
-                .tint(.primaryColor)
                 .scaleEffect(1.2)
             
             Text(message)

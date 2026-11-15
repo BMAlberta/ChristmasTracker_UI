@@ -452,6 +452,8 @@ struct ChristmasTrackerApp: App {
 
     private var appContent: some View {
         ContentView()
+                // The one app tint: login, tabs and sheets inherit it.
+                .tint(Color.primaryColor)
                 .environment(\.authenticationService, authService)
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)

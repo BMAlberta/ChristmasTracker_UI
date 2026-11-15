@@ -74,7 +74,7 @@ struct TabBarMinimizeScanTests {
     @Test("OLD: no minimize behavior was set; the tint and the three tabs are unchanged")
     func tabsUnchanged() throws {
         let code = try code(Self.tabBar, in: try tree())
-        #expect(code.contains(".tint(.primaryColor)"), "the tab tint changed")
+        #expect(!code.contains(".tint("), "the app tint now lives in ChristmasTrackerApp, not the tab bar")
         for tag in [".tag(TabSelection.dashboard)", ".tag(TabSelection.stats)", ".tag(TabSelection.profile)"] {
             #expect(code.contains(tag), "missing tab: \(tag)")
         }

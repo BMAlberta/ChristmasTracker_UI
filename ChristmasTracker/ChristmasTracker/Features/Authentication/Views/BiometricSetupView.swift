@@ -88,19 +88,16 @@ private struct BiometricActionSection: View {
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             Button(action: onEnable) {
-                if isEnabling {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Text("Enable \(biometricType.displayName)")
+                Group {
+                    if isEnabling {
+                        ProgressView()
+                    } else {
+                        Text("Enable \(biometricType.displayName)")
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
-            .font(.appHeadline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.primaryColor)
-            .clipShape(.rect(cornerRadius: 12))
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(isEnabling)
 
             Button("Not Now", action: onSkip)

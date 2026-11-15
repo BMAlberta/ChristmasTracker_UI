@@ -279,7 +279,6 @@ private struct RememberForgotRow: View {
             Toggle("Remember email", isOn: $rememberEmail)
                 .font(.appBody)
                 .foregroundStyle(Color.textPrimaryColor)
-                .tint(Color.primaryColor)
             Spacer()
             Button("Forgot?", action: onForgotPassword)
                 .font(.appBody)
@@ -295,21 +294,17 @@ private struct LoginActionSection: View {
 
     var body: some View {
         Button(action: onLogin) {
-            if isLoading {
-                ProgressView()
-                    .tint(.white)
-            } else {
-                Text("Sign In")
+            Group {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text("Sign In")
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .font(.appHeadline)
-        .foregroundStyle(Color.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.md)
-        .background(Color.primaryColor)
-        .clipShape(.rect(cornerRadius: 12))
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(isLoading || !isFormValid)
-        .opacity(isFormValid ? 1.0 : 0.5)
     }
 }
 // MARK: - Biometrics

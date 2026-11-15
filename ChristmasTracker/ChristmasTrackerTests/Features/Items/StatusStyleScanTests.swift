@@ -12,8 +12,7 @@
 //  `.white` allowlist (a file listed here may contain `.white`):
 //   - Features/Items/Components/ItemStatusStyle.swift  the style layer that maps ThemeLabel to a Color
 //   - DesignSystem/Colors/ThemeTokenTable.swift         pure data: `ThemeLabel.white`
-//   - the hand-built primary buttons the T5 story replaces: EmptyStateView, ErrorStateView, LoginView,
-//     RegistrationView, BiometricSetupView, App/LockView
+//  (T5 removed the hand-built filled primary buttons; PrimaryButtonStyle takes its label from the table.)
 //
 
 import Foundation
@@ -25,13 +24,7 @@ struct StatusStyleScanTests {
 
     static let whiteAllowlist: Set<String> = [
         "Features/Items/Components/ItemStatusStyle.swift",
-        "DesignSystem/Colors/ThemeTokenTable.swift",
-        "DesignSystem/Components/EmptyStateView.swift",
-        "DesignSystem/Components/ErrorStateView.swift",
-        "Features/Authentication/Views/LoginView.swift",
-        "Features/Authentication/Views/RegistrationView.swift",
-        "Features/Authentication/Views/BiometricSetupView.swift",
-        "App/LockView.swift"
+        "DesignSystem/Colors/ThemeTokenTable.swift"
     ]
 
     private func tree(_ file: String = #filePath) throws -> ItemSourceTree {

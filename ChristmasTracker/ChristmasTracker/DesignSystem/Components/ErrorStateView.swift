@@ -42,12 +42,7 @@ struct ErrorStateView: View {
                     Text("Try Again")
                 }
             }
-            .font(.appHeadline)
-            .foregroundColor(.white)
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.primaryColor)
-            .cornerRadius(12)
+            .buttonStyle(PrimaryButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.backgroundPrimaryColor)

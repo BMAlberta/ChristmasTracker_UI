@@ -242,7 +242,6 @@ struct ItemDetailView: View {
                 .foregroundStyle(Color.textPrimaryColor)
             if let progress = state.progress {
                 ProgressView(value: progress)
-                    .tint(Color.primaryColor)
                     .accessibilityLabel("Purchase progress")
                     .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
             }
@@ -273,8 +272,7 @@ struct ItemDetailView: View {
                         .font(.appHeadline)
                         .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.primaryColor)
+                .buttonStyle(PrimaryButtonStyle())
             }
             if state.showsDelete {
                 deleteButton(item: item)

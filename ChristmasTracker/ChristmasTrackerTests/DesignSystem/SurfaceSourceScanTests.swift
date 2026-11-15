@@ -6,9 +6,8 @@
 //  Scanned: Features/, DesignSystem/, App/, Navigation/ (DesignSystem/Colors/ is the token definition and is excluded
 //  from the color scans).
 //
-//  `.white` allowlist (same as StatusStyleScanTests.whiteAllowlist): ItemStatusStyle.swift, ThemeTokenTable.swift, and the
-//  filled-button files T5 will fix: EmptyStateView, ErrorStateView, LoginView, RegistrationView, BiometricSetupView,
-//  App/LockView. `.clear` is allowed everywhere.
+//  `.white` allowlist (same as StatusStyleScanTests.whiteAllowlist): ItemStatusStyle.swift, ThemeTokenTable.swift only
+//  (T5 replaced the hand-built filled buttons with PrimaryButtonStyle). `.clear` is allowed everywhere.
 //
 //  Hand-built card allowlist (a file may contain `surfaceColor` together with a shape; the implementer corrects it from
 //  reality, and stale entries fail):

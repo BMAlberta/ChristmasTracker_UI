@@ -99,7 +99,6 @@ struct InlineErrorBanner: View {
                     .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
             }
             .buttonStyle(.bordered)
-            .tint(Color.primaryColor)
         }
     }
 

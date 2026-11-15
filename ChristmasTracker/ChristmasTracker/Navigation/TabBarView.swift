@@ -34,7 +34,6 @@ struct TabBarView: View {
                 }
                 .tag(TabSelection.profile)
         }
-        .tint(.primaryColor)
         // The tab bar minimizes on scroll down (UX1b rule 4).
         .tabBarMinimizeBehavior(.onScrollDown)
     }

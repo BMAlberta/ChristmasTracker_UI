@@ -25,8 +25,7 @@ struct RecordPurchaseRecordSection: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.primaryColor)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(!model.canTapRecord)
             .confirmationDialog(
                 model.overPurchasePrompt?.title ?? "",

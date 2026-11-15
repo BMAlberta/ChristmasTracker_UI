@@ -55,13 +55,8 @@ struct EmptyStateView: View {
             if let actionTitle = actionTitle, let action = action {
                 Button(action: action) {
                     Text(actionTitle)
-                        .font(.appHeadline)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, AppSpacing.xl)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(Color.primaryColor)
-                        .cornerRadius(12)
                 }
+                .buttonStyle(PrimaryButtonStyle())
                 .padding(.top, AppSpacing.md)
             }
         }
