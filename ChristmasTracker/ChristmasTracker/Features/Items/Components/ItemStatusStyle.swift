@@ -115,6 +115,13 @@ extension Color {
     }
 }
 
+/// The role badge look as Colors (PAL1-P3), so the badge view holds no color initializer.
+extension RoleBadgeLook {
+    var fillColor: Color? { fill.map { Color(token: $0) } }
+    var borderColor: Color? { border.map { Color(token: $0) } }
+    func textColor(for mode: ThemeMode) -> Color { Color(label: label(for: mode)) }
+}
+
 extension Color {
     /// The budget token color of a level (bars and graphics; not for small text).
     static func budget(level: BudgetLevel) -> Color {
