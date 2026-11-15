@@ -32,7 +32,8 @@ struct TypographySourceScanTests {
     static let brandFiles: Set<String> = [
         "Features/Authentication/Views/LoginView.swift",
         "Features/Authentication/Views/RegistrationView.swift",
-        "DesignSystem/Components/EmptyStateView.swift"
+        "DesignSystem/Components/EmptyStateView.swift",
+        "Features/Version/Views/UpdateRequiredView.swift"
     ]
 
     static let lineLimitFiles: Set<String> = [
@@ -115,7 +116,7 @@ struct TypographySourceScanTests {
         #expect(stale.isEmpty, "\(stale)")
     }
 
-    @Test("appBrand outside the Typography folder appears only in the three brand files, and in each")
+    @Test("appBrand outside the Typography folder appears only in the four brand files, and in each")
     func brandUsage() throws {
         let files = try codeByFile()
         var users: Set<String> = []
