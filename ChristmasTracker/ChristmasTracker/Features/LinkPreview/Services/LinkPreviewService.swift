@@ -20,6 +20,7 @@ final class LinkPreviewService {
     // MARK: - Dependencies
 
     private nonisolated let repository: any LinkPreviewLoading
+    private nonisolated let provider: any ProductImageProviding
 
     // MARK: - Session safety
 
@@ -35,8 +36,9 @@ final class LinkPreviewService {
 
     // MARK: - Initialization
 
-    init(repository: any LinkPreviewLoading) {
+    init(repository: any LinkPreviewLoading, provider: any ProductImageProviding = InertProductImageProvider()) {
         self.repository = repository
+        self.provider = provider
     }
 
     // MARK: - Lookup
@@ -55,11 +57,26 @@ final class LinkPreviewService {
         defer { span.finish() }
 
         let gen = generation
+        let repository = self.repository
+        let provider = self.provider
+
+        // Step 1: the API. A cancellation ends the lookup; any other error counts as "no image".
+        var apiValue: String?
         do {
-            let repository = self.repository
-            let raw = try await perform { try await repository.imageUrl(for: page) }
+            apiValue = try await perform { try await repository.imageUrl(for: page) }
+        } catch is CancellationError {
+            return nil
+        } catch {
+            apiValue = nil
+        }
+        if gen != generation || Task.isCancelled { return nil }
+        if let accepted = LinkPreviewImageFilter.accepted(apiValue) { return accepted }
+
+        // Step 2: the device, only for a live task in the same session.
+        do {
+            let raw = try await perform { try await provider.imageUrl(for: page) }
             if gen != generation || Task.isCancelled { return nil }
-            return LinkPreviewImageFilter.accepted(raw)
+            return LinkPreviewImageFilter.accepted(ProductImageURLNormalizer.normalized(raw))
         } catch {
             return nil
         }
