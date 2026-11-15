@@ -10,6 +10,7 @@ import SwiftUI
 
 struct SpendByPersonView: View {
     let rows: [SpendRowState]
+    var onSelect: (SpendRowState) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
@@ -23,7 +24,16 @@ struct SpendByPersonView: View {
                     .foregroundStyle(Color.textMutedColor)
             } else {
                 ForEach(rows) { row in
-                    SpendRowView(row: row)
+                    Button {
+                        onSelect(row)
+                    } label: {
+                        SpendRowView(row: row)
+                            .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Opens purchase history for \(row.name)")
                 }
             }
         }
