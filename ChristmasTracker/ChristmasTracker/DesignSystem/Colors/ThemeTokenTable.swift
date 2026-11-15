@@ -33,6 +33,8 @@ nonisolated enum ThemeToken: String, CaseIterable, Sendable {
     case budgetSafe
     case budgetWarning
     case budgetOver
+    case highlightStrong
+    case budgetWarningBar
 
     /// The asset catalog colorset that holds this token.
     var colorsetName: String {
@@ -55,6 +57,8 @@ nonisolated enum ThemeToken: String, CaseIterable, Sendable {
         case .budgetSafe: return "budgetSafeColor"
         case .budgetWarning: return "budgetWarningColor"
         case .budgetOver: return "budgetOverColor"
+        case .highlightStrong: return "highlightStrongColor"
+        case .budgetWarningBar: return "budgetWarningBarColor"
         }
     }
 }
@@ -65,23 +69,25 @@ nonisolated enum ThemeTokenTable {
     private static func hex(_ token: ThemeToken) -> (light: String, dark: String) {
         switch token {
         case .primary: return ("#1F4D3A", "#4FA58A")
-        case .accent: return ("#B23A48", "#E06A75")
+        case .accent: return ("#B23A48", "#E8737E")
         case .highlight: return ("#D6B25E", "#E4C76A")
         case .backgroundPrimary: return ("#FAF9F7", "#0F1A17")
         case .backgroundSecondary: return ("#F2EFEA", "#162622")
         case .surface: return ("#FFFFFF", "#1E2E2A")
         case .textPrimary: return ("#1F2933", "#E6ECEA")
-        case .textMuted: return ("#6B7280", "#9AA5A1")
+        case .textMuted: return ("#656B77", "#9AA5A1")
         case .border: return ("#E2E2E2", "#2C3F3A")
         case .statusAvailable: return ("#1F4D3A", "#4FA58A")
         case .statusPurchased: return ("#2F7F6D", "#63BFA8")
         case .statusPartial: return ("#D6B25E", "#E4C76A")
         case .statusShipped: return ("#3A7CA5", "#6FAED6")
-        case .statusWrapped: return ("#B23A48", "#E06A75")
+        case .statusWrapped: return ("#B23A48", "#E8737E")
         case .statusGifted: return ("#C9A227", "#F0D97C")
         case .budgetSafe: return ("#1F4D3A", "#4FA58A")
         case .budgetWarning: return ("#D6B25E", "#E4C76A")
-        case .budgetOver: return ("#B23A48", "#E06A75")
+        case .budgetOver: return ("#B23A48", "#E8737E")
+        case .highlightStrong: return ("#9C7A2E", "#E4C76A")
+        case .budgetWarningBar: return ("#9C7A2E", "#E4C76A")
         }
     }
 
@@ -93,6 +99,29 @@ nonisolated enum ThemeTokenTable {
         case .dark: text = pair.dark
         }
         return ThemeRGB(hex: text) ?? ThemeRGB(red: 0, green: 0, blue: 0)
+    }
+}
+
+/// Which status fills need a graphic edge: the light fills that fall under 3:1 against BOTH
+/// `backgroundPrimary` and `surface`. Computed from `ThemeTokenTable`, never hard-coded.
+nonisolated enum ThemeEdgeRule {
+
+    /// The contrast a graphic needs against its surroundings.
+    static let graphicThreshold = 3.0
+
+    static func fillsNeedingEdge() -> Set<ThemeToken> {
+        let page = ThemeTokenTable.rgb(.backgroundPrimary, .light)
+        let card = ThemeTokenTable.rgb(.surface, .light)
+        var result: Set<ThemeToken> = []
+        for kind in StatusKind.allCases {
+            let fill = StatusStyle.style(for: kind).fill
+            let rgb = ThemeTokenTable.rgb(fill, .light)
+            if ThemeContrast.ratio(rgb, page) < graphicThreshold,
+               ThemeContrast.ratio(rgb, card) < graphicThreshold {
+                result.insert(fill)
+            }
+        }
+        return result
     }
 }
 

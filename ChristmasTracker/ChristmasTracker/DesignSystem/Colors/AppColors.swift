@@ -13,11 +13,14 @@ extension Color {
     /// Light: #1F4D3A, Dark: #4FA58A
     static let primaryColor = Color("primaryColor")
     /// Accent color (Cranberry)
-    /// Light: #B23A48, Dark: #E06A75
+    /// Light: #B23A48, Dark: #E8737E
     static let accentColor = Color("accentColor")
     /// Highlight color (Warm Gold)
     /// Light: #D6B25E, Dark: #E4C76A
     static let highlightColor = Color("highlightColor")
+    /// Stronger gold for graphic edges on gold fills
+    /// Light: #9C7A2E, Dark: #E4C76A
+    static let highlightStrongColor = Color("highlightStrongColor")
     // MARK: - Background Colors
     /// Primary background color
     /// Light: #FAF9F7, Dark: #0F1A17
@@ -33,7 +36,7 @@ extension Color {
     /// Light: #1F2933, Dark: #E6ECEA
     static let textPrimaryColor = Color("primaryTextColor")
     /// Muted text color
-    /// Light: #6B7280, Dark: #9AA5A1
+    /// Light: #656B77, Dark: #9AA5A1
     static let textMutedColor = Color("mutedTextColor")
     // MARK: - Border Colors
     /// Border and divider color
@@ -53,7 +56,7 @@ extension Color {
     /// Light: #3A7CA5, Dark: #6FAED6
     static let statusShippedColor = Color("statusShippedColor")
     /// Item status: wrapped
-    /// Light: #B23A48, Dark: #E06A75
+    /// Light: #B23A48, Dark: #E8737E
     static let statusWrappedColor = Color("statusWrappedColor")
     /// Item status: gifted
     /// Light: #C9A227, Dark: #F0D97C
@@ -66,10 +69,13 @@ extension Color {
     /// Light: #D6B25E, Dark: #E4C76A
     static let budgetWarningColor = Color("budgetWarningColor")
     /// Budget state: over budget
-    /// Light: #B23A48, Dark: #E06A75
+    /// Light: #B23A48, Dark: #E8737E
     static let budgetOverColor = Color("budgetOverColor")
+    /// Budget bar fill when near the limit (graphic only, not for text)
+    /// Light: #9C7A2E, Dark: #E4C76A
+    static let budgetWarningBarColor = Color("budgetWarningBarColor")
     // MARK: - Destructive
     /// Destructive actions and error banners use the Cranberry accent (the accent colorset).
-    /// Light: #B23A48, Dark: #E06A75
+    /// Light: #B23A48, Dark: #E8737E
     static let destructiveColor = Color("accentColor")
 }

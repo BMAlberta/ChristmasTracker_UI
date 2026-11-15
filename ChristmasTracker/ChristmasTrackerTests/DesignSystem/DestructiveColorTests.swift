@@ -3,7 +3,7 @@
 //  ChristmasTrackerTests
 //
 //  Story TH1-T1 (replaces the I3c-D system-red test): Color.destructiveColor is the accent
-//  colorset (Cranberry), resolved per trait collection: #B23A48 in light, #E06A75 in dark.
+//  colorset (Cranberry), resolved per trait collection: #B23A48 in light, #E8737E in dark (PAL1).
 //
 //  Covers Color.destructiveColor in light and dark appearance.
 //
@@ -40,7 +40,7 @@ struct DestructiveColorTests {
 
     @Test("Resolves to the accent colorset value in the given appearance", arguments: [UIUserInterfaceStyle.light, .dark])
     func matchesAccent(style: UIUserInterfaceStyle) throws {
-        let hex = style == .dark ? "#E06A75" : "#B23A48"
+        let hex = style == .dark ? "#E8737E" : "#B23A48"
         let actual = components(UIColor(Color.destructiveColor), style: style)
         let wanted = try expected(hex: hex)
         #expect(actual.isClose(to: wanted), "\(style.rawValue): \(actual) vs \(wanted)")

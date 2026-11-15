@@ -26,6 +26,11 @@ struct StatusDotLabel: View {
         HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
             Circle()
                 .fill(Color(token: style.fill))
+                .overlay {
+                    if let edge = style.edge {
+                        Circle().strokeBorder(Color(token: edge), lineWidth: StatusStyle.edgeWidth)
+                    }
+                }
                 .frame(width: dotSize, height: dotSize)
             Text(style.shortLabel)
                 .font(.appCaption1)

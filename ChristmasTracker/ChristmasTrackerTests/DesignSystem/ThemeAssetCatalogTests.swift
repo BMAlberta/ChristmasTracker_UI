@@ -33,14 +33,15 @@ struct ThemeAssetCatalogTests {
         #expect(entry.dark.hex == "#4FA58A")
     }
 
-    @Test("The catalog has no colorsets beyond the 18 tokens, AccentColor and LaunchBackground")
+    @Test("The catalog has no colorsets beyond the 20 tokens, AccentColor and LaunchBackground")
     func noExtraColorsets() throws {
         let catalog = try ThemeCatalog.load(from: #filePath)
         let expected = Set(ThemeToken.allCases.map(\.colorsetName)).union(["AccentColor", "LaunchBackground"])
         let actual = Set(catalog.colorsets.keys)
         #expect(actual.subtracting(expected).isEmpty, "unexpected colorsets: \(actual.subtracting(expected).sorted())")
         #expect(expected.subtracting(actual).isEmpty, "missing colorsets: \(expected.subtracting(actual).sorted())")
-        #expect(catalog.colorsets.count == 20)
+        // 20 tokens (18 + highlightStrong + budgetWarningBar) + AccentColor + LaunchBackground.
+        #expect(catalog.colorsets.count == 22)
         #expect(catalog.colorsets["AppIcon"] == nil)
     }
 }

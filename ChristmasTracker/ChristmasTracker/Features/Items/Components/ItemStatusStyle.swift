@@ -49,6 +49,21 @@ nonisolated struct StatusStyle: Equatable, Sendable {
         ThemeStatusLabelTable.label(onFill: fill, mode: mode)
     }
 
+    /// Width of the graphic edge, in points.
+    static let edgeWidth: CGFloat = 1
+
+    /// The token of the edge on a weak fill.
+    static let edgeToken: ThemeToken = .highlightStrong
+
+    /// The fills that get an edge, computed once from the token table by `ThemeEdgeRule`.
+    private static let fillsWithEdge: Set<ThemeToken> = ThemeEdgeRule.fillsNeedingEdge()
+
+    /// Whether this fill falls under 3:1 against the page and the card in light mode.
+    var needsEdge: Bool { Self.fillsWithEdge.contains(fill) }
+
+    /// The edge token when the fill needs one, otherwise nil. The same token is used in both modes.
+    var edge: ThemeToken? { needsEdge ? Self.edgeToken : nil }
+
     static func style(for kind: StatusKind) -> StatusStyle {
         let fill: ThemeToken
         let words: String
@@ -87,6 +102,8 @@ extension Color {
         case .budgetSafe: self = .budgetSafeColor
         case .budgetWarning: self = .budgetWarningColor
         case .budgetOver: self = .budgetOverColor
+        case .highlightStrong: self = .highlightStrongColor
+        case .budgetWarningBar: self = .budgetWarningBarColor
         }
     }
 
@@ -96,6 +113,13 @@ extension Color {
         case .token(let token): self.init(token: token)
         }
     }
+}
+
+/// The role badge look as Colors (PAL1-P3), so the badge view holds no color initializer.
+extension RoleBadgeLook {
+    var fillColor: Color? { fill.map { Color(token: $0) } }
+    var borderColor: Color? { border.map { Color(token: $0) } }
+    func textColor(for mode: ThemeMode) -> Color { Color(label: label(for: mode)) }
 }
 
 extension Color {

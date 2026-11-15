@@ -57,14 +57,45 @@ nonisolated extension ListRole {
     }
 }
 
-extension ListRoleBadge.Tone {
-    /// Badge background, from the design system colours.
-    @MainActor var color: Color {
+/// How a badge looks, by theme token: an optional fill, an optional 1 point edge and the text.
+/// Pure data, so tests measure it without SwiftUI. The view turns tokens into Colors.
+nonisolated struct RoleBadgeLook: Equatable, Sendable {
+
+    /// Where the text color comes from.
+    enum Text: Equatable, Sendable {
+        /// The contrast label chosen for the fill (`ThemeStatusLabelTable`).
+        case onFill
+        case token(ThemeToken)
+    }
+
+    /// Width of the edge, in points.
+    static let borderWidth: CGFloat = 1
+
+    let fill: ThemeToken?
+    let border: ThemeToken?
+    let text: Text
+
+    /// The text color for a mode.
+    func label(for mode: ThemeMode) -> ThemeLabel {
+        switch text {
+        case .token(let token):
+            return .token(token)
+        case .onFill:
+            guard let fill else { return .token(.textPrimary) }
+            return ThemeStatusLabelTable.label(onFill: fill, mode: mode)
+        }
+    }
+}
+
+nonisolated extension ListRoleBadge.Tone {
+    /// Owner: green fill. Co-owner: green edge and text. Member: quiet fill with a neutral edge.
+    /// Viewer: neutral edge and muted text. No gold, no cranberry.
+    var look: RoleBadgeLook {
         switch self {
-        case .owner: return .primaryColor
-        case .coOwner: return .accentColor
-        case .member: return .highlightColor
-        case .viewer: return .textMutedColor
+        case .owner: return RoleBadgeLook(fill: .primary, border: nil, text: .onFill)
+        case .coOwner: return RoleBadgeLook(fill: nil, border: .primary, text: .token(.primary))
+        case .member: return RoleBadgeLook(fill: .backgroundSecondary, border: .border, text: .token(.textPrimary))
+        case .viewer: return RoleBadgeLook(fill: nil, border: .border, text: .token(.textMuted))
         }
     }
 }

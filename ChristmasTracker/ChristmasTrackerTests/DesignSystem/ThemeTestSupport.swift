@@ -18,23 +18,25 @@ nonisolated enum ThemeTestSupport {
     /// The brief's values, written out independently of ThemeTokenTable so a wrong table is caught.
     static let expectedHex: [ThemeToken: (light: String, dark: String)] = [
         .primary: ("#1F4D3A", "#4FA58A"),
-        .accent: ("#B23A48", "#E06A75"),
+        .accent: ("#B23A48", "#E8737E"),
         .highlight: ("#D6B25E", "#E4C76A"),
         .backgroundPrimary: ("#FAF9F7", "#0F1A17"),
         .backgroundSecondary: ("#F2EFEA", "#162622"),
         .surface: ("#FFFFFF", "#1E2E2A"),
         .textPrimary: ("#1F2933", "#E6ECEA"),
-        .textMuted: ("#6B7280", "#9AA5A1"),
+        .textMuted: ("#656B77", "#9AA5A1"),
         .border: ("#E2E2E2", "#2C3F3A"),
         .statusAvailable: ("#1F4D3A", "#4FA58A"),
         .statusPurchased: ("#2F7F6D", "#63BFA8"),
         .statusPartial: ("#D6B25E", "#E4C76A"),
         .statusShipped: ("#3A7CA5", "#6FAED6"),
-        .statusWrapped: ("#B23A48", "#E06A75"),
+        .statusWrapped: ("#B23A48", "#E8737E"),
         .statusGifted: ("#C9A227", "#F0D97C"),
         .budgetSafe: ("#1F4D3A", "#4FA58A"),
         .budgetWarning: ("#D6B25E", "#E4C76A"),
-        .budgetOver: ("#B23A48", "#E06A75")
+        .budgetOver: ("#B23A48", "#E8737E"),
+        .highlightStrong: ("#9C7A2E", "#E4C76A"),
+        .budgetWarningBar: ("#9C7A2E", "#E4C76A")
     ]
 
     static let expectedColorsetNames: [ThemeToken: String] = [
@@ -55,7 +57,9 @@ nonisolated enum ThemeTestSupport {
         .statusGifted: "statusGiftedColor",
         .budgetSafe: "budgetSafeColor",
         .budgetWarning: "budgetWarningColor",
-        .budgetOver: "budgetOverColor"
+        .budgetOver: "budgetOverColor",
+        .highlightStrong: "highlightStrongColor",
+        .budgetWarningBar: "budgetWarningBarColor"
     ]
 
     static func expectedHex(_ token: ThemeToken, _ mode: ThemeMode) -> String {
@@ -281,8 +285,9 @@ nonisolated struct ThemePairMeasurement: Sendable {
 
 nonisolated enum ThemePairs {
 
-    /// Number of pairs measured per mode: 18 text, 2 graphic, 18 supplementary.
-    static let pairsPerMode = 38
+    /// Number of pairs measured per mode: 18 text, 7 graphic (2 primary, 2 highlightStrong,
+    /// 3 budgetWarningBar), 18 supplementary.
+    static let pairsPerMode = 43
 
     /// Every pair from the brief, measured from the colorset files (not from ThemeTokenTable).
     static func measureAll(_ catalog: ThemeCatalog) throws -> [ThemePairMeasurement] {
@@ -324,6 +329,14 @@ nonisolated enum ThemePairs {
             let primary = try catalog.rgb(.primary, mode)
             for background in [ThemeToken.surface, .backgroundPrimary] {
                 try add(ThemeToken.primary.rawValue, primary, background, .graphic)
+            }
+            let strong = try catalog.rgb(.highlightStrong, mode)
+            for background in [ThemeToken.backgroundPrimary, .surface] {
+                try add(ThemeToken.highlightStrong.rawValue, strong, background, .graphic)
+            }
+            let bar = try catalog.rgb(.budgetWarningBar, mode)
+            for background in [ThemeToken.backgroundPrimary, .surface, .backgroundSecondary] {
+                try add(ThemeToken.budgetWarningBar.rawValue, bar, background, .graphic)
             }
 
             // SUPPLEMENTARY GRAPHIC
