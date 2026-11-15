@@ -71,13 +71,13 @@ struct ItemInputBuildingTests {
     func createFull() throws {
         let input = try #require(makeCreate(
             name: "  Fake Lamp \n", description: "\tA fake lamp  ",
-            url: " https://example.com/lamp ", imageUrl: "http://example.com/lamp.png ",
+            url: " https://example.com/lamp ", imageUrl: "https://example.com/lamp.png ",
             price: "19.99", quantity: 3, priority: 8
         ))
         #expect(input.name == "Fake Lamp")
         #expect(input.description == "A fake lamp")
         #expect(input.url == "https://example.com/lamp")
-        #expect(input.imageUrl == "http://example.com/lamp.png")
+        #expect(input.imageUrl == "https://example.com/lamp.png")
         #expect(input.expectedUnitPrice == ItemFixtures.decimal("19.99"))
         #expect(input.quantityRequested == 3)
         #expect(input.priority == 8)

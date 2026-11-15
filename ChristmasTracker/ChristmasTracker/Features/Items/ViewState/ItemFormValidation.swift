@@ -4,8 +4,11 @@
 //
 //  Pure validation and request-building for the add and edit item forms. The limits come from
 //  the generated schema: name 1 to 200, description 1 to 2000 (required by the server),
-//  url and imageUrl absolute http or https URLs, quantity 1 to 999, priority 1 to 10, and a
-//  price from 0 to 999999.99 with at most two decimals.
+//  url an absolute http or https URL and imageUrl an absolute https URL (C19), both with a host,
+//  no userinfo, no whitespace and at most 2048 characters, quantity 1 to 999, priority 1 to 10,
+//  and a price from 0 to 999999.99 with at most two decimals. On Edit, a url or imageUrl equal
+//  (trimmed) to its stored original is not validated, so an unchanged legacy value neither
+//  blocks saving nor shows an invalid flag.
 //
 
 import Foundation
@@ -42,14 +45,16 @@ nonisolated enum ItemFormValidation {
         imageUrl: String,
         priceText: String,
         quantity: Int,
-        priority: Int
+        priority: Int,
+        originalUrl: String? = nil,
+        originalImageUrl: String? = nil
     ) -> ItemFormValidity {
         let trimmedPrice = priceText.trimmingCharacters(in: .whitespacesAndNewlines)
         return ItemFormValidity(
             nameInvalid: !lengthIsValid(name, max: 200),
             descriptionInvalid: !lengthIsValid(description, max: 2000),
-            urlInvalid: !optionalURLIsValid(url),
-            imageUrlInvalid: !optionalURLIsValid(imageUrl),
+            urlInvalid: !optionalURLIsValid(url, allowedSchemes: ["http", "https"], original: originalUrl),
+            imageUrlInvalid: !optionalURLIsValid(imageUrl, allowedSchemes: ["https"], original: originalImageUrl),
             priceInvalid: !trimmedPrice.isEmpty && parsePrice(trimmedPrice) == nil,
             quantityInvalid: !(1...999).contains(quantity),
             priorityInvalid: !(1...10).contains(priority)
@@ -111,7 +116,8 @@ nonisolated enum ItemFormValidation {
         priority: Int
     ) -> UpdateItemInput? {
         let validity = validate(name: name, description: description, url: url, imageUrl: imageUrl,
-                                priceText: priceText, quantity: quantity, priority: priority)
+                                priceText: priceText, quantity: quantity, priority: priority,
+                                originalUrl: original.url, originalImageUrl: original.imageUrl)
         guard validity.isValid else { return nil }
 
         let newName = trimmed(name)
@@ -151,14 +157,18 @@ nonisolated enum ItemFormValidation {
         !text.isEmpty && text.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
-    private static func optionalURLIsValid(_ text: String) -> Bool {
+    /// Empty is valid. A value equal (trimmed) to the stored original is not validated
+    /// (decision 17). Otherwise the C19 rules apply with the allowed schemes of the field.
+    private static func optionalURLIsValid(_ text: String, allowedSchemes: Set<String>, original: String?) -> Bool {
         let value = trimmed(text)
         if value.isEmpty { return true }
+        if let original, trimmed(original) == value { return true }
         guard value.count <= 2048,
               !value.contains(where: { $0.isWhitespace }),
               let components = URLComponents(string: value),
               let scheme = components.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
+              allowedSchemes.contains(scheme),
+              components.user == nil, components.password == nil,
               let host = components.host, !host.isEmpty else { return false }
         return true
     }
