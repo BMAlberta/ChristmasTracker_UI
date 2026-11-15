@@ -191,6 +191,7 @@ struct ItemDetailView: View {
 
     private func headerCard(state: ItemDetailState) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
+            ItemThumbnail(imageUrl: state.imageUrl)
             Text(state.title)
                 .font(.appTitle1)
                 .foregroundStyle(Color.textPrimaryColor)

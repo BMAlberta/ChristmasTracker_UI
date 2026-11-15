@@ -367,6 +367,7 @@ struct ChristmasTrackerApp: App {
         )
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
+        Task { await sm.register(ImageCacheClearable(cache: URLCacheClearer())) }
 
         // Create services
         // Pass UserDefaultsEnrollmentHistory explicitly for persistence across app launches.

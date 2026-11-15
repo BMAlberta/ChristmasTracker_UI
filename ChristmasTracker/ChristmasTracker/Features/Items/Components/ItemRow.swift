@@ -12,8 +12,13 @@ import SwiftUI
 struct ItemRow: View {
     let state: ItemRowState
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         HStack(spacing: AppSpacing.md) {
+            if ThumbnailLayout.rowThumbnailVisible(for: dynamicTypeSize) {
+                ItemThumbnail(imageUrl: state.imageUrl)
+            }
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 Text(state.name)
                     .font(.appBody)
