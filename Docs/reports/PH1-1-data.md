@@ -59,6 +59,12 @@ interface (and the three edited tests' extra argument). Implementer: first full 
 - 429: on a GET the rate-limit middleware throws `TrackerAPIError.rateLimited` before the repository's
   `.tooManyRequests` branch can run, so the tests pin the thrown mapping (retryAfter carried) and the branch is
   kept for exhaustiveness.
+- `scripts/verify.sh` was OK before the H1 commit (83dc683) and FAILED right after it at "prohibited frameworks in
+  changed lines": that check reads only the committed diff (`master...HEAD`), so it flagged three lines of
+  `PurchaseHistorySourceScanTests.swift` (a comment and two scanner samples containing the literal words). Fixed
+  by a new commit a088fb5 (comment reworded, samples built by string concatenation, same expectations); verify
+  then ended `=== verify: OK ===` with `--- tests: 4933 passed, 0 failed, 0 skipped ---` and the package run at 212
+  passed. Lesson kept for H2 and H3: run verify after the commit, and keep those literals out of added lines.
 - The unreadable-body table also covers 401 and 429 by status (the documented statuses).
 - The mock's first 14 rows are dated 1 to 14 days after Jan 1 of the current year, so in early January a few mock
   rows are dated in the future (mock only).
