@@ -48,7 +48,9 @@ struct ChildServiceClearableTests {
             purchaseService: PurchaseService(repository: MockPurchaseRecorder(access: { _ in .unknown })),
             // EDITED (I5a-B): the two new final parameters of makeProductionClearables.
             statsService: StatsService(repository: GatedStatsLoader()),
-            budgetService: BudgetService(repository: GatedBudgetManager())
+            budgetService: BudgetService(repository: GatedBudgetManager()),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: PurchaseHistoryService(repository: GatedPurchaseHistoryLoader())
         )
         return SUT(
             clearables: clearables, childService: childService, repo: repo,
@@ -60,11 +62,13 @@ struct ChildServiceClearableTests {
     // clearable is appended last (index 7); the ChildService keeps index 6.
     // EDITED (I5a-B): count 8 -> 10. Reason: two session-safe services were added to the teardown list
     // (StatsService at index 8, BudgetService at index 9); the ChildService keeps index 6.
-    @Test("makeProductionClearables(childService:) returns 10 clearables and the ChildService keeps index 6")
+    // EDITED (PH1-H1): count 10 -> 11. Reason: the PurchaseHistoryService clearable is appended last
+    // (index 10); the ChildService keeps index 6.
+    @Test("makeProductionClearables(childService:) returns 11 clearables and the ChildService keeps index 6")
     func childServiceKeepsIndexSix() {
         let sut = makeSUT()
 
-        #expect(sut.clearables.count == 10)
+        #expect(sut.clearables.count == 11)
         #expect(sut.clearables[6] is ChildService, "the ChildService must come after the lock controller")
         #expect(sut.clearables[6] === sut.childService, "the registered clearable is the very instance passed in")
         #expect(sut.clearables[7] is PurchaseService, "the PurchaseService clearable keeps index 7")

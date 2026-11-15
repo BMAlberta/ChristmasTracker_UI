@@ -31,13 +31,14 @@ internal func makeProductionClearables(
     childService: ChildService,
     purchaseService: PurchaseService,
     statsService: StatsService,
-    budgetService: BudgetService
+    budgetService: BudgetService,
+    purchaseHistoryService: PurchaseHistoryService
 ) -> [any SessionClearable] {
-    // New clearables are appended so existing indices never move (statsService is index 8 and
-    // budgetService index 9). The clearables are independent of each other and SessionManager
-    // clears them one after another, so order carries no meaning.
+    // New clearables are appended so existing indices never move (statsService is index 8,
+    // budgetService index 9 and purchaseHistoryService index 10). The clearables are independent of
+    // each other and SessionManager clears them one after another, so order carries no meaning.
     [
         listDataStore, itemDataStore, listService, itemService, networkCache, lockController, childService,
-        purchaseService, statsService, budgetService
+        purchaseService, statsService, budgetService, purchaseHistoryService
     ]
 }

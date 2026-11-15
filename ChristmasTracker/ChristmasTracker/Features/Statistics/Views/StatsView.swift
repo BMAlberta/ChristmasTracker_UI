@@ -17,12 +17,13 @@ struct StatsView: View {
     // The environment services are not readable in init, so the model is built once, in `.task`,
     // never in `body`. Until then a progress view shows.
     @State private var model: StatsScreenModel?
+    @State private var historyRoute: PurchaseHistoryRoute?
 
     var body: some View {
         NavigationStack {
             Group {
                 if let model {
-                    StatsContentView(model: model)
+                    StatsContentView(model: model, onOpenHistory: { historyRoute = $0 })
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,6 +32,7 @@ struct StatsView: View {
             }
             .background(Color.backgroundPrimaryColor)
             .navigationTitle("Statistics")
+            .navigationDestination(item: $historyRoute) { PurchaseHistoryView(route: $0) }
         }
     }
 
@@ -50,6 +52,7 @@ struct StatsView: View {
 
 struct StatsContentView: View {
     @Bindable var model: StatsScreenModel
+    var onOpenHistory: (PurchaseHistoryRoute) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
@@ -90,7 +93,7 @@ struct StatsContentView: View {
             }
         case .content:
             if let state = model.screenState {
-                StatsStateView(model: model, state: state)
+                StatsStateView(model: model, state: state, onOpenHistory: onOpenHistory)
             }
         }
     }
@@ -116,6 +119,7 @@ struct StatsContentView: View {
 private struct StatsStateView: View {
     @Bindable var model: StatsScreenModel
     let state: StatsScreenState
+    let onOpenHistory: (PurchaseHistoryRoute) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
@@ -134,7 +138,16 @@ private struct StatsStateView: View {
                 emptyCard(empty)
             }
             if state.kind != .nothing {
-                SpendByPersonView(rows: state.spendRows)
+                SpendByPersonView(rows: state.spendRows) { row in
+                    onOpenHistory(PurchaseHistoryRoute.fromSpendRow(
+                        row, year: model.selectedYear, yearChoices: model.yearChoices
+                    ))
+                }
+            }
+            PurchaseHistoryEntryRow {
+                onOpenHistory(PurchaseHistoryRoute.fromHistoryRow(
+                    year: model.selectedYear, yearChoices: model.yearChoices
+                ))
             }
         }
     }

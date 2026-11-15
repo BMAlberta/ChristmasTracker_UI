@@ -218,16 +218,18 @@ struct BudgetCompositionTests {
         #expect(code.contains(".environment(\\.spendingCacheInvalidator"))
     }
 
-    @Test("makeProductionClearables gets statsService: then budgetService: after purchaseService:")
+    // EDITED (PH1-H1): the list is now 11 long; purchaseHistoryService: is appended after budgetService:
+    // (index 10), so statsService: and budgetService: still follow purchaseService: in that order.
+    @Test("makeProductionClearables gets statsService: then budgetService: after purchaseService:, then purchaseHistoryService:")
     func appRegistersTheClearablesInOrder() throws {
         let code = try appSource()
         let flat = code.replacingOccurrences(of: "\n", with: " ")
 
         let ordered = try ItemSourceScan.matchingLines(
-            #"makeProductionClearables\(.*purchaseService:.*statsService:.*budgetService:"#, in: flat
+            #"makeProductionClearables\(.*purchaseService:.*statsService:.*budgetService:.*purchaseHistoryService:"#, in: flat
         )
 
-        #expect(ordered.isEmpty == false, "statsService: and budgetService: follow purchaseService: in that order")
+        #expect(ordered.isEmpty == false, "statsService: and budgetService: follow purchaseService: in that order, purchaseHistoryService: last")
     }
 
     // MARK: - The two runner construction sites

@@ -91,6 +91,7 @@ struct AppDependencies: Sendable {
     let purchaseManager: any PurchaseManaging
     let statsLoader: any StatsLoading
     let budgetManager: any BudgetManaging
+    let purchaseHistoryLoader: any PurchaseHistoryLoading
     let appVersionRepository: any AppVersionChecking
     // Stored as the APIProtocol existential to avoid a linker dependency on
     // OpenAPIRuntime.UniversalClient (@_spi) in the app binary; the generated
@@ -126,6 +127,7 @@ struct AppDependencies: Sendable {
             purchaseManager: MockPurchaseManager(store: purchaseStore, currentUserId: { MockItemRepository.defaultUser.id }),
             statsLoader: MockStatsRepository(store: budgetStore),
             budgetManager: MockBudgetRepository(store: budgetStore),
+            purchaseHistoryLoader: MockPurchaseHistoryRepository(),
             appVersionRepository: versionState.map { MockAppVersionRepository(state: $0) } ?? MockAppVersionRepository(),
             trackerClient: nil
         )
@@ -143,6 +145,7 @@ struct AppDependencies: Sendable {
             purchaseManager: GeneratedClientPurchaseManagementRepository(client: generatedClient),
             statsLoader: GeneratedClientStatsRepository(client: generatedClient),
             budgetManager: GeneratedClientBudgetRepository(client: generatedClient),
+            purchaseHistoryLoader: GeneratedClientPurchaseHistoryRepository(client: generatedClient),
             appVersionRepository: GeneratedClientAppVersionRepository(
                 client: generatedClient,
                 info: makeClientInfo(from: Bundle.main.infoDictionary)
@@ -164,6 +167,7 @@ struct AppDependencies: Sendable {
             purchaseManager: InertPurchaseManager(),
             statsLoader: InertStatsLoader(),
             budgetManager: InertBudgetManager(),
+            purchaseHistoryLoader: InertPurchaseHistoryLoader(),
             appVersionRepository: InertAppVersionRepository(),
             trackerClient: nil
         )
@@ -237,6 +241,7 @@ struct ChristmasTrackerApp: App {
     @State private var purchaseService: PurchaseService
     @State private var statsService: StatsService
     @State private var budgetService: BudgetService
+    @State private var purchaseHistoryService: PurchaseHistoryService
     @State private var spendingCacheInvalidator: SpendingCacheInvalidator
     @State private var showBiometricSetup = false
     @State private var versionGate: VersionGate
@@ -364,8 +369,11 @@ struct ChristmasTrackerApp: App {
         budgetService = budgets
         spendingCacheInvalidator = SpendingCacheInvalidator(statsService: stats, budgetService: budgets)
 
-        // Create session manager with production clearables (10 total; statsService and
-        // budgetService are appended last, after purchaseService)
+        let history = PurchaseHistoryService(repository: dependencies.purchaseHistoryLoader)
+        purchaseHistoryService = history
+
+        // Create session manager with production clearables (11 total; statsService, budgetService
+        // and purchaseHistoryService are appended last, after purchaseService)
         let clearables = makeProductionClearables(
             listDataStore: listDataStore,
             itemDataStore: itemDataStore,
@@ -376,7 +384,8 @@ struct ChristmasTrackerApp: App {
             childService: cs,
             purchaseService: ps,
             statsService: stats,
-            budgetService: budgets
+            budgetService: budgets,
+            purchaseHistoryService: history
         )
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
@@ -479,6 +488,7 @@ struct ChristmasTrackerApp: App {
                 .environment(\.purchaseService, purchaseService)
                 .environment(\.statsService, statsService)
                 .environment(\.budgetService, budgetService)
+                .environment(\.purchaseHistoryService, purchaseHistoryService)
                 .environment(\.spendingCacheInvalidator, spendingCacheInvalidator)
                 .updatePrompt(
                     service: versionService,

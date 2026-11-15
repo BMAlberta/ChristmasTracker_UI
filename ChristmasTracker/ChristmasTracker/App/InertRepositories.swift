@@ -203,6 +203,14 @@ nonisolated final class InertBudgetManager: BudgetManaging {
     }
 }
 
+/// The purchase history loader of the failed state: every call throws, no data is ever returned.
+nonisolated final class InertPurchaseHistoryLoader: PurchaseHistoryLoading {
+    @Instrumented
+    func loadPage(filter: PurchaseHistoryFilter, cursor: String?) async throws -> PurchaseHistoryPage {
+        throw ConfigurationError.clientUnavailable
+    }
+}
+
 /// The version repository of the failed state: no check is ever made.
 nonisolated final class InertAppVersionRepository: AppVersionChecking {
     @Instrumented

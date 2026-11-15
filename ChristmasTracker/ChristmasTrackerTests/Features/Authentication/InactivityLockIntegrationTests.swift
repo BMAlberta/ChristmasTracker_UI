@@ -75,6 +75,12 @@ struct InactivityLockIntegrationTests {
         BudgetService(repository: GatedBudgetManager())
     }
 
+    // EDITED (PH1-H1): makeProductionClearables gained `purchaseHistoryService:` (the 11th clearable).
+    // Mechanical call-site argument only.
+    private func makePurchaseHistoryService() -> PurchaseHistoryService {
+        PurchaseHistoryService(repository: GatedPurchaseHistoryLoader())
+    }
+
     // MARK: - Tests
 
     // I3b-M2: pinned count 6 -> 7. Reason: a new session-scoped store (ChildService) holds the
@@ -85,7 +91,9 @@ struct InactivityLockIntegrationTests {
     // below is unchanged.
     // I5a-B: pinned count 8 -> 10. Reason: two session-safe services were added to the teardown list
     // (StatsService at index 8, BudgetService at index 9); they are appended last, so no index moves.
-    @Test("makeProductionClearables(lockController:) returns exactly 10 clearables")
+    // EDITED (PH1-H1): pinned count 10 -> 11. Reason: the PurchaseHistoryService clearable is appended
+    // last (index 10), so no index moves.
+    @Test("makeProductionClearables(lockController:) returns exactly 11 clearables")
     func productionClearablesReturnsEightItems() {
         let (listDataStore, itemDataStore, listService, itemService, networkCache, lockController) = makeSUT()
 
@@ -99,11 +107,13 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
-        #expect(clearables.count == 10,
-                "makeProductionClearables(lockController:) must return exactly 10 clearables (8 + StatsService + BudgetService)")
+        #expect(clearables.count == 11,
+                "makeProductionClearables(lockController:) must return exactly 11 clearables (8 + Stats + Budget + PurchaseHistory)")
         #expect(clearables[8] is StatsService, "clearables[8] must be StatsService")
         #expect(clearables[9] is BudgetService, "clearables[9] must be BudgetService")
     }
@@ -122,7 +132,9 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
         #expect(clearables[0] is ListDataStore, "clearables[0] must be ListDataStore")
@@ -142,7 +154,9 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
         #expect(clearables[1] is ItemDataStore, "clearables[1] must be ItemDataStore")
@@ -162,7 +176,9 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
         #expect(clearables[2] is ListService, "clearables[2] must be ListService")
@@ -182,7 +198,9 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
         #expect(clearables[3] is ItemService, "clearables[3] must be ItemService")
@@ -202,7 +220,9 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
         #expect(clearables[4] is NetworkCache, "clearables[4] must be NetworkCache")
@@ -222,7 +242,9 @@ struct InactivityLockIntegrationTests {
             childService: makeChildService(),
             purchaseService: makePurchaseService(),
             statsService: makeStatsService(),
-            budgetService: makeBudgetService()
+            budgetService: makeBudgetService(),
+            // EDITED (PH1-H1): the new final parameter of makeProductionClearables.
+            purchaseHistoryService: makePurchaseHistoryService()
         )
 
         #expect(clearables[5] is InactivityLockController,

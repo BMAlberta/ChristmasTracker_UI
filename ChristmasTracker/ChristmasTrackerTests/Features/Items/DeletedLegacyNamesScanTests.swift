@@ -35,7 +35,8 @@ struct DeletedLegacyNamesScanTests {
         name("Gift", "Item"),
         name("MockItem", "Data"),
         name("MockPurchase", "Data"),
-        name("PurchaseHistory", "View"),
+        // EDITED (PH1-H3): the name PurchaseHistoryView is no longer a deleted name. The new Purchase History
+        // screen (Features/PurchaseHistory/Views) uses it; the deleted legacy file below stays gone.
         name("PurchaseDetail", "View"),
         name("PurchaseEdit", "View"),
         name("EditPurchase", "View"),
