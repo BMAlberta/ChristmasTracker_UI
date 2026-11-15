@@ -101,13 +101,16 @@ struct RegisterView: View {
 }
 // MARK: - Header
 private struct RegisterHeaderView: View {
+    /// Decorative icon size: 64pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 64
+
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             Image(systemName: "person.crop.circle.badge.plus")
-                .font(.appIconHero)
+                .font(.system(size: heroSize))
                 .foregroundStyle(Color.primaryColor)
             Text("Join Christmas Tracker")
-                .font(.appTitle2)
+                .font(.appBrand)
                 .foregroundStyle(Color.textPrimaryColor)
         }
     }
@@ -202,7 +205,7 @@ private struct SimpleTextFieldView: View {
             if let error = fieldError {
                 Text(error)
                     .font(.appCaption1)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.destructiveColor)
             }
         }
     }
@@ -229,7 +232,7 @@ private struct EmailFieldView: View {
             if let error = fieldError {
                 Text(error)
                     .font(.appCaption1)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.destructiveColor)
             }
         }
     }
@@ -312,21 +315,17 @@ private struct RegistrationActionSection: View {
 
     var body: some View {
         Button(action: onRegister) {
-            if isLoading {
-                ProgressView()
-                    .tint(Color.white)
-            } else {
-                Text("Create Account")
+            Group {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text("Create Account")
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .font(.appHeadline)
-        .foregroundStyle(Color.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.md)
-        .background(Color.primaryColor)
-        .clipShape(.rect(cornerRadius: 12))
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(isLoading || !isFormValid)
-        .opacity(isFormValid ? 1.0 : 0.5)
     }
 }
 #Preview {

@@ -191,6 +191,7 @@ struct ItemDetailView: View {
 
     private func headerCard(state: ItemDetailState) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
+            ItemThumbnail(imageUrl: state.imageUrl)
             Text(state.title)
                 .font(.appTitle1)
                 .foregroundStyle(Color.textPrimaryColor)
@@ -223,9 +224,7 @@ struct ItemDetailView: View {
                     .background(Color.highlightColor.opacity(0.25), in: .rect(cornerRadius: AppSpacing.xs))
             }
             if let marker = state.statusMarker {
-                Label(marker.displayName, systemImage: marker.icon)
-                    .font(.appHeadline)
-                    .foregroundStyle(marker.tokenColor)
+                StatusPill(status: marker)
             }
             if let updated = state.updatedText {
                 Text(updated)
@@ -234,7 +233,7 @@ struct ItemDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func purchaseStatusCard(item: ListItem, state: ItemDetailState) -> some View {
@@ -244,7 +243,6 @@ struct ItemDetailView: View {
                 .foregroundStyle(Color.textPrimaryColor)
             if let progress = state.progress {
                 ProgressView(value: progress)
-                    .tint(Color.primaryColor)
                     .accessibilityLabel("Purchase progress")
                     .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
             }
@@ -260,7 +258,7 @@ struct ItemDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     // MARK: - Actions
@@ -275,8 +273,7 @@ struct ItemDetailView: View {
                         .font(.appHeadline)
                         .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.primaryColor)
+                .buttonStyle(PrimaryButtonStyle())
             }
             if state.showsDelete {
                 deleteButton(item: item)

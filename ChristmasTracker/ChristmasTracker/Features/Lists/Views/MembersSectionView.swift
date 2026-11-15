@@ -62,7 +62,7 @@ struct MembersSectionView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private var addButton: some View {
@@ -72,7 +72,6 @@ struct MembersSectionView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
-        .tint(.primaryColor)
         .disabled(controlsDisabled)
         .accessibilityHint("Invites a person to this list by email")
         .accessibilityIdentifier("listDetail.addMemberButton")

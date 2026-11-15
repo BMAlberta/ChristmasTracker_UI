@@ -188,13 +188,16 @@ struct LoginView: View {
 }
 // MARK: - Header
 private struct LoginHeaderView: View {
+    /// Decorative icon size: 72pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 72
+
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             Image(systemName: "gift.fill")
-                .font(.system(size: 72))
+                .font(.system(size: heroSize))
                 .foregroundStyle(Color.primaryColor)
             Text("Christmas Tracker")
-                .font(.appTitle1)
+                .font(.appBrand)
                 .foregroundStyle(Color.textPrimaryColor)
         }
         .padding(.top, AppSpacing.xl)
@@ -276,11 +279,10 @@ private struct RememberForgotRow: View {
             Toggle("Remember email", isOn: $rememberEmail)
                 .font(.appBody)
                 .foregroundStyle(Color.textPrimaryColor)
-                .tint(Color.primaryColor)
             Spacer()
             Button("Forgot?", action: onForgotPassword)
                 .font(.appBody)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.primaryColor)
         }
     }
 }
@@ -292,27 +294,26 @@ private struct LoginActionSection: View {
 
     var body: some View {
         Button(action: onLogin) {
-            if isLoading {
-                ProgressView()
-                    .tint(.white)
-            } else {
-                Text("Sign In")
+            Group {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text("Sign In")
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .font(.appHeadline)
-        .foregroundStyle(Color.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.md)
-        .background(Color.primaryColor)
-        .clipShape(.rect(cornerRadius: 12))
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(isLoading || !isFormValid)
-        .opacity(isFormValid ? 1.0 : 0.5)
     }
 }
 // MARK: - Biometrics
 private struct BiometricButtonSection: View {
     @Bindable var model: LoginBiometricModel
     let biometricType: BiometricType
+
+    /// Biometric glyph size: 20pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .headline) private var glyphSize: CGFloat = 20
 
     var body: some View {
         VStack(spacing: AppSpacing.md) {
@@ -322,7 +323,7 @@ private struct BiometricButtonSection: View {
             } label: {
                 HStack(spacing: AppSpacing.sm) {
                     Image(systemName: biometricType == .faceID ? "faceid" : "touchid")
-                        .font(.system(size: 20))
+                        .font(.system(size: glyphSize))
                     if case .showEnrolled(let firstName) = model.buttonState {
                         Text("Sign in as \(firstName)")
                     } else {
@@ -380,7 +381,7 @@ private struct SignUpRow: View {
                 RegisterView()
             }
             .font(.appHeadline)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.primaryColor)
         }
     }
 }

@@ -298,7 +298,7 @@ struct ListDetailView: View {
             if let theme = state.theme, !theme.isEmpty {
                 Label(theme, systemImage: "sparkles")
                     .font(.appBody)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.primaryColor)
             }
             HStack {
                 Label(state.year.yearDisplay, systemImage: "calendar")
@@ -312,7 +312,7 @@ struct ListDetailView: View {
                 .foregroundStyle(Color.textMutedColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func statsCard(itemCountText: String, purchasedCountText: String, progress: Double?) -> some View {
@@ -327,7 +327,7 @@ struct ListDetailView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func membersSection(detail: ListDetail) -> some View {
@@ -373,11 +373,10 @@ struct ListDetailView: View {
         } label: {
             Label(ListArchiveConfirmation.actionTitle, systemImage: "archivebox")
                 .font(.appHeadline)
-                .foregroundStyle(Color.surfaceColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .padding(.vertical, AppSpacing.xs)
-                .background(Color.destructiveColor, in: .rect(cornerRadius: AppSpacing.md))
         }
+        .buttonStyle(.bordered)
+        .destructiveTint()
         .disabled(listService.isMutating)
         .accessibilityHint("Moves this list to Archived after you confirm")
         .accessibilityIdentifier("listDetail.archiveButton")
@@ -411,7 +410,7 @@ struct ListDetailView: View {
             onSelect: { selectedItemId = $0 },
             onAdd: { showsAddItem = true }
         )
-        .listCard()
+        .appCard()
     }
 }
 

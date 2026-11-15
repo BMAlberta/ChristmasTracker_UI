@@ -10,6 +10,11 @@
 
 import SwiftUI
 
+nonisolated enum InlineErrorBannerStyle {
+    /// Opacity of the destructive tint behind the banner.
+    static let backgroundOpacity: Double = 0.12
+}
+
 struct InlineErrorBanner: View {
     let state: InlineErrorBannerState
     var onTryAgain: (() -> Void)?
@@ -42,7 +47,10 @@ struct InlineErrorBanner: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(EdgeInsets.appCardPadding)
-        .background(Color.destructiveColor.opacity(0.12), in: .rect(cornerRadius: AppSpacing.md))
+        .background(
+            Color.destructiveColor.opacity(InlineErrorBannerStyle.backgroundOpacity),
+            in: .rect(cornerRadius: AppSpacing.md)
+        )
         .onAppear {
             AccessibilityNotification.Announcement(state.announcement).post()
         }
@@ -91,7 +99,6 @@ struct InlineErrorBanner: View {
                     .frame(minHeight: InlineErrorBannerState.minimumButtonHeight)
             }
             .buttonStyle(.bordered)
-            .tint(Color.primaryColor)
         }
     }
 

@@ -48,6 +48,8 @@ nonisolated struct ItemRowState: Equatable, Identifiable, Sendable {
     let statusMarker: ItemStatus?
     let showsOffListBadge: Bool
     let isCompleted: Bool
+    /// The item's image value, copied unchanged; the thumbnail validates it.
+    let imageUrl: String?
 
     init(
         id: String,
@@ -57,8 +59,10 @@ nonisolated struct ItemRowState: Equatable, Identifiable, Sendable {
         priorityText: String,
         statusMarker: ItemStatus?,
         showsOffListBadge: Bool,
-        isCompleted: Bool
+        isCompleted: Bool,
+        imageUrl: String? = nil
     ) {
+        self.imageUrl = imageUrl
         self.id = id
         self.name = name
         self.priceText = priceText
@@ -89,7 +93,8 @@ nonisolated struct ItemRowState: Equatable, Identifiable, Sendable {
             priorityText: itemPriorityText(item.priority),
             statusMarker: showsActivity ? item.status : nil,
             showsOffListBadge: item.offList && permissions.canSeeOffListItems,
-            isCompleted: completed
+            isCompleted: completed,
+            imageUrl: item.imageUrl
         )
     }
 }
@@ -184,6 +189,8 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
     let showsPurchaseEntry: Bool
     /// The product link, only for an absolute http or https URL.
     let linkURL: URL?
+    /// The item's image value, copied unchanged; the thumbnail validates it.
+    let imageUrl: String?
 
     init(item: ListItem, context: ItemListContext, currentUserId: String?, now: Date) {
         self.init(item: item, capabilities: context.capabilities, currentUserId: currentUserId, now: now)
@@ -201,6 +208,7 @@ nonisolated struct ItemDetailState: Equatable, Sendable {
         let showsActivity = permissions.canSeeGiftActivity
 
         title = item.name
+        imageUrl = item.imageUrl
         let trimmed = item.description.trimmingCharacters(in: .whitespacesAndNewlines)
         descriptionText = trimmed.isEmpty ? nil : item.description
         priceText = item.expectedUnitPrice.map { itemPriceText($0, currencyCode: currencyCode, locale: locale) }

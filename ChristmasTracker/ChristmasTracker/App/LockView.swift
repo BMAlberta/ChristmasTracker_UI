@@ -74,8 +74,6 @@ struct LockView: View {
     @State private var biometricHint: String?
     @State private var hasAutoAttempted: Bool = false
 
-    private let buttonCornerRadius: CGFloat = AppSpacing.md
-
     var body: some View {
         ZStack {
             Color.backgroundPrimaryColor
@@ -159,14 +157,9 @@ struct LockView: View {
             }
         } label: {
             Text("Unlock with \(biometricAuthenticator.biometryType.displayName)")
-                .font(.appHeadline)
-                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(Color.primaryColor)
-                .clipShape(.rect(cornerRadius: buttonCornerRadius))
         }
-        .frame(minHeight: 44)
+        .buttonStyle(PrimaryButtonStyle())
         .accessibilityLabel("Unlock with \(biometricAuthenticator.biometryType.displayName)")
     }
 

@@ -14,11 +14,12 @@ nonisolated struct BudgetPersonRowState: Identifiable, Equatable, Sendable {
     let limitText: String
     let spentText: String
     let statusText: String
-    let isOver: Bool
+    let level: BudgetLevel
     let accessibilityLabel: String
 
+    var isOver: Bool { level == .over }
+
     fileprivate init(id: String, name: String, limit: Decimal, spent: Decimal, code: String, locale: Locale) {
-        let isOver = spent > limit
         let limitText = MoneyText.currency(limit, code: code, locale: locale)
         let spentText = MoneyText.currency(spent, code: code, locale: locale)
         let statusText = BudgetCardState.status(spent: spent, limit: limit, code: code, locale: locale)
@@ -27,7 +28,7 @@ nonisolated struct BudgetPersonRowState: Identifiable, Equatable, Sendable {
         self.limitText = limitText
         self.spentText = spentText
         self.statusText = statusText
-        self.isOver = isOver
+        self.level = BudgetStateStyle.level(spent: spent, limit: limit)
         self.accessibilityLabel = "\(name), limit \(limitText), spent \(spentText), \(statusText)"
     }
 }
@@ -37,11 +38,13 @@ nonisolated struct BudgetCardState: Equatable, Sendable {
     let totalText: String
     let spentText: String
     let statusText: String
-    let isOver: Bool
+    let level: BudgetLevel
     /// 0...1: spent over total computed in Decimal, capped at 1.
     let progress: Double
     let progressAccessibilityLabel: String
     let rows: [BudgetPersonRowState]
+
+    var isOver: Bool { level == .over }
 
     static func make(from budget: Budget, currencyCode: String, locale: Locale) -> BudgetCardState {
         let rows = budget.recipients.map {
@@ -72,10 +75,12 @@ nonisolated struct BudgetCardState: Equatable, Sendable {
     // MARK: - Shared
 
     fileprivate static func status(spent: Decimal, limit: Decimal, code: String, locale: Locale) -> String {
-        if spent > limit {
-            return "Over by \(MoneyText.currency(spent - limit, code: code, locale: locale))"
+        let remaining = "\(MoneyText.currency(limit - spent, code: code, locale: locale)) remaining"
+        switch BudgetStateStyle.level(spent: spent, limit: limit) {
+        case .over: return "Over by \(MoneyText.currency(spent - limit, code: code, locale: locale))"
+        case .nearLimit: return "Near limit. \(remaining)"
+        case .under: return remaining
         }
-        return "\(MoneyText.currency(limit - spent, code: code, locale: locale)) remaining"
     }
 
     private static func card(
@@ -93,7 +98,7 @@ nonisolated struct BudgetCardState: Equatable, Sendable {
             totalText: totalText,
             spentText: spentText,
             statusText: status(spent: spent, limit: total, code: code, locale: locale),
-            isOver: spent > total,
+            level: BudgetStateStyle.level(spent: spent, limit: total),
             progress: progress(spent: spent, total: total),
             progressAccessibilityLabel: "Spent \(spentText) of \(totalText)",
             rows: rows

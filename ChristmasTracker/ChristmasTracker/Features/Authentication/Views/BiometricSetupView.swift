@@ -59,10 +59,13 @@ struct BiometricSetupView: View {
 private struct BiometricHeaderView: View {
     let biometricType: BiometricType
 
+    /// Decorative icon size: 96pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 96
+
     var body: some View {
         VStack(spacing: AppSpacing.sm) {
             Image(systemName: biometricType == .faceID ? "faceid" : "touchid")
-                .font(.system(size: 96))
+                .font(.system(size: heroSize))
                 .foregroundStyle(Color.primaryColor)
             Text("Enable \(biometricType.displayName)?")
                 .font(.appTitle1)
@@ -85,19 +88,16 @@ private struct BiometricActionSection: View {
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             Button(action: onEnable) {
-                if isEnabling {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Text("Enable \(biometricType.displayName)")
+                Group {
+                    if isEnabling {
+                        ProgressView()
+                    } else {
+                        Text("Enable \(biometricType.displayName)")
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
-            .font(.appHeadline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.primaryColor)
-            .clipShape(.rect(cornerRadius: 12))
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(isEnabling)
 
             Button("Not Now", action: onSkip)

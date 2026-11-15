@@ -16,7 +16,10 @@ struct EmptyStateView: View {
     let message: String
     var actionTitle: String?
     var action: (() -> Void)?
-    
+
+    /// Decorative icon size: 64pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 64
+
     init(
         icon: String,
         title: String,
@@ -34,12 +37,12 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: AppSpacing.lg) {
             Image(systemName: icon)
-                .font(.system(size: 64))
+                .font(.system(size: heroSize))
                 .foregroundColor(.textMutedColor)
             
             VStack(spacing: AppSpacing.sm) {
                 Text(title)
-                    .font(.appTitle2)
+                    .font(.appBrand)
                     .foregroundColor(.textPrimaryColor)
                 
                 Text(message)
@@ -52,13 +55,8 @@ struct EmptyStateView: View {
             if let actionTitle = actionTitle, let action = action {
                 Button(action: action) {
                     Text(actionTitle)
-                        .font(.appHeadline)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, AppSpacing.xl)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(Color.primaryColor)
-                        .cornerRadius(12)
                 }
+                .buttonStyle(PrimaryButtonStyle())
                 .padding(.top, AppSpacing.md)
             }
         }

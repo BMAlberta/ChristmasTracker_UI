@@ -36,14 +36,4 @@ enum ItemStatus: String, Codable, Sendable, Hashable {
         }
     }
 
-    @MainActor var color: Color {
-        switch self {
-        case .available: return .gray
-        case .partial: return .orange
-        case .purchased: return .green
-        case .wrapped: return .blue
-        case .gifted: return .purple
-        }
-    }
-
 }

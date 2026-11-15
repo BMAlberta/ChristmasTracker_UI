@@ -17,7 +17,6 @@ struct LoadingView: View {
     var body: some View {
         VStack(spacing: AppSpacing.lg) {
             ProgressView()
-                .tint(.primaryColor)
                 .scaleEffect(1.2)
             
             Text(message)
@@ -40,7 +39,6 @@ struct LoadingView: View {
 #Preview("In Card") {
     LoadingView(message: "Please wait...")
         .frame(height: 200)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
+        .appCard()
         .padding()
 }

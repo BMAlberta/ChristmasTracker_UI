@@ -23,11 +23,13 @@ struct DestructiveRealFilesTests {
     }
 
     private func scannedFiles(file: String = #filePath) throws -> [Scanned] {
+        // TH1-T4: DesignSystem/ joins the scope (ErrorStateView's raw-red exception is gone).
         let tree = try #require(ItemSourceTree.load(from: file), "Could not find the app source folder")
         var result: [Scanned] = []
         for url in tree.all {
             let relative = tree.relativePath(url)
-            guard relative.hasPrefix("Features/") || relative.hasPrefix("App/") else { continue }
+            let scopes = ["Features/", "App/", "DesignSystem/"]
+            guard scopes.contains(where: { relative.hasPrefix($0) }) else { continue }
             result.append(Scanned(relative: relative, source: try String(contentsOf: url, encoding: .utf8)))
         }
         #expect(result.count > 50, "the scan reached only \(result.count) files in Features/ and App/")
@@ -104,9 +106,8 @@ struct DestructiveRealFilesTests {
         #expect(found.isEmpty, "sign out must be neutral, red or destructive token at: \(found.map { "ProfileView.swift:\($0.line)" }.joined(separator: "; "))")
     }
 
-    // ALLOWLIST: none. ErrorStateView.swift (DesignSystem/, not scanned here) also uses
-    // .foregroundColor(.red); it is an error view, not a destructive control, out of B2 scope; banked.
-    @Test("OLD: ProfileView paints Logout with raw .red; no view under Features/ or App/ may use raw red")
+    // ALLOWLIST: none. TH1-T4: ErrorStateView now uses Color.destructiveColor, so DesignSystem/ is scanned too.
+    @Test("OLD: ProfileView paints Logout with raw .red; no view under Features/, App/ or DesignSystem/ may use raw red")
     func noRawRedInViews() throws {
         var offenders: [String] = []
         for scanned in try scannedFiles() {

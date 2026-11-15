@@ -245,7 +245,7 @@ struct EditListView: View {
     private func problemText(_ text: String) -> some View {
         Text(text)
             .font(.appCaption1)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.destructiveColor)
     }
 
     // MARK: - Actions

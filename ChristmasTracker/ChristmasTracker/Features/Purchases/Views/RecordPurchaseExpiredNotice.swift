@@ -21,8 +21,7 @@ struct RecordPurchaseExpiredNotice: View {
                     .font(.appHeadline)
                     .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.primaryColor)
+            .buttonStyle(PrimaryButtonStyle())
         }
         .onAppear {
             AccessibilityNotification.Announcement(RecordPurchaseCopy.expiredMessage).post()

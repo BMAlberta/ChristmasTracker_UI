@@ -108,7 +108,7 @@ struct AddChildView: View {
     private func problemText(_ text: String) -> some View {
         Text(text)
             .font(.appCaption1)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.destructiveColor)
     }
 
     private func save() async {

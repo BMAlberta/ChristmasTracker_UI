@@ -12,13 +12,12 @@ import SwiftUI
 struct ItemRow: View {
     let state: ItemRowState
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         HStack(spacing: AppSpacing.md) {
-            if let marker = state.statusMarker {
-                Image(systemName: marker.icon)
-                    .font(.appTitle2)
-                    .foregroundStyle(marker.tokenColor)
-                    .accessibilityHidden(true)
+            if ThumbnailLayout.rowThumbnailVisible(for: dynamicTypeSize) {
+                ItemThumbnail(imageUrl: state.imageUrl)
             }
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 Text(state.name)
@@ -26,10 +25,8 @@ struct ItemRow: View {
                     .foregroundStyle(state.isCompleted ? Color.textMutedColor : Color.textPrimaryColor)
                     .strikethrough(state.isCompleted)
                 details
-                if let marker = state.statusMarker, marker != .available {
-                    Text(marker.displayName)
-                        .font(.appCaption2)
-                        .foregroundStyle(marker.tokenColor)
+                if let marker = state.statusMarker {
+                    StatusPill(status: marker)
                 }
             }
             Spacer(minLength: AppSpacing.sm)

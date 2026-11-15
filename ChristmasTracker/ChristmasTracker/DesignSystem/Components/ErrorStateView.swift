@@ -11,13 +11,16 @@ struct ErrorStateView: View {
     
     let error: Error
     let onRetry: () -> Void
-    
+
+    /// Decorative icon size: 64pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 64
+
     var body: some View {
         VStack(spacing: AppSpacing.xl) {
             // Error icon
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 64))
-                .foregroundColor(.red)
+                .font(.system(size: heroSize))
+                .foregroundColor(Color.destructiveColor)
             
             // Error message
             VStack(spacing: AppSpacing.sm) {
@@ -39,12 +42,7 @@ struct ErrorStateView: View {
                     Text("Try Again")
                 }
             }
-            .font(.appHeadline)
-            .foregroundColor(.white)
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.primaryColor)
-            .cornerRadius(12)
+            .buttonStyle(PrimaryButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.backgroundPrimaryColor)

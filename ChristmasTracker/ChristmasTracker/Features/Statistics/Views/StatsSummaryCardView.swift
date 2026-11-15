@@ -32,7 +32,8 @@ struct StatsSummaryCardView: View {
                 }
             }
         }
-        .statsCardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
         .accessibilityElement(children: .combine)
     }
 
@@ -58,16 +59,6 @@ private struct StatsMetricView: View {
                 .foregroundStyle(Color.textPrimaryColor)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-}
-
-extension View {
-    /// The card look shared by the Statistics cards: surface background, card padding, rounded corners.
-    func statsCardStyle() -> some View {
-        self
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(EdgeInsets.appCardPadding)
-            .background(Color.surfaceColor, in: .rect(cornerRadius: AppSpacing.md))
     }
 }
 

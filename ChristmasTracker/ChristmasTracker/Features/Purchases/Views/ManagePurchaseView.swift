@@ -213,8 +213,7 @@ struct ManagePurchaseShippingSection: View {
             }
             .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Color.primaryColor)
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(model.shipping?.canSave != true || model.isSavingShipping)
         .accessibilityHint("Saves the shipping status and tracking number")
     }
@@ -275,8 +274,7 @@ struct ManagePurchaseNotesSection: View {
             }
             .frame(maxWidth: .infinity, minHeight: InlineErrorBannerState.minimumButtonHeight)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Color.primaryColor)
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(model.notes?.canSave != true || model.isSavingNotes)
         .accessibilityHint("Saves the notes")
     }

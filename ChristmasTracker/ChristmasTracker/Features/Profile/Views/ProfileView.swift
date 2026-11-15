@@ -88,15 +88,18 @@ private struct UserInfoCardView: View {
 
     let user: User
 
+    /// Avatar diameter: 80pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .title) private var avatarSize: CGFloat = 80
+
     var body: some View {
         CardContainerView {
             VStack(spacing: AppSpacing.lg) {
                 Circle()
                     .fill(Color.primaryColor.opacity(0.2))
-                    .frame(width: 80, height: 80)
+                    .frame(width: avatarSize, height: avatarSize)
                     .overlay(
                         Text(user.initials)
-                            .font(.system(size: 32, weight: .semibold))
+                            .font(.appTitle1)
                             .foregroundStyle(Color.primaryColor)
                     )
 
@@ -113,7 +116,7 @@ private struct UserInfoCardView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.xl)
+            .padding(.vertical, AppSpacing.md)
         }
     }
 }
@@ -149,8 +152,7 @@ private struct SettingsSectionView: View {
                         action: onEditProfile
                     )
 
-                    Divider()
-                        .padding(.leading, 52)
+                    SettingsDividerView()
 
                     SettingsRowView(
                         icon: "bell",
@@ -161,8 +163,7 @@ private struct SettingsSectionView: View {
                     )
 
                     if isBiometricAvailable {
-                        Divider()
-                            .padding(.leading, 52)
+                        SettingsDividerView()
 
                         Toggle(
                             "Unlock with \(biometricType.displayName)",
@@ -174,14 +175,13 @@ private struct SettingsSectionView: View {
                         .disabled(toggleModel.isDisabledForOtherUser)
                         .font(.appBody)
                         .foregroundStyle(Color.textPrimaryColor)
-                        .padding(AppSpacing.md)
+                        .padding(.vertical, AppSpacing.sm)
 
                         if let message = toggleModel.disabledMessage {
                             Text(message)
                                 .font(.appCaption1)
                                 .foregroundStyle(Color.textMutedColor)
-                                .padding(.horizontal, AppSpacing.md)
-                                .padding(.bottom, AppSpacing.md)
+                                .padding(.bottom, AppSpacing.sm)
                         }
                     }
                 }
@@ -232,8 +232,7 @@ private struct AboutSectionView: View {
                         action: onHelp
                     )
 
-                    Divider()
-                        .padding(.leading, 52)
+                    SettingsDividerView()
 
                     SettingsRowView(
                         icon: "hand.raised",
@@ -243,8 +242,7 @@ private struct AboutSectionView: View {
                         action: onPrivacy
                     )
 
-                    Divider()
-                        .padding(.leading, 52)
+                    SettingsDividerView()
 
                     SettingsRowView(
                         icon: "info.circle",
@@ -272,13 +270,9 @@ private struct LogoutButtonView: View {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                 Text("Logout")
             }
-            .font(.appHeadline)
-            .foregroundStyle(Color.surfaceColor)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.primaryColor, in: .rect(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PrimaryButtonStyle())
         .padding(.top, AppSpacing.md)
         // Attached to this trigger, not to the screen's scroll view.
         .confirmationDialog(
@@ -316,6 +310,12 @@ private struct SettingsRowView: View {
     let showChevron: Bool
     let action: (() -> Void)?
 
+    /// Row icon size and slot width: 20pt and 28pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 20
+    @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 28
+    /// Chevron size: 14pt at the default text size, scaling with Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var chevronSize: CGFloat = 14
+
     var body: some View {
         Group {
             if let action {
@@ -328,15 +328,15 @@ private struct SettingsRowView: View {
             }
         }
         .contentShape(.rect)
-        .padding(AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
     }
 
     private var rowContent: some View {
         HStack(spacing: AppSpacing.md) {
             Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundStyle(.accent)
-                .frame(width: 28)
+                .font(.system(size: iconSize))
+                .foregroundStyle(Color.primaryColor)
+                .frame(minWidth: iconSlotWidth)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -352,10 +352,21 @@ private struct SettingsRowView: View {
 
             if showChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: chevronSize, weight: .semibold))
                     .foregroundStyle(Color.textMutedColor)
             }
         }
+    }
+}
+
+/// A divider inset to the row text: the icon slot plus the row spacing, so it tracks Dynamic Type.
+private struct SettingsDividerView: View {
+
+    @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 28
+
+    var body: some View {
+        Divider()
+            .padding(.leading, iconSlotWidth + AppSpacing.md)
     }
 }
 
@@ -369,8 +380,8 @@ private struct CardContainerView<Content: View>: View {
 
     var body: some View {
         content
-            .background(Color.surfaceColor, in: .rect(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .frame(maxWidth: .infinity)
+            .appCard()
     }
 }
 

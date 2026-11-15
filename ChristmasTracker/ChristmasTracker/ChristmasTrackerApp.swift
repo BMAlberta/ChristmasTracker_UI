@@ -367,6 +367,7 @@ struct ChristmasTrackerApp: App {
         )
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
+        Task { await sm.register(ImageCacheClearable(cache: URLCacheClearer())) }
 
         // Create services
         // Pass UserDefaultsEnrollmentHistory explicitly for persistence across app launches.
@@ -452,6 +453,8 @@ struct ChristmasTrackerApp: App {
 
     private var appContent: some View {
         ContentView()
+                // The one app tint: login, tabs and sheets inherit it.
+                .tint(Color.primaryColor)
                 .environment(\.authenticationService, authService)
                 .environment(\.listService, listService)
                 .environment(\.itemService, itemService)
