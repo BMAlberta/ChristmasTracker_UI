@@ -38,7 +38,8 @@ struct BudgetCardView: View {
                 people
             }
         }
-        .statsCardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
     }
 
     private var header: some View {
@@ -161,7 +162,8 @@ struct NoBudgetCardView: View {
                 .fixedSize(horizontal: false, vertical: true)
             CreateBudgetButton(title: createTitle, action: onCreate)
         }
-        .statsCardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
     }
 }
 

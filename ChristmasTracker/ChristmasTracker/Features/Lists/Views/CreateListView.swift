@@ -145,7 +145,7 @@ struct CreateListView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private var listDetailsCard: some View {
@@ -170,7 +170,7 @@ struct CreateListView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func field(
@@ -198,7 +198,7 @@ struct CreateListView: View {
     private func problemText(_ text: String) -> some View {
         Text(text)
             .font(.appCaption1)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.destructiveColor)
     }
 
     private var visibilityCard: some View {
@@ -222,7 +222,7 @@ struct CreateListView: View {
                 .foregroundStyle(Color.textMutedColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private var yearCard: some View {
@@ -241,7 +241,7 @@ struct CreateListView: View {
             .accessibilityIdentifier("createList.yearStepper")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     // MARK: - Actions

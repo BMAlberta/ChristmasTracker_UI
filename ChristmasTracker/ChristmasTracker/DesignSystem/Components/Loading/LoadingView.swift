@@ -40,7 +40,6 @@ struct LoadingView: View {
 #Preview("In Card") {
     LoadingView(message: "Please wait...")
         .frame(height: 200)
-        .background(Color.surfaceColor)
-        .cornerRadius(12)
+        .appCard()
         .padding()
 }

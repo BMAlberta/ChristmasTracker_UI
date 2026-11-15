@@ -149,7 +149,8 @@ private struct StatsStateView: View {
                 model.presentCreate()
             }
         }
-        .statsCardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
     }
 }
 

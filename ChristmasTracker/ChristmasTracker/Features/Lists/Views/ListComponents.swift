@@ -8,28 +8,6 @@
 
 import SwiftUI
 
-// MARK: - Card style
-
-private struct ListCardStyle: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(EdgeInsets.appCardPadding)
-            .background(Color.surfaceColor)
-            .clipShape(.rect(cornerRadius: AppSpacing.md))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppSpacing.md)
-                    .stroke(Color.borderColor)
-            }
-    }
-}
-
-extension View {
-    /// Surface card used by the list screens.
-    func listCard() -> some View {
-        modifier(ListCardStyle())
-    }
-}
-
 // MARK: - Badge
 
 /// The role label of a list. The colour comes from the tone the view state supplies.

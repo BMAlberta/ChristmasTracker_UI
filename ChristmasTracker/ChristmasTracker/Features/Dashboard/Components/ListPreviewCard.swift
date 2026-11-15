@@ -38,7 +38,7 @@ struct ListPreviewCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(state.accessibilityLabel)
         .accessibilityHint(state.accessibilityHint)

@@ -20,7 +20,7 @@ struct ErrorStateView: View {
             // Error icon
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: heroSize))
-                .foregroundColor(.red)
+                .foregroundColor(Color.destructiveColor)
             
             // Error message
             VStack(spacing: AppSpacing.sm) {

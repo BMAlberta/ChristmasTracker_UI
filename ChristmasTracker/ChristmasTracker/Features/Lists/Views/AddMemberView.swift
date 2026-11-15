@@ -45,7 +45,7 @@ struct AddMemberView: View {
                     if !email.isEmpty, AddMemberFormValidation.validate(email: email, role: role).emailInvalid {
                         Text("Enter a valid email address.")
                             .font(.appCaption1)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Color.destructiveColor)
                     }
                     Picker("Role", selection: $role) {
                         ForEach(MemberRole.allCases, id: \.self) { option in

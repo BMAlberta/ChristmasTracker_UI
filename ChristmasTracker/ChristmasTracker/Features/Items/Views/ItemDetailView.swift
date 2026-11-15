@@ -232,7 +232,7 @@ struct ItemDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func purchaseStatusCard(item: ListItem, state: ItemDetailState) -> some View {
@@ -258,7 +258,7 @@ struct ItemDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     // MARK: - Actions

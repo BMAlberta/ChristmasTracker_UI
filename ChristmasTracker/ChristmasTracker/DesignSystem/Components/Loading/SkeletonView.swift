@@ -36,9 +36,9 @@ struct SkeletonView: View {
     private var shimmerGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color.gray.opacity(0.3),
-                Color.gray.opacity(0.15),
-                Color.gray.opacity(0.3)
+                Color.borderColor,
+                Color.backgroundSecondaryColor,
+                Color.borderColor
             ],
             startPoint: isAnimating ? .leading : .trailing,
             endPoint: isAnimating ? .trailing : .leading
@@ -54,10 +54,7 @@ struct SkeletonListCard: View {
             SkeletonListStatsRow()
             SkeletonProgressBar()
         }
-        .padding(AppSpacing.lg)
-        .background(Color.surfaceColor)
-        .clipShape(.rect(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .appCard()
     }
 }
 

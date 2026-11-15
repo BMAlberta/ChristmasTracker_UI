@@ -298,7 +298,7 @@ struct ListDetailView: View {
             if let theme = state.theme, !theme.isEmpty {
                 Label(theme, systemImage: "sparkles")
                     .font(.appBody)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.primaryColor)
             }
             HStack {
                 Label(state.year.yearDisplay, systemImage: "calendar")
@@ -312,7 +312,7 @@ struct ListDetailView: View {
                 .foregroundStyle(Color.textMutedColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func statsCard(itemCountText: String, purchasedCountText: String, progress: Double?) -> some View {
@@ -327,7 +327,7 @@ struct ListDetailView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private func membersSection(detail: ListDetail) -> some View {
@@ -411,7 +411,7 @@ struct ListDetailView: View {
             onSelect: { selectedItemId = $0 },
             onAdd: { showsAddItem = true }
         )
-        .listCard()
+        .appCard()
     }
 }
 

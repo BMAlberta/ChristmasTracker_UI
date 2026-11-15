@@ -283,7 +283,7 @@ private struct RememberForgotRow: View {
             Spacer()
             Button("Forgot?", action: onForgotPassword)
                 .font(.appBody)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.primaryColor)
         }
     }
 }
@@ -386,7 +386,7 @@ private struct SignUpRow: View {
                 RegisterView()
             }
             .font(.appHeadline)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.primaryColor)
         }
     }
 }

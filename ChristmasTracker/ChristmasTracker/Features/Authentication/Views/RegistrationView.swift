@@ -205,7 +205,7 @@ private struct SimpleTextFieldView: View {
             if let error = fieldError {
                 Text(error)
                     .font(.appCaption1)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.destructiveColor)
             }
         }
     }
@@ -232,7 +232,7 @@ private struct EmailFieldView: View {
             if let error = fieldError {
                 Text(error)
                     .font(.appCaption1)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.destructiveColor)
             }
         }
     }

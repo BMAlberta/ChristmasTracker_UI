@@ -62,7 +62,7 @@ struct MembersSectionView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listCard()
+        .appCard()
     }
 
     private var addButton: some View {

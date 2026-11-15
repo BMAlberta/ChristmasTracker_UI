@@ -116,7 +116,7 @@ private struct UserInfoCardView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.xl)
+            .padding(.vertical, AppSpacing.md)
         }
     }
 }
@@ -152,8 +152,7 @@ private struct SettingsSectionView: View {
                         action: onEditProfile
                     )
 
-                    Divider()
-                        .padding(.leading, 52)
+                    SettingsDividerView()
 
                     SettingsRowView(
                         icon: "bell",
@@ -164,8 +163,7 @@ private struct SettingsSectionView: View {
                     )
 
                     if isBiometricAvailable {
-                        Divider()
-                            .padding(.leading, 52)
+                        SettingsDividerView()
 
                         Toggle(
                             "Unlock with \(biometricType.displayName)",
@@ -177,14 +175,13 @@ private struct SettingsSectionView: View {
                         .disabled(toggleModel.isDisabledForOtherUser)
                         .font(.appBody)
                         .foregroundStyle(Color.textPrimaryColor)
-                        .padding(AppSpacing.md)
+                        .padding(.vertical, AppSpacing.sm)
 
                         if let message = toggleModel.disabledMessage {
                             Text(message)
                                 .font(.appCaption1)
                                 .foregroundStyle(Color.textMutedColor)
-                                .padding(.horizontal, AppSpacing.md)
-                                .padding(.bottom, AppSpacing.md)
+                                .padding(.bottom, AppSpacing.sm)
                         }
                     }
                 }
@@ -235,8 +232,7 @@ private struct AboutSectionView: View {
                         action: onHelp
                     )
 
-                    Divider()
-                        .padding(.leading, 52)
+                    SettingsDividerView()
 
                     SettingsRowView(
                         icon: "hand.raised",
@@ -246,8 +242,7 @@ private struct AboutSectionView: View {
                         action: onPrivacy
                     )
 
-                    Divider()
-                        .padding(.leading, 52)
+                    SettingsDividerView()
 
                     SettingsRowView(
                         icon: "info.circle",
@@ -337,14 +332,14 @@ private struct SettingsRowView: View {
             }
         }
         .contentShape(.rect)
-        .padding(AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
     }
 
     private var rowContent: some View {
         HStack(spacing: AppSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: iconSize))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.primaryColor)
                 .frame(minWidth: iconSlotWidth)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -368,6 +363,17 @@ private struct SettingsRowView: View {
     }
 }
 
+/// A divider inset to the row text: the icon slot plus the row spacing, so it tracks Dynamic Type.
+private struct SettingsDividerView: View {
+
+    @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 28
+
+    var body: some View {
+        Divider()
+            .padding(.leading, iconSlotWidth + AppSpacing.md)
+    }
+}
+
 private struct CardContainerView<Content: View>: View {
 
     let content: Content
@@ -378,8 +384,8 @@ private struct CardContainerView<Content: View>: View {
 
     var body: some View {
         content
-            .background(Color.surfaceColor, in: .rect(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .frame(maxWidth: .infinity)
+            .appCard()
     }
 }
 

@@ -27,7 +27,8 @@ struct SpendByPersonView: View {
                 }
             }
         }
-        .statsCardStyle()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
     }
 }
 
