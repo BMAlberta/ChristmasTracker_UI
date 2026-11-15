@@ -22,7 +22,6 @@ struct ButtonChromeScanTests {
         "Features/Authentication/Views/RegistrationView.swift",
         "Features/Authentication/Views/BiometricSetupView.swift",
         "App/LockView.swift",
-        "Features/Profile/Views/ProfileView.swift",
         "Features/Statistics/Views/BudgetCardView.swift",
         "Features/Items/Views/ItemDetailView.swift",
         "Features/Purchases/Views/ManagePurchaseView.swift",
@@ -191,6 +190,17 @@ struct ButtonChromeScanTests {
         #expect(segment.contains(".buttonStyle(.bordered)"), "Archive List must be .bordered")
         #expect(segment.contains("destructiveTint()"), "Archive List must use destructiveTint()")
         #expect(!segment.contains("Color.destructiveColor"), "Archive List must not paint the destructive color itself")
+    }
+
+    @Test func logoutIsBorderedWithDestructiveTint() throws {
+        let code = try code("Features/Profile/Views/ProfileView.swift", in: try tree())
+        let hit = try #require(code.range(of: "private struct LogoutButtonView"), "LogoutButtonView not found")
+        let segment = String(code[hit.lowerBound...].prefix(1500))
+        #expect(segment.contains(".buttonStyle(.bordered)"), "Logout must be .bordered")
+        #expect(segment.contains("destructiveTint()"), "Logout must use destructiveTint()")
+        #expect(!segment.contains("PrimaryButtonStyle"), "Logout must not use PrimaryButtonStyle")
+        #expect(segment.contains("Button(\"Logout\", role: .destructive"), "the dialog Logout button must have role: .destructive")
+        #expect(segment.contains("Button(role: .destructive)"), "the Logout trigger must have role: .destructive")
     }
 
     // MARK: 6. Per-control tints

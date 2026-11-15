@@ -263,16 +263,18 @@ private struct LogoutButtonView: View {
     let onConfirm: () -> Void
 
     var body: some View {
-        Button {
+        Button(role: .destructive) {
             isConfirming = true
         } label: {
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                 Text("Logout")
             }
-            .frame(maxWidth: .infinity)
+            .font(.appHeadline)
+            .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(PrimaryButtonStyle())
+        .buttonStyle(.bordered)
+        .destructiveTint()
         .padding(.top, AppSpacing.md)
         // Attached to this trigger, not to the screen's scroll view.
         .confirmationDialog(
@@ -280,7 +282,8 @@ private struct LogoutButtonView: View {
             isPresented: $isConfirming,
             titleVisibility: .visible
         ) {
-            Button("Logout", action: onConfirm)
+            Button("Logout", role: .destructive, action: onConfirm)
+                .destructiveTint()
             Button("Cancel", role: .cancel) { }
         }
     }
