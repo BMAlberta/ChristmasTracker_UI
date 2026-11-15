@@ -266,7 +266,8 @@ struct ChristmasTrackerApp: App {
         FirstLaunchWipe().performIfNeeded()
 
         // Build versionGate before anything else so it can be passed into the client factory.
-        let vg = VersionGate()
+        let updateSequence = UpdateSequence()
+        let vg = VersionGate(sequence: updateSequence)
         _versionGate = State(initialValue: vg)
 
         // Start the privacy cover before any app data or session state is built.
@@ -382,7 +383,7 @@ struct ChristmasTrackerApp: App {
         seams.box.value = auth  // seam closures can now reach auth
         authService = auth
 
-        let vs = VersionService(repository: dependencies.appVersionRepository)
+        let vs = VersionService(repository: dependencies.appVersionRepository, sequence: updateSequence)
         _versionService = State(initialValue: vs)
 
         // In real mode with a client, start the version-check launch task.
