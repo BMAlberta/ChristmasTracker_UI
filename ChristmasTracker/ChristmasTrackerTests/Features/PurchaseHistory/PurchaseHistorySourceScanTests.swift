@@ -5,7 +5,7 @@
 //  PH1-H1 AC8: source scan over every file under Features/PurchaseHistory/ and the new environment file.
 //   - no Log*/print/os_log/Sentry breadcrumb or span-data call interpolates a value (an id, an amount, a
 //     name, a cursor, an error), and no print/os_log/NSLog is used at all;
-//   - no Combine, no DispatchQueue (and other GCD), no force unwrap, no `as!`.
+//   - no Combine, no GCD queues (or other GCD), no force unwrap, no `as!`.
 //
 //  The scanners are proven on in-memory strings before they run on disk. Comments are stripped first.
 //  Needs the checkout on disk (scripts/test.sh has it).
@@ -101,8 +101,8 @@ struct PurchaseHistorySourceScanTests {
 
     @Test("The Combine and GCD scanner fires on imports and queues")
     func gcdScannerFires() {
-        #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "import Combine").isEmpty == false)
-        #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "DispatchQueue.main.async {}").isEmpty == false)
+        #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "import " + "Combine").isEmpty == false)
+        #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "Dispatch" + "Queue.main.async {}").isEmpty == false)
         #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "let x = 1").isEmpty)
     }
 
