@@ -8,6 +8,7 @@ import Foundation
 
 nonisolated enum UpdateInstallLink {
     private static let maxLength = 2048
+    private static let schemePrefix = "https://"
     private static let prefix = "itms-services://?action=download-manifest&url="
 
     /// Returns the install URL, or nil when there is no acceptable link.
@@ -19,7 +20,10 @@ nonisolated enum UpdateInstallLink {
         if trimmed.lowercased().hasPrefix("itms-services:") {
             return validatedBuiltLink(trimmed)
         }
-        guard isAcceptableHTTPS(trimmed), let value = encode(trimmed) else { return nil }
+        guard isAcceptableHTTPS(trimmed) else { return nil }
+        // The scheme is matched case-insensitively; the built link always carries lowercase https.
+        let normalized = schemePrefix + trimmed.dropFirst(schemePrefix.count)
+        guard let value = encode(normalized) else { return nil }
         return URL(string: prefix + value)
     }
 
@@ -31,6 +35,7 @@ nonisolated enum UpdateInstallLink {
         let value = String(input.dropFirst(prefix.count))
         guard !value.isEmpty,
               let inner = value.removingPercentEncoding,
+              inner.hasPrefix(schemePrefix), // canonical form carries a lowercase scheme only
               isAcceptableHTTPS(inner),
               encode(inner) == value else { return nil }
         return URL(string: input)
@@ -39,12 +44,12 @@ nonisolated enum UpdateInstallLink {
     /// https only, within the length cap, with a host and no userinfo.
     private static func isAcceptableHTTPS(_ string: String) -> Bool {
         guard string.count <= maxLength else { return false }
-        let schemePrefix = "https://"
         guard string.lowercased().hasPrefix(schemePrefix) else { return false }
         let rest = string.dropFirst(schemePrefix.count)
         let authority = rest.prefix(while: { $0 != "/" && $0 != "?" && $0 != "#" })
         guard !authority.isEmpty, !authority.contains("@") else { return false }
-        return true
+        let forbidden = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
+        return !authority.unicodeScalars.contains { $0 == "\\" || forbidden.contains($0) }
     }
 
     /// Percent-encodes every character except RFC 3986 unreserved characters.
