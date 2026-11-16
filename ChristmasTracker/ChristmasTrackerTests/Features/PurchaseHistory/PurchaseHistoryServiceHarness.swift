@@ -49,9 +49,14 @@ func expectCancellation(
 ) {
     switch result {
     case .success(let page):
-        Issue.record("expected CancellationError, got a page with \(page.rows.count) rows", sourceLocation: sourceLocation)
+        Issue.record(
+            "expected CancellationError, got a page with \(page.rows.count) rows", sourceLocation: sourceLocation
+        )
     case .failure(let error):
         #expect(error is CancellationError, "expected CancellationError, got \(error)", sourceLocation: sourceLocation)
-        #expect(!(error is PurchaseHistoryError), "a cancelled call must not become a typed error", sourceLocation: sourceLocation)
+        #expect(
+            !(error is PurchaseHistoryError), "a cancelled call must not become a typed error",
+            sourceLocation: sourceLocation
+        )
     }
 }

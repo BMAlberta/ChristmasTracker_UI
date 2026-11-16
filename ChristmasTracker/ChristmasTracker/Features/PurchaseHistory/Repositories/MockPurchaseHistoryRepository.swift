@@ -75,7 +75,9 @@ nonisolated final class MockPurchaseHistoryRepository: PurchaseHistoryLoading, S
         let calendar = Calendar.current
         let thisYear = calendar.component(.year, from: Date())
         let yearStart = calendar.date(from: DateComponents(year: thisYear, month: 1, day: 1, hour: 12)) ?? Date()
-        let lastDecember = calendar.date(from: DateComponents(year: thisYear - 1, month: 12, day: 28, hour: 12)) ?? Date()
+        let lastDecember = calendar.date(
+            from: DateComponents(year: thisYear - 1, month: 12, day: 28, hour: 12)
+        ) ?? Date()
         let statuses = PurchaseShippingStatus.allCases
         return (0..<30).map { index in
             let person = people[index % people.count]

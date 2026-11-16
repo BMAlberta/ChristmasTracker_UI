@@ -250,7 +250,8 @@ struct MockPurchaseHistoryRepositoryTests {
         let repo = MockPurchaseHistoryRepository()
 
         let page = try await repo.loadPage(
-            filter: PurchaseHistoryFilter(year: 1901, recipientId: "nobody-here", shippingStatus: .delivered), cursor: nil
+            filter: PurchaseHistoryFilter(year: 1901, recipientId: "nobody-here", shippingStatus: .delivered),
+            cursor: nil
         )
 
         #expect(page.rows.isEmpty)

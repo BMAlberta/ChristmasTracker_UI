@@ -112,7 +112,9 @@ private enum UpdateRequiredPreviewData {
 
 #Preview("Required with notes") {
     UpdateRequiredPreviewData.screen(
-        UpdateRequiredPreviewData.update(manifest: UpdateRequiredPreviewData.manifest, notes: "Fixes a sign-in problem."))
+        UpdateRequiredPreviewData.update(
+            manifest: UpdateRequiredPreviewData.manifest, notes: "Fixes a sign-in problem."
+        ))
 }
 
 #Preview("Required without notes, dark") {
@@ -127,6 +129,8 @@ private enum UpdateRequiredPreviewData {
 
 #Preview("Largest accessibility size") {
     UpdateRequiredPreviewData.screen(
-        UpdateRequiredPreviewData.update(manifest: UpdateRequiredPreviewData.manifest, notes: "Fixes a sign-in problem."))
+        UpdateRequiredPreviewData.update(
+            manifest: UpdateRequiredPreviewData.manifest, notes: "Fixes a sign-in problem."
+        ))
         .dynamicTypeSize(.accessibility5)
 }

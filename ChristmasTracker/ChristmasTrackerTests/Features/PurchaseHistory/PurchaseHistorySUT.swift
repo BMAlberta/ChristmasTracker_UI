@@ -32,12 +32,16 @@ struct PurchaseHistorySUT {
     let transport: ListFakeTransport
     let refresher: ListFakeRefresher
 
-    func load(_ filter: PurchaseHistoryFilter = PurchaseHistoryFilter(), cursor: String? = nil) async throws -> PurchaseHistoryPage {
+    func load(
+        _ filter: PurchaseHistoryFilter = PurchaseHistoryFilter(), cursor: String? = nil
+    ) async throws -> PurchaseHistoryPage {
         try await repo.loadPage(filter: filter, cursor: cursor)
     }
 
     /// Runs one call and returns whatever it threw (nil when it returned).
-    func thrown(_ filter: PurchaseHistoryFilter = PurchaseHistoryFilter(), cursor: String? = nil) async -> (any Error)? {
+    func thrown(
+        _ filter: PurchaseHistoryFilter = PurchaseHistoryFilter(), cursor: String? = nil
+    ) async -> (any Error)? {
         do {
             _ = try await load(filter, cursor: cursor)
             return nil

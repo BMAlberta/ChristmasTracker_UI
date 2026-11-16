@@ -48,7 +48,9 @@ struct PurchaseHistoryQueryTests {
 
     @Test("all years sends no year at all")
     func allYearsHasNoYear() {
-        let query = makePurchaseHistoryQuery(filter: PurchaseHistoryFilter(year: nil, shippingStatus: .shipped), cursor: nil)
+        let query = makePurchaseHistoryQuery(
+            filter: PurchaseHistoryFilter(year: nil, shippingStatus: .shipped), cursor: nil
+        )
 
         #expect(query.year == nil)
         #expect(query.shippingStatus == .shipped)
@@ -73,6 +75,9 @@ struct PurchaseHistoryQueryTests {
     func isPure() {
         let filter = PurchaseHistoryFilter(year: 2026, recipientId: "user-1", shippingStatus: .delivered)
 
-        #expect(makePurchaseHistoryQuery(filter: filter, cursor: "c") == makePurchaseHistoryQuery(filter: filter, cursor: "c"))
+        #expect(
+            makePurchaseHistoryQuery(filter: filter, cursor: "c")
+                == makePurchaseHistoryQuery(filter: filter, cursor: "c")
+        )
     }
 }

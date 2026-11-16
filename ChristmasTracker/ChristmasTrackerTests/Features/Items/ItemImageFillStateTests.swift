@@ -189,7 +189,9 @@ struct ItemImageFillStateTests {
         #expect(state.inFlight == second, "a stale result leaves the state unchanged")
         #expect(state.source == .empty)
 
-        #expect(state.lookupFinished(second, result: Self.otherImage, url: Self.otherPage, imageUrl: "") == Self.otherImage)
+        #expect(
+            state.lookupFinished(second, result: Self.otherImage, url: Self.otherPage, imageUrl: "") == Self.otherImage
+        )
     }
 
     @Test("Tokens keep increasing across finished lookups")

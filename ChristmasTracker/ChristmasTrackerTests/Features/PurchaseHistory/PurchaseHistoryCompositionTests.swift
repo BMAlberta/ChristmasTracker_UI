@@ -41,7 +41,9 @@ struct PurchaseHistoryCompositionTests {
                 transport: ListFakeTransport()
             )
         }
-        return AppDependencies.resolve(mode: mode, generatedClient: client, reporter: RecordingBootstrapReporter()).dependencies
+        return AppDependencies.resolve(
+            mode: mode, generatedClient: client, reporter: RecordingBootstrapReporter()
+        ).dependencies
     }
 
     // MARK: - Identity
@@ -60,7 +62,9 @@ struct PurchaseHistoryCompositionTests {
         let deps = try makeDependencies(mode: .real, withClient: true)
 
         #expect(deps.purchaseHistoryLoader is GeneratedClientPurchaseHistoryRepository)
-        #expect(!(deps.purchaseHistoryLoader is MockPurchaseHistoryRepository), "the real branch must not build any Mock")
+        #expect(
+            !(deps.purchaseHistoryLoader is MockPurchaseHistoryRepository), "the real branch must not build any Mock"
+        )
         #expect(!(deps.purchaseHistoryLoader is InertPurchaseHistoryLoader))
     }
 
@@ -83,7 +87,9 @@ struct PurchaseHistoryCompositionTests {
             _ = try await loader.loadPage(filter: PurchaseHistoryFilter(), cursor: nil)
         }
         await #expect(throws: ConfigurationError.clientUnavailable) {
-            _ = try await loader.loadPage(filter: PurchaseHistoryFilter(year: 2026, recipientId: "u", shippingStatus: .shipped), cursor: "c")
+            _ = try await loader.loadPage(
+                filter: PurchaseHistoryFilter(year: 2026, recipientId: "u", shippingStatus: .shipped), cursor: "c"
+            )
         }
     }
 
@@ -102,7 +108,11 @@ struct PurchaseHistoryCompositionTests {
 
         let page = try await deps.purchaseHistoryLoader.loadPage(filter: PurchaseHistoryFilter(), cursor: nil)
 
-        #expect(page.rows == Array(MockPurchaseHistoryRepository.seedRows.prefix(GeneratedClientPurchaseHistoryRepository.pageLimit)))
+        #expect(
+            page.rows == Array(
+                MockPurchaseHistoryRepository.seedRows.prefix(GeneratedClientPurchaseHistoryRepository.pageLimit)
+            )
+        )
         #expect(page.nextCursor != nil)
     }
 
@@ -183,7 +193,8 @@ struct PurchaseHistoryCompositionTests {
         let flat = code.replacingOccurrences(of: "\n", with: " ")
 
         let ordered = try ItemSourceScan.matchingLines(
-            #"makeProductionClearables\(.*purchaseService:.*statsService:.*budgetService:.*purchaseHistoryService:"#, in: flat
+            #"makeProductionClearables\(.*purchaseService:.*statsService:.*budgetService:.*purchaseHistoryService:"#,
+            in: flat
         )
 
         #expect(ordered.isEmpty == false, "purchaseHistoryService: is the final argument, after budgetService:")

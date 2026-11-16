@@ -39,11 +39,15 @@ struct PurchaseHistoryModelSourceScanTests {
         var found: [String] = []
         for url in files {
             let code = ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8))
-            for word in ["Log" + "Debug(", "Log" + "Info(", "Log" + "Error(", "Log" + "Warning(", "Sentry", "addBreadcrumb"]
+            for word in [
+                "Log" + "Debug(", "Log" + "Info(", "Log" + "Error(", "Log" + "Warning(", "Sentry", "addBreadcrumb"
+            ]
             where code.contains(word) {
                 found.append("\(tree.relativePath(url)): \(word)")
             }
-            for hit in try PurchaseHistoryScanRules.printViolations(in: code) { found.append("\(tree.relativePath(url)): \(hit)") }
+            for hit in try PurchaseHistoryScanRules.printViolations(in: code) {
+                found.append("\(tree.relativePath(url)): \(hit)")
+            }
         }
         #expect(found.isEmpty, "The model logs nothing:\n\(found.joined(separator: "\n"))")
     }
@@ -70,7 +74,8 @@ struct PurchaseHistoryModelSourceScanTests {
     func fileSize() throws {
         let (tree, files) = try modelFiles()
         for url in files {
-            let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false).count
+            let lines = try String(contentsOf: url, encoding: .utf8)
+                .split(separator: "\n", omittingEmptySubsequences: false).count
             #expect(lines < 400, "\(tree.relativePath(url)) has \(lines) lines")
         }
     }

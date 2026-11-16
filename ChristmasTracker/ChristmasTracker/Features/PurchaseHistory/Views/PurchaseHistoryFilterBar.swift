@@ -60,7 +60,9 @@ struct PurchaseHistoryFilterBar: View {
     private var yearMenu: some View {
         Menu {
             Picker(PurchaseHistoryScreenState.yearAccessibilityLabel, selection: yearBinding) {
-                ForEach(PurchaseHistoryScreenState.yearOptions(choices: yearChoices, selected: model.filter.year)) { option in
+                ForEach(
+                    PurchaseHistoryScreenState.yearOptions(choices: yearChoices, selected: model.filter.year)
+                ) { option in
                     Text(option.title).tag(option.value)
                 }
             }

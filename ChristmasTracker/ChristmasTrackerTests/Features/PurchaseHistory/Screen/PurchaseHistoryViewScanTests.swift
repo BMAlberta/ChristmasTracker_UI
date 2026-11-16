@@ -105,7 +105,9 @@ struct PurchaseHistoryViewScanTests {
     @Test("One view type per file")
     func oneViewPerFile() throws {
         for source in try sources() {
-            let count = try ItemSourceScan.matchingLines(#"\bstruct\s+\w+\s*(<[^>]*>)?\s*:\s*[^{\n]*\bView\b"#, in: source.bare).count
+            let count = try ItemSourceScan.matchingLines(
+                #"\bstruct\s+\w+\s*(<[^>]*>)?\s*:\s*[^{\n]*\bView\b"#, in: source.bare
+            ).count
 
             #expect(count <= 1, "\(source.path) declares \(count) views")
         }

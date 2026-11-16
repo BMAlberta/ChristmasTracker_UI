@@ -111,7 +111,9 @@ struct LinkPreviewSourceScanTests {
         var found: [String] = []
         for url in files {
             let code = ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8))
-            for hit in try LinkPreviewScanRules.violations(in: code) { found.append("\(tree.relativePath(url)): \(hit)") }
+            for hit in try LinkPreviewScanRules.violations(in: code) {
+                found.append("\(tree.relativePath(url)): \(hit)")
+            }
         }
         #expect(found.isEmpty, "A URL or value may reach no log or report:\n\(found.joined(separator: "\n"))")
     }

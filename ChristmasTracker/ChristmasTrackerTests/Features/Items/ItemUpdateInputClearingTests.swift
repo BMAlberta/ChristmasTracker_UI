@@ -21,7 +21,9 @@ struct ItemUpdateInputClearingTests {
         var description: String { rawValue }
     }
 
-    private func item(url: String? = "https://example.com/lamp", imageUrl: String? = "https://example.com/lamp.png") -> ListItem {
+    private func item(
+        url: String? = "https://example.com/lamp", imageUrl: String? = "https://example.com/lamp.png"
+    ) -> ListItem {
         ItemFixtures.item(name: "Fake Lamp", description: "A fake lamp", url: url, imageUrl: imageUrl,
                           price: nil, quantity: 2, priority: 5)
     }
@@ -47,7 +49,9 @@ struct ItemUpdateInputClearingTests {
     }
 
     /// The form with `field` replaced by `text` and the other field untouched.
-    private func make(_ original: ListItem, field: Field, text: String, name: String = "Fake Lamp") -> UpdateItemInput? {
+    private func make(
+        _ original: ListItem, field: Field, text: String, name: String = "Fake Lamp"
+    ) -> UpdateItemInput? {
         switch field {
         case .url: makeSUT(from: original, name: name, url: text)
         case .imageUrl: makeSUT(from: original, name: name, imageUrl: text)
@@ -71,7 +75,10 @@ struct ItemUpdateInputClearingTests {
         #expect(sent(input, field) == nil)
     }
 
-    @Test("Clearing a field that had a value sends an empty string, never nil", arguments: Field.allCases, ["", "   ", "\n"])
+    @Test(
+        "Clearing a field that had a value sends an empty string, never nil",
+        arguments: Field.allCases, ["", "   ", "\n"]
+    )
     func clearedSendsEmptyString(field: Field, blank: String) throws {
         let input = try #require(make(item(), field: field, text: blank))
         #expect(sent(input, field) == "")

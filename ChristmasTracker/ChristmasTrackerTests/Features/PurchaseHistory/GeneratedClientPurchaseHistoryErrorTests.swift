@@ -112,7 +112,9 @@ struct GeneratedClientPurchaseHistoryErrorTests {
 
     @Test("a refresh that fails for a non-credential reason throws network")
     func nonCredentialRefreshFailure() async throws {
-        let sut = try makePurchaseHistorySUT(refreshFailure: SessionRefreshError.other(URLError(.notConnectedToInternet)))
+        let sut = try makePurchaseHistorySUT(
+            refreshFailure: SessionRefreshError.other(URLError(.notConnectedToInternet))
+        )
         await sut.transport.enqueue(status: 401, json: ListWire.tokenExpired)
 
         #expect(await sut.historyError() == .network)
@@ -130,7 +132,10 @@ struct GeneratedClientPurchaseHistoryErrorTests {
         }
     }
 
-    @Test("any 404 throws notFound, never forbidden", arguments: [PurchaseHistoryWire.notFound, ListWire.listNotFound, "{ this is not json"])
+    @Test(
+        "any 404 throws notFound, never forbidden",
+        arguments: [PurchaseHistoryWire.notFound, ListWire.listNotFound, "{ this is not json"]
+    )
     func notFound(body: String) async throws {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(status: 404, json: body)
@@ -247,7 +252,10 @@ struct GeneratedClientPurchaseHistoryErrorTests {
 
     // MARK: Contract
 
-    @Test("the repository never produces sessionEnded, whatever the failure", arguments: [400, 401, 403, 404, 422, 429, 500, 503, 418])
+    @Test(
+        "the repository never produces sessionEnded, whatever the failure",
+        arguments: [400, 401, 403, 404, 422, 429, 500, 503, 418]
+    )
     func neverSessionEnded(status: Int) async throws {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(
@@ -257,7 +265,10 @@ struct GeneratedClientPurchaseHistoryErrorTests {
         #expect(await sut.historyError() != .sessionEnded)
     }
 
-    @Test("every failure is a PurchaseHistoryError or a CancellationError, nothing else", arguments: [400, 401, 403, 404, 429, 500, 502, 418])
+    @Test(
+        "every failure is a PurchaseHistoryError or a CancellationError, nothing else",
+        arguments: [400, 401, 403, 404, 429, 500, 502, 418]
+    )
     func onlyTypedErrors(status: Int) async throws {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(status: status, json: ListWire.internalError, times: 12)

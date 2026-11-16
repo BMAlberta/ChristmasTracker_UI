@@ -35,7 +35,9 @@ struct LinkPreviewServiceRateLimitFallbackTests {
             transport: transport
         )
         let provider = GatedProductImageProvider()
-        let service = LinkPreviewService(repository: GeneratedClientLinkPreviewRepository(client: client), provider: provider)
+        let service = LinkPreviewService(
+            repository: GeneratedClientLinkPreviewRepository(client: client), provider: provider
+        )
         return SUT(service: service, provider: provider, transport: transport)
     }
 

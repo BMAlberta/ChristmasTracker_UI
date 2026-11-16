@@ -44,7 +44,8 @@ import TrackerAPI
 
     /// The "active again" entry: skips when the last success is inside the minimum interval,
     /// or the last failure is inside the failure retry interval.
-    // @MainActor-isolated, so @Instrumented is skipped per coding-standards.md; its span comes from check(), and the skipped path makes no span.
+    // @MainActor-isolated, so @Instrumented is skipped per coding-standards.md; its span comes from check(),
+    // and the skipped path makes no span.
     func checkIfDue() async {
         let current = now()
         if let success = lastSuccess, current.timeIntervalSince(success) < minimumCheckInterval {

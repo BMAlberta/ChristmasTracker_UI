@@ -26,7 +26,9 @@ struct ItemAddImageRequestTests {
     // MARK: - Factory
 
     /// The key case: an old item whose url equals the saved one and whose image is blank.
-    private func makeSUT(mode: ItemFormMode = .edit(savedUrl: page), initialImageUrl: String = "") -> ItemImageFillState {
+    private func makeSUT(
+        mode: ItemFormMode = .edit(savedUrl: page), initialImageUrl: String = ""
+    ) -> ItemImageFillState {
         ItemImageFillState(mode: mode, initialImageUrl: initialImageUrl)
     }
 
@@ -211,7 +213,10 @@ struct ItemAddImageRequestTests {
         #expect(state.addImageStatus == .idle)
     }
 
-    @Test("A result for a url the field no longer holds is dropped silently", arguments: ["https://images.example.test/a.jpg", nil as String?])
+    @Test(
+        "A result for a url the field no longer holds is dropped silently",
+        arguments: ["https://images.example.test/a.jpg", nil as String?]
+    )
     func urlChangedMeanwhile(result: String?) throws {
         var state = makeSUT()
         let lookup = try request(&state)
@@ -222,7 +227,10 @@ struct ItemAddImageRequestTests {
         #expect(state.source == .empty)
     }
 
-    @Test("A result after the user typed an image is dropped silently", arguments: ["https://images.example.test/a.jpg", nil as String?])
+    @Test(
+        "A result after the user typed an image is dropped silently",
+        arguments: ["https://images.example.test/a.jpg", nil as String?]
+    )
     func userTypedMeanwhile(result: String?) throws {
         var state = makeSUT()
         let lookup = try request(&state)

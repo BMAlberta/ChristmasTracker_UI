@@ -63,7 +63,8 @@ struct UpdateViewsSourceScanTests {
         for file in opening {
             #expect(
                 file.code.contains("UpdatePresentation.installLink") || file.code.contains("UpdateInstallLink.url"),
-                "\(file.path) opens a URL that does not come from UpdatePresentation.installLink / UpdateInstallLink.url")
+                "\(file.path) opens a URL that does not come from UpdatePresentation.installLink / UpdateInstallLink.url"
+            )
         }
     }
 

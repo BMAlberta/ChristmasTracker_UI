@@ -22,7 +22,9 @@ struct ItemAddImageVisibilityTests {
 
     // MARK: - Factory
 
-    private func makeSUT(mode: ItemFormMode = .edit(savedUrl: page), initialImageUrl: String = "") -> ItemImageFillState {
+    private func makeSUT(
+        mode: ItemFormMode = .edit(savedUrl: page), initialImageUrl: String = ""
+    ) -> ItemImageFillState {
         ItemImageFillState(mode: mode, initialImageUrl: initialImageUrl)
     }
 
