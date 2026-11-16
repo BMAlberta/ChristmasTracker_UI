@@ -242,6 +242,7 @@ struct ChristmasTrackerApp: App {
     @State private var statsService: StatsService
     @State private var budgetService: BudgetService
     @State private var purchaseHistoryService: PurchaseHistoryService
+    @State private var linkPreviewService: LinkPreviewService
     @State private var spendingCacheInvalidator: SpendingCacheInvalidator
     @State private var showBiometricSetup = false
     @State private var versionGate: VersionGate
@@ -390,6 +391,9 @@ struct ChristmasTrackerApp: App {
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
         Task { await sm.register(ImageCacheClearable(cache: URLCacheClearer())) }
+        let linkPreview = makeLinkPreviewService(mode: AppConfiguration.apiMode, state: resolved.state, client: builtClient)
+        linkPreviewService = linkPreview
+        Task { await sm.register(linkPreview) }
 
         // Create services
         // Pass UserDefaultsEnrollmentHistory explicitly for persistence across app launches.
@@ -489,6 +493,7 @@ struct ChristmasTrackerApp: App {
                 .environment(\.statsService, statsService)
                 .environment(\.budgetService, budgetService)
                 .environment(\.purchaseHistoryService, purchaseHistoryService)
+                .environment(\.linkPreviewService, linkPreviewService)
                 .environment(\.spendingCacheInvalidator, spendingCacheInvalidator)
                 .updatePrompt(
                     service: versionService,

@@ -22,6 +22,7 @@ struct EditItemView: View {
     @State private var priceText: String
     @State private var quantityRequested: Int
     @State private var priority: Int
+    @State private var imageFill: ItemImageFillModel
     @State private var isSaving = false
     @State private var saveError: ItemError?
 
@@ -34,6 +35,10 @@ struct EditItemView: View {
         _priceText = State(initialValue: item.expectedUnitPrice.map { "\($0)" } ?? "")
         _quantityRequested = State(initialValue: item.quantityRequested)
         _priority = State(initialValue: item.priority)
+        _imageFill = State(initialValue: ItemImageFillModel(
+            mode: .edit(savedUrl: item.url),
+            initialImageUrl: item.imageUrl ?? ""
+        ))
     }
 
     /// The changed fields, or nil when the form is invalid or nothing changed.
@@ -71,7 +76,10 @@ struct EditItemView: View {
                     imageUrl: $imageUrl,
                     priceText: $priceText,
                     quantity: $quantityRequested,
-                    priority: $priority
+                    priority: $priority,
+                    imageFill: imageFill,
+                    originalUrl: item.url,
+                    originalImageUrl: item.imageUrl
                 )
             }
             .navigationTitle("Edit Item")
@@ -98,6 +106,7 @@ struct EditItemView: View {
                 }
             }
             .onDisappear {
+                imageFill.cancel()
                 saveError = nil
             }
         }
@@ -105,6 +114,7 @@ struct EditItemView: View {
 
     private func saveChanges() async {
         guard let input, !isSaving else { return }
+        imageFill.cancel()
         saveError = nil
         isSaving = true
         defer { isSaving = false }
@@ -130,4 +140,5 @@ struct EditItemView: View {
             repository: MockItemRepository(),
             dataStore: ItemDataStore()
         ))
+        .environment(\.linkPreviewService, LinkPreviewService(repository: MockLinkPreviewRepository()))
 }

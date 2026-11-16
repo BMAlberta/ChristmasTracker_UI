@@ -18,6 +18,9 @@ struct ItemFormFields: View {
     @Binding var priceText: String
     @Binding var quantity: Int
     @Binding var priority: Int
+    let imageFill: ItemImageFillModel
+    var originalUrl: String?
+    var originalImageUrl: String?
     var showsOffListNotice = false
 
     private var priceLooksInvalid: Bool {
@@ -32,16 +35,13 @@ struct ItemFormFields: View {
             TextField("Description", text: $description, axis: .vertical)
                 .lineLimit(3...6)
         }
-        Section("Links") {
-            TextField("URL (optional)", text: $url)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-            TextField("Image URL (optional)", text: $imageUrl)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-        }
+        ItemLinksSection(
+            url: $url,
+            imageUrl: $imageUrl,
+            imageFill: imageFill,
+            originalUrl: originalUrl,
+            originalImageUrl: originalImageUrl
+        )
         Section("Pricing") {
             HStack {
                 Text("$")

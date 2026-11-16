@@ -5,8 +5,9 @@
 //  Story I3c-B: the pure validation rules of the add and edit forms (Gate 1 addendum, D4).
 //
 //  Rules under test: name trimmed 1...200; description trimmed 1...2000 (REQUIRED by the
-//  server); url and imageUrl empty after trimming (valid, sent as nil) or an absolute http or
-//  https URL with a host of at most 2048 characters; price empty (valid) or parsed with
+//  server); url and imageUrl empty after trimming (valid, sent as nil) or an absolute URL with a
+//  host and no userinfo of at most 2048 characters (url http or https, imageUrl https only, C19;
+//  the C19 and legacy cases are in ItemFormValidationC19Tests); price empty (valid) or parsed with
 //  en_US_POSIX into a Decimal from 0 to 999999.99 with at most two fraction digits; quantity
 //  1...999; priority 1...10.
 //
@@ -64,7 +65,7 @@ struct ItemFormValidationTests {
 
     @Test("A fully filled form is valid")
     func fullFormIsValid() {
-        let validity = makeSUT(url: "https://example.com/lamp", imageUrl: "http://example.com/lamp.png",
+        let validity = makeSUT(url: "https://example.com/lamp", imageUrl: "https://example.com/lamp.png",
                                price: "19.99", quantity: 3, priority: 8)
         #expect(validity.isValid)
     }
@@ -171,11 +172,18 @@ struct ItemFormValidationTests {
         #expect(!validity.imageUrlInvalid)
     }
 
-    @Test("Absolute http and https URLs with a host are valid",
-          arguments: ["https://example.com", "http://example.com", "https://example.com/a/b?c=d#e", "  https://example.com/x  "])
+    @Test("Absolute http and https URLs with a host are valid for url; https only for imageUrl",
+          arguments: ["https://example.com", "https://example.com/a/b?c=d#e", "  https://example.com/x  "])
     func validUrls(value: String) {
         #expect(!makeSUT(url: value).urlInvalid, "url '\(value)'")
         #expect(!makeSUT(imageUrl: value).imageUrlInvalid, "imageUrl '\(value)'")
+    }
+
+    @Test("An http URL is valid for url and invalid for imageUrl (C19)")
+    func httpUrlOnly() {
+        #expect(!makeSUT(url: "http://example.com").urlInvalid)
+        #expect(makeSUT(imageUrl: "http://example.com").imageUrlInvalid)
+        #expect(makeSUT(imageUrl: "  http://example.com/x  ").imageUrlInvalid)
     }
 
     @Test("Other schemes, relative values, hostless and non-URL text are invalid",

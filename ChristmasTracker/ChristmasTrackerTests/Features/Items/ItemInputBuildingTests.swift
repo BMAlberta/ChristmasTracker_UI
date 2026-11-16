@@ -6,8 +6,8 @@
 //   - makeCreateInput: nil when invalid, otherwise trimmed values, nil for empty optionals,
 //     a Decimal price, and NEVER an offList (the server derives it).
 //   - makeUpdateInput: nil when invalid or when nothing differs from the original; only the
-//     changed fields are non-nil; clearing an optional field (url, imageUrl, price) is not a
-//     change because the generated update body cannot clear a field.
+//     changed fields are non-nil; clearing url or imageUrl sends "" (decision 17); clearing the price is
+//     not a change.
 //
 //  The memberwise initialiser of UpdateItemInput is used once, for the isEmpty checks; its
 //  argument order is the declaration order in the Gate 1 addendum.
@@ -71,13 +71,13 @@ struct ItemInputBuildingTests {
     func createFull() throws {
         let input = try #require(makeCreate(
             name: "  Fake Lamp \n", description: "\tA fake lamp  ",
-            url: " https://example.com/lamp ", imageUrl: "http://example.com/lamp.png ",
+            url: " https://example.com/lamp ", imageUrl: "https://example.com/lamp.png ",
             price: "19.99", quantity: 3, priority: 8
         ))
         #expect(input.name == "Fake Lamp")
         #expect(input.description == "A fake lamp")
         #expect(input.url == "https://example.com/lamp")
-        #expect(input.imageUrl == "http://example.com/lamp.png")
+        #expect(input.imageUrl == "https://example.com/lamp.png")
         #expect(input.expectedUnitPrice == ItemFixtures.decimal("19.99"))
         #expect(input.quantityRequested == 3)
         #expect(input.priority == 8)
@@ -146,20 +146,27 @@ struct ItemInputBuildingTests {
         #expect(makeUpdate(price: price) == nil)
     }
 
-    @Test("Clearing url, imageUrl or price is not a change (clearing is not offered)")
-    func updateClearingIsNotAChange() {
-        #expect(makeUpdate(url: "") == nil)
-        #expect(makeUpdate(imageUrl: "") == nil)
+    @Test("Clearing url or imageUrl sends an empty string; clearing the price is not a change")
+    func updateClearingSendsEmptyString() throws {
+        let urlClear = try #require(makeUpdate(url: ""))
+        #expect(urlClear.url == "")
+        #expect(urlClear.imageUrl == nil)
+        let imageClear = try #require(makeUpdate(imageUrl: ""))
+        #expect(imageClear.imageUrl == "")
+        #expect(imageClear.url == nil)
         #expect(makeUpdate(price: "") == nil)
-        #expect(makeUpdate(url: "  ", imageUrl: "\n", price: "  ") == nil)
+        let blanks = try #require(makeUpdate(url: "  ", imageUrl: "\n", price: "  "))
+        #expect(blanks.url == "")
+        #expect(blanks.imageUrl == "")
+        #expect(blanks.expectedUnitPrice == nil)
     }
 
-    @Test("Clearing optionals next to a real change leaves them nil in the update")
+    @Test("Clearing optionals next to a real change sends empty strings for url and imageUrl; the price clear stays nil")
     func updateClearingNextToChange() throws {
         let input = try #require(makeUpdate(name: "New name", url: "", imageUrl: "", price: ""))
         #expect(input.name == "New name")
-        #expect(input.url == nil)
-        #expect(input.imageUrl == nil)
+        #expect(input.url == "")
+        #expect(input.imageUrl == "")
         #expect(input.expectedUnitPrice == nil)
     }
 
