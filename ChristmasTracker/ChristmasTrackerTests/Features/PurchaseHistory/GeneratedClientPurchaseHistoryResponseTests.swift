@@ -104,7 +104,9 @@ struct GeneratedClientPurchaseHistoryResponseTests {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(
             status: 200,
-            json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(id: "p1"), PurchaseHistoryWire.rowJSON(id: "p2")], nextCursor: "page-2")
+            json: PurchaseHistoryWire.envelope(
+                [PurchaseHistoryWire.rowJSON(id: "p1"), PurchaseHistoryWire.rowJSON(id: "p2")], nextCursor: "page-2"
+            )
         )
         await sut.transport.enqueue(
             status: 200, json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(id: "p3")], nextCursor: nil)
@@ -125,7 +127,8 @@ struct GeneratedClientPurchaseHistoryResponseTests {
     func moneyIsExact(text: String) async throws {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(
-            status: 200, json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(totalCost: text)], nextCursor: nil)
+            status: 200,
+            json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(totalCost: text)], nextCursor: nil)
         )
 
         let page = try await sut.load()
@@ -149,7 +152,8 @@ struct GeneratedClientPurchaseHistoryResponseTests {
     func noImage() async throws {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(
-            status: 200, json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(imageUrl: nil)], nextCursor: nil)
+            status: 200,
+            json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(imageUrl: nil)], nextCursor: nil)
         )
 
         #expect(try await sut.load().rows.count == 1)
@@ -159,7 +163,8 @@ struct GeneratedClientPurchaseHistoryResponseTests {
     func blankItemName() async throws {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(
-            status: 200, json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(itemName: "")], nextCursor: nil)
+            status: 200,
+            json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(itemName: "")], nextCursor: nil)
         )
 
         #expect(try await sut.load().rows.first?.itemName == "")
@@ -187,7 +192,9 @@ struct GeneratedClientPurchaseHistoryResponseTests {
         let sut = try makePurchaseHistorySUT()
         await sut.transport.enqueue(
             status: 200,
-            json: PurchaseHistoryWire.envelope([PurchaseHistoryWire.rowJSON(shippingStatus: "LOST_AT_SEA")], nextCursor: nil)
+            json: PurchaseHistoryWire.envelope(
+                [PurchaseHistoryWire.rowJSON(shippingStatus: "LOST_AT_SEA")], nextCursor: nil
+            )
         )
 
         await #expect(throws: PurchaseHistoryError.invalidResponse) {

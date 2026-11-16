@@ -57,14 +57,17 @@ struct PurchaseHistorySourceScanTests {
 
     // MARK: Scanner self-proofs
 
-    @Test("The interpolation scanner fires on ids, amounts, names, cursors and errors in logs and Sentry data", arguments: [
-        #"LogDebug("Loading history for \(recipientId)", category: .business)"#,
-        #"LogError("failed: \(error)", category: .business)"#,
-        #"LogInfo("cursor \(cursor)")"#,
-        #"span.setData(value: "\(row.totalCost)", key: "total")"#,
-        #"SentrySDK.addBreadcrumb(Breadcrumb(level: .info, category: "x \(itemName)"))"#,
-        "LogInfo(\n    \"split \\(itemName)\",\n    category: .business\n)"
-    ])
+    @Test(
+        "The interpolation scanner fires on ids, amounts, names, cursors and errors in logs and Sentry data",
+        arguments: [
+            #"LogDebug("Loading history for \(recipientId)", category: .business)"#,
+            #"LogError("failed: \(error)", category: .business)"#,
+            #"LogInfo("cursor \(cursor)")"#,
+            #"span.setData(value: "\(row.totalCost)", key: "total")"#,
+            #"SentrySDK.addBreadcrumb(Breadcrumb(level: .info, category: "x \(itemName)"))"#,
+            "LogInfo(\n    \"split \\(itemName)\",\n    category: .business\n)"
+        ]
+    )
     func interpolationScannerFires(source: String) throws {
         let code = ItemSourceScan.codeOnly(source)
         #expect(try PurchaseHistoryScanRules.interpolatingCalls(in: code).isEmpty == false, "\(source)")
@@ -102,7 +105,10 @@ struct PurchaseHistorySourceScanTests {
     @Test("The Combine and GCD scanner fires on imports and queues")
     func gcdScannerFires() {
         #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "import " + "Combine").isEmpty == false)
-        #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "Dispatch" + "Queue.main.async {}").isEmpty == false)
+        #expect(
+            RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "Dispatch" + "Queue.main.async {}")
+                .isEmpty == false
+        )
         #expect(RecordPurchaseViewRules.combineAndDispatchViolations(inBare: "let x = 1").isEmpty)
     }
 
@@ -140,9 +146,13 @@ struct PurchaseHistorySourceScanTests {
         var found: [String] = []
         for url in files {
             let code = ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8))
-            for hit in try PurchaseHistoryScanRules.interpolatingCalls(in: code) { found.append("\(tree.relativePath(url)): \(hit)") }
+            for hit in try PurchaseHistoryScanRules.interpolatingCalls(in: code) {
+                found.append("\(tree.relativePath(url)): \(hit)")
+            }
             for hit in try PurchaseLogScan.violations(in: code) { found.append("\(tree.relativePath(url)): \(hit)") }
-            for hit in try PurchaseHistoryScanRules.printViolations(in: code) { found.append("\(tree.relativePath(url)): \(hit)") }
+            for hit in try PurchaseHistoryScanRules.printViolations(in: code) {
+                found.append("\(tree.relativePath(url)): \(hit)")
+            }
         }
         #expect(found.isEmpty, "Nothing sensitive may reach a log or Sentry:\n\(found.joined(separator: "\n"))")
     }
@@ -152,7 +162,9 @@ struct PurchaseHistorySourceScanTests {
         let (tree, files) = try newFiles()
         var found: [String] = []
         for url in files {
-            let bare = RecordPurchaseViewRules.bare(ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8)))
+            let bare = RecordPurchaseViewRules.bare(
+                ItemSourceScan.codeOnly(try String(contentsOf: url, encoding: .utf8))
+            )
             let hits = RecordPurchaseViewRules.combineAndDispatchViolations(inBare: bare)
                 + RecordPurchaseViewRules.forceUnwrapViolations(inBare: bare)
                 + (try PurchaseHistoryScanRules.asBangViolations(in: bare))
@@ -164,7 +176,9 @@ struct PurchaseHistorySourceScanTests {
     @Test("The repository method is instrumented")
     func repositoryIsInstrumented() throws {
         let tree = try #require(ItemSourceTree.load(from: #filePath), "Could not find the app source folder")
-        let raw = try #require(tree.source("Features/PurchaseHistory/Repositories/GeneratedClientPurchaseHistoryRepository.swift"))
+        let raw = try #require(
+            tree.source("Features/PurchaseHistory/Repositories/GeneratedClientPurchaseHistoryRepository.swift")
+        )
         let code = ItemSourceScan.codeOnly(raw)
 
         #expect(code.contains("@Instrumented"))

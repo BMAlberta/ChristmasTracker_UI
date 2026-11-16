@@ -161,7 +161,9 @@ struct ItemInputBuildingTests {
         #expect(blanks.expectedUnitPrice == nil)
     }
 
-    @Test("Clearing optionals next to a real change sends empty strings for url and imageUrl; the price clear stays nil")
+    @Test(
+        "Clearing optionals next to a real change sends empty strings for url and imageUrl; the price clear stays nil"
+    )
     func updateClearingNextToChange() throws {
         let input = try #require(makeUpdate(name: "New name", url: "", imageUrl: "", price: ""))
         #expect(input.name == "New name")

@@ -226,10 +226,14 @@ struct BudgetCompositionTests {
         let flat = code.replacingOccurrences(of: "\n", with: " ")
 
         let ordered = try ItemSourceScan.matchingLines(
-            #"makeProductionClearables\(.*purchaseService:.*statsService:.*budgetService:.*purchaseHistoryService:"#, in: flat
+            #"makeProductionClearables\(.*purchaseService:.*statsService:.*budgetService:.*purchaseHistoryService:"#,
+            in: flat
         )
 
-        #expect(ordered.isEmpty == false, "statsService: and budgetService: follow purchaseService: in that order, purchaseHistoryService: last")
+        #expect(
+            ordered.isEmpty == false,
+            "statsService: and budgetService: follow purchaseService: in that order, purchaseHistoryService: last"
+        )
     }
 
     // MARK: - The two runner construction sites

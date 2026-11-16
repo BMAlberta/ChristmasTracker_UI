@@ -58,7 +58,8 @@ struct ItemAddImageModelTests {
     private func makeSUT(mode: ItemFormMode? = nil, honorsCancellation: Bool = false) -> SUT {
         let loader = GatedLinkPreviewLoader()
         loader.gate.honorsCancellation = honorsCancellation
-        return SUT(model: ItemImageFillModel(mode: mode ?? .edit(savedUrl: Self.page)), service: LinkPreviewService(repository: loader),
+        return SUT(model: ItemImageFillModel(mode: mode ?? .edit(savedUrl: Self.page)),
+                   service: LinkPreviewService(repository: loader),
                    loader: loader, probe: FormProbe())
     }
 

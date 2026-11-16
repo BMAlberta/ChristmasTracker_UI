@@ -29,7 +29,9 @@ nonisolated struct PurchaseHistoryRowPresentation: Equatable, Sendable {
         let trimmed = row.itemName.trimmingCharacters(in: .whitespacesAndNewlines)
         let itemName = trimmed.isEmpty ? fallbackItemName : row.itemName
         let dateText = row.purchasedAt.formatted(
-            Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+            Date.FormatStyle(
+                date: .abbreviated, time: .omitted, locale: locale, calendar: calendar, timeZone: calendar.timeZone
+            )
         )
         let totalText = MoneyText.currency(row.totalCost, code: currencyCode, locale: locale)
         let shipping = ShippingStatusStyle.style(for: row.shippingStatus)

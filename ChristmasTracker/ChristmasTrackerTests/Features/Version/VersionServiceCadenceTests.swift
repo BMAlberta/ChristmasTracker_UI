@@ -91,21 +91,127 @@ struct VersionServiceCadenceTests {
         #expect(h.checker.callCount == 2)
     }
 
-    @Test("a failed attempt counts against the interval")
+    // EDITED (CL1-C2): a failed attempt no longer waits the 15 minute interval; it waits only the
+    // 60 second failure retry window, so the old 60 s expectation became 30 s.
+    @Test("a failed attempt inside the failure retry window makes no second call")
     func failedAttemptCounts() async {
         let h = makeSUT(result: .failure(TrackerAPIError.server(500)))
         await h.sut.checkIfDue()
-        h.clock.advance(by: 60)
+        h.clock.advance(by: 30)
         await h.sut.checkIfDue()
         #expect(h.checker.callCount == 1)
     }
 
+    // EDITED (CL1-C2): still retries well past the failure window; the point is now the short
+    // window, covered by failureRetriesAfterRetryWindow.
     @Test("a failed attempt is retried after the interval")
     func failedAttemptRetriesAfterInterval() async {
         let h = makeSUT(result: .failure(TrackerAPIError.server(500)))
         await h.sut.checkIfDue()
         h.clock.advance(by: 900)
         await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 2)
+    }
+
+    @Test("a failed attempt is retried 61 seconds later")
+    func failureRetriesAfterRetryWindow() async {
+        let h = makeSUT(result: .failure(TrackerAPIError.server(500)))
+        await h.sut.checkIfDue()
+        h.clock.advance(by: 61)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 2)
+    }
+
+    @Test("failure then success then activation inside 15 minutes makes no check")
+    func failureThenSuccessWaitsFullInterval() async {
+        let h = makeSUT(result: .failure(TrackerAPIError.server(500)))
+        await h.sut.checkIfDue()
+        h.clock.advance(by: 61)
+        h.checker.result = .success(VersionTestFixtures.policy(state: .ok))
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 2)
+        h.clock.advance(by: 600)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 2)
+    }
+
+    @Test("a failure after an earlier success allows a retry after 60 seconds")
+    func failureAfterSuccessRetriesAfterRetryWindow() async {
+        let h = makeSUT()
+        await h.sut.check()
+        h.checker.result = .failure(TrackerAPIError.server(500))
+        h.clock.advance(by: 1000)
+        await h.sut.checkIfDue()
+        h.clock.advance(by: 61)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 3)
+    }
+
+    @Test("manual check() ignores the failure window")
+    func manualCheckIgnoresFailureTime() async {
+        let h = makeSUT(result: .failure(TrackerAPIError.server(500)))
+        await h.sut.checkIfDue()
+        h.clock.advance(by: 10)
+        await h.sut.check()
+        #expect(h.checker.callCount == 2)
+    }
+
+    @Test("manual check() ignores the success interval")
+    func manualCheckIgnoresSuccessTime() async {
+        let h = makeSUT()
+        await h.sut.checkIfDue()
+        h.clock.advance(by: 10)
+        await h.sut.check()
+        #expect(h.checker.callCount == 2)
+    }
+
+    // MARK: in-flight guard
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        var spins = 0
+        while !condition() && spins < 1000 {
+            await Task.yield()
+            spins += 1
+        }
+    }
+
+    @Test("checkIfDue() while a check is in flight makes no second call")
+    func checkIfDueSkipsWhileInFlight() async {
+        let h = makeSUT()
+        h.checker.holdFirstCall = true
+        let launch = Task { await h.sut.check() }
+        await waitUntil { h.checker.callCount == 1 }
+        await h.sut.checkIfDue()
+        h.checker.release()
+        await launch.value
+        #expect(h.checker.callCount == 1)
+    }
+
+    @Test("after the in-flight check finishes the success window still applies")
+    func windowAppliesAfterInFlightFinishes() async {
+        let h = makeSUT()
+        h.checker.holdFirstCall = true
+        let launch = Task { await h.sut.check() }
+        await waitUntil { h.checker.callCount == 1 }
+        h.checker.release()
+        await launch.value
+        h.clock.advance(by: 899)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 1)
+        h.clock.advance(by: 1)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 2)
+    }
+
+    @Test("manual check() while another check is in flight still runs")
+    func manualCheckRunsWhileInFlight() async {
+        let h = makeSUT()
+        h.checker.holdFirstCall = true
+        let launch = Task { await h.sut.check() }
+        await waitUntil { h.checker.callCount == 1 }
+        await h.sut.check()
+        h.checker.release()
+        await launch.value
         #expect(h.checker.callCount == 2)
     }
 

@@ -167,6 +167,53 @@ struct UpdateInstallLinkTests {
         #expect(UpdateInstallLink.url(from: input) == nil)
     }
 
+    // MARK: scheme case and authority characters (CL1 C1)
+
+    @Test("an uppercase HTTPS scheme builds the link with a lowercase https inside")
+    func uppercaseSchemeNormalized() {
+        let url = UpdateInstallLink.url(from: "HTTPS://example.com/m.plist")
+        #expect(url?.absoluteString == Self.prefix + "https%3A%2F%2Fexample.com%2Fm.plist")
+    }
+
+    @Test("a mixed-case scheme builds the same link as lowercase")
+    func mixedCaseSchemeSameAsLowercase() {
+        let lower = UpdateInstallLink.url(from: "https://example.com/m.plist")
+        let mixed = UpdateInstallLink.url(from: "HtTpS://example.com/m.plist")
+        #expect(lower != nil)
+        #expect(mixed == lower)
+    }
+
+    @Test("a backslash in the host is rejected", arguments: [
+        "https://exa\\mple.com/m.plist",
+        "https://example.com\\@evil.com/m.plist",
+        "https://example.com\\m.plist",
+    ])
+    func backslashHostRejected(input: String) {
+        #expect(UpdateInstallLink.url(from: input) == nil)
+    }
+
+    @Test("a space, tab or newline in the host is rejected", arguments: [
+        "https://exa mple.com/m.plist",
+        "https://exa\tmple.com/m.plist",
+        "https://exa\nmple.com/m.plist",
+    ])
+    func whitespaceHostRejected(input: String) {
+        #expect(UpdateInstallLink.url(from: input) == nil)
+    }
+
+    @Test("a control character in the host is rejected")
+    func controlCharacterHostRejected() {
+        #expect(UpdateInstallLink.url(from: "https://exa\u{07}mple.com/m.plist") == nil)
+    }
+
+    @Test("itms-services with an uppercase or mixed-case inner scheme is rejected (non-canonical)", arguments: [
+        "HTTPS%3A%2F%2Fexample.com%2Fm.plist",
+        "HtTpS%3A%2F%2Fexample.com%2Fm.plist",
+    ])
+    func itmsUppercaseInnerSchemeRejected(value: String) {
+        #expect(UpdateInstallLink.url(from: Self.prefix + value) == nil)
+    }
+
     // MARK: length
 
     private func manifest(ofLength length: Int) -> String {

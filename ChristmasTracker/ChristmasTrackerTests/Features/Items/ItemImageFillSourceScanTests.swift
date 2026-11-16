@@ -111,7 +111,9 @@ struct ItemImageFillSourceScanTests {
     func viewsDoNotLogUrls() throws {
         let tree = try makeSUT()
         let pattern = #"(?i)(LogError|LogInfo|LogDebug|LogWarning|Logger|print|NSLog|os_log|addBreadcrumb|capture\w*|setExtra|setTag)\b[^\n]*url"#
-        for file in codeFiles(tree, under: ["Features/Items/ViewState/", "Features/Items/Views/", "Features/Items/Components/"]) {
+        for file in codeFiles(
+            tree, under: ["Features/Items/ViewState/", "Features/Items/Views/", "Features/Items/Components/"]
+        ) {
             let lines = try ItemSourceScan.matchingLines(pattern, in: file.code)
             #expect(lines.isEmpty, "\(file.path) logs or reports a url on lines \(lines)")
         }
@@ -121,7 +123,9 @@ struct ItemImageFillSourceScanTests {
           arguments: ["Com" + "bine", "Dispatch" + "Queue"])
     func noReactiveOrGCD(token: String) throws {
         let tree = try makeSUT()
-        for file in codeFiles(tree, under: ["Features/Items/ViewState/", "Features/Items/Views/", "Features/Items/Components/"]) {
+        for file in codeFiles(
+            tree, under: ["Features/Items/ViewState/", "Features/Items/Views/", "Features/Items/Components/"]
+        ) {
             #expect(!file.code.contains(token), "\(file.path) must not contain \(token)")
         }
     }

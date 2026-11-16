@@ -63,7 +63,10 @@ struct PurchaseHistoryFilterTests {
         #expect(!PurchaseHistoryFilter(year: nil, recipientId: "user-1").isDefault(defaultYear: nil))
     }
 
-    @Test("isDefault is false when a shipping status is set, for every status", arguments: PurchaseShippingStatus.allCases)
+    @Test(
+        "isDefault is false when a shipping status is set, for every status",
+        arguments: PurchaseShippingStatus.allCases
+    )
     func notDefaultWithShipping(status: PurchaseShippingStatus) {
         #expect(!PurchaseHistoryFilter(year: 2026, shippingStatus: status).isDefault(defaultYear: 2026))
         #expect(!PurchaseHistoryFilter(year: nil, shippingStatus: status).isDefault(defaultYear: nil))

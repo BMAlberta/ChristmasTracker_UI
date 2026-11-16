@@ -18,7 +18,9 @@ struct UpdatePresentationTests {
         manifest: String? = "https://example.com/app/manifest.plist",
         notes: String? = nil
     ) -> RequiredUpdate {
-        RequiredUpdate(minimumVersion: minimumVersion, minimumBuild: minimumBuild, manifest: manifest, releaseNotes: notes)
+        RequiredUpdate(
+            minimumVersion: minimumVersion, minimumBuild: minimumBuild, manifest: manifest, releaseNotes: notes
+        )
     }
 
     private func recommended(manifestURL: URL?) -> UpdateGate.Decision {
@@ -95,9 +97,13 @@ struct UpdatePresentationTests {
 
     @Test("prompt message without notes")
     func promptNoNotes() {
-        #expect(UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: nil) == "Version 3.1 is available.")
+        #expect(
+            UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: nil) == "Version 3.1 is available."
+        )
         #expect(UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: "") == "Version 3.1 is available.")
-        #expect(UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: "  \n ") == "Version 3.1 is available.")
+        #expect(
+            UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: "  \n ") == "Version 3.1 is available."
+        )
     }
 
     @Test("prompt message appends short notes after a blank line")
@@ -112,7 +118,9 @@ struct UpdatePresentationTests {
     @Test("prompt message omits notes over 200 characters entirely")
     func promptLongNotes() {
         let long = String(repeating: "n", count: 201)
-        #expect(UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: long) == "Version 3.1 is available.")
+        #expect(
+            UpdatePresentation.promptMessage(latestVersion: "3.1", releaseNotes: long) == "Version 3.1 is available."
+        )
     }
 
     // MARK: - Decision-derived flags
@@ -148,7 +156,9 @@ struct UpdatePresentationTests {
     func showsPrompt() {
         #expect(UpdatePresentation.showsPrompt(for: recommended(manifestURL: URL(string: goodManifest))))
         #expect(!UpdatePresentation.showsPrompt(for: recommended(manifestURL: nil)))
-        #expect(!UpdatePresentation.showsPrompt(for: recommended(manifestURL: URL(string: "http://example.com/m.plist"))))
+        #expect(
+            !UpdatePresentation.showsPrompt(for: recommended(manifestURL: URL(string: "http://example.com/m.plist")))
+        )
         #expect(!UpdatePresentation.showsPrompt(for: .none))
         #expect(!UpdatePresentation.showsPrompt(for: .required(required())))
     }

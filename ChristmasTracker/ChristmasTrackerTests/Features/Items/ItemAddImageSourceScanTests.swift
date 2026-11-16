@@ -125,7 +125,10 @@ struct ItemAddImageSourceScanTests {
         #expect(lines.isEmpty, "\(file) logs or reports a url on lines \(lines)")
     }
 
-    @Test("The button file uses no reactive framework and no GCD queue", arguments: ["Com" + "bine", "Dispatch" + "Queue"])
+    @Test(
+        "The button file uses no reactive framework and no GCD queue",
+        arguments: ["Com" + "bine", "Dispatch" + "Queue"]
+    )
     func noReactiveOrGCD(token: String) throws {
         let tree = try makeSUT()
         #expect(!(try code(tree, buttonFile)).contains(token))

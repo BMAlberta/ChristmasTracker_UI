@@ -128,7 +128,8 @@ struct AppDependencies: Sendable {
             statsLoader: MockStatsRepository(store: budgetStore),
             budgetManager: MockBudgetRepository(store: budgetStore),
             purchaseHistoryLoader: MockPurchaseHistoryRepository(),
-            appVersionRepository: versionState.map { MockAppVersionRepository(state: $0) } ?? MockAppVersionRepository(),
+            appVersionRepository: versionState.map { MockAppVersionRepository(state: $0) }
+                ?? MockAppVersionRepository(),
             trackerClient: nil
         )
     }
@@ -391,7 +392,9 @@ struct ChristmasTrackerApp: App {
         let sm = SessionManager(initialClearables: clearables)
         sessionManager = sm
         Task { await sm.register(ImageCacheClearable(cache: URLCacheClearer())) }
-        let linkPreview = makeLinkPreviewService(mode: AppConfiguration.apiMode, state: resolved.state, client: builtClient)
+        let linkPreview = makeLinkPreviewService(
+            mode: AppConfiguration.apiMode, state: resolved.state, client: builtClient
+        )
         linkPreviewService = linkPreview
         Task { await sm.register(linkPreview) }
 

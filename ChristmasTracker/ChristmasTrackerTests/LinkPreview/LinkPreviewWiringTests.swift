@@ -35,10 +35,16 @@ struct LinkPreviewWiringTests {
         return (client, transport)
     }
 
-    @Test("a failed bootstrap is inert in every mode, with or without a client", arguments: [APIMode.mock, APIMode.real])
+    @Test(
+        "a failed bootstrap is inert in every mode, with or without a client",
+        arguments: [APIMode.mock, APIMode.real]
+    )
     func failedIsInert(mode: APIMode) async throws {
         let fake = try makeFakeClient()
-        await fake.transport.enqueue(status: 200, json: ListWire.success(data: "{ \"imageUrl\": \"https://images.example.test/a.jpg\" }"))
+        await fake.transport.enqueue(
+            status: 200,
+            json: ListWire.success(data: "{ \"imageUrl\": \"https://images.example.test/a.jpg\" }")
+        )
 
         let withClient = makeLinkPreviewService(mode: mode, state: .failed, client: fake.client)
         let withoutClient = makeLinkPreviewService(mode: mode, state: .failed, client: nil)
