@@ -281,6 +281,19 @@ its own and you understand what each step does.
 
 ---
 
+## Before any App Store submission
+
+**Blocker: non-public key path.** The on-device image fallback reads the non-public `imageMetadata`
+key path of `LPLinkMetadata` in
+`Features/LinkPreview/Providers/LinkPresentationProductImageProvider.swift` (marker comment
+`APPSTORE-BLOCKER: non-public key path`). It must be removed or replaced with a public API before the
+app is submitted to the App Store or TestFlight.
+
+Ad hoc distribution (this runbook's release procedure) is unaffected. Search for the marker to find it:
+`grep -rn "APPSTORE-BLOCKER" ChristmasTracker/ChristmasTracker`.
+
+---
+
 ## Rollback
 
 **Never delete an uploaded build.** The itms-services link for any build that was
