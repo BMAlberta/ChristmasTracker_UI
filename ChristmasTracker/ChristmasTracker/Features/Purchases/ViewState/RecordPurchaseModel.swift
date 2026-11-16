@@ -55,7 +55,8 @@ final class RecordPurchaseModel {
         service: PurchaseService,
         now: @escaping @Sendable () -> Date = { Date() },
         currencyCode: String = "USD",
-        locale: Locale = .current
+        locale: Locale = .current,
+        startingInput: RecordPurchaseFormInput? = nil
     ) {
         self.item = item
         self.context = context
@@ -65,7 +66,7 @@ final class RecordPurchaseModel {
         self.locale = locale
         self.flow = RecordPurchaseFlow(now: now)
         let known = context.capabilities.canSeeGiftActivity ? item.quantityRemaining : nil
-        self.storedInput = RecordPurchaseFormInput(
+        self.storedInput = startingInput ?? RecordPurchaseFormInput(
             quantity: RecordPurchaseFormState.defaultQuantity(quantityRemaining: known),
             totalCostText: "",
             storeName: "",

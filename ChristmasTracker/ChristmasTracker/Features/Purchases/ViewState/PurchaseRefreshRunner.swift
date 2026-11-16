@@ -27,6 +27,15 @@ final class PurchaseRefreshRunner {
         self.spendingCaches = spendingCaches
     }
 
+    /// Runs the refresh plan after a purchase (or a check of the item): the item detail, the items,
+    /// the list detail, then the spending invalidation.
+    func runAfterPurchase(itemId: String, listId: String) async {
+        let steps = PurchaseRefreshPlan.steps(
+            itemId: itemId, listId: listId, currentItemsListId: itemService.currentListId
+        )
+        await run(steps)
+    }
+
     func run(_ steps: [PurchaseRefreshStep]) async {
         await run(steps, while: { true })
     }
