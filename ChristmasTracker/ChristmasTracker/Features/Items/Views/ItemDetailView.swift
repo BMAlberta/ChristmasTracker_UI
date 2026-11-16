@@ -354,10 +354,7 @@ struct ItemDetailView: View {
     /// Runs the refresh plan in order. A failed refresh never turns the recorded purchase into an
     /// error: the screens' own banners apply.
     private func refreshAfterPurchase(_ item: ListItem) async {
-        let steps = PurchaseRefreshPlan.steps(
-            itemId: item.id, listId: item.listId, currentItemsListId: itemService.currentListId
-        )
-        await refreshRunner.run(steps)
+        await refreshRunner.runAfterPurchase(itemId: item.id, listId: item.listId)
     }
 
     // MARK: - Purchase detail
