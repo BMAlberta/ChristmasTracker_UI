@@ -18,16 +18,22 @@ import TrackerAPI
     private let minimumCheckInterval: TimeInterval
     private let now: @Sendable () -> Date
     private let sequence: UpdateSequence
-    private var lastAttemptStart: Date?
+    private let failureRetryInterval: TimeInterval
+    /// When the last check succeeded; cleared by a failure.
+    private var lastSuccess: Date?
+    /// When the last check failed; cleared by a success.
+    private var lastFailure: Date?
 
     init(
         repository: any AppVersionChecking,
         minimumCheckInterval: TimeInterval = 900,
+        failureRetryInterval: TimeInterval = 60,
         now: @escaping @Sendable () -> Date = { Date() },
         sequence: UpdateSequence = UpdateSequence()
     ) {
         self.repository = repository
         self.minimumCheckInterval = minimumCheckInterval
+        self.failureRetryInterval = failureRetryInterval
         self.now = now
         self.sequence = sequence
     }
@@ -36,10 +42,15 @@ import TrackerAPI
         dismissedLatestVersion = latestVersion
     }
 
-    /// The "active again" entry: skips when the last attempt started inside the interval.
+    /// The "active again" entry: skips when the last success is inside the minimum interval,
+    /// or the last failure is inside the failure retry interval.
     // @MainActor-isolated, so @Instrumented is skipped per coding-standards.md; its span comes from check(), and the skipped path makes no span.
     func checkIfDue() async {
-        if let last = lastAttemptStart, now().timeIntervalSince(last) < minimumCheckInterval {
+        let current = now()
+        if let success = lastSuccess, current.timeIntervalSince(success) < minimumCheckInterval {
+            return
+        }
+        if let failure = lastFailure, current.timeIntervalSince(failure) < failureRetryInterval {
             return
         }
         await check()
@@ -49,7 +60,6 @@ import TrackerAPI
     // using manual SentrySDK span per coding-standards.md.
     // The span carries no URL, release notes or error text.
     func check() async {
-        lastAttemptStart = now()
         let span = SentrySDK.startTransaction(
             name: "service.version.check",
             operation: "service.version.check"
@@ -60,7 +70,10 @@ import TrackerAPI
             lastPolicy = policy
             policyOrder = sequence.next()
             lastErrorCategory = nil
+            lastSuccess = now()
+            lastFailure = nil
         } catch let error as TrackerAPIError {
+            recordFailure()
             switch error {
             case .validation: lastErrorCategory = .showMessage
             case .rateLimited: lastErrorCategory = .backOff
@@ -70,7 +83,14 @@ import TrackerAPI
             default: lastErrorCategory = .showMessage
             }
         } catch {
+            recordFailure()
             lastErrorCategory = .showMessage
         }
+    }
+
+    /// A failure replaces any earlier success time, so the short retry window governs.
+    private func recordFailure() {
+        lastSuccess = nil
+        lastFailure = now()
     }
 }
