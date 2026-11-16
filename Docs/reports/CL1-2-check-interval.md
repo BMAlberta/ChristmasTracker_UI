@@ -30,4 +30,23 @@ Previous total 5326 (after C1); 212 package tests passed.
 - Not done on purpose: the brief's test "session end resets both times". `VersionService` holds no session state and is not a clearable (the version policy is pre-auth; VER1 clears nothing on sign-out), so there is nothing to reset and no existing session-safety test to follow. No reset was added. Brian can say if he wants one.
 
 ## Not done or partial
-- The session-end reset test, as above. Nothing else. Simulator and network were not exercised; the acceptance review is still to run at package level.
+- The session-end reset test, as above. Nothing else. Simulator and network were not exercised. The package acceptance review found one regression (an in-flight overlap), fixed in the follow-up section below and re-approved.
+
+## Follow-up: in-flight guard
+Why: the acceptance reviewer found a regression. The old `lastAttemptStart` was set at the start of a check, so an `.active` scene-phase `checkIfDue()` during the launch check was suppressed. After C2 the times were recorded only after the await, so a second concurrent request could go out.
+
+What changed:
+- `VersionService.swift`: private `isChecking` flag, set at the start of `check()` before the first await and reset in the existing `defer` (so it always runs). `checkIfDue()` returns first thing when `isChecking` is true; the success/failure window rules are unchanged. Manual `check()` is not gated and always runs. Doc comment of `checkIfDue` mentions the in-flight skip. Span and comments kept.
+- Correction: the earlier sentence calling the success-time-at-completion change "negligible" is withdrawn as the full story. The gap it opened (a request during the in-flight check) is now covered by the in-flight guard.
+- Known limit: with a manual `check()` overlapping another in-flight check, the first to finish clears the flag while the other is still running. This is only reachable via manual checks, which are never gated; the launch/active path is covered.
+
+Tests added (`VersionServiceCadenceTests.swift`): `checkIfDueSkipsWhileInFlight` (red first: callCount was 2), `windowAppliesAfterInFlightFinishes`, `manualCheckRunsWhileInFlight`.
+`FakeAppVersionChecker.swift`: `EDITED (CL1-C2)`: added an off-by-default one-shot `holdFirstCall` gate plus `release()` so a test can hold a call open. Existing tests are unaffected (callCount semantics unchanged).
+
+Raw verify summary (`scripts/verify.sh`):
+```
+--- xcodebuild exit status: 0 ---
+--- tests: 5334 passed, 0 failed, 0 skipped ---
+=== verify: OK ===
+```
+Package tests (212) passed in the same run. One attempt to green after the red run.

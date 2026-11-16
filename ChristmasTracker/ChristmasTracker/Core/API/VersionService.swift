@@ -23,6 +23,8 @@ import TrackerAPI
     private var lastSuccess: Date?
     /// When the last check failed; cleared by a success.
     private var lastFailure: Date?
+    /// True from the start of a check until it finishes; lets `checkIfDue()` skip a concurrent request.
+    private var isChecking = false
 
     init(
         repository: any AppVersionChecking,
@@ -42,11 +44,12 @@ import TrackerAPI
         dismissedLatestVersion = latestVersion
     }
 
-    /// The "active again" entry: skips when the last success is inside the minimum interval,
-    /// or the last failure is inside the failure retry interval.
+    /// The "active again" entry: skips when a check is already in flight, when the last success is
+    /// inside the minimum interval, or when the last failure is inside the failure retry interval.
     // @MainActor-isolated, so @Instrumented is skipped per coding-standards.md; its span comes from check(),
     // and the skipped path makes no span.
     func checkIfDue() async {
+        if isChecking { return }
         let current = now()
         if let success = lastSuccess, current.timeIntervalSince(success) < minimumCheckInterval {
             return
@@ -65,7 +68,11 @@ import TrackerAPI
             name: "service.version.check",
             operation: "service.version.check"
         )
-        defer { span.finish() }
+        isChecking = true
+        defer {
+            isChecking = false
+            span.finish()
+        }
         do {
             let policy = try await repository.checkVersion()
             lastPolicy = policy

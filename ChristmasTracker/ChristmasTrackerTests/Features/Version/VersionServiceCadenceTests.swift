@@ -165,6 +165,56 @@ struct VersionServiceCadenceTests {
         #expect(h.checker.callCount == 2)
     }
 
+    // MARK: in-flight guard
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        var spins = 0
+        while !condition() && spins < 1000 {
+            await Task.yield()
+            spins += 1
+        }
+    }
+
+    @Test("checkIfDue() while a check is in flight makes no second call")
+    func checkIfDueSkipsWhileInFlight() async {
+        let h = makeSUT()
+        h.checker.holdFirstCall = true
+        let launch = Task { await h.sut.check() }
+        await waitUntil { h.checker.callCount == 1 }
+        await h.sut.checkIfDue()
+        h.checker.release()
+        await launch.value
+        #expect(h.checker.callCount == 1)
+    }
+
+    @Test("after the in-flight check finishes the success window still applies")
+    func windowAppliesAfterInFlightFinishes() async {
+        let h = makeSUT()
+        h.checker.holdFirstCall = true
+        let launch = Task { await h.sut.check() }
+        await waitUntil { h.checker.callCount == 1 }
+        h.checker.release()
+        await launch.value
+        h.clock.advance(by: 899)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 1)
+        h.clock.advance(by: 1)
+        await h.sut.checkIfDue()
+        #expect(h.checker.callCount == 2)
+    }
+
+    @Test("manual check() while another check is in flight still runs")
+    func manualCheckRunsWhileInFlight() async {
+        let h = makeSUT()
+        h.checker.holdFirstCall = true
+        let launch = Task { await h.sut.check() }
+        await waitUntil { h.checker.callCount == 1 }
+        await h.sut.check()
+        h.checker.release()
+        await launch.value
+        #expect(h.checker.callCount == 2)
+    }
+
     // MARK: policyOrder
 
     @Test("policyOrder is 0 until a successful check")
