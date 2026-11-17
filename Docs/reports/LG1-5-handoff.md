@@ -27,4 +27,4 @@ Package-end diff: see the section "Package-end diff (taken after the final docs 
 - `AsyncImage` thumbnails and `LPMetadataProvider` requests bypass the logging transport.
 
 ## Package-end diff (taken after the final docs commit)
-See below, appended after the commit.
+`git diff --stat main...HEAD` taken 2026-11-17 after commit `2a4a7f1` (the handoff commit): 57 files changed, 6501 insertions, 1121 deletions. The changed paths are only: the app target (`ChristmasTrackerApp.swift` +2/-1 for the one `transport:` argument, the new `Core/API/` and `Core/Logging/` files, the ten services, and the small `reason:` call-site edits in DashboardView, ListDetailView, PurchaseHistoryView, PurchaseHistoryModel and StatsScreenModel), the new and edited tests under `ChristmasTrackerTests/`, `Docs/epics/LG1-client-logging.md`, `Docs/handoffs/2026-11-17-ios-to-brian-lg1.md` and `Docs/reports/LG1-*.md`. Nothing under `contract/`, `.claude/`, `LocalPackages/`, any `.pbxproj`, or the synced Docs (`client-guide.md`, `error-codes.md`, `privacy-matrix.md`, `PRD.md`, `DECISIONS.md`). The stat is re-run after this note's own commit; this file is the only difference.
