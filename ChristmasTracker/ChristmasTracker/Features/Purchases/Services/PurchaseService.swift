@@ -20,6 +20,7 @@ final class PurchaseService {
 
     private nonisolated let repository: any PurchaseRecording
     private nonisolated let management: any PurchaseManaging
+    private nonisolated let log: ServiceLog
 
     // MARK: - Published State
 
@@ -43,48 +44,49 @@ final class PurchaseService {
 
     // MARK: - Initialization
 
-    init(repository: any PurchaseRecording) {
+    init(repository: any PurchaseRecording, log: ServiceLog = ServiceLog()) {
         self.repository = repository
         self.management = InertPurchaseManager()
+        self.log = log
     }
 
-    init(repository: any PurchaseRecording, management: any PurchaseManaging) {
+    init(repository: any PurchaseRecording, management: any PurchaseManaging, log: ServiceLog = ServiceLog()) {
         self.repository = repository
         self.management = management
+        self.log = log
     }
 
     // MARK: - Record
 
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method, so a
-    // manual SentrySDK span is used. No purchase data goes into the span.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied here, so the InstrumentedOperation
+    // span is used (the helper works on the main actor). No purchase data goes into a span or a line.
     func recordPurchase(
         itemId: String,
         draft: PurchaseDraft,
         confirmationToken: String?
     ) async throws -> PurchaseOutcome {
-        let span = SentrySDK.startTransaction(
-            name: "service.purchases.recordPurchase",
-            operation: "service.purchases.recordPurchase"
-        )
-        defer { span.finish() }
+        let op = "record purchase"
+        return try await InstrumentedOperation.run("service.purchases.recordPurchase") { () -> PurchaseOutcome in
+            log.started(op)
+            let gen = generation
+            beginCall()
+            defer { endCall(generation: gen) }
 
-        let gen = generation
-        beginCall()
-        defer { endCall(generation: gen) }
-
-        do {
-            let repository = self.repository
-            let outcome = try await perform {
-                try await repository.createPurchase(
-                    itemId: itemId,
-                    draft: draft,
-                    confirmationToken: confirmationToken
-                )
+            do {
+                let repository = self.repository
+                let outcome = try await perform {
+                    try await repository.createPurchase(
+                        itemId: itemId,
+                        draft: draft,
+                        confirmationToken: confirmationToken
+                    )
+                }
+                try ensureCurrent(gen)
+                log.processed(op)
+                return outcome
+            } catch {
+                throw failure(error, generation: gen, op: op)
             }
-            try ensureCurrent(gen)
-            return outcome
-        } catch {
-            throw failure(error, generation: gen)
         }
     }
 
@@ -94,31 +96,33 @@ final class PurchaseService {
     // not touch isMutating, which stays the Record screen's flag. They share the generation, the
     // in-flight registry and the stale-result check with the record call.
 
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied here, so a manual SentrySDK span
-    // is used in runManagement. No purchase data goes into the span.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied here, so the InstrumentedOperation
+    // span is used in runManagement. No purchase data goes into a span or a line.
     func fetchPurchase(id: String) async throws -> RecordedPurchase {
-        try await runManagement(spanName: "service.purchases.fetchPurchase") { management in
+        try await runManagement(spanName: "service.purchases.fetchPurchase", op: "fetch purchase") { management in
             try await management.fetchPurchase(id: id)
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see fetchPurchase.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see fetchPurchase.
     func updateNotes(id: String, update: PurchaseNotesUpdate) async throws -> RecordedPurchase {
-        try await runManagement(spanName: "service.purchases.updateNotes") { management in
+        try await runManagement(spanName: "service.purchases.updateNotes", op: "update purchase notes") { management in
             try await management.updateNotes(id: id, update: update)
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see fetchPurchase.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see fetchPurchase.
     func updateShipping(id: String, update: PurchaseShippingUpdate) async throws -> RecordedPurchase {
-        try await runManagement(spanName: "service.purchases.updateShipping") { management in
+        try await runManagement(
+            spanName: "service.purchases.updateShipping", op: "update purchase shipping"
+        ) { management in
             try await management.updateShipping(id: id, update: update)
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see fetchPurchase.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see fetchPurchase.
     func deletePurchase(id: String) async throws -> RecordedPurchase {
-        try await runManagement(spanName: "service.purchases.deletePurchase") { management in
+        try await runManagement(spanName: "service.purchases.deletePurchase", op: "delete purchase") { management in
             try await management.deletePurchase(id: id)
         }
     }
@@ -146,32 +150,38 @@ final class PurchaseService {
 
     // MARK: - Private Functions
 
-    /// Shared body of the four management calls: a manual span (no data in it), the generation
-    /// captured before the first await, the cancellable `perform`, and the stale-result check.
-    // Actor-isolated (@MainActor): manual SentrySDK span instead of @Instrumented.
+    /// Shared body of the four management calls: an InstrumentedOperation span (no data in it), the
+    /// generation captured before the first await, the cancellable `perform`, and the stale-result check.
+    // Actor-isolated (@MainActor): InstrumentedOperation span instead of @Instrumented.
     private func runManagement(
         spanName: String,
+        op: String,
         _ work: @escaping @Sendable (any PurchaseManaging) async throws -> RecordedPurchase
     ) async throws -> RecordedPurchase {
-        let span = SentrySDK.startTransaction(name: spanName, operation: spanName)
-        defer { span.finish() }
-
-        let gen = generation
-        do {
-            let management = self.management
-            let purchase = try await perform { try await work(management) }
-            try ensureCurrent(gen)
-            return purchase
-        } catch {
-            throw managementFailure(error, generation: gen)
+        try await InstrumentedOperation.run(spanName) { () -> RecordedPurchase in
+            log.started(op)
+            let gen = generation
+            do {
+                let management = self.management
+                let purchase = try await perform { try await work(management) }
+                try ensureCurrent(gen)
+                log.processed(op)
+                return purchase
+            } catch {
+                throw managementFailure(error, generation: gen, op: op)
+            }
         }
     }
 
     /// The error a management call rethrows: the typed PurchaseManagementError, or CancellationError
     /// when the call was cancelled or its session ended. Never stored in the service.
-    private func managementFailure(_ error: any Error, generation gen: Int) -> any Error {
-        if error is CancellationError || gen != generation || Task.isCancelled { return CancellationError() }
-        LogError("purchase management failed", category: .business)
+    private func managementFailure(_ error: any Error, generation gen: Int, op: String) -> any Error {
+        if error is CancellationError || gen != generation || Task.isCancelled {
+            log.cancelled(op)
+            return CancellationError()
+        }
+        // The old wording is kept: the line names the family of calls, not the one operation.
+        log.failed("purchase management")
         return (error as? PurchaseManagementError) ?? PurchaseManagementError.server
     }
 
@@ -189,7 +199,7 @@ final class PurchaseService {
 
     /// Runs a repository call in a task the service can cancel at teardown. Cancelling the caller
     /// cancels the call too.
-    // Covered by the manual span of its public caller.
+    // Covered by the InstrumentedOperation span of its public caller.
     private func perform<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
         let task = Task { try await work() }
         let handle = UUID()
@@ -209,9 +219,12 @@ final class PurchaseService {
 
     /// The error a call rethrows: the typed PurchaseError, or CancellationError when the call
     /// was cancelled or its session ended. Never stored in the service.
-    private func failure(_ error: any Error, generation gen: Int) -> any Error {
-        if error is CancellationError || gen != generation || Task.isCancelled { return CancellationError() }
-        LogError("record purchase failed", category: .business)
+    private func failure(_ error: any Error, generation gen: Int, op: String) -> any Error {
+        if error is CancellationError || gen != generation || Task.isCancelled {
+            log.cancelled(op)
+            return CancellationError()
+        }
+        log.failed(op)
         return (error as? PurchaseError) ?? PurchaseError.server
     }
 }

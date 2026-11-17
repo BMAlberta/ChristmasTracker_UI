@@ -141,7 +141,7 @@ struct ListDetailView: View {
         refreshFailure = nil
         dismissed.reset()
         await listService.loadListDetail(id: listId)
-        await itemService.loadItems(listId: listId)
+        await itemService.loadItems(listId: listId, reason: .appear)
     }
 
     /// Pull to refresh: always fetches the detail and the items.
@@ -151,8 +151,8 @@ struct ListDetailView: View {
         listService.clearDetailLoadFailure(forListId: listId)
         refreshFailure = await listService.refreshListDetail(id: listId)
         switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
-        case .refresh: await itemService.refreshItems()
-        case .load: await itemService.loadItems(listId: listId)
+        case .refresh: await itemService.refreshItems(reason: .pull)
+        case .load: await itemService.loadItems(listId: listId, reason: .pull)
         }
     }
 

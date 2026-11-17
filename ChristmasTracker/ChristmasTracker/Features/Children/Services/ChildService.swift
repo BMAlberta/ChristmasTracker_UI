@@ -5,8 +5,9 @@
 //  Holds the signed-in user's children for the Children screen and the create-list recipient
 //  picker. Session-safe like ListService: every operation captures the session generation before
 //  its first await and drops its result (and any error) if the session was cleared meanwhile, and
-//  clearForSession() cancels work in flight and empties everything. Nothing is logged here:
-//  children's names and ids are personal data.
+//  clearForSession() cancels work in flight and empties everything. Only the operation name and a
+//  count with a literal noun are logged (through ServiceLog): children's names and ids are
+//  personal data.
 //
 
 import Foundation
@@ -17,6 +18,7 @@ import Sentry
 final class ChildService {
     // MARK: - Dependencies
     private nonisolated let repository: any ChildRepository
+    private nonisolated let log: ServiceLog
 
     // MARK: - Published State
     private(set) var children: [Child] = []
@@ -39,41 +41,44 @@ final class ChildService {
     private var inFlight: [UUID: () -> Void] = [:]
 
     // MARK: - Initialization
-    init(repository: any ChildRepository) {
+    init(repository: any ChildRepository, log: ServiceLog = ServiceLog()) {
         self.repository = repository
+        self.log = log
     }
 
     // MARK: - Public Methods
 
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
-    // so a manual SentrySDK span is used. No child data goes into the span.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied here, so the InstrumentedOperation
+    // span is used (the helper works on the main actor). No child data goes into the span or a line.
     func loadChildren() async {
-        let span = SentrySDK.startTransaction(
-            name: "service.children.loadChildren",
-            operation: "service.children.loadChildren"
-        )
-        defer { span.finish() }
+        let op = "load children"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("service.children.loadChildren") {
+            log.started(op)
+            let gen = generation
+            let previousPhase = phase
+            phase = .loading
 
-        let gen = generation
-        let previousPhase = phase
-        phase = .loading
-
-        do {
-            let repository = self.repository
-            let fetched = try await perform { try await repository.fetchChildren() }
-            guard gen == generation else { return }
-            children = fetched
-            phase = .loaded
-        } catch {
-            guard gen == generation else { return }
-            if error is CancellationError {
-                // Not shown to the user: the phase goes back to what it was.
-                phase = previousPhase
-                return
+            do {
+                let repository = self.repository
+                let fetched = try await perform { try await repository.fetchChildren() }
+                guard gen == generation else { log.cancelled(op); return }
+                children = fetched
+                phase = .loaded
+                log.processed(op, count: fetched.count, noun: "children")
+            } catch {
+                guard gen == generation else { log.cancelled(op); return }
+                if error is CancellationError {
+                    // Not shown to the user: the phase goes back to what it was.
+                    phase = previousPhase
+                    log.cancelled(op)
+                    return
+                }
+                // A failed load keeps the previous children out of the picker.
+                children = []
+                phase = .failed(childError(error))
+                log.failed(op)
             }
-            // A failed load keeps the previous children out of the picker.
-            children = []
-            phase = .failed(childError(error))
         }
     }
 
@@ -83,51 +88,49 @@ final class ChildService {
         if case .failed = phase { phase = .idle }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadChildren.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadChildren.
     func addChild(_ input: CreateChildInput) async throws {
-        let span = SentrySDK.startTransaction(
-            name: "service.children.addChild",
-            operation: "service.children.addChild"
-        )
-        defer { span.finish() }
+        let op = "add child"
+        try await InstrumentedOperation.run("service.children.addChild") {
+            log.started(op)
+            let gen = generation
+            isMutating = true
+            defer { if gen == generation { isMutating = false } }
 
-        let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
-
-        do {
-            let repository = self.repository
-            let created = try await perform { try await repository.createChild(input) }
-            try ensureCurrent(gen)
-            children.append(created)
-        } catch {
-            throw failure(error, generation: gen)
+            do {
+                let repository = self.repository
+                let created = try await perform { try await repository.createChild(input) }
+                try ensureCurrent(gen)
+                children.append(created)
+                log.processed(op)
+            } catch {
+                throw failure(error, generation: gen, op: op)
+            }
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadChildren.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadChildren.
     func deleteChild(id: String) async throws {
-        let span = SentrySDK.startTransaction(
-            name: "service.children.deleteChild",
-            operation: "service.children.deleteChild"
-        )
-        defer { span.finish() }
+        let op = "delete child"
+        try await InstrumentedOperation.run("service.children.deleteChild") {
+            log.started(op)
+            let gen = generation
+            isMutating = true
+            defer { if gen == generation { isMutating = false } }
 
-        let gen = generation
-        isMutating = true
-        defer { if gen == generation { isMutating = false } }
-
-        do {
-            let repository = self.repository
-            try await perform { try await repository.deleteChild(id: id) }
-            try ensureCurrent(gen)
-            children.removeAll { $0.id == id }
-        } catch {
-            // The child is already gone on the server: drop it locally too.
-            if gen == generation, (error as? ChildError) == .childNotFound {
+            do {
+                let repository = self.repository
+                try await perform { try await repository.deleteChild(id: id) }
+                try ensureCurrent(gen)
                 children.removeAll { $0.id == id }
+                log.processed(op)
+            } catch {
+                // The child is already gone on the server: drop it locally too.
+                if gen == generation, (error as? ChildError) == .childNotFound {
+                    children.removeAll { $0.id == id }
+                }
+                throw failure(error, generation: gen, op: op)
             }
-            throw failure(error, generation: gen)
         }
     }
 
@@ -158,7 +161,7 @@ final class ChildService {
 
     /// Runs a repository call in a task the service can cancel at teardown. Cancelling the caller
     /// cancels the call too.
-    // Covered by the manual spans of its public callers.
+    // Covered by the InstrumentedOperation spans of its public callers.
     private func perform<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
         let task = Task { try await work() }
         let token = UUID()
@@ -182,11 +185,13 @@ final class ChildService {
     }
 
     /// The error a throwing operation rethrows: the typed ChildError (stored nowhere), or
-    /// CancellationError when the call was cancelled or its session ended.
-    private func failure(_ error: any Error, generation gen: Int) -> any Error {
+    /// CancellationError when the call was cancelled or its session ended. Logs the one line.
+    private func failure(_ error: any Error, generation gen: Int, op: String) -> any Error {
         if error is CancellationError || gen != generation {
+            log.cancelled(op)
             return CancellationError()
         }
+        log.failed(op)
         return childError(error)
     }
 }
