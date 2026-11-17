@@ -302,3 +302,100 @@ No `skipped` test (no guard exists).
 - `VersionService.checkIfDue` logs nothing for its early returns (no call), so there is no "already checking" line.
 - Screenshot / visual check: not performed (no UI layout change; only reason arguments added at four call sites).
 - ListService.swift is 1169 lines, over the guideline; not split (scope).
+
+# Batch D: AuthenticationService
+
+## What changed (batch D)
+
+- `AuthenticationService.init` takes `log: ServiceLog = ServiceLog()` as the last parameter.
+- login, register, signInWithBiometric, refreshTokenIfNeeded and forceRefresh run inside `InstrumentedOperation.run`
+  (span names unchanged except login, see deviations) and write started, processed, cancelled and exactly one failed
+  line through `ServiceLog`. Operation names: "auth login", "auth register", "auth biometric sign-in", "auth refresh",
+  "auth force refresh", "auth logout".
+- Privacy: every `LogError` that interpolated an error value is gone. "Login failed: \(authError)", "Login failed:
+  \(error)", "Registration failed: ...", "Biometric sign-in: credential error / credential store error / auth error /
+  network or unknown error: ...", "Token refresh failed (non-credential): ...", "Token refresh failed: \(error)",
+  "Logout API failed (best-effort): \(error)" are now the literal "<op> failed" line. The "Token refresh credential
+  failure - session ended" and "Forced refresh credential failure - session ended" `LogError`s became the single
+  "auth refresh failed" / "auth force refresh failed" line (the session end follows as before). The
+  "Session ended by the server: \(reason)" `LogInfo` is now the literal "Session ended by the server".
+  Non-interpolated `LogInfo`/`LogDebug` lines stay (D6).
+- Auth logic untouched: order and conditions of Keychain, biometrics, refresh single-flight, session end guard.
+- No UI call site changed (no refresh reason for auth).
+
+## Audit table (batch D)
+
+| service | method | had logging before | has now | performance wrapper |
+|---|---|---|---|---|
+| AuthenticationService | login | `.error` with the error interpolated ("Login failed: ...") + `LogInfo` | started, processed, cancelled, one failed (literal) | helper (`AuthenticationService.login`) |
+| AuthenticationService | register | `.error` with error interpolated + `LogInfo` | started, processed, cancelled, one failed | helper (`service.authentication.register`) |
+| AuthenticationService | signInWithBiometric | `.error` x4 variants, error interpolated | started, processed, cancelled (also a dismissed Face ID prompt, `.userCancelled`), one failed (other credential errors or refresh failure) | helper (`service.authentication.signInWithBiometric`) |
+| AuthenticationService | refreshTokenIfNeeded | `.error` x3 (two interpolated) | started (not logged when no refresh is due), processed, cancelled, one failed (credential or not) | helper (`service.authentication.refreshTokenIfNeeded`) |
+| AuthenticationService | forceRefresh | `.error` for credential failure only | started (after the no-token guard), processed, cancelled, one failed (any error), error still rethrown | helper (`service.authentication.forceRefresh`) |
+| AuthenticationService | best-effort logout API call in performSessionEnd | `.error` with error interpolated | started, processed, cancelled, one failed ("auth logout", written by the unawaited task when the call runs) | none new (see below) |
+| AuthenticationService | logout / endSession / handleServerSessionEnd | none (one `LogInfo` interpolated the reason) | none of its own; `LogInfo` now literal | hand span kept: they make no repository call themselves; the API call is an unawaited task, and wrapping it would add a new span name |
+| AuthenticationService | enrollCurrentSession, clearForSession | none | none (no repository call: Keychain / local state) | hand span kept |
+| AuthenticationService | revokeEnrollment, clear*, refreshBiometricState, recordActivity | none | none (sync or local) | n/a |
+
+## Audit: API-calling code outside *Service.swift (report only, no change)
+
+Searched every non-`*Service.swift`, non-repository, non-Mock Swift file for repository, API client, loader,
+provider, URLSession and image-fetch calls. Callers of the services (views and view-state models: CreateListView,
+EditListView, ChildrenView, ItemsSectionView, ProfileView, ProfileBiometricToggleModel, StatsScreenModel,
+PurchaseHistoryModel) only go through services; none calls a repository or the API directly (the only repository
+references in those files are `Mock*Repository()` in `#Preview` blocks). Calls that reach the network and are NOT
+covered by a service's step lines:
+
+- `Features/Items/Components/ItemThumbnail.swift:27`: `AsyncImage(url:)` downloads the item image through
+  URLSession.shared, not the generated client and not the logging transport. No service line, no transport line.
+- `Features/LinkPreview/Providers/LinkPresentationProductImageProvider.swift:78`: `startFetchingMetadata(for:)`
+  (LPMetadataProvider) fetches a product page. It is the "device link preview" operation of LinkPreviewService, so
+  its outcome is covered by that service's started/processed/failed lines (batch C), but it bypasses the logging
+  transport (not the generated client).
+- `Core/API/ClientSeams.swift:55`: `service.forceRefresh()` goes to AuthenticationService (now covered).
+- `ProfileView.swift:60` / `InactivityLockController.swift:137`: `authService.logout(...)` (now covered).
+- `SessionManager` makes no API call (teardown clears URLCache and registered clearables only).
+
+All generated-client requests (the repositories) are logged by the transport.
+
+## Deviations and notes (batch D)
+
+- `login` span: the hand span was `name: "AuthenticationService.login", operation: "auth"`. The helper uses the name
+  as the operation too, so the Sentry op becomes "AuthenticationService.login". The name is unchanged.
+- A cancelled login or register still sets `error = .networkError` (existing behavior kept); only the log differs
+  (cancelled, no error line).
+- The "auth logout" lines are written by the best-effort task, not by `logout()`, because the API call is unawaited
+  and the tests require processed only when the call really succeeds. A superseded session end makes no call and
+  logs nothing. `endSession` for an already-ended session logs nothing.
+- Biometric credential failures (for example the user cancelling the Face ID prompt) log the one "auth biometric
+  sign-in failed" error line, as the old code logged an error line for them. Cancel it to `cancelled` later if too noisy.
+- `InstrumentedOperation` writes its own `.performance` line through the default sink; not captured by test sinks.
+- Gate 2 fix: the biometric prompt cancel (`BiometricCredentialError.userCancelled`) now logs cancelled, not failed
+  (this replaces the earlier note on it). A URLError.cancelled reaching a generic catch is still logged as failed
+  (only CancellationError is cancelled) if the auth repository does not map it.
+
+## Edited existing tests (batch D)
+
+- EDITED (LG1-3): ChristmasTrackerTests/Features/Purchases/ServiceLogCallScanTests.swift: `ServiceLogCallScan.files`
+  now also lists Features/Authentication/Services/AuthenticationService.swift. Only the list changed; rules and
+  self-proofs unchanged, and the new file passes the non-vacuity check.
+
+## New tests (batch D)
+
+- ChristmasTrackerTests/Features/Authentication/AuthenticationServiceLogTests.swift (written by the isolated
+  test-writer; not edited)
+
+## Commands and raw summary lines (batch D)
+
+- `scripts/build.sh`: `** BUILD SUCCEEDED **`
+- `scripts/test.sh`: `--- xcodebuild exit status: 0 ---`, `--- tests: 5578 passed, 0 failed, 0 skipped ---`
+  (batch C 5567; scripts/verify.sh not run, per instruction)
+- Attempts: 1 implementation loop, green first time; no repeated error signature; no flaky test.
+
+## Not done or partial (batch D)
+
+- No refresh reason for auth (none is needed).
+- logout / endSession / handleServerSessionEnd / enrollCurrentSession / clearForSession keep their hand spans.
+- The non-service gaps listed above (ItemThumbnail `AsyncImage`, the LPMetadataProvider fetch bypassing the transport)
+  are reported, not changed.
+- Screenshot / visual check: not performed (no UI change).

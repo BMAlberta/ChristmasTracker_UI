@@ -29,7 +29,8 @@ nonisolated enum ServiceLogCallScan {
         "Features/Children/Services/ChildService.swift",
         "Features/Lists/Services/ListService.swift",
         "Features/LinkPreview/Services/LinkPreviewService.swift",
-        "Core/API/VersionService.swift"
+        "Core/API/VersionService.swift",
+        "Features/Authentication/Services/AuthenticationService.swift"
     ]
 
     private static let literal = #""(?:[^"\\]|\\[^(])*""#
