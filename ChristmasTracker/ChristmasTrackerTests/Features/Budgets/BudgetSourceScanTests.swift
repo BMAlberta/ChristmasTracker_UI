@@ -326,7 +326,7 @@ struct BudgetSourceScanTests {
         #expect(budgets.code.contains("func update(_ request: UpdateBudgetRequest) async throws -> Budget"))
         #expect(budgets.code.contains("func duplicate(_ request: DuplicateBudgetRequest) async throws -> Budget"))
         #expect(budgets.code.contains("func delete(year: Int) async throws"))
-        #expect(budgets.code.contains("func loadBudgets(force: Bool) async -> BudgetError?"))
+        #expect(budgets.code.contains("func loadBudgets(force: Bool, reason: RefreshReason = .unspecified) async -> BudgetError?"))
     }
 
     @Test("the concrete invalidator exists and is a MainActor class over both services")

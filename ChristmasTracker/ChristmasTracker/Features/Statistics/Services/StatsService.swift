@@ -20,6 +20,7 @@ final class StatsService {
     // MARK: - Dependencies
 
     private nonisolated let repository: any StatsLoading
+    private nonisolated let log: ServiceLog
 
     // MARK: - Published State
 
@@ -65,8 +66,9 @@ final class StatsService {
 
     // MARK: - Initialization
 
-    init(repository: any StatsLoading) {
+    init(repository: any StatsLoading, log: ServiceLog = ServiceLog()) {
         self.repository = repository
+        self.log = log
     }
 
     // MARK: - Reads
@@ -80,15 +82,15 @@ final class StatsService {
     // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method, so a
     // manual SentrySDK span is used in fetch. No statistics data goes into the span.
     /// Cache-first: a fresh cached year does no fetch; a missing or stale year fetches.
-    func load(year: Int) async {
+    func load(year: Int, reason: RefreshReason = .unspecified) async {
         if statsByYear[year] != nil, freshYears.contains(year) { return }
-        await fetch(year: year, spanName: "service.stats.load")
+        await fetch(year: year, spanName: "service.stats.load", opName: "load stats", reason: reason)
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span in fetch, see load.
+    // Actor-isolated (@MainActor): InstrumentedOperation span in fetch, see load.
     /// Always fetches.
-    func refresh(year: Int) async {
-        await fetch(year: year, spanName: "service.stats.refresh")
+    func refresh(year: Int, reason: RefreshReason = .unspecified) async {
+        await fetch(year: year, spanName: "service.stats.refresh", opName: "refresh stats", reason: reason)
     }
 
     func clearLoadFailure() {
@@ -156,31 +158,40 @@ final class StatsService {
     /// Shared body of load and refresh: a manual span (no data in it), the generation captured
     /// before the first await, the cancellable `perform`, and the stale-result check.
     // Actor-isolated (@MainActor): manual SentrySDK span instead of @Instrumented.
-    private func fetch(year: Int, spanName: String) async {
-        let span = SentrySDK.startTransaction(name: spanName, operation: spanName)
-        defer { span.finish() }
+    private func fetch(year: Int, spanName: String, opName: String, reason: RefreshReason) async {
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run(spanName) {
+            log.started(opName, reason: reason)
 
-        let gen = generation
-        let epoch = staleEpoch
-        let sequence = (lastSequenceByYear[year] ?? 0) + 1
-        lastSequenceByYear[year] = sequence
-        beginLoad()
-        defer { endLoad(generation: gen) }
+            let gen = generation
+            let epoch = staleEpoch
+            let sequence = (lastSequenceByYear[year] ?? 0) + 1
+            lastSequenceByYear[year] = sequence
+            beginLoad()
+            defer { endLoad(generation: gen) }
 
-        do {
-            let repository = self.repository
-            let stats = try await perform { try await repository.yearStats(year: year) }
-            try ensureCurrent(gen)
-            // A newer fetch of this year already landed: this older result must not overwrite it.
-            if sequence < (landedSequenceByYear[year] ?? 0) { return }
-            landedSequenceByYear[year] = sequence
-            statsByYear[year] = stats
-            if epoch == staleEpoch { freshYears.insert(year) }
-            if loadFailure?.year == year { loadFailure = nil }
-        } catch {
-            guard let failure = failure(error, generation: gen) else { return }
-            if sequence < (landedSequenceByYear[year] ?? 0) { return }
-            loadFailure = StatsLoadFailure(year: year, error: failure)
+            do {
+                let repository = self.repository
+                let stats = try await perform { try await repository.yearStats(year: year) }
+                try ensureCurrent(gen)
+                // A newer fetch of this year already landed: this older result must not overwrite it.
+                if sequence < (landedSequenceByYear[year] ?? 0) {
+                    log.cancelled(opName)
+                    return
+                }
+                landedSequenceByYear[year] = sequence
+                statsByYear[year] = stats
+                if epoch == staleEpoch { freshYears.insert(year) }
+                if loadFailure?.year == year { loadFailure = nil }
+                log.processed(opName)
+            } catch {
+                guard let failure = failure(error, generation: gen) else {
+                    log.cancelled(opName)
+                    return
+                }
+                if sequence < (landedSequenceByYear[year] ?? 0) { return }
+                loadFailure = StatsLoadFailure(year: year, error: failure)
+            }
         }
     }
 
@@ -220,7 +231,7 @@ final class StatsService {
     /// is published then).
     private func failure(_ error: any Error, generation gen: Int) -> BudgetError? {
         if error is CancellationError || gen != generation || Task.isCancelled { return nil }
-        LogError("load stats failed", category: .business)
+        log.failed("load stats")
         return (error as? BudgetError) ?? BudgetError.server
     }
 }

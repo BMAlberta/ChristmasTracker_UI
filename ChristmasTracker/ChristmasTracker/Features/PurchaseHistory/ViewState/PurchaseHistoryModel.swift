@@ -107,17 +107,17 @@ final class PurchaseHistoryModel {
 
 extension PurchaseHistoryModel {
 
-    func onAppear() async {
+    func onAppear(reason: RefreshReason = .appear) async {
         reconcileSession()
         guard !hasStarted else { return }
         hasStarted = true
-        await loadFirstPage(kind: .first)
+        await loadFirstPage(kind: .first, reason: reason)
     }
 
-    func refresh() async {
+    func refresh(reason: RefreshReason = .unspecified) async {
         reconcileSession()
         hasStarted = true
-        await loadFirstPage(kind: .refresh)
+        await loadFirstPage(kind: .refresh, reason: reason)
     }
 
     func returnedFromPurchase() async {
@@ -215,14 +215,14 @@ extension PurchaseHistoryModel {
         await loadFirstPage(kind: .first)
     }
 
-    private func loadFirstPage(kind: RequestKind) async {
+    private func loadFirstPage(kind: RequestKind, reason: RefreshReason = .unspecified) async {
         cancelInFlight()
         requestToken += 1
         let token = requestToken
         isRefreshing = kind == .refresh && loadPhase == .content
         nextPageFailed = false
         inFlightKind = kind
-        let result = await fetch(filter: filter, cursor: nil)
+        let result = await fetch(filter: filter, cursor: nil, reason: reason)
         guard isCurrent(token) else { return }
         finishRequest()
         switch result {
@@ -267,11 +267,15 @@ extension PurchaseHistoryModel {
     }
 
     /// Runs one service call in a task the model can cancel. Cancelling the caller cancels the task too.
-    private func fetch(filter: PurchaseHistoryFilter, cursor: String?) async -> PageResult {
+    private func fetch(
+        filter: PurchaseHistoryFilter,
+        cursor: String?,
+        reason: RefreshReason = .unspecified
+    ) async -> PageResult {
         let service = self.service
         let task = Task { @MainActor () -> PageResult in
             do {
-                return .success(try await service.loadPage(filter: filter, cursor: cursor))
+                return .success(try await service.loadPage(filter: filter, cursor: cursor, reason: reason))
             } catch {
                 return .failure(error)
             }
