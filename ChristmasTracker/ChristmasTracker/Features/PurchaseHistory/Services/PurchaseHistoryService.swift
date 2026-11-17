@@ -19,6 +19,7 @@ final class PurchaseHistoryService {
     // MARK: - Dependencies
 
     private nonisolated let repository: any PurchaseHistoryLoading
+    private nonisolated let log: ServiceLog
 
     // MARK: - Session safety
 
@@ -34,8 +35,9 @@ final class PurchaseHistoryService {
 
     // MARK: - Initialization
 
-    init(repository: any PurchaseHistoryLoading) {
+    init(repository: any PurchaseHistoryLoading, log: ServiceLog = ServiceLog()) {
         self.repository = repository
+        self.log = log
     }
 
     // MARK: - Load
@@ -44,21 +46,24 @@ final class PurchaseHistoryService {
     // manual SentrySDK span is used. No purchase data goes into the span.
     /// One page of the history. Throws `CancellationError` for a cancelled caller or an ended session,
     /// and a `PurchaseHistoryError` for every other failure.
-    func loadPage(filter: PurchaseHistoryFilter, cursor: String?) async throws -> PurchaseHistoryPage {
-        let span = SentrySDK.startTransaction(
-            name: "service.purchaseHistory.loadPage",
-            operation: "service.purchaseHistory.loadPage"
-        )
-        defer { span.finish() }
-
-        let gen = generation
-        do {
-            let repository = self.repository
-            let page = try await perform { try await repository.loadPage(filter: filter, cursor: cursor) }
-            try ensureCurrent(gen)
-            return page
-        } catch {
-            throw failure(error, generation: gen)
+    func loadPage(
+        filter: PurchaseHistoryFilter,
+        cursor: String?,
+        reason: RefreshReason = .unspecified
+    ) async throws -> PurchaseHistoryPage {
+        let op = "load purchase history"
+        return try await InstrumentedOperation.run("service.purchaseHistory.loadPage") {
+            log.started(op, reason: reason)
+            let gen = generation
+            do {
+                let repository = self.repository
+                let page = try await perform { try await repository.loadPage(filter: filter, cursor: cursor) }
+                try ensureCurrent(gen)
+                log.processed(op, count: page.rows.count, noun: "rows")
+                return page
+            } catch {
+                throw failure(error, generation: gen, opName: op)
+            }
         }
     }
 
@@ -104,9 +109,12 @@ final class PurchaseHistoryService {
 
     /// The error to throw: a CancellationError when the call was cancelled or its session ended,
     /// the repository's typed error as is, and `.server` for anything else.
-    private func failure(_ error: any Error, generation gen: Int) -> any Error {
-        if error is CancellationError || gen != generation || Task.isCancelled { return CancellationError() }
-        LogError("load purchase history failed", category: .business)
+    private func failure(_ error: any Error, generation gen: Int, opName: String) -> any Error {
+        if error is CancellationError || gen != generation || Task.isCancelled {
+            log.cancelled(opName)
+            return CancellationError()
+        }
+        log.failed(opName)
         return (error as? PurchaseHistoryError) ?? PurchaseHistoryError.server
     }
 }

@@ -129,12 +129,17 @@ struct PurchaseLogHygieneScanTests {
         #expect(found.isEmpty, "Purchase log calls must be static strings:\n\(found.joined(separator: "\n"))")
     }
 
-    @Test("PurchaseService still has its static log lines, so the scan is not vacuous")
+    // EDITED (LG1-3): the two static LogError lines moved into ServiceLog.failed (one fixed
+    // "<operation> failed" line, operation names are literals), so the service now has no direct
+    // Log*( call and instead has its two failure call sites; the scan stays non-vacuous.
+    @Test("PurchaseService writes its failure lines through ServiceLog, so the scan is not vacuous")
     func serviceStaticLinesExist() throws {
         let tree = try #require(ItemSourceTree.load(from: #filePath), "Could not find the app source folder")
         let source = try #require(tree.source("Features/Purchases/Services/PurchaseService.swift"))
-        let calls = try PurchaseLogScan.calls(in: ItemSourceScan.codeOnly(source))
-        #expect(calls.count == 2, "PurchaseService has exactly its two static log lines, found \(calls.count)")
-        #expect(try PurchaseLogScan.violations(in: ItemSourceScan.codeOnly(source)).isEmpty)
+        let code = ItemSourceScan.codeOnly(source)
+        let calls = try PurchaseLogScan.calls(in: code)
+        #expect(calls.isEmpty, "PurchaseService has no direct Log*( call, found \(calls.count)")
+        #expect(code.components(separatedBy: "log.failed(").count - 1 == 2, "two ServiceLog failure lines")
+        #expect(try PurchaseLogScan.violations(in: code).isEmpty)
     }
 }

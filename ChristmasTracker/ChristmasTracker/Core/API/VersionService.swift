@@ -2,7 +2,6 @@
 // ChristmasTracker
 
 import Foundation
-import Sentry
 import TrackerAPI
 
 @MainActor @Observable final class VersionService {
@@ -15,6 +14,7 @@ import TrackerAPI
     private(set) var dismissedLatestVersion: String?
 
     private let repository: any AppVersionChecking
+    private let log: ServiceLog
     private let minimumCheckInterval: TimeInterval
     private let now: @Sendable () -> Date
     private let sequence: UpdateSequence
@@ -31,9 +31,11 @@ import TrackerAPI
         minimumCheckInterval: TimeInterval = 900,
         failureRetryInterval: TimeInterval = 60,
         now: @escaping @Sendable () -> Date = { Date() },
-        sequence: UpdateSequence = UpdateSequence()
+        sequence: UpdateSequence = UpdateSequence(),
+        log: ServiceLog = ServiceLog()
     ) {
         self.repository = repository
+        self.log = log
         self.minimumCheckInterval = minimumCheckInterval
         self.failureRetryInterval = failureRetryInterval
         self.now = now
@@ -47,7 +49,7 @@ import TrackerAPI
     /// The "active again" entry: skips when a check is already in flight, when the last success is
     /// inside the minimum interval, or when the last failure is inside the failure retry interval.
     // @MainActor-isolated, so @Instrumented is skipped per coding-standards.md; its span comes from check(),
-    // and the skipped path makes no span.
+    // and a skipped path makes no call, no span and no log line.
     func checkIfDue() async {
         if isChecking { return }
         let current = now()
@@ -60,39 +62,41 @@ import TrackerAPI
         await check()
     }
 
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
-    // using manual SentrySDK span per coding-standards.md.
-    // The span carries no URL, release notes or error text.
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods, so the
+    // InstrumentedOperation span is used (the helper works on the main actor).
+    // The span and the step lines carry no URL, release notes or error text.
     func check() async {
-        let span = SentrySDK.startTransaction(
-            name: "service.version.check",
-            operation: "service.version.check"
-        )
-        isChecking = true
-        defer {
-            isChecking = false
-            span.finish()
-        }
-        do {
-            let policy = try await repository.checkVersion()
-            lastPolicy = policy
-            policyOrder = sequence.next()
-            lastErrorCategory = nil
-            lastSuccess = now()
-            lastFailure = nil
-        } catch let error as TrackerAPIError {
-            recordFailure()
-            switch error {
-            case .validation: lastErrorCategory = .showMessage
-            case .rateLimited: lastErrorCategory = .backOff
-            case .server: lastErrorCategory = .showMessage
-            case .undocumented: lastErrorCategory = .showMessage
-            case .network: lastErrorCategory = .showMessage
-            default: lastErrorCategory = .showMessage
+        let op = "check version"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("service.version.check") {
+            log.started(op)
+            isChecking = true
+            defer { isChecking = false }
+            do {
+                let policy = try await repository.checkVersion()
+                lastPolicy = policy
+                policyOrder = sequence.next()
+                lastErrorCategory = nil
+                lastSuccess = now()
+                lastFailure = nil
+                log.processed(op)
+            } catch let error as TrackerAPIError {
+                recordFailure()
+                log.failed(op)
+                switch error {
+                case .validation: lastErrorCategory = .showMessage
+                case .rateLimited: lastErrorCategory = .backOff
+                case .server: lastErrorCategory = .showMessage
+                case .undocumented: lastErrorCategory = .showMessage
+                case .network: lastErrorCategory = .showMessage
+                default: lastErrorCategory = .showMessage
+                }
+            } catch {
+                // The state is the same for every error; only the log tells a cancellation from a failure.
+                recordFailure()
+                lastErrorCategory = .showMessage
+                if error is CancellationError { log.cancelled(op) } else { log.failed(op) }
             }
-        } catch {
-            recordFailure()
-            lastErrorCategory = .showMessage
         }
     }
 

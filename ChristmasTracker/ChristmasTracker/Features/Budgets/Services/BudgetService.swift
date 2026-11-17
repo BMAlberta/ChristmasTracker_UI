@@ -19,6 +19,7 @@ final class BudgetService {
     // MARK: - Dependencies
 
     private nonisolated let repository: any BudgetManaging
+    private nonisolated let log: ServiceLog
 
     // MARK: - Published State
 
@@ -60,8 +61,9 @@ final class BudgetService {
 
     // MARK: - Initialization
 
-    init(repository: any BudgetManaging) {
+    init(repository: any BudgetManaging, log: ServiceLog = ServiceLog()) {
         self.repository = repository
+        self.log = log
     }
 
     // MARK: - Reads
@@ -77,38 +79,48 @@ final class BudgetService {
     /// Cache-first unless forced or stale. Replaces the cache with the server list. Returns the
     /// failure and publishes none; a stale or cancelled call returns nil and writes nothing.
     @discardableResult
-    func loadBudgets(force: Bool) async -> BudgetError? {
+    func loadBudgets(force: Bool, reason: RefreshReason = .unspecified) async -> BudgetError? {
+        // A fresh cache serves the call without a fetch: nothing runs, so nothing is logged.
         if !force && hasLoaded && isFresh { return nil }
 
-        let span = SentrySDK.startTransaction(name: "service.budgets.load", operation: "service.budgets.load")
-        defer { span.finish() }
+        let op = "load budgets"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        let outcome = try? await InstrumentedOperation.run("service.budgets.load") { () -> BudgetError? in
+            log.started(op, reason: reason)
 
-        let gen = generation
-        let epoch = staleEpoch
-        let mutations = mutationCount
-        loadCount += 1
-        isLoading = true
-        defer { endLoad(generation: gen) }
+            let gen = generation
+            let epoch = staleEpoch
+            let mutations = mutationCount
+            loadCount += 1
+            isLoading = true
+            defer { endLoad(generation: gen) }
 
-        do {
-            let repository = self.repository
-            let budgets = try await perform { try await repository.listBudgets() }
-            try ensureCurrent(gen)
-            // A mutation succeeded while this load was in flight: the server list may predate it.
-            // Discard it and leave the cache not fresh so the next non-forced load refetches.
-            if mutations != mutationCount {
-                isFresh = false
+            do {
+                let repository = self.repository
+                let budgets = try await perform { try await repository.listBudgets() }
+                try ensureCurrent(gen)
+                // A mutation succeeded while this load was in flight: the server list may predate it.
+                // Discard it and leave the cache not fresh so the next non-forced load refetches.
+                if mutations != mutationCount {
+                    isFresh = false
+                    log.cancelled(op)
+                    return nil
+                }
+                budgetsByYear = Dictionary(budgets.map { ($0.year, $0) }, uniquingKeysWith: { _, later in later })
+                hasLoaded = true
+                isFresh = epoch == staleEpoch
+                log.processed(op, count: budgets.count, noun: "budgets")
                 return nil
+            } catch {
+                if error is CancellationError || gen != generation || Task.isCancelled {
+                    log.cancelled(op)
+                    return nil
+                }
+                log.failed("load budgets")
+                return (error as? BudgetError) ?? BudgetError.server
             }
-            budgetsByYear = Dictionary(budgets.map { ($0.year, $0) }, uniquingKeysWith: { _, later in later })
-            hasLoaded = true
-            isFresh = epoch == staleEpoch
-            return nil
-        } catch {
-            if error is CancellationError || gen != generation || Task.isCancelled { return nil }
-            LogError("load budgets failed", category: .business)
-            return (error as? BudgetError) ?? BudgetError.server
         }
+        return outcome
     }
 
     // MARK: - Mutations
@@ -120,44 +132,55 @@ final class BudgetService {
     // Actor-isolated (@MainActor): @Instrumented cannot be applied here, so a manual SentrySDK span
     // is used in store. No budget data goes into the span.
     func create(_ request: CreateBudgetRequest) async throws -> Budget {
-        try await store(spanName: "service.budgets.create") { repository in
+        try await store(spanName: "service.budgets.create", opName: "create budget") { repository in
             try await repository.create(request)
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see create.
+    // Actor-isolated (@MainActor): InstrumentedOperation span in store, see create.
     func update(_ request: UpdateBudgetRequest) async throws -> Budget {
-        try await store(spanName: "service.budgets.update") { repository in
+        try await store(spanName: "service.budgets.update", opName: "update budget") { repository in
             try await repository.update(request)
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see create.
+    // Actor-isolated (@MainActor): InstrumentedOperation span in store, see create.
     func duplicate(_ request: DuplicateBudgetRequest) async throws -> Budget {
-        try await store(spanName: "service.budgets.duplicate") { repository in
+        try await store(spanName: "service.budgets.duplicate", opName: "duplicate budget") { repository in
             try await repository.duplicate(request)
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see create.
+    // Actor-isolated (@MainActor): InstrumentedOperation span (the helper works on the main actor).
     /// A success, or a notFound (already deleted), removes the year from the cache; any other error
     /// is rethrown with the cache untouched.
     func delete(year: Int) async throws {
-        let span = SentrySDK.startTransaction(name: "service.budgets.delete", operation: "service.budgets.delete")
-        defer { span.finish() }
-
-        let gen = generation
-        do {
-            let repository = self.repository
-            try await perform { try await repository.delete(year: year) }
-            try ensureCurrent(gen)
-            budgetsByYear[year] = nil
-            mutationCount += 1
-        } catch {
-            let thrown = mutationFailure(error, generation: gen)
-            guard let budgetError = thrown as? BudgetError, budgetError.isGone else { throw thrown }
-            budgetsByYear[year] = nil
-            mutationCount += 1
+        let op = "delete budget"
+        try await InstrumentedOperation.run("service.budgets.delete") {
+            log.started(op)
+            let gen = generation
+            do {
+                let repository = self.repository
+                try await perform { try await repository.delete(year: year) }
+                try ensureCurrent(gen)
+                budgetsByYear[year] = nil
+                mutationCount += 1
+                log.processed(op)
+            } catch {
+                if error is CancellationError || gen != generation || Task.isCancelled {
+                    log.cancelled(op)
+                    throw CancellationError()
+                }
+                let typed = (error as? BudgetError) ?? BudgetError.server
+                // A notFound means it is already deleted: that is a success, not a failure.
+                guard typed.isGone else {
+                    log.failed("budget mutation")
+                    throw typed
+                }
+                budgetsByYear[year] = nil
+                mutationCount += 1
+                log.processed(op)
+            }
         }
     }
 
@@ -200,21 +223,23 @@ final class BudgetService {
     // Actor-isolated (@MainActor): manual SentrySDK span instead of @Instrumented.
     private func store(
         spanName: String,
+        opName: String,
         _ work: @escaping @Sendable (any BudgetManaging) async throws -> Budget
     ) async throws -> Budget {
-        let span = SentrySDK.startTransaction(name: spanName, operation: spanName)
-        defer { span.finish() }
-
-        let gen = generation
-        do {
-            let repository = self.repository
-            let budget = try await perform { try await work(repository) }
-            try ensureCurrent(gen)
-            budgetsByYear[budget.year] = budget
-            mutationCount += 1
-            return budget
-        } catch {
-            throw mutationFailure(error, generation: gen)
+        try await InstrumentedOperation.run(spanName) {
+            log.started(opName)
+            let gen = generation
+            do {
+                let repository = self.repository
+                let budget = try await perform { try await work(repository) }
+                try ensureCurrent(gen)
+                budgetsByYear[budget.year] = budget
+                mutationCount += 1
+                log.processed(opName)
+                return budget
+            } catch {
+                throw mutationFailure(error, generation: gen, opName: opName)
+            }
         }
     }
 
@@ -247,9 +272,12 @@ final class BudgetService {
 
     /// The error a mutation rethrows: the typed BudgetError, or CancellationError when the call was
     /// cancelled or its session ended. Never stored in the service.
-    private func mutationFailure(_ error: any Error, generation gen: Int) -> any Error {
-        if error is CancellationError || gen != generation || Task.isCancelled { return CancellationError() }
-        LogError("budget mutation failed", category: .business)
+    private func mutationFailure(_ error: any Error, generation gen: Int, opName: String) -> any Error {
+        if error is CancellationError || gen != generation || Task.isCancelled {
+            log.cancelled(opName)
+            return CancellationError()
+        }
+        log.failed("budget mutation")
         return (error as? BudgetError) ?? BudgetError.server
     }
 }

@@ -221,7 +221,8 @@ nonisolated func buildGeneratedClient(
             sessionRefresher: sessionRefresher,
             versionOutdatedHandler: versionOutdatedHandler,
             requestIDObserver: requestIDObserver,
-            sessionEndingHandler: sessionEndingHandler
+            sessionEndingHandler: sessionEndingHandler,
+            transport: LoggingClientTransport.production()
         )
     } catch {
         // Constant category only: the thrown error can carry the URL.

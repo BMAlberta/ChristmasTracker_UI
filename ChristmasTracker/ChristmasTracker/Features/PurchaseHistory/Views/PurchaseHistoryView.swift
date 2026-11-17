@@ -86,11 +86,11 @@ struct PurchaseHistoryView: View {
             }
             .padding(EdgeInsets.appScreenPadding)
         }
-        .refreshable { await model.refresh() }
+        .refreshable { await model.refresh(reason: .pull) }
         .task { await model.onAppear() }
         .onChange(of: service.sessionGeneration) {
             model.reconcileSession()
-            Task { await model.onAppear() }
+            Task { await model.onAppear(reason: .session) }
         }
     }
 

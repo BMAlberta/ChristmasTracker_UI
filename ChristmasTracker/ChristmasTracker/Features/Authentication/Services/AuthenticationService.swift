@@ -22,6 +22,7 @@ final class AuthenticationService {
     private let legacyCleanup: any LegacyTokenCleaning
     private let credentialStore: any BiometricCredentialStoring
     private let enrollmentHistory: any EnrollmentHistoryStoring
+    private let log: ServiceLog
 
     // MARK: - Published State (Observable)
     private(set) var currentUser: User?
@@ -75,8 +76,10 @@ final class AuthenticationService {
         emailStore: any RememberedEmailStoring = RememberedEmailStore(),
         legacyCleanup: any LegacyTokenCleaning = LegacyTokenCleanup(),
         credentialStore: any BiometricCredentialStoring = KeychainBiometricCredentialStore(),
-        enrollmentHistory: any EnrollmentHistoryStoring = EphemeralEnrollmentHistory()
+        enrollmentHistory: any EnrollmentHistoryStoring = EphemeralEnrollmentHistory(),
+        log: ServiceLog = ServiceLog()
     ) {
+        self.log = log
         self.authRepository = repository
         self.sessionManager = sessionManager
         self.biometricAuthenticator = biometricAuthenticator
@@ -142,96 +145,119 @@ final class AuthenticationService {
     }
 
     /// Login
-    // @MainActor-isolated async — manual SentrySDK span instead of @Instrumented
+    // @MainActor-isolated async: InstrumentedOperation.run instead of @Instrumented. Step lines go
+    // through ServiceLog (operation name only; never the error, which may carry server text).
     func login(email: String, password: String, rememberEmail: Bool = false) async {
-        let span = SentrySDK.startTransaction(name: "AuthenticationService.login", operation: "auth")
-        defer { span.finish() }
-        isLoading = true
-        defer { isLoading = false }
-        error = nil
+        let op = "auth login"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("AuthenticationService.login") { () async -> Void in
+            isLoading = true
+            defer { isLoading = false }
+            error = nil
+            log.started(op)
 
-        do {
-            let session = try await authRepository.login(email: email, password: password)
+            do {
+                let session = try await authRepository.login(email: email, password: password)
 
-            // Compute and apply the biometric offer action before handleAuthSuccess so we
-            // evaluate against the enrolled snapshot that existed at the time login completed.
-            applyBiometricOffer(session: session)
+                // Compute and apply the biometric offer action before handleAuthSuccess so we
+                // evaluate against the enrolled snapshot that existed at the time login completed.
+                applyBiometricOffer(session: session)
 
-            await handleAuthSuccess(session: session)
+                await handleAuthSuccess(session: session)
 
-            if rememberEmail {
-                emailStore.rememberedEmail = email
-            } else {
-                emailStore.rememberedEmail = nil
+                if rememberEmail {
+                    emailStore.rememberedEmail = email
+                } else {
+                    emailStore.rememberedEmail = nil
+                }
+
+                LogInfo("User logged in", category: .auth)
+                log.processed(op)
+            } catch let authError as AuthenticationError {
+                error = authError
+                log.failed(op)
+            } catch {
+                self.error = .networkError
+                if error is CancellationError {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
             }
-
-            LogInfo("User logged in", category: .auth)
-        } catch let authError as AuthenticationError {
-            error = authError
-            LogError("Login failed: \(authError)", category: .auth)
-        } catch {
-            self.error = .networkError
-            LogError("Login failed: \(error)", category: .auth)
         }
     }
 
     /// Sign in using the biometric-protected refresh token from the credential store.
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
-    // using manual SentrySDK span per coding-standards.md.
+    // @MainActor-isolated async: InstrumentedOperation.run (same span name as the old hand span)
+    // instead of @Instrumented. Step lines carry the operation name only, never an error.
     func signInWithBiometric() async {
-        let transaction = SentrySDK.startTransaction(
-            name: "service.authentication.signInWithBiometric",
-            operation: "service.authentication.signInWithBiometric"
-        )
-        defer { transaction.finish() }
-        isLoading = true
-        defer { isLoading = false }
-        biometricSignInState = .idle
+        let op = "auth biometric sign-in"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("service.authentication.signInWithBiometric") { () async -> Void in
+            isLoading = true
+            defer { isLoading = false }
+            biometricSignInState = .idle
+            log.started(op)
 
-        let typeName = biometricType.displayName
+            let typeName = biometricType.displayName
 
-        // Read the refresh token — this triggers the biometric prompt via evaluatePolicy
-        // inside KeychainBiometricCredentialStore.readRefreshToken (F2 fix).
-        let refreshToken: String
-        do {
-            refreshToken = try await credentialStore.readRefreshToken(
-                reason: "Sign in to Christmas Tracker"
-            )
-        } catch let credError as BiometricCredentialError {
-            let outcome = biometricSignInOutcome(for: credError, biometryTypeName: typeName)
-            if outcome.deleteEnrollment {
-                try? credentialStore.delete()
+            // Read the refresh token — this triggers the biometric prompt via evaluatePolicy
+            // inside KeychainBiometricCredentialStore.readRefreshToken (F2 fix).
+            let refreshToken: String
+            do {
+                refreshToken = try await credentialStore.readRefreshToken(
+                    reason: "Sign in to Christmas Tracker"
+                )
+            } catch let credError as BiometricCredentialError {
+                let outcome = biometricSignInOutcome(for: credError, biometryTypeName: typeName)
+                if outcome.deleteEnrollment {
+                    try? credentialStore.delete()
+                }
+                if outcome.refreshSnapshot {
+                    refreshBiometricState()
+                }
+                biometricSignInState = outcome.state
+                // Cancelling the prompt is not a failure; every other credential error is.
+                if credError == .userCancelled {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
+                return
+            } catch {
+                if error is CancellationError {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
+                return
             }
-            if outcome.refreshSnapshot {
-                refreshBiometricState()
-            }
-            biometricSignInState = outcome.state
-            LogError("Biometric sign-in: credential error: \(credError)", category: .auth)
-            return
-        } catch {
-            LogError("Biometric sign-in: credential store error: \(error)", category: .auth)
-            return
-        }
 
-        // Perform single-flight token refresh.
-        do {
-            let session = try await singleFlightRefresh(token: refreshToken)
-            // Rotate the stored refresh token before surfacing authenticated state.
-            try? credentialStore.updateRefreshToken(session.refreshToken)
-            await handleAuthSuccess(session: session)
-            LogInfo("Biometric sign-in succeeded", category: .auth)
-        } catch let authError as AuthenticationError {
-            let outcome = biometricSignInOutcome(for: authError, biometryTypeName: typeName)
-            if outcome.deleteEnrollment {
-                try? credentialStore.delete()
+            // Perform single-flight token refresh.
+            do {
+                let session = try await singleFlightRefresh(token: refreshToken)
+                // Rotate the stored refresh token before surfacing authenticated state.
+                try? credentialStore.updateRefreshToken(session.refreshToken)
+                await handleAuthSuccess(session: session)
+                LogInfo("Biometric sign-in succeeded", category: .auth)
+                log.processed(op)
+            } catch let authError as AuthenticationError {
+                let outcome = biometricSignInOutcome(for: authError, biometryTypeName: typeName)
+                if outcome.deleteEnrollment {
+                    try? credentialStore.delete()
+                }
+                if outcome.refreshSnapshot {
+                    refreshBiometricState()
+                }
+                biometricSignInState = outcome.state
+                log.failed(op)
+            } catch {
+                if error is CancellationError {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
             }
-            if outcome.refreshSnapshot {
-                refreshBiometricState()
-            }
-            biometricSignInState = outcome.state
-            LogError("Biometric sign-in: auth error: \(authError)", category: .auth)
-        } catch {
-            LogError("Biometric sign-in: network or unknown error: \(error)", category: .auth)
         }
     }
 
@@ -241,8 +267,8 @@ final class AuthenticationService {
     }
 
     /// Register a user.
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
-    // using manual SentrySDK span per coding-standards.md.
+    // @MainActor-isolated async: InstrumentedOperation.run (same span name as the old hand span)
+    // instead of @Instrumented. Step lines carry the operation name only, never an error.
     func register(
         email: String,
         password: String,
@@ -250,35 +276,40 @@ final class AuthenticationService {
         lastName: String,
         registrationCode: String
     ) async {
-        let transaction = SentrySDK.startTransaction(
-            name: "service.authentication.register",
-            operation: "service.authentication.register"
-        )
-        defer { transaction.finish() }
-        isLoading = true
-        defer { isLoading = false }
-        error = nil
+        let op = "auth register"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("service.authentication.register") { () async -> Void in
+            isLoading = true
+            defer { isLoading = false }
+            error = nil
+            log.started(op)
 
-        do {
-            let session = try await authRepository.register(
-                email: email,
-                password: password,
-                firstName: firstName,
-                lastName: lastName,
-                registrationCode: registrationCode
-            )
+            do {
+                let session = try await authRepository.register(
+                    email: email,
+                    password: password,
+                    firstName: firstName,
+                    lastName: lastName,
+                    registrationCode: registrationCode
+                )
 
-            applyBiometricOffer(session: session)
+                applyBiometricOffer(session: session)
 
-            await handleAuthSuccess(session: session)
+                await handleAuthSuccess(session: session)
 
-            LogInfo("User registered", category: .auth)
-        } catch let authError as AuthenticationError {
-            error = authError
-            LogError("Registration failed: \(authError)", category: .auth)
-        } catch {
-            self.error = .networkError
-            LogError("Registration failed: \(error)", category: .auth)
+                LogInfo("User registered", category: .auth)
+                log.processed(op)
+            } catch let authError as AuthenticationError {
+                error = authError
+                log.failed(op)
+            } catch {
+                self.error = .networkError
+                if error is CancellationError {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
+            }
         }
     }
 
@@ -346,78 +377,91 @@ final class AuthenticationService {
             LogInfo("Session end ignored: ignored a stale session-end", category: .auth)
             return
         }
-        LogInfo("Session ended by the server: \(reason)", category: .auth)
+        // The reason is not interpolated (D6): the log carries fixed text only.
+        LogInfo("Session ended by the server", category: .auth)
         await endSession(reason: .sessionExpired)
     }
 
     /// Refresh access token
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
-    // using manual SentrySDK span per coding-standards.md.
+    // @MainActor-isolated async: InstrumentedOperation.run (same span name as the old hand span)
+    // instead of @Instrumented. Step lines carry the operation name only, never an error.
     func refreshTokenIfNeeded() async {
-        let transaction = SentrySDK.startTransaction(
-            name: "service.authentication.refreshTokenIfNeeded",
-            operation: "service.authentication.refreshTokenIfNeeded"
-        )
-        defer { transaction.finish() }
-        guard let tokens = self.tokens, tokens.needsRefresh else {
-            return
-        }
-
-        LogDebug("Refreshing access token", category: .auth)
-
-        do {
-            let session = try await singleFlightRefresh(token: tokens.refreshToken)
-            await updateTokens(session: session)
-
-            // Rotate the stored credential token only if the enrolled user matches the session user.
-            if let enrolled = credentialStore.enrolledUser(),
-               enrolled.userId == currentUser?.id {
-                try? credentialStore.updateRefreshToken(session.refreshToken)
+        let op = "auth refresh"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("service.authentication.refreshTokenIfNeeded") { () async -> Void in
+            guard let tokens = self.tokens, tokens.needsRefresh else {
+                return
             }
 
-            LogInfo("Token refreshed successfully", category: .auth)
+            log.started(op)
+            LogDebug("Refreshing access token", category: .auth)
 
-        } catch let authError as AuthenticationError {
-            if isCredentialFailure(authError, context: .refresh) {
-                LogError("Token refresh credential failure — session ended", category: .auth)
-                await endSessionAfterRefreshCredentialFailure()
-            } else {
+            do {
+                let session = try await singleFlightRefresh(token: tokens.refreshToken)
+                await updateTokens(session: session)
+
+                // Rotate the stored credential token only if the enrolled user matches the session user.
+                if let enrolled = credentialStore.enrolledUser(),
+                   enrolled.userId == currentUser?.id {
+                    try? credentialStore.updateRefreshToken(session.refreshToken)
+                }
+
+                LogInfo("Token refreshed successfully", category: .auth)
+                log.processed(op)
+
+            } catch let authError as AuthenticationError {
+                // One failure line for either kind of failure.
+                log.failed(op)
+                if isCredentialFailure(authError, context: .refresh) {
+                    await endSessionAfterRefreshCredentialFailure()
+                }
                 // Non-credential failure (network, etc.) — keep session and enrollment alive.
-                LogError("Token refresh failed (non-credential): \(authError)", category: .auth)
+            } catch {
+                // Unknown failure — keep session and enrollment alive. Cancellation is not an error.
+                if error is CancellationError {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
             }
-        } catch {
-            // Unknown failure — keep session and enrollment alive.
-            LogError("Token refresh failed: \(error)", category: .auth)
         }
     }
 
     /// Current access token — used by AccessTokenSeam production closure.
     var currentAccessToken: String? { tokens?.accessToken }
 
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to actor-isolated methods;
-    // using manual SentrySDK span per coding-standards.md.
+    // @MainActor-isolated async: InstrumentedOperation.run (same span name as the old hand span)
+    // instead of @Instrumented. Step lines carry the operation name only, never an error.
     func forceRefresh() async throws {
-        let span = SentrySDK.startTransaction(
-            name: "service.authentication.forceRefresh",
-            operation: "service.authentication.forceRefresh"
-        )
-        defer { span.finish() }
-        // No tokens means no session (for example, after logout): throw without ending anything.
-        guard let currentToken = tokens?.refreshToken else {
-            throw AuthenticationError.invalidRefreshToken
-        }
-        let session: AuthSession
-        do {
-            session = try await singleFlightRefresh(token: currentToken)
-        } catch let authError as AuthenticationError {
-            if isCredentialFailure(authError, context: .refresh) {
-                LogError("Forced refresh credential failure — session ended", category: .auth)
-                await endSessionAfterRefreshCredentialFailure()
+        let op = "auth force refresh"
+        try await InstrumentedOperation.run("service.authentication.forceRefresh") { () async throws -> Void in
+            // No tokens means no session (for example, after logout): throw without ending anything.
+            guard let currentToken = tokens?.refreshToken else {
+                throw AuthenticationError.invalidRefreshToken
             }
-            // Rethrow the original error so the caller (SessionRefreshSeam) can classify it.
-            throw authError
+            log.started(op)
+            let session: AuthSession
+            do {
+                session = try await singleFlightRefresh(token: currentToken)
+            } catch let authError as AuthenticationError {
+                // One failure line for either kind of failure.
+                log.failed(op)
+                if isCredentialFailure(authError, context: .refresh) {
+                    await endSessionAfterRefreshCredentialFailure()
+                }
+                // Rethrow the original error so the caller (SessionRefreshSeam) can classify it.
+                throw authError
+            } catch {
+                if error is CancellationError {
+                    log.cancelled(op)
+                } else {
+                    log.failed(op)
+                }
+                throw error
+            }
+            await updateTokens(session: session)
+            log.processed(op)
         }
-        await updateTokens(session: session)
     }
 
     /// Record user activity (for session keep-alive)
@@ -463,11 +507,19 @@ final class AuthenticationService {
         // Best-effort non-awaited server logout — enrollment is never touched here.
         // Only for an unsuperseded end: a superseded end must make no server call, because
         // the request would carry the NEW session's token and log the new user out.
+        // The step lines are written by this task, when the API call actually runs; the failure
+        // line carries no error text.
+        let log = self.log
         Task {
+            let op = "auth logout"
+            log.started(op)
             do {
                 try await repo.logout()
+                log.processed(op)
+            } catch is CancellationError {
+                log.cancelled(op)
             } catch {
-                LogError("Logout API failed (best-effort): \(error)", category: .auth)
+                log.failed(op)
             }
         }
     }

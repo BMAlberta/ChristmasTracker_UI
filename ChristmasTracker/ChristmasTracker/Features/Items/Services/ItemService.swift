@@ -12,7 +12,8 @@ import SwiftUI
 /// Session-safe item service. Mutations throw their typed `ItemError` to the initiating view and
 /// publish nothing. Load failures are kept per screen: `listLoadError` is set only by the list
 /// loads and `detailLoadError` only by the detail load, so one screen never clears or shows the
-/// other's error. No item id, name, url, price or raw error value is ever logged.
+/// other's error. No item id, name, url, price or raw error value is ever logged; the step lines
+/// (ServiceLog) carry only an operation name, a reason and a count with a literal noun.
 @MainActor
 @Observable
 final class ItemService {
@@ -21,6 +22,7 @@ final class ItemService {
 
     private nonisolated let itemRepository: any ItemRepository
     private nonisolated let dataStore: ItemDataStore
+    private nonisolated let log: ServiceLog
 
     // MARK: - Published State
 
@@ -62,96 +64,100 @@ final class ItemService {
 
     // MARK: - Initialization
 
-    init(repository: any ItemRepository, dataStore: ItemDataStore) {
+    init(repository: any ItemRepository, dataStore: ItemDataStore, log: ServiceLog = ServiceLog()) {
         self.itemRepository = repository
         self.dataStore = dataStore
+        self.log = log
     }
 
     // MARK: - Loads
 
-    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method,
-    // so a manual SentrySDK span is used. No item data goes into the span.
-    func loadItems(listId: String) async {
-        let span = SentrySDK.startTransaction(name: "service.items.loadItems", operation: "service.items.loadItems")
-        defer { span.finish() }
+    // Actor-isolated (@MainActor): @Instrumented cannot be applied to this @MainActor method, so
+    // the InstrumentedOperation span is used (the helper works on the main actor). No item data
+    // goes into the span or a line.
+    func loadItems(listId: String, reason: RefreshReason = .unspecified) async {
+        let op = "load items"
+        // The closure throws nothing (every error is handled inside), so `run` rethrows nothing.
+        _ = try? await InstrumentedOperation.run("service.items.loadItems") {
+            log.started(op, reason: reason)
+            let gen = generation
+            let token = beginListLoad()
+            if currentListId != listId {
+                items = []
+            }
+            currentListId = listId
+            listLoadError = nil
+            isLoadingItems = true
+            defer { endListLoad(token: token, generation: gen) }
 
-        let gen = generation
-        let token = beginListLoad()
-        if currentListId != listId {
-            items = []
-        }
-        currentListId = listId
-        listLoadError = nil
-        isLoadingItems = true
-        defer { endListLoad(token: token, generation: gen) }
-
-        do {
-            let cached = await dataStore.getItems(listId: listId)
-            try ensureCurrent(gen)
-            if !cached.isEmpty {
-                if currentListId == listId { items = cached }
-                if await dataStore.shouldRefresh(listId: listId), gen == generation {
+            do {
+                let cached = await dataStore.getItems(listId: listId)
+                try ensureCurrent(gen)
+                if !cached.isEmpty {
+                    if currentListId == listId { items = cached }
+                    if await dataStore.shouldRefresh(listId: listId), gen == generation {
+                        try await fetchAndStore(listId: listId, generation: gen)
+                    }
+                } else {
                     try await fetchAndStore(listId: listId, generation: gen)
                 }
-                return
+                log.processed(op, count: items.count, noun: "items")
+            } catch {
+                recordLoadError(error, generation: gen, token: token, op: op)
             }
-            try await fetchAndStore(listId: listId, generation: gen)
-        } catch {
-            recordLoadError(error, generation: gen, token: token, operation: "load items")
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadItems.
-    func refreshItems() async {
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadItems.
+    func refreshItems(reason: RefreshReason = .unspecified) async {
+        // No list is loaded, so there is nothing to refresh and no operation to log.
         guard let listId = currentListId else { return }
-        let span = SentrySDK.startTransaction(
-            name: "service.items.refreshItems",
-            operation: "service.items.refreshItems"
-        )
-        defer { span.finish() }
+        let op = "refresh items"
+        _ = try? await InstrumentedOperation.run("service.items.refreshItems") {
+            log.started(op, reason: reason)
+            let gen = generation
+            let token = beginListLoad()
+            listLoadError = nil
+            isLoadingItems = true
+            defer { endListLoad(token: token, generation: gen) }
 
-        let gen = generation
-        let token = beginListLoad()
-        listLoadError = nil
-        isLoadingItems = true
-        defer { endListLoad(token: token, generation: gen) }
-
-        do {
-            try await fetchAndStore(listId: listId, generation: gen)
-        } catch {
-            recordLoadError(error, generation: gen, token: token, operation: "refresh items")
+            do {
+                try await fetchAndStore(listId: listId, generation: gen)
+                log.processed(op, count: items.count, noun: "items")
+            } catch {
+                recordLoadError(error, generation: gen, token: token, op: op)
+            }
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadItems.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadItems.
     func loadItemDetail(id: String) async {
-        let span = SentrySDK.startTransaction(
-            name: "service.items.loadItemDetail",
-            operation: "service.items.loadItemDetail"
-        )
-        defer { span.finish() }
+        let op = "load item detail"
+        _ = try? await InstrumentedOperation.run("service.items.loadItemDetail") {
+            log.started(op)
+            let gen = generation
+            detailLoadToken += 1
+            let token = detailLoadToken
+            detailLoadError = nil
+            isLoadingDetail = true
+            defer { if gen == generation, token == detailLoadToken { isLoadingDetail = false } }
+            // Another item's detail is never shown while this one loads.
+            if currentItem?.id != id {
+                currentItem = nil
+            }
 
-        let gen = generation
-        detailLoadToken += 1
-        let token = detailLoadToken
-        detailLoadError = nil
-        isLoadingDetail = true
-        defer { if gen == generation, token == detailLoadToken { isLoadingDetail = false } }
-        // Another item's detail is never shown while this one loads.
-        if currentItem?.id != id {
-            currentItem = nil
-        }
-
-        do {
-            let repository = self.itemRepository
-            let detail = try await perform { try await repository.fetchItemDetail(id: id) }
-            try ensureCurrent(gen)
-            // A newer detail load owns currentItem now.
-            guard token == detailLoadToken else { return }
-            currentItem = detail
-        } catch {
-            await dropIfGone(error, id: id, generation: gen)
-            recordDetailLoadError(error, generation: gen, token: token)
+            do {
+                let repository = self.itemRepository
+                let detail = try await perform { try await repository.fetchItemDetail(id: id) }
+                try ensureCurrent(gen)
+                // A newer detail load owns currentItem now.
+                guard token == detailLoadToken else { log.cancelled(op); return }
+                currentItem = detail
+                log.processed(op)
+            } catch {
+                await dropIfGone(error, id: id, generation: gen)
+                recordDetailLoadError(error, generation: gen, token: token, op: op)
+            }
         }
     }
 
@@ -174,95 +180,92 @@ final class ItemService {
 
     // MARK: - Mutations
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadItems.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadItems.
     @discardableResult
     func createItem(listId: String, _ input: CreateItemInput) async throws -> ListItem {
-        let span = SentrySDK.startTransaction(
-            name: "service.items.createItem",
-            operation: "service.items.createItem"
-        )
-        defer { span.finish() }
+        let op = "create item"
+        return try await InstrumentedOperation.run("service.items.createItem") { () -> ListItem in
+            log.started(op)
+            let gen = generation
+            beginMutation()
+            defer { endMutation(generation: gen) }
 
-        let gen = generation
-        beginMutation()
-        defer { endMutation(generation: gen) }
-
-        do {
-            let repository = self.itemRepository
-            let created = try await perform { try await repository.createItem(listId: listId, input) }
-            try ensureCurrent(gen)
-            await dataStore.addItem(created)
-            try ensureCurrent(gen)
-            if currentListId == listId, !items.contains(where: { $0.id == created.id }) {
-                items.append(created)
+            do {
+                let repository = self.itemRepository
+                let created = try await perform { try await repository.createItem(listId: listId, input) }
+                try ensureCurrent(gen)
+                await dataStore.addItem(created)
+                try ensureCurrent(gen)
+                if currentListId == listId, !items.contains(where: { $0.id == created.id }) {
+                    items.append(created)
+                }
+                LogInfo("Created item", category: .business)
+                log.processed(op)
+                return created
+            } catch {
+                await dropIfGone(error, id: nil, generation: gen)
+                throw failure(error, generation: gen, op: op)
             }
-            LogInfo("Created item", category: .business)
-            return created
-        } catch {
-            await dropIfGone(error, id: nil, generation: gen)
-            throw failure(error, generation: gen, operation: "create item")
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadItems.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadItems.
     @discardableResult
     func updateItem(id: String, _ input: UpdateItemInput) async throws -> ListItem {
-        let span = SentrySDK.startTransaction(
-            name: "service.items.updateItem",
-            operation: "service.items.updateItem"
-        )
-        defer { span.finish() }
+        let op = "update item"
+        return try await InstrumentedOperation.run("service.items.updateItem") { () -> ListItem in
+            log.started(op)
+            let gen = generation
+            beginMutation()
+            defer { endMutation(generation: gen) }
 
-        let gen = generation
-        beginMutation()
-        defer { endMutation(generation: gen) }
-
-        do {
-            let repository = self.itemRepository
-            let updated = try await perform { try await repository.updateItem(id: id, input) }
-            try ensureCurrent(gen)
-            await dataStore.updateItem(updated)
-            try ensureCurrent(gen)
-            if let index = items.firstIndex(where: { $0.id == updated.id }) {
-                items[index] = updated
+            do {
+                let repository = self.itemRepository
+                let updated = try await perform { try await repository.updateItem(id: id, input) }
+                try ensureCurrent(gen)
+                await dataStore.updateItem(updated)
+                try ensureCurrent(gen)
+                if let index = items.firstIndex(where: { $0.id == updated.id }) {
+                    items[index] = updated
+                }
+                if currentItem?.id == updated.id {
+                    currentItem = updated
+                }
+                LogInfo("Updated item", category: .business)
+                log.processed(op)
+                return updated
+            } catch {
+                await dropIfGone(error, id: id, generation: gen)
+                throw failure(error, generation: gen, op: op)
             }
-            if currentItem?.id == updated.id {
-                currentItem = updated
-            }
-            LogInfo("Updated item", category: .business)
-            return updated
-        } catch {
-            await dropIfGone(error, id: id, generation: gen)
-            throw failure(error, generation: gen, operation: "update item")
         }
     }
 
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadItems.
+    // Actor-isolated (@MainActor): InstrumentedOperation span, see loadItems.
     func deleteItem(id: String, listId: String) async throws {
-        let span = SentrySDK.startTransaction(
-            name: "service.items.deleteItem",
-            operation: "service.items.deleteItem"
-        )
-        defer { span.finish() }
+        let op = "delete item"
+        try await InstrumentedOperation.run("service.items.deleteItem") {
+            log.started(op)
+            let gen = generation
+            beginMutation()
+            defer { endMutation(generation: gen) }
 
-        let gen = generation
-        beginMutation()
-        defer { endMutation(generation: gen) }
-
-        do {
-            let repository = self.itemRepository
-            try await perform { try await repository.deleteItem(id: id) }
-            try ensureCurrent(gen)
-            await dataStore.removeItem(id: id, listId: listId)
-            try ensureCurrent(gen)
-            items.removeAll { $0.id == id }
-            if currentItem?.id == id {
-                currentItem = nil
+            do {
+                let repository = self.itemRepository
+                try await perform { try await repository.deleteItem(id: id) }
+                try ensureCurrent(gen)
+                await dataStore.removeItem(id: id, listId: listId)
+                try ensureCurrent(gen)
+                items.removeAll { $0.id == id }
+                if currentItem?.id == id {
+                    currentItem = nil
+                }
+                LogInfo("Deleted item", category: .business)
+                log.processed(op)
+            } catch {
+                await dropIfGone(error, id: id, generation: gen)
+                throw failure(error, generation: gen, op: op)
             }
-            LogInfo("Deleted item", category: .business)
-        } catch {
-            await dropIfGone(error, id: id, generation: gen)
-            throw failure(error, generation: gen, operation: "delete item")
         }
     }
 
@@ -270,7 +273,8 @@ final class ItemService {
 
     /// Ends this service's session: cancels in-flight work, bumps the generation so late results
     /// are discarded, and empties the published state and the cache.
-    // Actor-isolated (@MainActor): manual SentrySDK span, see loadItems.
+    // Actor-isolated (@MainActor): manual SentrySDK span. It calls no repository (only the local
+    // cache), so it is not wrapped by the step-line helper.
     func clearForSession() async throws {
         let span = SentrySDK.startTransaction(
             name: "service.items.clearForSession",
@@ -312,7 +316,7 @@ final class ItemService {
     }
 
     /// Fetches a list's items and writes the cache and (for the current list) `items`.
-    // Covered by the manual spans of its public callers (loadItems, refreshItems).
+    // Covered by the InstrumentedOperation spans of its public callers (loadItems, refreshItems).
     private func fetchAndStore(listId: String, generation gen: Int) async throws {
         let repository = self.itemRepository
         let fetched = try await perform { try await repository.fetchItems(listId: listId) }
@@ -327,7 +331,7 @@ final class ItemService {
 
     /// A 404 means the item is gone: removes it from the items, the open detail and the cache and
     /// marks it gone. Does nothing for another error, a nil id, or after the session ended.
-    // Covered by the manual spans of its public callers.
+    // Covered by the InstrumentedOperation spans of its public callers.
     private func dropIfGone(_ error: any Error, id: String?, generation gen: Int) async {
         guard gen == generation, let id, (error as? ItemError) == .notFound else { return }
         goneItemId = id
@@ -340,7 +344,7 @@ final class ItemService {
 
     /// Runs a repository call in a task the service can cancel at teardown. Cancelling the caller
     /// cancels the call too.
-    // Covered by the manual spans of its public callers.
+    // Covered by the InstrumentedOperation spans of its public callers.
     private func perform<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
         let task = Task { try await work() }
         let token = UUID()
@@ -370,30 +374,37 @@ final class ItemService {
         if gen == generation, token == listLoadToken { isLoadingItems = false }
     }
 
-    /// Records a list load failure. Nothing for cancellation, a session that has ended, or a load
-    /// that a newer list load has replaced.
-    private func recordLoadError(_ error: any Error, generation gen: Int, token: Int, operation: String) {
-        if error is CancellationError || gen != generation { return }
-        if token != listLoadToken { return }
-        // Only the operation name is logged: no ids, names or server text.
-        LogError("\(operation) failed", category: .business)
+    /// Records a list load failure. Nothing is stored for cancellation, a session that has ended, or
+    /// a load that a newer list load has replaced; those log `cancelled`. `op` is an operation-name
+    /// literal ("load items", "refresh items"), never data.
+    private func recordLoadError(_ error: any Error, generation gen: Int, token: Int, op: String) {
+        if error is CancellationError || gen != generation || token != listLoadToken {
+            log.cancelled(op)
+            return
+        }
+        log.failed(op)
         listLoadError = (error as? ItemError) ?? .server
     }
 
-    /// Records a detail load failure. Nothing for cancellation, a session that has ended, or a
-    /// load that a newer detail load has replaced.
-    private func recordDetailLoadError(_ error: any Error, generation gen: Int, token: Int) {
-        if error is CancellationError || gen != generation { return }
-        if token != detailLoadToken { return }
-        LogError("load item detail failed", category: .business)
+    /// Records a detail load failure. Nothing is stored for cancellation, a session that has ended,
+    /// or a load that a newer detail load has replaced; those log `cancelled`.
+    private func recordDetailLoadError(_ error: any Error, generation gen: Int, token: Int, op: String) {
+        if error is CancellationError || gen != generation || token != detailLoadToken {
+            log.cancelled(op)
+            return
+        }
+        log.failed(op)
         detailLoadError = (error as? ItemError) ?? .server
     }
 
     /// The error a mutation rethrows: the typed ItemError, or CancellationError when the call was
     /// cancelled or its session ended. Never stored in the service.
-    private func failure(_ error: any Error, generation gen: Int, operation: String) -> any Error {
-        if error is CancellationError || gen != generation { return CancellationError() }
-        LogError("\(operation) failed", category: .business)
+    private func failure(_ error: any Error, generation gen: Int, op: String) -> any Error {
+        if error is CancellationError || gen != generation {
+            log.cancelled(op)
+            return CancellationError()
+        }
+        log.failed(op)
         return (error as? ItemError) ?? ItemError.server
     }
 }

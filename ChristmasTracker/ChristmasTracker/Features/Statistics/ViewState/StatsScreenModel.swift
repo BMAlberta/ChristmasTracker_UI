@@ -179,7 +179,7 @@ final class StatsScreenModel {
     // MARK: - Lifecycle
 
     func onAppear() async {
-        await load(force: false)
+        await load(force: false, reason: .appear)
     }
 
     func onDisappear() {
@@ -193,7 +193,7 @@ final class StatsScreenModel {
 
     /// Pull to refresh: both fetches are forced.
     func refresh() async {
-        await load(force: true)
+        await load(force: true, reason: .pull)
     }
 
     func tryAgain() async {
@@ -322,17 +322,17 @@ final class StatsScreenModel {
         await refreshStats(year: budget.year)
     }
 
-    private func load(force: Bool) async {
+    private func load(force: Bool, reason: RefreshReason = .unspecified) async {
         await runTracked { [self] in
             budgetListFailure = nil
             let year = selectedYear
-            let listFailure = await budgetService.loadBudgets(force: force)
+            let listFailure = await budgetService.loadBudgets(force: force, reason: reason)
             if Task.isCancelled { return }
             if year == selectedYear { budgetListFailure = listFailure }
             if force {
-                await statsService.refresh(year: year)
+                await statsService.refresh(year: year, reason: reason)
             } else {
-                await statsService.load(year: year)
+                await statsService.load(year: year, reason: reason)
             }
             if Task.isCancelled { return }
             noteLoadOutcome()
