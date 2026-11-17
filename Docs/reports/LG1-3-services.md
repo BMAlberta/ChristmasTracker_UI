@@ -185,3 +185,120 @@ No `skipped` test (no guard exists).
   pull/appear/tab).
 - Screenshot / visual check: not performed (no UI layout change; only two reason arguments added).
 - ItemService.swift is 414 lines (it was 403 before), over the 400-line guideline; not split (scope).
+
+# Batch C: ListService, LinkPreviewService, VersionService
+
+## What changed (batch C)
+
+- Each service takes `log: ServiceLog = ServiceLog()` as a defaulted init parameter (last parameter).
+- Every repository-calling method runs inside `InstrumentedOperation.run` with the same span name as the old hand
+  span and writes started (after guards), processed (after the result is applied), cancelled and exactly one failed
+  line through `ServiceLog`. Failure wording kept: "load lists failed", "refresh lists failed", "load list details
+  failed", "refresh list details failed", "create list failed", "update list failed", "remove co-owner failed",
+  "archive list failed", "fresh lists failed", "archive list in batch failed", "reload lists after archive batch
+  failed", "add member failed", "remove member failed", "leave list failed", and the sub-operation lines
+  ("refresh list after member change failed", "reload lists after archive failed", "refresh list after archive failed").
+  `record(...)` / `failure(...)` (private helpers, label `operation:` renamed `op:` so the scan accepts them) now write
+  through `ServiceLog.failed`; a nil result (cancellation, ended session) now logs `cancelled`.
+- The pull-to-refresh diagnostic: `refreshLists(reportingFailure:reason:)` logs "refresh lists started (pull)",
+  "refresh lists skipped (already refreshing)" at the `isRefreshing` guard (no call made), "refresh lists cancelled" on
+  CancellationError (SwiftUI cancelling the refreshable task), "refresh lists processed (N lists)" or one "refresh
+  lists failed". The same lines are written when `loadLists` runs the background refresh of a stale cache (it passes
+  its reason on). The refresh itself (guards, state, when it runs) is unchanged.
+- Reasons (defaulted `reason: RefreshReason = .unspecified`): `loadLists`, `refreshLists`, `loadListDetail`,
+  `refreshListDetail`. UI call sites: `DashboardView` `.refreshable` = pull, `.task` = appear; `ListDetailView.load()`
+  = appear, `ListDetailView.refresh()` = pull. Try Again (dashboard `retryLoad`, detail `refetchDetail`),
+  `BudgetEditorModel` and `PurchaseRefreshRunner` stay `.unspecified`. `freshLists` and `archiveLists` take no reason
+  (called by the child deletion flow, not a user refresh).
+- D8: `archiveLists` no longer logs per list. One started, one processed ("N lists", N = archived), and one failed line
+  if an archive failed (the old "archive list in batch failed" wording, now after the loop). A failed reload after the
+  loop keeps its own "reload lists after archive batch failed" line; a cancelled reload is no longer an error line.
+  Batch behavior (order, stop at first failure, one reload, result) is identical.
+- LinkPreviewService.imageUrl: two operations, "link preview lookup" (API repository) and "device link preview" (the
+  provider fallback), each started/processed/cancelled/failed. An invalid page URL makes no call and logs nothing. No
+  URL, host or image value ever reaches a line or the span.
+- VersionService.check: "check version" started/processed/cancelled/failed; `checkIfDue` early returns (in flight,
+  inside the success interval, inside the failure interval) make no call and log nothing. State handling is unchanged
+  (a cancellation still records a failure and `.showMessage`, only the log differs).
+- Existing `LogInfo` success lines in ListService kept (D6). Stale "manual SentrySDK span" comments fixed in touched
+  methods.
+
+## Audit table (batch C)
+
+| service | method | had logging before | has now | performance wrapper |
+|---|---|---|---|---|
+| ListService | loadLists(reportingFailure:reason:) | one `.error` ("load lists failed") + `LogInfo` | started (reason), processed (N lists), cancelled, one failed; waiter path logs nothing | helper (`service.lists.loadLists`) |
+| ListService | refreshLists(reportingFailure:reason:) (and the background refresh inside loadLists) | one `.error` ("refresh lists failed") + `LogInfo` | started (reason), skipped (already refreshing), processed (N lists), cancelled, one failed | helper (`service.lists.refreshLists`) |
+| ListService | loadListDetail(id:reason:) | one `.error` ("load list details failed") + `LogInfo` | started (reason), processed, cancelled, one failed | helper (`service.lists.loadListDetail`) |
+| ListService | refreshListDetail(id:reason:) | one `.error` ("refresh list details failed") + `LogInfo` | started (reason), processed, cancelled, one failed | helper (`service.lists.refreshListDetail`) |
+| ListService | createList / updateList / removeCoOwner | one `.error` each + `LogInfo` | started, processed, cancelled, one failed | helper (`service.lists.createList/updateList/removeCoOwner`) |
+| ListService | deleteList (op "archive list") | one `.error` + `LogInfo` | started, processed, cancelled, one failed | helper (`service.lists.deleteList`) |
+| ListService | freshLists | one `.error` ("fresh lists failed") | started, processed (N lists), cancelled, one failed | helper (`service.lists.freshLists`) |
+| ListService | archiveLists(ids:) (op "archive list in batch") | `.error` per failure inside the loop, one reload `.error`, `LogInfo` | started, processed (N lists), cancelled, one failed after the loop; separate reload failed line | helper (`service.lists.archiveLists`) |
+| ListService | archiveLists empty ids | none | none (no call) | n/a |
+| ListService | addMember / removeMember / leaveList | one `.error` each + `LogInfo` | started, processed, cancelled, one failed | helper (`service.lists.addMember/removeMember/leaveList`) |
+| ListService | setCoOwner | none of its own | delegates to updateList ("update list" lines) | via updateList |
+| ListService | clearCache / clearForSession | none | none (no repository call) | hand span kept: no repository call, teardown only |
+| ListService | clear*Failure, clearCurrentDetail, filters (sync state) | none | none | n/a |
+| LinkPreviewService | imageUrl(for:) API step | none (silent) | started, processed, cancelled, one failed ("link preview lookup") | helper (`service.linkPreview.imageUrl`) |
+| LinkPreviewService | imageUrl(for:) device fallback step | none (silent) | started, processed, cancelled, one failed ("device link preview") | same helper span |
+| LinkPreviewService | imageUrl invalid URL | none | none (no call) | n/a (returns before the span, as before) |
+| LinkPreviewService | clearForSession | none | none (no repository call) | hand span kept: no repository call |
+| VersionService | check() | none (silent) | started, processed, cancelled, one failed ("check version") | helper (`service.version.check`) |
+| VersionService | checkIfDue() early returns | none | none (no call; not logged by instruction) | n/a (span comes from check) |
+
+## Deviations and notes (batch C)
+
+- `refreshListDetail`: a not-found or forbidden answer that drops the list (no error is returned, as before) logs
+  `processed` (the call completed and the list was handled), not an error. A superseded or session-ended refresh logs
+  `cancelled`.
+- `updateList` / `removeCoOwner`: a list removed while the call was in flight (nothing written back, as before) logs
+  `cancelled`.
+- `loadLists`/`loadListDetail`/`refreshLists` results dropped because an archive finished meanwhile, or the session
+  ended, log `cancelled` (previously silent).
+- A real error thrown while the caller task is cancelled (for example a URLError.cancelled from the transport when
+  SwiftUI cancels a pull to refresh) is NOT a CancellationError, so it still logs the one failed line and still stores
+  the load failure, exactly as before. That is deliberate: it is what the new lines will reveal. Only a
+  CancellationError logs `cancelled`.
+- `deleteList`: a failed reload after a successful archive still writes its own sub-operation error line
+  ("reload lists after archive failed") while the archive itself logs `processed` (one line per failure, as before).
+- LinkPreview device fallback is a provider (LinkPresentation), not a repository; it is logged as its own operation
+  because it is a call that can fail. Its failed line is an `.error` in Release; drop it if that is too noisy.
+- ListService.swift is now 1169 lines (was 1130). Not split: the scope list does not allow other files and a split
+  would touch the test source scans.
+- `InstrumentedOperation` writes its own `.performance` duration lines through the default sink; they are not in the
+  per-service test sinks.
+- Failing tests first: the new test files call `ListService(..., log:)`, `loadLists(reason:)`, `refreshLists(reason:)`
+  and the `log:` parameters that did not exist, so they did not compile before the implementation (red by compile
+  failure; a separate red run was not made).
+
+## Edited existing tests (batch C)
+
+- EDITED (LG1-3): ChristmasTrackerTests/Features/Purchases/ServiceLogCallScanTests.swift: `ServiceLogCallScan.files`
+  now also lists ListService.swift, LinkPreviewService.swift and VersionService.swift. Every rule and self-proof is
+  unchanged (the three files also pass the non-vacuity check).
+
+## New tests (batch C)
+
+- ChristmasTrackerTests/Features/Lists/ListServiceLogTests.swift (success lines with reason, failure one error, cancelled
+  load/refresh/detail/create/archive/member, skipped while refreshing with no second repository call, "started (pull)",
+  D8 batch aggregation, Release-style, secrets "ZZ-secret-list", "987654.32", "zz-secret@example.com")
+- ChristmasTrackerTests/LinkPreview/LinkPreviewServiceLogTests.swift (page "https://zz-secret.example/item")
+- ChristmasTrackerTests/Features/Version/VersionServiceLogTests.swift
+
+## Commands and raw summary lines (batch C)
+
+- `scripts/build.sh`: `** BUILD SUCCEEDED **`
+- `scripts/test.sh`: `--- xcodebuild exit status: 0 ---`, `--- tests: 5567 passed, 0 failed, 0 skipped ---`
+  (batch B final 5519; scripts/verify.sh not run, per instruction)
+- Attempts: 1 implementation loop, green first time; no repeated error signature; no flaky test.
+
+## Not done or partial (batch C)
+
+- AuthenticationService and any later service are not touched.
+- The pull-to-refresh problem itself is not investigated or fixed (diagnostic lines only).
+- Try Again paths, `BudgetEditorModel` and `PurchaseRefreshRunner` call the list loads with `.unspecified`; `freshLists` and
+  `archiveLists` have no reason parameter.
+- `VersionService.checkIfDue` logs nothing for its early returns (no call), so there is no "already checking" line.
+- Screenshot / visual check: not performed (no UI layout change; only reason arguments added at four call sites).
+- ListService.swift is 1169 lines, over the guideline; not split (scope).

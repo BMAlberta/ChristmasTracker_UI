@@ -140,7 +140,7 @@ struct ListDetailView: View {
         actionBanner = nil
         refreshFailure = nil
         dismissed.reset()
-        await listService.loadListDetail(id: listId)
+        await listService.loadListDetail(id: listId, reason: .appear)
         await itemService.loadItems(listId: listId, reason: .appear)
     }
 
@@ -149,7 +149,7 @@ struct ListDetailView: View {
         dismissed.reset()
         refreshFailure = nil
         listService.clearDetailLoadFailure(forListId: listId)
-        refreshFailure = await listService.refreshListDetail(id: listId)
+        refreshFailure = await listService.refreshListDetail(id: listId, reason: .pull)
         switch ListDetailRefresh.itemsStep(currentItemsListId: itemService.currentListId, listId: listId) {
         case .refresh: await itemService.refreshItems(reason: .pull)
         case .load: await itemService.loadItems(listId: listId, reason: .pull)

@@ -48,7 +48,7 @@ struct DashboardView: View {
                 .searchable(text: $searchText, prompt: "Search lists")
                 .refreshable {
                     dismissed.reset()
-                    await listService.refreshLists()
+                    await listService.refreshLists(reason: .pull)
                 }
                 .sheet(isPresented: $showCreateSheet) {
                     CreateListView()
@@ -56,7 +56,7 @@ struct DashboardView: View {
                 .task {
                     if listService.lists.isEmpty {
                         dismissed.reset()
-                        await listService.loadLists()
+                        await listService.loadLists(reason: .appear)
                     }
                 }
                 .onChange(of: listService.lists.map(\.id)) {
